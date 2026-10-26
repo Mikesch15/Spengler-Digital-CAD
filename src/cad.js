@@ -30,9 +30,10 @@ const neueId = () => "f" + doc.zaehler++;
 const finde = (id) => doc.features.find((f) => f.id === id);
 // Werkstatt-Einstellungen (pro Gerät): kalibrierte und eigene Materialien, Lagerformate
 const EINST = "sdcad-einstellungen";
-const standardEinst = () => JSON.parse(JSON.stringify({ materialien: MATERIALIEN, ...LAGER }));
+const standardEinst = () => JSON.parse(JSON.stringify({ materialien: MATERIALIEN, ...LAGER, vorlagen: [] }));
 let einst = standardEinst();
 try { const e = JSON.parse(localStorage.getItem(EINST) || "null"); if (e?.materialien?.length) einst = { ...einst, ...e }; } catch {}
+const einstSpeichern = () => { try { localStorage.setItem(EINST, JSON.stringify(einst)); } catch {} };
 // Reihenfolge: Einstellungen, dann die im Projekt mitgespeicherten Werte (Projekt von einem anderen Gerät)
 const material = (id) => einst.materialien.find((m) => m.id === id) || doc.materialien?.find((m) => m.id === id) || einst.materialien[0];
 const matOpt = () => [...einst.materialien, ...(doc.materialien || []).filter((m) => !einst.materialien.some((e) => e.id === m.id))].map((m) => [m.id, m.name]);
@@ -297,7 +298,7 @@ function zeigeWerkstatt() {
     <table class="liste"><thead><tr><th>Biegung</th><th class="num">Anschlag ab A</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
     ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span> ${b.art === "Abkanten" ? "" : b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : f1(b.pos)}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
     </tbody></table>
-    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button>${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
+    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button>${f.typ === "profil" ? '<button class="knopf" id="kEigene">Als eigene Vorlage speichern</button>' : ""}${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
     <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
     <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>`;
   $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${f.laenge} mm`, "",
@@ -305,6 +306,12 @@ function zeigeWerkstatt() {
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, f.laenge, f.name), "application/dxf");
   $("kDruck").onclick = () => drucke([f]);
   $("kKopie").onclick = () => dupliziere(f);
+  if ($("kEigene")) $("kEigene").onclick = () => {
+    const v = { name: f.name, start: f.start, zeilen: JSON.parse(JSON.stringify(f.zeilen)) }, i = einst.vorlagen.findIndex((x) => x.name === f.name);
+    if (i >= 0) einst.vorlagen[i] = v; else einst.vorlagen.push(v);
+    einstSpeichern();
+    status(`«${f.name}» ${i >= 0 ? "aktualisiert" : "gespeichert"}: unter «Freies Profil» → «Eigene Vorlage» wählbar.`);
+  };
   if ($("kFrei")) $("kFrei").onclick = () => { // Vorlage in Tabelle umwandeln, um Schenkel frei zu ergänzen
     const { start, zeilen } = alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m)));
     Object.assign(f, { typ: "profil", start, zeilen }); delete f.vorlage; delete f.params;
@@ -506,6 +513,7 @@ function profilDialog(f) {
   f ||= { id: neueId(), typ: "profil", name: "Profil " + (doc.features.filter((x) => x.typ === "profil").length + 1), start: 0,
     zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 50, winkel: 0, art: "abkanten" }], material: einst.materialien[0].id, laenge: 1000, richtung: "eine", ebene: "XY" };
   const felder = (f) => [
+    ...(einst.vorlagen.length ? [{ id: "eigene", label: "Eigene Vorlage", optionen: [["", "–"], ...einst.vorlagen.map((v, i) => [i, v.name])], wert: "" }] : []),
     { id: "name", label: "Name", text: true, wert: f.name },
     { id: "start", label: "Startwinkel", einheit: "°", wert: f.start },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
@@ -513,7 +521,15 @@ function profilDialog(f) {
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "ebene", label: "Querschnitt in", optionen: EBENEN_OPT, wert: f.ebene },
   ];
-  const setze = (f, w) => { Object.assign(f, w, { name: w.name.trim() || f.name, start: Number.isFinite(w.start) ? w.start : 0 }); };
+  const setze = (f, w) => {
+    const { eigene, ...rest } = w;
+    Object.assign(f, rest, { name: w.name.trim() || f.name, start: Number.isFinite(w.start) ? w.start : 0 });
+    if (eigene !== "" && eigene != null && einst.vorlagen[+eigene]) { // Schenkel aus der eigenen Vorlage übernehmen
+      const v = einst.vorlagen[+eigene];
+      Object.assign(f, { name: v.name, start: v.start, zeilen: JSON.parse(JSON.stringify(v.zeilen)) });
+      setTimeout(() => { const d = dlg; if (d) { dialog({ ...d, felder: felder(f) }); regen(); } });
+    }
+  };
   const tabelle = () => `<table class="zeilen"><thead><tr><th>#</th><th>Schenkel mm</th><th>Winkel °</th><th>Art</th><th></th></tr></thead><tbody>
     ${f.zeilen.map((z, i) => { const letzte = i === f.zeilen.length - 1; return `<tr data-i="${i}"><td>${i + 1}</td>
       <td><input data-k="L" type="number" step="any" inputmode="decimal" value="${z.L}" aria-label="Schenkel ${i + 1} Länge"></td>
@@ -561,6 +577,9 @@ function zeigeEinst() {
       <label>Schenkel b aussen <input id="pB" type="number" step="any" inputmode="decimal" value="${probeWerte.b}"></label>
     </div>
     <p id="pErgebnis" class="hinweis">a und b eingeben.</p>
+    <h4>Eigene Vorlagen</h4>
+    ${e.vorlagen.length ? `<ul class="eigene">${e.vorlagen.map((v, i) => `<li>${esc(v.name)} <small class="hinweis">${v.zeilen.length} Schenkel</small><button class="weg" data-vweg="${i}" aria-label="${esc(v.name)} entfernen">×</button></li>`).join("")}</ul>`
+      : '<p class="hinweis">Noch keine. Ein freies Profil wählen und in der Werkstatt «Als eigene Vorlage speichern».</p>'}
     <h4>Lagerformate</h4>
     <div class="probe">
       <label>Spaltbänder mm <input id="lBand" type="text" value="${e.spaltbaender.join(", ")}"></label>
@@ -589,6 +608,7 @@ $("eInhalt").addEventListener("input", (ev) => {
 $("eInhalt").addEventListener("change", (ev) => { if (ev.target.id === "pMat") probe(); });
 $("eInhalt").addEventListener("click", (ev) => {
   if (ev.target.dataset.weg != null) { entwurf.materialien.splice(+ev.target.dataset.weg, 1); zeigeEinst(); }
+  else if (ev.target.dataset.vweg != null) { entwurf.vorlagen.splice(+ev.target.dataset.vweg, 1); zeigeEinst(); }
   else if (ev.target.id === "eNeuMat") {
     const v = entwurf.materialien.at(-1);
     entwurf.materialien.push({ ...v, id: "eigen" + Date.now().toString(36), name: v.name + " (Kopie)" }); zeigeEinst();
@@ -597,12 +617,12 @@ $("eInhalt").addEventListener("click", (ev) => {
 });
 $("wEinst").onclick = () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); meldung(""); zeigeEinst(); $("einst").hidden = false; };
 $("eAbbrechen").onclick = () => { $("einst").hidden = true; entwurf = null; };
-$("eStandard").onclick = () => { entwurf = standardEinst(); zeigeEinst(); meldung("Standardwerte geladen – mit «Übernehmen» speichern."); };
+$("eStandard").onclick = () => { entwurf = { ...standardEinst(), vorlagen: entwurf.vorlagen }; zeigeEinst(); meldung("Standardwerte geladen – mit «Übernehmen» speichern."); };
 $("eOk").onclick = () => {
   const falsch = entwurf.materialien.find((m) => !m.name.trim() || !(m.t > 0) || !(m.ri >= 0) || !(m.k > 0 && m.k < 1));
   if (falsch) return meldung(`Material «${falsch.name || "ohne Namen"}»: Dicke > 0, Innenradius ≥ 0 und K-Faktor zwischen 0 und 1 nötig.`);
   einst = entwurf; entwurf = null; $("einst").hidden = true;
-  try { localStorage.setItem(EINST, JSON.stringify(einst)); } catch {}
+  einstSpeichern();
   regen(); status("Einstellungen gespeichert. Alle Teile neu berechnet.");
 };
 
