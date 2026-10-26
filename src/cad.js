@@ -6,6 +6,7 @@ import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../ke
 import { MATERIALIEN, quelle } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
 import { profilSvg } from "../kern/zeichnung.js";
+import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 
 const $ = (id) => document.getElementById(id);
 const SPEICHER = "sdcad-doc-0.2";
@@ -248,9 +249,32 @@ function waehle(id) { auswahl = id; markiere(); zeigeBrowser(); zeigeWerkstatt()
 
 // ------------------------------------------------------------ Werkstatt
 const f1 = (v) => v.toFixed(1);
+let register = "teil"; // Werkstatt: «teil» oder «auftrag»
+document.querySelectorAll("[data-register]").forEach((b) => (b.onclick = () => { register = b.dataset.register; zeigeWerkstatt(); }));
+const blechteile = () => doc.features.filter((f) => f._res && !f.versteckt);
+function auftrag() {
+  return stueckliste(blechteile().map((f) => ({ name: f.name, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: f.laenge, stueck: f.stueck ?? 1 })));
+}
+const f2 = (v) => v.toFixed(2);
+function zeigeAuftrag(w) {
+  const a = auftrag();
+  if (!a.zeilen.length) { w.innerHTML = '<p class="leer">Noch keine Blechteile im Auftrag.</p>'; return; }
+  w.innerHTML = `<div class="zahl"><b>${a.summe.stueck}</b><span>Teile · ${f2(a.summe.flaeche)} m² · ${a.summe.gewicht.toFixed(1)} kg</span></div>
+    <table class="liste"><thead><tr><th>Teil</th><th class="num">Stk</th><th class="num">Zuschnitt × Länge</th><th class="num">m²</th></tr></thead><tbody>
+    ${a.zeilen.map((z) => `<tr><td>${esc(z.name)}<br><small class="hinweis">${esc(z.material)}</small></td><td class="num">${z.stueck}</td><td class="num">${f1(z.zuschnitt)} × ${z.laenge}</td><td class="num">${f2(z.flaeche)}</td></tr>`).join("")}
+    </tbody></table>
+    <table class="liste summen"><thead><tr><th>Material</th><th class="num">lfm</th><th class="num">m²</th><th class="num">kg</th></tr></thead><tbody>
+    ${a.jeMaterial.map((m) => `<tr><td>${esc(m.material)}</td><td class="num">${m.laufmeter.toFixed(1)}</td><td class="num">${f2(m.flaeche)}</td><td class="num">${m.gewicht.toFixed(1)}</td></tr>`).join("")}
+    </tbody></table>
+    <div class="reihe"><button class="knopf haupt" id="kAlleDruck">Stückliste und Werkstattblätter drucken</button><button class="knopf" id="kCsv">Stückliste als CSV</button></div>`;
+  $("kAlleDruck").onclick = () => drucke(blechteile(), true);
+  $("kCsv").onclick = () => herunterladen(`${doc.nr || "auftrag"} Stückliste.csv`, stuecklisteCsv(a, [["Objekt", doc.objekt], ["Nr.", doc.nr], []]), "text/csv");
+}
 function zeigeWerkstatt() {
   const f = finde(auswahl);
   const w = $("werkstatt");
+  document.querySelectorAll("[data-register]").forEach((b) => b.setAttribute("aria-selected", b.dataset.register === register));
+  if (register === "auftrag") return zeigeAuftrag(w);
   if (!f || !f._res) { w.innerHTML = `<p class="leer">${f ? (f._fehler || "Volumenkörper: keine Abwicklung.") : "Blechteil anklicken, um Zuschnitt und Abkantfolge zu sehen."}</p>`; return; }
   const r = f._res, m = material(f.material), q = quelle(r.zuschnitt);
   w.innerHTML = `<div class="zahl"><b>${f1(r.zuschnitt)}</b><span>mm Zuschnitt</span></div>
@@ -262,7 +286,7 @@ function zeigeWerkstatt() {
     </tbody></table>
     <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button>${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
     <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
-    <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm</dd></dl>`;
+    <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>`;
   $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${f.laenge} mm`, "",
     "Biegung\tAnschlag ab A (mm)\tWinkel\tRichtung", ...r.biegungen.map((b) => `B${b.nr}\t${f1(b.pos)}\t${f1(Math.abs(b.winkel))}\t${b.richtung}`)].join("\n"));
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, f.laenge, f.name), "application/dxf");
@@ -296,10 +320,24 @@ function werkstattblatt(f) {
       <dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>
   </section>`;
 }
-function drucke(teile) {
+function stuecklisteBlatt() {
+  const a = auftrag();
+  return `<section class="blatt">
+    <header><div><small>Stückliste</small><h1>${esc(doc.objekt)}</h1></div>
+      <dl><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
+    <table class="liste"><thead><tr><th>Teil</th><th>Material</th><th class="num">Zuschnitt × Länge mm</th><th class="num">Stück</th><th class="num">m²</th><th class="num">kg</th></tr></thead><tbody>
+    ${a.zeilen.map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.material)}</td><td class="num">${f1(z.zuschnitt)} × ${z.laenge}</td><td class="num">${z.stueck}</td><td class="num">${f2(z.flaeche)}</td><td class="num">${z.gewicht.toFixed(1)}</td></tr>`).join("")}
+    </tbody></table>
+    <table class="liste"><thead><tr><th>Summe je Material</th><th class="num">Stück</th><th class="num">Laufmeter</th><th class="num">m²</th><th class="num">kg</th></tr></thead><tbody>
+    ${a.jeMaterial.map((m) => `<tr><td>${esc(m.material)}</td><td class="num">${m.stueck}</td><td class="num">${m.laufmeter.toFixed(1)}</td><td class="num">${f2(m.flaeche)}</td><td class="num">${m.gewicht.toFixed(1)}</td></tr>`).join("")}
+    <tr><td><b>Total</b></td><td class="num"><b>${a.summe.stueck}</b></td><td></td><td class="num"><b>${f2(a.summe.flaeche)}</b></td><td class="num"><b>${a.summe.gewicht.toFixed(1)}</b></td></tr>
+    </tbody></table>
+  </section>`;
+}
+function drucke(teile, mitListe = false) {
   teile = teile.filter((f) => f._res);
   if (!teile.length) return status("Keine Blechteile zum Drucken.");
-  $("druck").innerHTML = teile.map(werkstattblatt).join("");
+  $("druck").innerHTML = (mitListe ? stuecklisteBlatt() : "") + teile.map(werkstattblatt).join("");
   window.print();
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -324,9 +362,11 @@ async function herunterladen(name, inhalt, typ, pfad = null) {
     } catch (e) { status("Speichern fehlgeschlagen: " + e); return null; }
   }
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([inhalt], { type: typ })); a.download = name;
+  // Browser verwerfen Download-Namen mit Umlauten teils («download»), daher umschreiben
+  const sicher = name.replace(/[äöüÄÖÜß]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue", Ä: "Ae", Ö: "Oe", Ü: "Ue", ß: "ss" })[c]);
+  a.href = URL.createObjectURL(new Blob([inhalt], { type: typ })); a.download = sicher;
   document.body.appendChild(a); a.click(); a.remove();
-  status(`${name} gespeichert (Download-Ordner).`);
+  status(`${sicher} gespeichert (Download-Ordner).`);
   return null;
 }
 
@@ -407,6 +447,7 @@ function blechDialog(f) {
     { id: "kette", label: "Linienzug", optionen: Array.from({ length: ketten(finde(f.skizze) || sk.at(-1)).length }, (_, i) => [i, `Nr. ${i + 1}`]), wert: f.kette },
     { id: "material", label: "Material", optionen: MAT_OPT, wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
+    { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
   ], (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1) }), "Blechprofil", "Der Linienzug ist die Blechmitte. Jeder Knick wird zur Biegung mit dem Innenradius des Materials.");
 }
@@ -419,12 +460,13 @@ function vorlageDialog(f) {
     ...VORLAGE[f.vorlage].params.map(([k, l, e]) => ({ id: "p_" + k, label: l, einheit: e, wert: f.params[k] })),
     { id: "material", label: "Material", optionen: MAT_OPT, wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
+    { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "ebene", label: "Querschnitt in", optionen: Object.entries(EBENEN).map(([k, e]) => [k, e.name]), wert: f.ebene },
   ];
   const setze = (f, w) => {
     if (w.vorlage !== f.vorlage) { f.vorlage = w.vorlage; f.params = standardwerte(w.vorlage); f.name = VORLAGE[w.vorlage].name; return; }
     for (const [k] of VORLAGE[f.vorlage].params) if (Number.isFinite(w["p_" + k])) f.params[k] = w["p_" + k];
-    Object.assign(f, { material: w.material, laenge: w.laenge, ebene: w.ebene });
+    Object.assign(f, { material: w.material, laenge: w.laenge, stueck: w.stueck, ebene: w.ebene });
   };
   featureDialog(f, istNeu, felder, setze, "Spengler-Vorlage");
 }
@@ -440,6 +482,7 @@ function profilDialog(f) {
     { id: "start", label: "Startwinkel", einheit: "°", wert: f.start },
     { id: "material", label: "Material", optionen: MAT_OPT, wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
+    { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "ebene", label: "Querschnitt in", optionen: EBENEN_OPT, wert: f.ebene },
   ];
   const setze = (f, w) => { Object.assign(f, w, { name: w.name.trim() || f.name, start: Number.isFinite(w.start) ? w.start : 0 }); };
@@ -821,11 +864,11 @@ document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
   if (k === "s") { e.preventDefault(); projektSpeichern(e.shiftKey); }
-  else if (k === "p") { e.preventDefault(); drucke(doc.features.filter((f) => !f.versteckt)); }
+  else if (k === "p") { e.preventDefault(); drucke(blechteile(), true); }
   else if (k === "o") { e.preventDefault(); projektOeffnen(); }
 });
 let neuBestaetigt = 0;
-$("wDrucken").onclick = () => drucke(doc.features.filter((f) => !f.versteckt));
+$("wDrucken").onclick = () => drucke(blechteile(), true);
 $("wNeu").onclick = () => {
   if (Date.now() - neuBestaetigt > 3000) { neuBestaetigt = Date.now(); status("Nochmals «Neu» klicken, um alles zu löschen."); return; }
   doc = { features: [], zaehler: 1, objekt: doc.objekt, nr: doc.nr }; auswahl = null; projektPfad = null; titel(); regen(); status("Neues Projekt.");

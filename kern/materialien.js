@@ -1,14 +1,14 @@
 // Spengler Digital CAD – Kern: Materialien und Lagerformate
 // Startwerte – mit Probebiegungen an der eigenen Abkantbank kalibrieren.
-// t = Blechdicke mm, ri = Innenradius mm, k = K-Faktor
+// t = Blechdicke mm, ri = Innenradius mm, k = K-Faktor, dichte = kg/dm³
 
 export const MATERIALIEN = [
-  { id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4 },
-  { id: "kupfer06", name: "Kupfer 0.60", t: 0.6, ri: 0.8, k: 0.4 },
-  { id: "alu08", name: "Aluminium 0.80", t: 0.8, ri: 1.2, k: 0.38 },
-  { id: "alu10", name: "Aluminium 1.00", t: 1.0, ri: 1.5, k: 0.38 },
-  { id: "cns05", name: "Chromstahl 0.50", t: 0.5, ri: 1.0, k: 0.42 },
-  { id: "stahl06", name: "Stahl verzinkt 0.60", t: 0.6, ri: 1.0, k: 0.4 },
+  { id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 },
+  { id: "kupfer06", name: "Kupfer 0.60", t: 0.6, ri: 0.8, k: 0.4, dichte: 8.93 },
+  { id: "alu08", name: "Aluminium 0.80", t: 0.8, ri: 1.2, k: 0.38, dichte: 2.7 },
+  { id: "alu10", name: "Aluminium 1.00", t: 1.0, ri: 1.5, k: 0.38, dichte: 2.7 },
+  { id: "cns05", name: "Chromstahl 0.50", t: 0.5, ri: 1.0, k: 0.42, dichte: 7.9 },
+  { id: "stahl06", name: "Stahl verzinkt 0.60", t: 0.6, ri: 1.0, k: 0.4, dichte: 7.85 },
 ];
 
 // Lagerformate des Betriebs (mm)

@@ -100,6 +100,10 @@ table.zeilen .weg { border: 0; background: none; color: var(--bend); font-size: 
 .zeitleiste .rechts { margin-left: auto; display: flex; gap: 6px; }
 .zeitleiste button:disabled { opacity: .4; cursor: default; }
 /* Werkstatt */
+.register { display: flex; border-bottom: 1px solid var(--line); }
+.register button { flex: 1; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted); padding: 8px 12px; font: 600 12px var(--font-label); letter-spacing: .09em; text-transform: uppercase; cursor: pointer; }
+.register button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+table.liste.summen { margin-top: 10px; }
 .zahl { display: flex; align-items: baseline; gap: 6px; padding: 10px 12px 0; }
 .zahl b { font: 600 32px var(--font-num); }
 .zahl span, .unter { color: var(--muted); font-size: 13px; }
@@ -166,7 +170,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <div class="gruppe"><div class="gtitel">Datei</div><div class="knoepfe">
       <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
       <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Öffnen</button>
-      <button class="wz" id="wDrucken" title="Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-8h16v8h-3"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
+      <button class="wz" id="wDrucken" title="Stückliste und Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-8h16v8h-3"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
       <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg>Neu</button>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
     </div></div>
@@ -188,7 +192,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
         <div class="fuss"><button class="knopf weg" id="dLoeschen" hidden>Löschen</button><button class="knopf" id="dAbbrechen">Abbrechen</button><button class="knopf haupt" id="dOk">OK</button></div></div>
       <div id="status"></div>
     </section>
-    <aside class="panel werkstatt"><h2 class="ptitel">Werkstatt</h2><div id="werkstatt"></div>
+    <aside class="panel werkstatt"><div class="register" role="tablist" aria-label="Werkstatt">
+      <button role="tab" data-register="teil" aria-selected="true">Teil</button><button role="tab" data-register="auftrag" aria-selected="false">Auftrag</button></div><div id="werkstatt"></div>
       <div class="auftrag">
         <div class="feld"><label for="aObjekt">Objekt</label><input id="aObjekt"></div>
         <div class="feld"><label for="aNr">Objektnummer</label><input id="aNr"></div>

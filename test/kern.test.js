@@ -5,6 +5,7 @@ import { VORLAGEN, standardwerte, freiesProfil, alsZeilen } from "../kern/profil
 import { MATERIALIEN, quelle } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
 import { profilSvg } from "../kern/zeichnung.js";
+import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 
 const ref = JSON.parse(readFileSync(new URL("./referenz_python.json", import.meta.url)));
 const m = MATERIALIEN[0];
@@ -40,6 +41,19 @@ const t = VORLAGEN[0].bau(standardwerte("traufe"), m);
 const z = alsZeilen(t.start, t.ops);
 const f = freiesProfil(z.start, z.zeilen, m);
 ok(Math.abs(berechne(f.start, f.ops, m.t, m.ri, m.k).zuschnitt - ref.traufe.flat) < 1e-6, "freies Profil Traufe");
+
+// Stückliste: 2 × 333.3 × 2000 mm Titanzink 0.70 = 1.3332 m², 6.72 kg
+const sl = stueckliste([
+  { name: "Rinne", material: MATERIALIEN[0], zuschnitt: 333.3, laenge: 2000, stueck: 2 },
+  { name: "Ort", material: MATERIALIEN[1], zuschnitt: 250, laenge: 1000, stueck: 3 },
+  { name: "Traufe", material: MATERIALIEN[0], zuschnitt: 200, laenge: 3000, stueck: 1 },
+]);
+ok(Math.abs(sl.zeilen[0].flaeche - 1.3332) < 1e-9, "Stückliste Fläche");
+ok(Math.abs(sl.zeilen[0].gewicht - 1.3332 * 0.7 * 7.2) < 1e-9, "Stückliste Gewicht");
+ok(sl.jeMaterial.length === 2 && sl.jeMaterial[0].stueck === 3 && Math.abs(sl.jeMaterial[0].laufmeter - 7) < 1e-9, "Stückliste je Material");
+ok(sl.summe.stueck === 6, "Stückliste Summe");
+const csv = stuecklisteCsv(sl, [["Objekt", "Muster; Bern"]]);
+ok(csv.startsWith("\ufeffObjekt;\"Muster; Bern\"") && csv.includes("Rinne;Titanzink 0.70;333.3;2000;2;4;1.333;6.719"), "Stückliste CSV");
 
 // Fehlerfall: zu kurzer Schenkel
 let geworfen = false;
