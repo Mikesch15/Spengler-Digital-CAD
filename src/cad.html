@@ -87,6 +87,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .zeitleiste { display: flex; align-items: center; gap: 6px; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 .zeitleiste .ztitel { font: 600 11px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; white-space: nowrap; }
 .zeitleiste button { display: flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); border-radius: 5px; padding: 4px 8px; font: 12px var(--font-body); cursor: pointer; white-space: nowrap; }
+#zeit { display: flex; gap: 6px; }
 .zeitleiste .rechts { margin-left: auto; display: flex; gap: 6px; }
 .zeitleiste button:disabled { opacity: .4; cursor: default; }
 /* Werkstatt */
@@ -106,6 +107,33 @@ table.liste td { padding: 5px 8px; border-bottom: 1px solid var(--line); font-va
 .etikett dt { color: var(--muted); font: 600 11px var(--font-label); text-transform: uppercase; }
 .etikett dd { margin: 0; font-family: var(--font-num); }
 .auftrag { padding: 8px 12px; display: grid; gap: 6px; border-top: 1px solid var(--line); }
+.zeichnung { padding: 0 12px 6px; color: var(--fg); }
+.zeichnung svg { width: 100%; height: auto; display: block; }
+/* Druck: nur die Werkstattblätter */
+#druck { display: none; }
+@page { size: A4; margin: 12mm; }
+@media print {
+  body { background: #fff; color: #000; padding: 0; }
+  .app { display: none !important; }
+  #druck { display: block; color: #000; }
+  .blatt { break-after: page; display: grid; gap: 10px; font-size: 12px; }
+  .blatt:last-child { break-after: auto; }
+  .blatt header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #000; padding-bottom: 6px; }
+  .blatt h1 { margin: 0; font: 600 26px var(--font-label); }
+  .blatt small { display: block; font: 600 10px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: #555; }
+  .blatt header dl { display: grid; grid-template-columns: auto auto; gap: 0 10px; margin: 0; }
+  .blatt header dt { font: 600 10px var(--font-label); text-transform: uppercase; color: #555; }
+  .blatt header dd { margin: 0; font-family: var(--font-num); }
+  .eckdaten { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .eckdaten div { border: 1px solid #999; border-radius: 4px; padding: 4px 6px; }
+  .eckdaten b { font: 600 14px var(--font-num); }
+  .grosszeichnung { border: 1px solid #999; border-radius: 4px; display: flex; justify-content: center; }
+  .grosszeichnung svg { width: 100%; height: auto; max-height: 95mm; }
+  .blatt table.liste th, .blatt table.liste td { border-bottom: 1px solid #999; color: #000; }
+  .blatt .hinweis { color: #333; margin: 0; }
+  .blatt .etikett { width: 90mm; margin: 0; border-color: #000; }
+  .blatt .etikett dt { color: #555; }
+}
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
 
@@ -128,6 +156,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <div class="gruppe"><div class="gtitel">Datei</div><div class="knoepfe">
       <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
       <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Öffnen</button>
+      <button class="wz" id="wDrucken" title="Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-8h16v8h-3"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
       <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg>Neu</button>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
     </div></div>
@@ -161,6 +190,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <span class="rechts"><button id="zurueck" title="Rückgängig (Strg+Z)">↶ Rückgängig</button><button id="vor" title="Wiederholen (Strg+Y)">↷ Wiederholen</button>
       <button id="rueckgaengig">Letzten Schritt löschen</button></span></footer>
 </div>
+<div id="druck" aria-hidden="true"></div>
 
 <script type="module">
 /*APP*/

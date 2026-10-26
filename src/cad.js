@@ -5,6 +5,7 @@ import { berechne, kontur } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte } from "../kern/profile.js";
 import { MATERIALIEN, quelle } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
+import { profilSvg } from "../kern/zeichnung.js";
 
 const $ = (id) => document.getElementById(id);
 const SPEICHER = "sdcad-doc-0.2";
@@ -248,16 +249,47 @@ function zeigeWerkstatt() {
   const r = f._res, m = material(f.material), q = quelle(r.zuschnitt);
   w.innerHTML = `<div class="zahl"><b>${f1(r.zuschnitt)}</b><span>mm Zuschnitt</span></div>
     <div class="unter">${f.name} · ${r.biegungen.length} Biegungen${r.hatRundung ? "" : ` · Summe Schenkel ${r.summeSchenkel.toFixed(0)} mm`}</div>
+    <div class="zeichnung">${profilSvg(r, { dicke: m.t, breite: 276, hoehe: 200, schrift: 11 })}</div>
     <div class="quelle">${q ? `Aus <b>${q.art} ${q.breite}${q.laenge ? " × " + q.laenge : ""} mm</b> · Rest ${f1(q.rest)} mm` : "Breiter als alle Lagerformate"}</div>
     <table class="liste"><thead><tr><th>Biegung</th><th class="num">Anschlag ab A</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
     ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span> ${b.art === "Abkanten" ? "" : b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : f1(b.pos)}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
     </tbody></table>
-    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button></div>
+    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button></div>
     <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
     <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm</dd></dl>`;
   $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${f.laenge} mm`, "",
     "Biegung\tAnschlag ab A (mm)\tWinkel\tRichtung", ...r.biegungen.map((b) => `B${b.nr}\t${f1(b.pos)}\t${f1(Math.abs(b.winkel))}\t${b.richtung}`)].join("\n"));
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, f.laenge, f.name), "application/dxf");
+  $("kDruck").onclick = () => drucke([f]);
+}
+
+// ------------------------------------------------------------ Druck: Werkstattblatt je Blechteil (A4)
+function werkstattblatt(f) {
+  const r = f._res, m = material(f.material), q = quelle(r.zuschnitt);
+  return `<section class="blatt">
+    <header><div><small>Werkstattblatt</small><h1>${esc(f.name)}</h1></div>
+      <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
+    <div class="eckdaten">
+      <div><small>Zuschnitt</small><b>${f1(r.zuschnitt)} × ${f.laenge} mm</b></div>
+      <div><small>Material</small><b>${esc(m.name)}</b></div>
+      <div><small>Stück</small><b>${f.stueck ?? 1}</b></div>
+      <div><small>Aus</small><b>${q ? `${q.art} ${q.breite}${q.laenge ? " × " + q.laenge : ""}` : "Sonderformat"}</b></div>
+    </div>
+    <div class="grosszeichnung">${profilSvg(r, { dicke: m.t, breite: 640, hoehe: 360, schrift: 14, rand: 44 })}</div>
+    <table class="liste"><thead><tr><th>Biegung</th><th>Art</th><th class="num">Anschlag ab A (mm)</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
+      ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span></td><td>${b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : f1(b.pos)}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
+    </tbody></table>
+    <p class="hinweis">Masse in mm auf der Blechmitte. Anschlag ab Kante A (grüner Punkt). Richtung «oben/unten» mit Kante A links.
+      Innenradius ${m.ri} mm, K-Faktor ${m.k}.</p>
+    <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
+      <dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>
+  </section>`;
+}
+function drucke(teile) {
+  teile = teile.filter((f) => f._res);
+  if (!teile.length) return status("Keine Blechteile zum Drucken.");
+  $("druck").innerHTML = teile.map(werkstattblatt).join("");
+  window.print();
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 for (const [id, k] of [["aObjekt", "objekt"], ["aNr", "nr"]]) { $(id).value = doc[k]; $(id).addEventListener("input", (e) => { doc[k] = e.target.value; speichern(); zeigeWerkstatt(); }); }
@@ -735,9 +767,11 @@ document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
   if (k === "s") { e.preventDefault(); projektSpeichern(e.shiftKey); }
+  else if (k === "p") { e.preventDefault(); drucke(doc.features.filter((f) => !f.versteckt)); }
   else if (k === "o") { e.preventDefault(); projektOeffnen(); }
 });
 let neuBestaetigt = 0;
+$("wDrucken").onclick = () => drucke(doc.features.filter((f) => !f.versteckt));
 $("wNeu").onclick = () => {
   if (Date.now() - neuBestaetigt > 3000) { neuBestaetigt = Date.now(); status("Nochmals «Neu» klicken, um alles zu löschen."); return; }
   doc = { features: [], zaehler: 1, objekt: doc.objekt, nr: doc.nr }; auswahl = null; projektPfad = null; titel(); regen(); status("Neues Projekt.");
