@@ -677,4 +677,6 @@ regen();
 auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser(); zeigeWerkstatt();
 ansicht("iso");
 (function schleife() { steuerung.update(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
+// Web-Version: offline nutzbar machen (nicht im PC-Programm und nicht per Doppelklick)
+if ("serviceWorker" in navigator && location.protocol.startsWith("http") && !("__TAURI_INTERNALS__" in window)) navigator.serviceWorker.register("sw.js").catch(() => {});
 status("Beispiel geladen. Neu zeichnen: «Skizze» → Ebene wählen → Linienzug zeichnen → «Blechprofil».");

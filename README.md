@@ -21,10 +21,13 @@ test/            Tests gegen die Werte des Fusion-Add-ins
 
 ## Lokal starten (Windows)
 
-1. Node.js installieren (nodejs.org, LTS).
-2. Im Ordner eine Eingabeaufforderung öffnen.
-3. `npx serve .` ausführen und die angezeigte Adresse im Browser öffnen.
-4. Tests: `npm test`
+`index.html` per Doppelklick öffnen – läuft ohne Internet, alles ist eingebettet.
+
+Entwickeln:
+
+1. Node.js installieren (nodejs.org, LTS), im Ordner `npm install`.
+2. Nach Änderungen in `src/` oder `kern/`: `npm run build` (baut `index.html` und `dist/`).
+3. Tests: `npm test`
 
 ## Auf dem Handy testen
 
@@ -83,5 +86,4 @@ npm run tauri build   # Installer nach src-tauri/target/release/bundle/nsis/
 
 - OpenCascade auf dem Windows-PC einrichten (native Bibliothek), STEP-Export
 - Echtes Speichern von Projekten und Dateien im PC-Programm (Speichern-Dialog statt Download-Ordner)
-- three.js und Schriften lokal einbinden, damit das Programm ohne Internet startet
 - Abkantliste im Eingabeformat von Jorns und Schröder (Modelle offen)

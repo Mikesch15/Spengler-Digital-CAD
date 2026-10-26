@@ -9,6 +9,11 @@
     "tauri": "tauri"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.12.4"
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@tauri-apps/cli": "^2.12.4",
+    "esbuild": "^0.25.10",
+    "three": "^0.160.0"
   }
 }
