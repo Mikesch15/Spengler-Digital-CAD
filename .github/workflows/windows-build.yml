@@ -1,0 +1,82 @@
+# Baut bei jeder Änderung das Windows-Installationsprogramm (NSIS).
+# Auf main wird zusätzlich ein GitHub-Release mit latest.json veröffentlicht,
+# aus dem sich installierte Programme automatisch aktualisieren.
+name: Windows-Installer
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      VEROEFFENTLICHEN: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      # Jede Änderung bekommt eine eigene, höhere Version (Major.Minor aus package.json, Patch = Laufnummer),
+      # sonst erkennt die Update-Funktion keine neue Version.
+      - name: Version setzen
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')").${{ github.run_number }}
+          node -e "
+            const fs = require('fs'); const p = 'src-tauri/tauri.conf.json';
+            const c = JSON.parse(fs.readFileSync(p, 'utf8')); c.version = process.argv[1];
+            fs.writeFileSync(p, JSON.stringify(c, null, 2));
+          " "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version $VERSION"
+
+      - name: Bauen und Release veröffentlichen
+        if: env.VEROEFFENTLICHEN == 'true'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v${{ steps.version.outputs.version }}
+          releaseName: Spengler Digital CAD ${{ steps.version.outputs.version }}
+          releaseBody: Installationsprogramm herunterladen (…-setup.exe) und ausführen. Bereits installierte Programme bieten das Update beim nächsten Start an.
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+
+      - name: Nur bauen (Branch / Pull Request)
+        if: env.VEROEFFENTLICHEN != 'true'
+        uses: tauri-apps/tauri-action@v0
+
+      - name: Installer als Artefakt ablegen
+        uses: actions/upload-artifact@v4
+        with:
+          name: spengler-digital-cad-${{ steps.version.outputs.version }}-windows
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

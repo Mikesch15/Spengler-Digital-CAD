@@ -1,0 +1,46 @@
+// Prüft den JavaScript-Kern gegen die Werte des Python-Add-ins
+import { readFileSync } from "node:fs";
+import { berechne, kontur, polylinie } from "../kern/geometrie.js";
+import { VORLAGEN, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
+import { MATERIALIEN, quelle } from "../kern/materialien.js";
+import { abwicklungDxf } from "../kern/dxf.js";
+
+const ref = JSON.parse(readFileSync(new URL("./referenz_python.json", import.meta.url)));
+const m = MATERIALIEN[0];
+let fehler = 0;
+const ok = (bed, msg) => { if (!bed) { fehler++; console.log("FEHLER:", msg); } };
+
+for (const v of VORLAGEN) {
+  const { start, ops } = v.bau(standardwerte(v.id), m);
+  const r = berechne(start, ops, m.t, m.ri, m.k);
+  const py = ref[v.id];
+  ok(Math.abs(r.zuschnitt - py.flat) < 1e-6, `${v.id} Zuschnitt ${r.zuschnitt} vs ${py.flat}`);
+  r.biegungen.forEach((b, i) => ok(Math.abs(b.pos - py.bends[i]) < 1e-6, `${v.id} B${i + 1}`));
+  // Kontur geschlossen und mit Fläche ≈ Zuschnitt × t
+  const k = kontur(r.pfad, m.t, 1);
+  let fl = 0;
+  for (let i = 0; i < k.length; i++) { const [a, b] = k[i], [c, d] = k[(i + 1) % k.length]; fl += a * d - b * c; }
+  fl = Math.abs(fl / 2);
+  const soll = (r.zuschnitt) * m.t;
+  ok(Math.abs(fl - soll) / soll < 0.03, `${v.id} Konturfläche ${fl.toFixed(1)} vs ${soll.toFixed(1)}`);
+  // Endpunkt des Pfads = Ende der Polylinie
+  const pl = polylinie(r.pfad);
+  ok(pl.length > 2, `${v.id} Polylinie`);
+  const dxf = abwicklungDxf(r, 1000, v.name);
+  ok(dxf.trimEnd().endsWith("EOF") && dxf.split("\n").length % 2 === 1, `${v.id} DXF`);
+  console.log(v.name.padEnd(22), r.zuschnitt.toFixed(1).padStart(6), "mm  Fläche", fl.toFixed(1), "/", soll.toFixed(1), " Quelle", JSON.stringify(quelle(r.zuschnitt)));
+}
+
+// Freies Profil = gleiche Rechnung wie Vorlage
+const t = VORLAGEN[0].bau(standardwerte("traufe"), m);
+const z = alsZeilen(t.start, t.ops);
+const f = freiesProfil(z.start, z.zeilen, m);
+ok(Math.abs(berechne(f.start, f.ops, m.t, m.ri, m.k).zuschnitt - ref.traufe.flat) < 1e-6, "freies Profil Traufe");
+
+// Fehlerfall: zu kurzer Schenkel
+let geworfen = false;
+try { berechne(0, [{ typ: "schenkel", L: 0.5 }, { typ: "biegung", winkel: 90, ri: null, modus: "sharp" }, { typ: "schenkel", L: 50 }], 0.7, 1, 0.4); } catch { geworfen = true; }
+ok(geworfen, "zu kurzer Schenkel erkannt");
+
+console.log(fehler ? `${fehler} Fehler` : "Alle Tests bestanden");
+process.exit(fehler ? 1 : 0);
