@@ -1,5 +1,5 @@
 // Service Worker der Web-Version: zuerst das Netz (immer die neueste Version), ohne Netz aus dem Zwischenspeicher.
-const CACHE = "sdcad-v1";
+const CACHE = "sdcad-v2";
 const DATEIEN = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -13,6 +13,7 @@ self.addEventListener("fetch", (e) => {
   e.respondWith(
     fetch(e.request)
       .then((antwort) => { const kopie = antwort.clone(); caches.open(CACHE).then((c) => c.put(e.request, kopie)); return antwort; })
-      .catch(() => caches.match(e.request, { ignoreSearch: true }).then((a) => a || caches.match("./index.html")))
+      .catch(() => caches.match(e.request, { ignoreSearch: true })
+        .then((a) => a || (e.request.mode === "navigate" ? caches.match("./index.html") : Response.error())))
   );
 });
