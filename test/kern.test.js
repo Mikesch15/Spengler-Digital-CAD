@@ -4,7 +4,7 @@ import { berechne, kontur, polylinie } from "../kern/geometrie.js";
 import { VORLAGEN, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
-import { profilSvg } from "../kern/zeichnung.js";
+import { profilSvg, abwicklungSvg } from "../kern/zeichnung.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 
 const ref = JSON.parse(readFileSync(new URL("./referenz_python.json", import.meta.url)));
@@ -35,6 +35,8 @@ for (const v of VORLAGEN) {
   const svg = profilSvg(r, { dicke: m.t });
   ok(svg.startsWith("<svg") && svg.trimEnd().endsWith("</svg>") && !svg.includes("NaN"), `${v.id} SVG gültig`);
   ok((svg.match(/class="biegung"/g) || []).length === r.biegungen.length && svg.includes('class="kante-a"'), `${v.id} SVG Biegungen und Kante A`);
+  const ab = abwicklungSvg(r);
+  ok(!ab.includes("NaN") && (ab.match(/class="biegung"/g) || []).length === r.biegungen.length, `${v.id} Abwicklung SVG`);
   console.log(v.name.padEnd(22), r.zuschnitt.toFixed(1).padStart(6), "mm  Fläche", fl.toFixed(1), "/", soll.toFixed(1), " Quelle", JSON.stringify(quelle(r.zuschnitt)));
 }
 

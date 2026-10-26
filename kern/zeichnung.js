@@ -61,3 +61,27 @@ export function profilSvg(res, { breite = 300, hoehe = 220, rand = 34, schrift =
 ${teile.join("\n")}
 </svg>`;
 }
+
+// Abwicklung als SVG: Blechstreifen (Zuschnitt) mit Biegelinien und Anschlagmass ab Kante A
+export function abwicklungSvg(res, { breite = 300, schrift = 11 } = {}) {
+  const rand = 14, streifen = 22;
+  const s = (breite - 2 * rand) / Math.max(res.zuschnitt, 1);
+  const X = (v) => z(rand + v * s), y0 = schrift * 2 + 10;
+  const teile = [`<rect x="${X(0)}" y="${y0}" width="${z(res.zuschnitt * s)}" height="${streifen}" class="streifen"/>`];
+  const belegt = [];
+  for (const b of res.biegungen) {
+    if (b.art === "Rundung") teile.push(`<rect x="${X(b.von)}" y="${y0}" width="${z((b.bis - b.von) * s)}" height="${streifen}" class="rundung"/>`);
+    else teile.push(`<line x1="${X(b.pos)}" y1="${y0 - 3}" x2="${X(b.pos)}" y2="${y0 + streifen + 3}" class="biegelinie"/>`);
+    // Nummer oben, Mass unten; bei engen Biegungen Mass eine Zeile tiefer
+    const x = +X(b.pos), zeile = belegt.filter((o) => Math.abs(o - x) < schrift * 3.2).length % 2;
+    belegt.push(x);
+    teile.push(`<text x="${x}" y="${y0 - 6 - zeile * (schrift + 2)}" class="biegung">B${b.nr}</text>`);
+    teile.push(`<text x="${x}" y="${y0 + streifen + schrift + 2 + zeile * (schrift + 2)}" class="mass">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : b.pos.toFixed(1)}</text>`);
+  }
+  teile.push(`<circle cx="${X(0)}" cy="${y0 + streifen / 2}" r="${schrift * 0.4}" class="kante-a"/>`);
+  const h = y0 + streifen + (schrift + 2) * 2 + 6;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${h}" width="${breite}" height="${h}" font-size="${schrift}" text-anchor="middle">
+<style>.streifen{fill:none;stroke:currentColor;stroke-width:1.5}.rundung{fill:#c4352b;opacity:.15}.biegelinie{stroke:#c4352b;stroke-width:1.5;stroke-dasharray:4 2}.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}</style>
+${teile.join("\n")}
+</svg>`;
+}
