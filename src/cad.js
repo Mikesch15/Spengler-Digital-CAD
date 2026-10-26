@@ -2,7 +2,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { berechne, kontur } from "../kern/geometrie.js";
-import { VORLAGEN, VORLAGE, standardwerte } from "../kern/profile.js";
+import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, quelle } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
 import { profilSvg } from "../kern/zeichnung.js";
@@ -165,6 +165,12 @@ function regen() {
         const { start, ops } = v.bau(f.params, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t)], f.ebene, f.laenge, f.richtung, FARBE[m.id], f.id));
+      } else if (f.typ === "profil") {
+        const m = material(f.material);
+        if (f.zeilen.some((z) => !(z.L > 0))) throw new Error("Jeder Schenkel braucht eine Länge grösser als 0");
+        const { start, ops } = freiesProfil(f.start, f.zeilen, m);
+        f._res = berechne(start, ops, m.t, m.ri, m.k);
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t)], f.ebene, f.laenge, f.richtung, FARBE[m.id], f.id));
       }
     } catch (e) { f._fehler = e.message; }
   }
@@ -214,7 +220,7 @@ function markiere() {
 }
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { skizze: "Skizze", extrusion: "Extrusion", blech: "Blechprofil", vorlage: "Vorlage" };
+const NAMEN = { skizze: "Skizze", extrusion: "Extrusion", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil" };
 function zeigeBrowser() {
   const sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze");
   const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}"><span class="typ ${typ}"></span>${f.name}${f._fehler ? " ⚠" : ""}
@@ -254,13 +260,18 @@ function zeigeWerkstatt() {
     <table class="liste"><thead><tr><th>Biegung</th><th class="num">Anschlag ab A</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
     ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span> ${b.art === "Abkanten" ? "" : b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : f1(b.pos)}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
     </tbody></table>
-    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button></div>
+    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button>${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
     <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
     <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm</dd></dl>`;
   $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${f.laenge} mm`, "",
     "Biegung\tAnschlag ab A (mm)\tWinkel\tRichtung", ...r.biegungen.map((b) => `B${b.nr}\t${f1(b.pos)}\t${f1(Math.abs(b.winkel))}\t${b.richtung}`)].join("\n"));
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, f.laenge, f.name), "application/dxf");
   $("kDruck").onclick = () => drucke([f]);
+  if ($("kFrei")) $("kFrei").onclick = () => { // Vorlage in Tabelle umwandeln, um Schenkel frei zu ergänzen
+    const { start, zeilen } = alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m)));
+    Object.assign(f, { typ: "profil", start, zeilen }); delete f.vorlage; delete f.params;
+    regen(); profilDialog(f);
+  };
 }
 
 // ------------------------------------------------------------ Druck: Werkstattblatt je Blechteil (A4)
@@ -328,31 +339,34 @@ function dialog(opt) {
   $("dInhalt").innerHTML = opt.felder.map((fd) => {
     const inp = fd.optionen
       ? `<select id="d_${fd.id}">${fd.optionen.map(([w, t]) => `<option value="${w}" ${String(w) === String(fd.wert) ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`
-      : `<input id="d_${fd.id}" type="number" step="any" value="${fd.wert}">`;
+      : fd.text ? `<input id="d_${fd.id}" type="text" value="${esc(fd.wert)}">`
+      : `<input id="d_${fd.id}" type="number" step="any" inputmode="decimal" value="${fd.wert}">`;
     return `<div class="feld"><label for="d_${fd.id}">${fd.label}${fd.einheit ? ` (${fd.einheit})` : ""}</label>${inp}</div>`;
-  }).join("") + (opt.hinweis ? `<p class="hinweis">${opt.hinweis}</p>` : "");
+  }).join("") + (opt.zusatz ? `<div id="dZusatz">${opt.zusatz()}</div>` : "") + (opt.hinweis ? `<p class="hinweis">${opt.hinweis}</p>` : "");
   $("dialog").hidden = false;
   opt.felder.forEach((fd) => $("d_" + fd.id).addEventListener(fd.optionen ? "change" : "input", () => opt.aendern?.(werte(), fd.id)));
+  opt.binden?.($("dZusatz"));
 }
-const werte = () => Object.fromEntries(dlg.felder.map((fd) => { const v = $("d_" + fd.id).value; return [fd.id, fd.optionen ? v : parseFloat(v)]; }));
+const werte = () => Object.fromEntries(dlg.felder.map((fd) => { const v = $("d_" + fd.id).value; return [fd.id, fd.optionen || fd.text ? v : parseFloat(v)]; }));
 function schliesse() { $("dialog").hidden = true; dlg = null; }
 $("dOk").onclick = () => { dlg?.ok?.(werte()); schliesse(); regen(); };
 $("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); };
 $("dLoeschen").onclick = () => { dlg?.loeschen?.(); schliesse(); regen(); };
 
 // Neue oder bestehende Features mit Live-Vorschau. felder(f) liefert die Felder, setze(f, w) übernimmt Werte.
-function featureDialog(f, istNeu, felder, setze, titel, hinweis) {
-  const kopie = JSON.parse(JSON.stringify(f));
+function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
+  const kopie = JSON.parse(JSON.stringify(f)), alteAuswahl = auswahl;
   if (istNeu) doc.features.push(f);
+  auswahl = f.id; // Werkstatt zeigt das Teil schon während der Eingabe
   dialog({
-    titel, hinweis, felder: felder(f),
+    titel, hinweis, felder: felder(f), ...extra,
     aendern: (w, feld) => {
       setze(f, w);
       if (feld === "vorlage" || feld === "skizze") { const d = dlg; dialog({ ...d, felder: felder(f) }); setze(f, werte()); }
       regen();
     },
     ok: (w) => { setze(f, w); auswahl = f.id; },
-    abbrechen: () => { if (istNeu) doc.features.splice(doc.features.indexOf(f), 1); else Object.assign(f, kopie); },
+    abbrechen: () => { if (istNeu) { doc.features.splice(doc.features.indexOf(f), 1); auswahl = alteAuswahl; } else Object.assign(f, kopie); },
     loeschen: istNeu ? null : () => { doc.features.splice(doc.features.indexOf(f), 1); auswahl = null; },
   });
   setze(f, werte()); regen();
@@ -368,6 +382,7 @@ function bearbeite(f) {
   if (f.typ === "extrusion") return extrusionDialog(f);
   if (f.typ === "blech") return blechDialog(f);
   if (f.typ === "vorlage") return vorlageDialog(f);
+  if (f.typ === "profil") return profilDialog(f);
 }
 
 function extrusionDialog(f) {
@@ -414,6 +429,44 @@ function vorlageDialog(f) {
   featureDialog(f, istNeu, felder, setze, "Spengler-Vorlage");
 }
 
+// Freies Profil: Schenkel als Tabelle, Winkel jeweils nach dem Schenkel
+const EBENEN_OPT = Object.entries(EBENEN).map(([k, e]) => [k, e.name]);
+function profilDialog(f) {
+  const istNeu = !f;
+  f ||= { id: neueId(), typ: "profil", name: "Profil " + (doc.features.filter((x) => x.typ === "profil").length + 1), start: 0,
+    zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 50, winkel: 0, art: "abkanten" }], material: MATERIALIEN[0].id, laenge: 1000, richtung: "eine", ebene: "XY" };
+  const felder = (f) => [
+    { id: "name", label: "Name", text: true, wert: f.name },
+    { id: "start", label: "Startwinkel", einheit: "°", wert: f.start },
+    { id: "material", label: "Material", optionen: MAT_OPT, wert: f.material },
+    { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
+    { id: "ebene", label: "Querschnitt in", optionen: EBENEN_OPT, wert: f.ebene },
+  ];
+  const setze = (f, w) => { Object.assign(f, w, { name: w.name.trim() || f.name, start: Number.isFinite(w.start) ? w.start : 0 }); };
+  const tabelle = () => `<table class="zeilen"><thead><tr><th>#</th><th>Schenkel mm</th><th>Winkel °</th><th>Art</th><th></th></tr></thead><tbody>
+    ${f.zeilen.map((z, i) => { const letzte = i === f.zeilen.length - 1; return `<tr data-i="${i}"><td>${i + 1}</td>
+      <td><input data-k="L" type="number" step="any" inputmode="decimal" value="${z.L}" aria-label="Schenkel ${i + 1} Länge"></td>
+      <td>${letzte ? "–" : `<input data-k="winkel" type="number" step="any" inputmode="decimal" value="${z.winkel}" aria-label="Winkel nach Schenkel ${i + 1}">`}</td>
+      <td>${letzte ? "" : `<select data-k="art" aria-label="Art nach Schenkel ${i + 1}"><option value="abkanten" ${z.art !== "umschlag" ? "selected" : ""}>Abkanten</option><option value="umschlag" ${z.art === "umschlag" ? "selected" : ""}>Umschlag</option></select>`}</td>
+      <td>${f.zeilen.length > 2 ? `<button class="weg" data-weg="${i}" aria-label="Schenkel ${i + 1} entfernen">×</button>` : ""}</td></tr>`; }).join("")}
+    </tbody></table><button class="knopf" data-neu>+ Schenkel</button>`;
+  const binden = (box) => {
+    const neu = () => { const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); };
+    box.addEventListener("input", (e) => {
+      const k = e.target.dataset.k, i = +e.target.closest("tr")?.dataset.i; if (!k) return;
+      f.zeilen[i][k] = k === "art" ? e.target.value : parseFloat(e.target.value);
+      regen();
+    });
+    box.addEventListener("click", (e) => {
+      if (e.target.dataset.weg != null) { f.zeilen.splice(+e.target.dataset.weg, 1); f.zeilen.at(-1).winkel = 0; neu(); }
+      else if (e.target.dataset.neu != null) { const l = f.zeilen.at(-1); l.winkel = 90; l.art = "abkanten"; f.zeilen.push({ L: 30, winkel: 0, art: "abkanten" }); neu(); box.querySelector("tr:last-child input")?.focus(); }
+    });
+  };
+  featureDialog(f, istNeu, felder, setze, "Freies Profil",
+    "Winkel nach dem Schenkel: + biegt nach oben (links), − nach unten (rechts). Umschlag = 180°, Vorzeichen gibt die Seite. Masse auf der Blechmitte.",
+    { zusatz: tabelle, binden });
+}
+
 // ------------------------------------------------------------ Ansichten
 function fitte(box) {
   if (box.isEmpty()) box = new THREE.Box3(new THREE.Vector3(-200, -200, -200), new THREE.Vector3(200, 200, 200));
@@ -445,7 +498,7 @@ function setzeWerkzeug(w) {
 function starteSkizze(f) {
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, zug: null };
   $("gSkizze").hidden = false;
-  ["wSkizze", "wExtrusion", "wBlech", "wVorlage"].forEach((id) => ($(id).disabled = true));
+  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil"].forEach((id) => ($(id).disabled = true));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
   steuerung.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
   const E = EBENEN[f.ebene];
@@ -464,7 +517,7 @@ function beendeSkizze() {
   skizze = null;
   if (!f.elemente.length) doc.features.splice(doc.features.indexOf(f), 1);
   $("gSkizze").hidden = true;
-  ["wSkizze", "wExtrusion", "wBlech", "wVorlage"].forEach((id) => ($(id).disabled = false));
+  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil"].forEach((id) => ($(id).disabled = false));
   steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   szene.remove(skizzenRaster); skizzenRaster = null; boden.visible = true;
@@ -732,6 +785,7 @@ $("wSkizze").onclick = () => {
 $("wExtrusion").onclick = () => { if (dlg) $("dAbbrechen").click(); extrusionDialog(); };
 $("wBlech").onclick = () => { if (dlg) $("dAbbrechen").click(); blechDialog(); };
 $("wVorlage").onclick = () => { if (dlg) $("dAbbrechen").click(); vorlageDialog(); };
+$("wProfil").onclick = () => { if (dlg) $("dAbbrechen").click(); profilDialog(); };
 $("tAuswahl").onclick = () => { abschliessenLinie(); setzeWerkzeug("auswahl"); };
 $("tLinie").onclick = () => { abschliessenLinie(); setzeWerkzeug("linie"); };
 $("tRechteck").onclick = () => { abschliessenLinie(); setzeWerkzeug("rechteck"); };

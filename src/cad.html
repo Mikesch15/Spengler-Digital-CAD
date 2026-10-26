@@ -72,7 +72,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .eingabe label { display: flex; align-items: center; gap: 3px; font: 600 11px var(--font-label); color: var(--muted); text-transform: uppercase; }
 .eingabe input { width: 64px; font: 12px var(--font-num); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; background: var(--panel-2); color: var(--fg); }
 /* Befehlsdialog */
-.dialog { position: absolute; top: 44px; right: 8px; width: 270px; max-width: calc(100% - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / .15); }
+.dialog { position: absolute; top: 44px; right: 8px; width: 330px; max-width: calc(100% - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / .15); }
 .dialog h3 { margin: 0; padding: 8px 12px; font: 600 14px var(--font-label); letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
 .dialog .inhalt { padding: 8px 12px; display: grid; gap: 6px; max-height: 55vh; overflow: auto; }
 .feld { display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 6px; }
@@ -83,6 +83,15 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .knopf.haupt { background: var(--accent); border-color: var(--accent); color: #fff; }
 .knopf.weg { color: var(--bend); margin-right: auto; }
 .hinweis { font-size: 12px; color: var(--muted); }
+table.zeilen { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+table.zeilen th:nth-child(1) { width: 18px; } table.zeilen th:nth-child(2) { width: 30%; } table.zeilen th:nth-child(3) { width: 24%; } table.zeilen th:nth-child(5) { width: 24px; }
+table.zeilen th { font: 600 10px var(--font-label); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 2px; }
+table.zeilen td { padding: 2px; }
+table.zeilen input, table.zeilen select { width: 100%; font: 13px var(--font-num); border: 1px solid var(--line); border-radius: 5px; padding: 4px 5px; background: var(--panel-2); color: var(--fg); }
+table.zeilen select { font-family: var(--font-body); }
+table.zeilen td:first-child { color: var(--muted); font-family: var(--font-num); }
+table.zeilen .weg { border: 0; background: none; color: var(--bend); font-size: 16px; cursor: pointer; padding: 0 4px; }
+#dZusatz { display: grid; gap: 6px; justify-items: start; }
 /* Zeitleiste */
 .zeitleiste { display: flex; align-items: center; gap: 6px; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 .zeitleiste .ztitel { font: 600 11px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; white-space: nowrap; }
@@ -145,6 +154,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wExtrusion"><svg viewBox="0 0 24 24"><path d="M4 16l8 4 8-4M4 16V9l8-4 8 4v7M12 13v7M4 9l8 4 8-4"/></svg>Extrudieren</button>
       <button class="wz" id="wBlech"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg>Blechprofil</button>
       <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path d="M3 6h10l-3 12h11"/><circle cx="3" cy="6" r="1.5"/></svg>Spengler-Vorlage</button>
+      <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14"/></svg>Freies Profil</button>
     </div></div>
     <div class="gruppe skizzengruppe" id="gSkizze" hidden><div class="gtitel">Skizze</div><div class="knoepfe">
       <button class="wz" id="tAuswahl"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-2 6z"/></svg>Auswahl</button>
