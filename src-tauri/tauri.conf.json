@@ -8,6 +8,7 @@
     "beforeBuildCommand": "npm run build"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "Spengler Digital CAD",
@@ -18,22 +19,51 @@
         "maximized": true
       }
     ],
-    "security": { "csp": null }
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "createUpdaterArtifacts": true,
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
     "windows": {
-      "nsis": { "installMode": "currentUser", "languages": ["German"] }
-    }
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "German"
+        ]
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "sdcad"
+        ],
+        "name": "Spengler-Digital-CAD-Projekt",
+        "description": "Spengler Digital CAD Projekt",
+        "role": "Editor",
+        "mimeType": "application/json"
+      }
+    ]
   },
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBOTI1NDFGOEJBQkFCQjEKUldTeHE2dUxIMVNTcWtrS3Z3bUNiL1p1WWEwSmJKbGlSSERnQjRjU3BZQ2huOE15Q2JVaDhSY3IK",
-      "endpoints": ["https://github.com/Mikesch15/Spengler-Digital-CAD/releases/latest/download/latest.json"],
-      "windows": { "installMode": "passive" }
+      "endpoints": [
+        "https://github.com/Mikesch15/Spengler-Digital-CAD/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

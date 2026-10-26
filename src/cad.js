@@ -230,11 +230,25 @@ function status(t) { $("status").textContent = t; }
 async function kopiere(text) {
   try { await navigator.clipboard.writeText(text); status("In die Zwischenablage kopiert."); } catch { status("Kopieren wird hier nicht unterstützt."); }
 }
-function herunterladen(name, inhalt, typ) {
+// ------------------------------------------------------------ Dateien
+// Im PC-Programm (Tauri) mit echtem Speichern-/Öffnen-Dialog, im Browser als Download bzw. Dateiauswahl.
+const pc = window.__TAURI__?.core;
+const DATEITYPEN = { sdcad: "Spengler-Digital-CAD-Projekt", dxf: "DXF-Zeichnung", csv: "CSV-Tabelle" };
+const dateiname = (pfad) => pfad.split(/[\\/]/).pop();
+async function herunterladen(name, inhalt, typ, pfad = null) {
+  const endung = name.split(".").pop();
+  if (pc) {
+    try {
+      const ziel = await pc.invoke("datei_speichern", { name, inhalt, filter: DATEITYPEN[endung] || endung, endungen: [endung], pfad });
+      if (ziel) status(`${dateiname(ziel)} gespeichert.`);
+      return ziel;
+    } catch (e) { status("Speichern fehlgeschlagen: " + e); return null; }
+  }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([inhalt], { type: typ })); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   status(`${name} gespeichert (Download-Ordner).`);
+  return null;
 }
 
 // ------------------------------------------------------------ Befehlsdialog
@@ -655,17 +669,42 @@ $("tLinie").onclick = () => { abschliessenLinie(); setzeWerkzeug("linie"); };
 $("tRechteck").onclick = () => { abschliessenLinie(); setzeWerkzeug("rechteck"); };
 $("tKreis").onclick = () => { abschliessenLinie(); setzeWerkzeug("kreis"); };
 $("tFertig").onclick = beendeSkizze;
-$("wSpeichern").onclick = () => herunterladen(`${doc.nr || "projekt"}.sdcad`, JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v), 1), "application/json");
-$("wOeffnen").onclick = () => $("datei").click();
-$("datei").onchange = async (e) => {
-  try { const d = JSON.parse(await e.target.files[0].text()); if (!d.features) throw 0; doc = d; auswahl = null; $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; regen(); ansicht("iso"); status("Projekt geöffnet."); }
-  catch { status("Diese Datei ist kein Spengler-Digital-CAD-Projekt."); }
-  e.target.value = "";
-};
+let projektPfad = null; // PC-Programm: Speichern schreibt ohne Rückfrage in diese Datei
+function titel() {
+  document.title = (projektPfad ? dateiname(projektPfad) + " – " : "") + "Spengler Digital CAD";
+  window.__TAURI__?.window.getCurrentWindow().setTitle(document.title).catch(() => {});
+}
+async function projektSpeichern(unter = false) {
+  const inhalt = JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v), 1);
+  const ziel = await herunterladen(`${doc.nr || "projekt"}.sdcad`, inhalt, "application/json", unter ? null : projektPfad);
+  if (ziel) { projektPfad = ziel; titel(); }
+}
+function ladeProjekt(text, pfad = null) {
+  try {
+    const d = JSON.parse(text); if (!d.features) throw 0;
+    doc = d; auswahl = null; projektPfad = pfad; titel();
+    $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; regen();
+    waehle(doc.features.find((f) => f._res)?.id || null); ansicht("iso"); status("Projekt geöffnet.");
+  } catch { status("Diese Datei ist kein Spengler-Digital-CAD-Projekt."); }
+}
+async function projektOeffnen() {
+  if (!pc) return $("datei").click();
+  try { const d = await pc.invoke("datei_oeffnen", { filter: DATEITYPEN.sdcad, endungen: ["sdcad", "json"] }); if (d) ladeProjekt(d.inhalt, d.pfad); }
+  catch (e) { status("Öffnen fehlgeschlagen: " + e); }
+}
+$("wSpeichern").onclick = () => projektSpeichern();
+$("wOeffnen").onclick = projektOeffnen;
+$("datei").onchange = async (e) => { ladeProjekt(await e.target.files[0].text()); e.target.value = ""; };
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (k === "s") { e.preventDefault(); projektSpeichern(e.shiftKey); }
+  else if (k === "o") { e.preventDefault(); projektOeffnen(); }
+});
 let neuBestaetigt = 0;
 $("wNeu").onclick = () => {
   if (Date.now() - neuBestaetigt > 3000) { neuBestaetigt = Date.now(); status("Nochmals «Neu» klicken, um alles zu löschen."); return; }
-  doc = { features: [], zaehler: 1, objekt: doc.objekt, nr: doc.nr }; auswahl = null; regen(); status("Neues Projekt.");
+  doc = { features: [], zaehler: 1, objekt: doc.objekt, nr: doc.nr }; auswahl = null; projektPfad = null; titel(); regen(); status("Neues Projekt.");
 };
 
 // ------------------------------------------------------------ Start
@@ -677,6 +716,8 @@ regen();
 auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser(); zeigeWerkstatt();
 ansicht("iso");
 (function schleife() { steuerung.update(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
+// PC-Programm: per Doppelklick geöffnete .sdcad-Datei laden
+pc?.invoke("startdatei").then((d) => d && ladeProjekt(d.inhalt, d.pfad)).catch((e) => status("Datei konnte nicht geöffnet werden: " + e));
 // Web-Version: offline nutzbar machen (nicht im PC-Programm und nicht per Doppelklick)
 if ("serviceWorker" in navigator && location.protocol.startsWith("http") && !("__TAURI_INTERNALS__" in window)) navigator.serviceWorker.register("sw.js").catch(() => {});
 status("Beispiel geladen. Neu zeichnen: «Skizze» → Ebene wählen → Linienzug zeichnen → «Blechprofil».");
