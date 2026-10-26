@@ -201,7 +201,8 @@ function regen() {
 const verlauf = { stapel: [], pos: -1 };
 const zustand = () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v));
 function merke() {
-  if (dlg || skizze) return zeigeVerlauf();
+  // nicht während Dialog/Skizze und nicht für eine eben angelegte, noch leere Skizze
+  if (dlg || skizze || doc.features.some((f) => f.typ === "skizze" && !f.elemente.length)) return zeigeVerlauf();
   const z = zustand();
   if (z !== verlauf.stapel[verlauf.pos]) {
     verlauf.stapel.splice(verlauf.pos + 1, Infinity, z);
