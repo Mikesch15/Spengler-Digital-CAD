@@ -1,13 +1,14 @@
 // Baut eine einzige HTML-Datei, die ohne Internet läuft (Doppelklick, PC-Programm, Handy): node build.mjs
 // three.js, Spengler-Kern, Oberfläche und Schriften werden eingebettet.
 import { readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 const url = (p) => new URL(p, import.meta.url);
 const lies = (p) => readFileSync(url(p), "utf8");
 
 const { outputFiles } = await build({
-  entryPoints: [url("./src/cad.js").pathname],
+  entryPoints: [fileURLToPath(url("./src/cad.js"))],
   bundle: true,
   format: "esm",
   minify: true,

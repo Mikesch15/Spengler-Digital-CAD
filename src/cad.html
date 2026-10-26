@@ -88,6 +88,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .zeitleiste .ztitel { font: 600 11px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; white-space: nowrap; }
 .zeitleiste button { display: flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); border-radius: 5px; padding: 4px 8px; font: 12px var(--font-body); cursor: pointer; white-space: nowrap; }
 .zeitleiste .rechts { margin-left: auto; display: flex; gap: 6px; }
+.zeitleiste button:disabled { opacity: .4; cursor: default; }
 /* Werkstatt */
 .zahl { display: flex; align-items: baseline; gap: 6px; padding: 10px 12px 0; }
 .zahl b { font: 600 32px var(--font-num); }
@@ -157,7 +158,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   </div>
 
   <footer class="zeitleiste" aria-label="Zeitleiste"><span class="ztitel">Zeitleiste</span><span id="zeit"></span>
-    <span class="rechts"><button id="rueckgaengig">Letzten Schritt löschen</button></span></footer>
+    <span class="rechts"><button id="zurueck" title="Rückgängig (Strg+Z)">↶ Rückgängig</button><button id="vor" title="Wiederholen (Strg+Y)">↷ Wiederholen</button>
+      <button id="rueckgaengig">Letzten Schritt löschen</button></span></footer>
 </div>
 
 <script type="module">

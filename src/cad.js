@@ -169,8 +169,44 @@ function regen() {
   }
   markiere();
   zeigeBrowser(); zeigeZeit(); zeigeWerkstatt();
-  speichern();
+  speichern(); merke();
 }
+
+// ------------------------------------------------------------ Rückgängig / Wiederholen
+// Nach jedem abgeschlossenen Schritt (nicht während Dialog oder Skizze) wird der Projektzustand gemerkt.
+const verlauf = { stapel: [], pos: -1 };
+const zustand = () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v));
+function merke() {
+  if (dlg || skizze) return zeigeVerlauf();
+  const z = zustand();
+  if (z !== verlauf.stapel[verlauf.pos]) {
+    verlauf.stapel.splice(verlauf.pos + 1, Infinity, z);
+    if (verlauf.stapel.length > 200) verlauf.stapel.shift();
+    verlauf.pos = verlauf.stapel.length - 1;
+  }
+  zeigeVerlauf();
+}
+function springe(d) {
+  const i = verlauf.pos + d;
+  if (dlg || skizze || i < 0 || i >= verlauf.stapel.length) return;
+  verlauf.pos = i; doc = JSON.parse(verlauf.stapel[i]);
+  if (!finde(auswahl)) auswahl = null;
+  $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr;
+  regen(); status(d < 0 ? "Rückgängig gemacht." : "Wiederhergestellt.");
+}
+function zeigeVerlauf() {
+  const gesperrt = !!(dlg || skizze);
+  $("zurueck").disabled = gesperrt || verlauf.pos <= 0;
+  $("vor").disabled = gesperrt || verlauf.pos >= verlauf.stapel.length - 1;
+}
+$("zurueck").onclick = () => springe(-1);
+$("vor").onclick = () => springe(1);
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || skizze || e.target.closest?.("input,select,textarea")) return;
+  const k = e.key.toLowerCase();
+  if (k === "z" && !e.shiftKey) { e.preventDefault(); springe(-1); }
+  else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); springe(1); }
+});
 
 function markiere() {
   modell.children.forEach((o) => { if (o.isMesh) o.material.emissive?.setHex(o.userData.fid === auswahl ? 0x1d5c4f : 0x000000); });
@@ -682,7 +718,7 @@ async function projektSpeichern(unter = false) {
 function ladeProjekt(text, pfad = null) {
   try {
     const d = JSON.parse(text); if (!d.features) throw 0;
-    doc = d; auswahl = null; projektPfad = pfad; titel();
+    doc = d; auswahl = null; projektPfad = pfad; titel(); verlauf.stapel = []; verlauf.pos = -1;
     $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; regen();
     waehle(doc.features.find((f) => f._res)?.id || null); ansicht("iso"); status("Projekt geöffnet.");
   } catch { status("Diese Datei ist kein Spengler-Digital-CAD-Projekt."); }
