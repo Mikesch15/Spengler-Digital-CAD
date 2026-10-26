@@ -1,0 +1,54 @@
+# Veröffentlicht bei jeder Änderung die Web-Version auf GitHub Pages, zum Testen auf dem Handy.
+#   main:            https://mikesch15.github.io/Spengler-Digital-CAD/
+#   andere Branches: https://mikesch15.github.io/Spengler-Digital-CAD/vorschau/<branch>/
+name: Web-Version
+
+on:
+  push:
+    branches: ["**", "!gh-pages"]
+  workflow_dispatch:
+
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tests
+        run: npm test
+
+      - name: Bauen
+        run: npm run build
+
+      - name: Zielordner bestimmen
+        id: ziel
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "ordner=." >> "$GITHUB_OUTPUT"; echo "pfad=" >> "$GITHUB_OUTPUT"
+          else
+            B=$(echo "$GITHUB_REF_NAME" | tr '/' '-' | tr -cd 'A-Za-z0-9._-')
+            echo "ordner=vorschau/$B" >> "$GITHUB_OUTPUT"; echo "pfad=vorschau/$B/" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Auf gh-pages veröffentlichen
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          destination_dir: ${{ steps.ziel.outputs.ordner }}
+          keep_files: true
+
+      - name: Adresse
+        run: echo "### Zum Testen auf dem Handy öffnen:<br>https://mikesch15.github.io/Spengler-Digital-CAD/${{ steps.ziel.outputs.pfad }}" >> "$GITHUB_STEP_SUMMARY"

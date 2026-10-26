@@ -1,5 +1,5 @@
 // Baut eine einzige HTML-Datei, die per Doppelklick läuft: node build.mjs
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
 
 const lies = (p) => readFileSync(new URL(p, import.meta.url), "utf8");
 const modul = (name, pfad) => {
@@ -19,5 +19,6 @@ const [kopf, ...rest] = app.split("\n").reduce((acc, z) => { (z.startsWith("impo
 const html = lies("./src/cad.html").replace("/*APP*/", () => `${kopf.join("\n")}\n// ---- Spengler-Kern ----\n${kern}\n// ---- Anwendung ----\n${rest[0].join("\n")}`);
 writeFileSync(new URL("./index.html", import.meta.url), html);
 mkdirSync(new URL("./dist/", import.meta.url), { recursive: true });
-writeFileSync(new URL("./dist/index.html", import.meta.url), html); // für das PC-Programm (Tauri)
+writeFileSync(new URL("./dist/index.html", import.meta.url), html); // für das PC-Programm (Tauri) und die Web-Version
+cpSync(new URL("./web/", import.meta.url), new URL("./dist/", import.meta.url), { recursive: true }); // Manifest und Icons fürs Handy
 console.log("index.html gebaut,", (html.length / 1024).toFixed(0), "KB");

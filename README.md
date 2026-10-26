@@ -14,6 +14,7 @@ kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Progra
 src/cad.js       Oberfläche
 src/cad.html     Seitenvorlage
 build.mjs        baut index.html und dist/index.html (eine Datei)
+web/             Manifest und Icons für die Web-Version (Handy)
 src-tauri/       Windows-Programm (Tauri 2) mit Update-Funktion
 test/            Tests gegen die Werte des Fusion-Add-ins
 ```
@@ -24,6 +25,20 @@ test/            Tests gegen die Werte des Fusion-Add-ins
 2. Im Ordner eine Eingabeaufforderung öffnen.
 3. `npx serve .` ausführen und die angezeigte Adresse im Browser öffnen.
 4. Tests: `npm test`
+
+## Auf dem Handy testen
+
+Jeder Push veröffentlicht die Web-Version über GitHub Pages (`.github/workflows/web.yml`):
+
+- **main:** https://mikesch15.github.io/Spengler-Digital-CAD/
+- **andere Branches:** https://mikesch15.github.io/Spengler-Digital-CAD/vorschau/<branch>/
+  (Schrägstriche im Branchnamen werden zu `-`)
+
+Die Adresse steht auch in der Zusammenfassung des Workflow-Laufs. Im Browser-Menü
+„Zum Startbildschirm hinzufügen“ legt das Programm als App-Symbol ab.
+
+Einmalig einrichten: nach dem ersten Lauf unter *Settings → Pages* bei *Source*
+„Deploy from a branch“ wählen, Branch `gh-pages`, Ordner `/ (root)`.
 
 ## Windows-Programm (Tauri)
 
