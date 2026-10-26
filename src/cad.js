@@ -192,6 +192,7 @@ function regen() {
   markiere();
   zeigeBrowser(); zeigeZeit(); zeigeWerkstatt();
   speichern(); merke();
+  if (dlg?.info) { const t = dlg.info(); $("dInfo").textContent = t; $("dInfo").className = t.startsWith("⚠") ? "fehler" : ""; }
 }
 
 // ------------------------------------------------------------ Rückgängig / Wiederholen
@@ -406,6 +407,7 @@ let dlg = null;
 function dialog(opt) {
   dlg = opt;
   $("dTitel").textContent = opt.titel;
+  $("dInfo").textContent = "";
   $("dLoeschen").hidden = !opt.loeschen;
   $("dInhalt").innerHTML = opt.felder.map((fd) => {
     const inp = fd.optionen
@@ -431,6 +433,7 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
   auswahl = f.id; // Werkstatt zeigt das Teil schon während der Eingabe
   dialog({
     titel, hinweis, felder: felder(f), ...extra,
+    info: () => (f._fehler ? "⚠ " + f._fehler : f._res ? `Zuschnitt ${f1(f._res.zuschnitt)} × ${f.laenge} mm · ${f._res.biegungen.length} Biegungen` : ""),
     aendern: (w, feld) => {
       setze(f, w);
       if (feld === "vorlage" || feld === "skizze") { const d = dlg; dialog({ ...d, felder: felder(f) }); setze(f, werte()); }

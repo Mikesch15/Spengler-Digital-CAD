@@ -78,7 +78,15 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .feld { display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 6px; }
 .feld input, .feld select { width: 100%; font: 13px var(--font-num); border: 1px solid var(--line); border-radius: 5px; padding: 5px 6px; background: var(--panel-2); color: var(--fg); }
 .feld select { font-family: var(--font-body); }
-.dialog .fuss { display: flex; gap: 6px; justify-content: flex-end; padding: 8px 12px; border-top: 1px solid var(--line); }
+.dialog .fuss { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: flex-end; padding: 8px 12px; border-top: 1px solid var(--line); }
+#dInfo { flex: 1 1 100%; font: 600 12px var(--font-num); color: var(--accent); }
+#dInfo.fehler { color: var(--bend); }
+#dInfo:empty { display: none; }
+/* Handy: Dialog als Panel am unteren Rand, damit OK immer erreichbar ist */
+@media (max-width: 1000px) {
+  .dialog { position: fixed; top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-width: none; z-index: 15; max-height: 70vh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .dialog .inhalt { max-height: none; }
+}
 .knopf { border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 6px; padding: 6px 12px; font: 600 13px var(--font-body); cursor: pointer; }
 .knopf.haupt { background: var(--accent); border-color: var(--accent); color: #fff; }
 .knopf.weg { color: var(--bend); margin-right: auto; }
@@ -211,7 +219,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
         <label>L <input id="eLaenge" type="number" step="any"></label><label>∠ <input id="eWinkel" type="number" step="any"></label>
       </div>
       <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><div class="inhalt" id="dInhalt"></div>
-        <div class="fuss"><button class="knopf weg" id="dLoeschen" hidden>Löschen</button><button class="knopf" id="dAbbrechen">Abbrechen</button><button class="knopf haupt" id="dOk">OK</button></div></div>
+        <div class="fuss"><span id="dInfo" role="status"></span><button class="knopf weg" id="dLoeschen" hidden>Löschen</button><button class="knopf" id="dAbbrechen">Abbrechen</button><button class="knopf haupt" id="dOk">OK</button></div></div>
       <div id="status"></div>
     </section>
     <aside class="panel werkstatt"><div class="register" role="tablist" aria-label="Werkstatt">
