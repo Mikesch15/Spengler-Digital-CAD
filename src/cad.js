@@ -1,7 +1,7 @@
 // Spengler Digital CAD 0.2 – Fusion-artige Oberfläche: Skizzen, Extrusion, Blechprofil, Vorlagen
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { berechne, kontur } from "../kern/geometrie.js";
+import { berechne, kontur, polylinie, grenzen } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
@@ -157,6 +157,8 @@ function regen() {
   // Verwendete Materialien ins Projekt schreiben, damit es auf jedem Gerät gleich rechnet
   const benutzt = [...new Set(doc.features.map((f) => f.material).filter(Boolean))].map(material);
   doc.materialien = benutzt.filter((m, i) => benutzt.indexOf(m) === i);
+  let platz = 0; // Vorlagen und freie Profile haben keine Lage: nebeneinander aufreihen statt übereinander
+  const daneben = (res) => { const g = grenzen(polylinie(res.pfad)), v = [platz - g.x0, 0]; platz += g.x1 - g.x0 + 80; return v; };
   for (const f of doc.features) {
     f._fehler = null; f._res = null;
     try {
@@ -176,13 +178,13 @@ function regen() {
         const m = material(f.material), v = VORLAGE[f.vorlage];
         const { start, ops } = v.bau(f.params, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t)], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
       } else if (f.typ === "profil") {
         const m = material(f.material);
         if (f.zeilen.some((z) => !(z.L > 0))) throw new Error("Jeder Schenkel braucht eine Länge grösser als 0");
         const { start, ops } = freiesProfil(f.start, f.zeilen, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t)], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
       }
     } catch (e) { f._fehler = e.message; }
   }
@@ -295,18 +297,29 @@ function zeigeWerkstatt() {
     <table class="liste"><thead><tr><th>Biegung</th><th class="num">Anschlag ab A</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
     ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span> ${b.art === "Abkanten" ? "" : b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : f1(b.pos)}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
     </tbody></table>
-    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button>${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
+    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button>${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
     <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
     <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>`;
   $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${f.laenge} mm`, "",
     "Biegung\tAnschlag ab A (mm)\tWinkel\tRichtung", ...r.biegungen.map((b) => `B${b.nr}\t${f1(b.pos)}\t${f1(Math.abs(b.winkel))}\t${b.richtung}`)].join("\n"));
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, f.laenge, f.name), "application/dxf");
   $("kDruck").onclick = () => drucke([f]);
+  $("kKopie").onclick = () => dupliziere(f);
   if ($("kFrei")) $("kFrei").onclick = () => { // Vorlage in Tabelle umwandeln, um Schenkel frei zu ergänzen
     const { start, zeilen } = alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m)));
     Object.assign(f, { typ: "profil", start, zeilen }); delete f.vorlage; delete f.params;
     regen(); profilDialog(f);
   };
+}
+
+function dupliziere(f) {
+  if (!f || f.typ === "skizze" || skizze || dlg) return;
+  const kopie = JSON.parse(JSON.stringify(f, (k, v) => (k.startsWith("_") ? undefined : v)));
+  const basis = f.name.replace(/ \(\d+\)$/, "");
+  let n = 2; while (doc.features.some((x) => x.name === `${basis} (${n})`)) n++;
+  Object.assign(kopie, { id: neueId(), name: `${basis} (${n})` });
+  doc.features.splice(doc.features.indexOf(f) + 1, 0, kopie);
+  auswahl = kopie.id; regen(); status(`${kopie.name} erstellt.`);
 }
 
 // ------------------------------------------------------------ Druck: Werkstattblatt je Blechteil (A4)
@@ -467,6 +480,7 @@ function vorlageDialog(f) {
   f ||= { id: neueId(), typ: "vorlage", name: VORLAGEN[0].name, vorlage: VORLAGEN[0].id, params: standardwerte(VORLAGEN[0].id), material: einst.materialien[0].id, laenge: 1000, richtung: "eine", ebene: "XY" };
   const felder = (f) => [
     { id: "vorlage", label: "Vorlage", optionen: VORLAGEN.map((x) => [x.id, x.name]), wert: f.vorlage },
+    { id: "name", label: "Name", text: true, wert: f.name },
     ...VORLAGE[f.vorlage].params.map(([k, l, e]) => ({ id: "p_" + k, label: l, einheit: e, wert: f.params[k] })),
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
@@ -474,7 +488,11 @@ function vorlageDialog(f) {
     { id: "ebene", label: "Querschnitt in", optionen: Object.entries(EBENEN).map(([k, e]) => [k, e.name]), wert: f.ebene },
   ];
   const setze = (f, w) => {
-    if (w.vorlage !== f.vorlage) { f.vorlage = w.vorlage; f.params = standardwerte(w.vorlage); f.name = VORLAGE[w.vorlage].name; return; }
+    if (w.vorlage !== f.vorlage) { // Name nur mitwechseln, wenn er nicht von Hand geändert wurde
+      if (f.name === VORLAGE[f.vorlage].name) f.name = VORLAGE[w.vorlage].name;
+      f.vorlage = w.vorlage; f.params = standardwerte(w.vorlage); return;
+    }
+    f.name = w.name.trim() || f.name;
     for (const [k] of VORLAGE[f.vorlage].params) if (Number.isFinite(w["p_" + k])) f.params[k] = w["p_" + k];
     Object.assign(f, { material: w.material, laenge: w.laenge, stueck: w.stueck, ebene: w.ebene });
   };
@@ -943,6 +961,7 @@ document.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (k === "s") { e.preventDefault(); projektSpeichern(e.shiftKey); }
   else if (k === "p") { e.preventDefault(); drucke(blechteile(), true); }
+  else if (k === "d" && !e.target.closest?.("input,select,textarea")) { e.preventDefault(); dupliziere(finde(auswahl)); }
   else if (k === "o") { e.preventDefault(); projektOeffnen(); }
 });
 let neuBestaetigt = 0;
