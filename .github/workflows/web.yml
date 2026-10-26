@@ -32,7 +32,8 @@ jobs:
         run: npm test
 
       - name: Bauen
-        run: npm run build
+        shell: bash
+        run: SDCAD_VERSION="$(node -p "require('./package.json').version")+${GITHUB_SHA::7}" npm run build
 
       - name: Zielordner bestimmen
         id: ziel

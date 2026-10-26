@@ -145,6 +145,9 @@ table.zeilen.mat td:first-child { min-width: 170px; }
 .probe { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
 .probe label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
 .probe input, .probe select { width: 100%; min-width: 0; font: 13px var(--font-num); border: 1px solid var(--line); border-radius: 5px; padding: 5px 6px; background: var(--panel-2); color: var(--fg); }
+.hilfetext ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.hilfetext p { margin: 6px 0; }
+table.kuerzel td:first-child { font-family: var(--font-num); font-size: 12px; white-space: nowrap; }
 ul.eigene { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 ul.eigene li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--bend); font-size: 16px; cursor: pointer; }
@@ -203,6 +206,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     </div></div>
     <div class="gruppe"><div class="gtitel">Werkstatt</div><div class="knoepfe">
       <button class="wz" id="wEinst" title="Materialien kalibrieren, Lagerformate"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Einstellungen</button>
+      <button class="wz" id="wHilfe" title="Kurzanleitung und Tastenkürzel (F1)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></svg>Hilfe</button>
     </div></div>
   </nav>
 
@@ -238,6 +242,38 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 <div class="modal" id="einst" hidden><div class="modalbox" role="dialog" aria-labelledby="eTitel">
   <h3 id="eTitel">Einstellungen</h3><div class="inhalt" id="eInhalt"></div>
   <div class="fuss"><button class="knopf weg" id="eStandard">Standardwerte</button><span id="eMeldung" class="hinweis" role="status"></span><button class="knopf" id="eAbbrechen">Abbrechen</button><button class="knopf haupt" id="eOk">Übernehmen</button></div>
+</div></div>
+<div class="modal" id="hilfe" hidden><div class="modalbox" role="dialog" aria-labelledby="hTitel">
+  <h3 id="hTitel">Kurzanleitung</h3><div class="inhalt hilfetext">
+    <h4>Blechteil erstellen</h4>
+    <ul>
+      <li><b>Spengler-Vorlage</b>: Traufe, Ortgang, First, Rinnen … Masse eintippen, fertig.</li>
+      <li><b>Freies Profil</b>: Schenkel und Winkel als Tabelle – am schnellsten für eigene Profile, auch auf dem Handy.</li>
+      <li><b>Skizze → Blechprofil</b>: Linienzug auf der Blechmitte zeichnen, jeder Knick wird zur Biegung.</li>
+    </ul>
+    <h4>Werkstatt</h4>
+    <ul>
+      <li><b>Teil</b>: Zuschnitt, Zeichnung, Abkantliste mit Anschlag ab Kante A (grüner Punkt), Etikett, DXF.</li>
+      <li><b>Auftrag</b>: Stückliste mit m², kg und Laufmetern je Material, CSV für Excel.</li>
+      <li><b>Drucken</b>: Stückliste und ein Werkstattblatt (A4) je Teil.</li>
+      <li><b>Einstellungen</b>: Materialien kalibrieren (K-Faktor aus Probebiegung), eigene Materialien, Lagerformate, eigene Vorlagen.</li>
+    </ul>
+    <h4>Tastenkürzel</h4>
+    <table class="liste kuerzel"><tbody>
+      <tr><td>Strg+S / Strg+Umschalt+S</td><td>Speichern / Speichern unter</td></tr>
+      <tr><td>Strg+O</td><td>Öffnen</td></tr>
+      <tr><td>Strg+P</td><td>Stückliste und Werkstattblätter drucken</td></tr>
+      <tr><td>Strg+Z / Strg+Y</td><td>Rückgängig / Wiederholen</td></tr>
+      <tr><td>Strg+D</td><td>Gewähltes Teil duplizieren</td></tr>
+      <tr><td>Skizze: Zahl tippen, Enter</td><td>Genaue Länge (und Winkel) der nächsten Linie</td></tr>
+      <tr><td>Skizze: Esc / Entf</td><td>Linie beenden / gewähltes Element löschen</td></tr>
+      <tr><td>F1</td><td>Diese Hilfe</td></tr>
+    </tbody></table>
+    <h4>Konventionen</h4>
+    <p>Alle Masse in mm auf der Blechmitte. Anschlag ab Kante A. Richtung «oben/unten» mit Kante A links. K-Faktor und Innenradius sind Startwerte – pro Material an der eigenen Abkantbank kalibrieren.</p>
+    <p class="hinweis" id="hVersion"></p>
+  </div>
+  <div class="fuss"><button class="knopf haupt" id="hZu">Schliessen</button></div>
 </div></div>
 <div id="druck" aria-hidden="true"></div>
 

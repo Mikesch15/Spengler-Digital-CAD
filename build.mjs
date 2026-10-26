@@ -15,6 +15,7 @@ const { outputFiles } = await build({
   target: "es2020",
   write: false,
   legalComments: "none",
+  define: { __VERSION__: JSON.stringify(process.env.SDCAD_VERSION || JSON.parse(lies("./package.json")).version) },
 });
 const js = outputFiles[0].text.replace(/<\/script/gi, "<\\/script");
 

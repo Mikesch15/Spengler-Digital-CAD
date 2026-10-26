@@ -55,6 +55,7 @@ jobs:
             fs.writeFileSync(p, JSON.stringify(c, null, 2));
           " "$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "SDCAD_VERSION=$VERSION" >> "$GITHUB_ENV"
           echo "Version $VERSION"
 
       - name: Bauen und Release veröffentlichen

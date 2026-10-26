@@ -1,7 +1,22 @@
-# Spengler Digital CAD – Prototyp 0.1
+# Spengler Digital CAD 0.2
 
-Erster Prototyp aus Phase 1: Profil-Editor, Spengler-Kern, 3D-Ansicht, Abkantliste,
-Lagerformat-Vorschlag, Etikett und DXF-Abwicklung. Läuft im Browser.
+Blechprofile für die Spenglerei: Profil eingeben, Zuschnitt und Abkantliste ablesen,
+Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Handy – ohne Internet.
+
+## Funktionen
+
+- **Profile erstellen:** 11 Spengler-Vorlagen, freies Profil als Tabelle (Schenkel/Winkel),
+  Skizze mit Linienzug → Blechprofil, Extrusion für Volumenkörper
+- **Werkstatt:** Zuschnitt, Querschnitt-Zeichnung mit Massen, Abkantliste mit Anschlag ab Kante A,
+  Lagerformat-Vorschlag (Spaltband/Coil/Tafel), Etikett, DXF-Abwicklung
+- **Auftrag:** Stückzahlen, Stückliste mit m², kg und Laufmetern je Material, CSV für Excel
+- **Drucken:** Stückliste und Werkstattblatt (A4) je Teil
+- **Einstellungen:** Materialien kalibrieren (K-Faktor aus Probebiegung), eigene Materialien,
+  Lagerformate, eigene Vorlagen
+- **Bearbeiten:** Rückgängig/Wiederholen, Duplizieren, Teile umbenennen
+- **PC-Programm:** Speichern/Öffnen mit Windows-Dialog, `.sdcad`-Dateien per Doppelklick,
+  automatische Updates
+- Kurzanleitung und Tastenkürzel im Programm unter **Hilfe** (F1)
 
 ## Aufbau
 
@@ -9,12 +24,14 @@ Lagerformat-Vorschlag, Etikett und DXF-Abwicklung. Läuft im Browser.
 kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Programm übernommen)
   geometrie.js   Profilrechnung, Zuschnitt, Abkantfolge, Blechkontur
   profile.js     11 Vorlagen + freies Profil
-  materialien.js Materialien, Tafeln, Coil, Spaltbänder
+  materialien.js Materialien, Lagerformate, K-Faktor aus Probebiegung
   dxf.js         DXF-Export der Abwicklung
+  zeichnung.js   Querschnitt als SVG (Werkstatt, Druck)
+  auftrag.js     Stückliste, CSV
 src/cad.js       Oberfläche
 src/cad.html     Seitenvorlage
-build.mjs        baut index.html und dist/index.html (eine Datei)
-web/             Manifest und Icons für die Web-Version (Handy)
+build.mjs        baut index.html und dist/ (eine Datei inkl. three.js und Schriften)
+web/             Manifest, Icons, Service Worker für die Web-Version (Handy, offline)
 src-tauri/       Windows-Programm (Tauri 2) mit Update-Funktion
 test/            Tests gegen die Werte des Fusion-Add-ins
 ```
@@ -49,18 +66,18 @@ Jeder Push baut über GitHub Actions (`.github/workflows/windows-build.yml`) ein
 Installationsprogramm `Spengler Digital CAD_<Version>_x64-setup.exe`:
 
 - **Branches und Pull Requests:** Installer liegt als Artefakt am Workflow-Lauf.
-- **main:** zusätzlich ein GitHub-Release `v0.1.<Laufnummer>` mit `latest.json`.
+- **main:** zusätzlich ein GitHub-Release `v0.2.<Laufnummer>` mit `latest.json`.
   Installierte Programme prüfen beim Start dieses Release und bieten das Update an.
 
 Die Version setzt der Workflow selbst (Major.Minor aus `package.json`, Patch = Laufnummer).
-Für einen Sprung auf 0.2 nur `version` in `package.json` ändern.
+Für einen Sprung auf 0.3 nur `version` in `package.json` ändern.
 
 ### Einmalig: Signaturschlüssel als Secrets hinterlegen
 
 Updates müssen signiert sein. Unter *Settings → Secrets and variables → Actions* anlegen:
 
 - `TAURI_SIGNING_PRIVATE_KEY` – Inhalt der privaten Schlüsseldatei
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` – Passwort des Schlüssels (leer lassen, wenn keins)
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` – nur nötig, wenn der Schlüssel ein Passwort hat
 
 Der passende öffentliche Schlüssel steht in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`).
 Geht der private Schlüssel verloren, neues Paar erzeugen (`npx tauri signer generate -w spengler.key`),
@@ -80,10 +97,11 @@ npm run tauri build   # Installer nach src-tauri/target/release/bundle/nsis/
 
 - Alle Masse in mm auf der Blechmitte, Anschlag ab Kante A (grüner Punkt).
 - Richtung „oben/unten“ mit Kante A links.
-- Zugaben und K-Faktor sind Startwerte, pro Material kalibrieren.
+- Innenradius und K-Faktor sind Startwerte, pro Material kalibrieren (Einstellungen → Probebiegung).
+- Einstellungen gelten pro Gerät; Projekte speichern die verwendeten Materialwerte mit.
 
 ## Nächste Schritte
 
 - OpenCascade auf dem Windows-PC einrichten (native Bibliothek), STEP-Export
-- Echtes Speichern von Projekten und Dateien im PC-Programm (Speichern-Dialog statt Download-Ordner)
 - Abkantliste im Eingabeformat von Jorns und Schröder (Modelle offen)
+- Abkantfolge mit Kollisionsprüfung (Werkzeug/Oberwange)

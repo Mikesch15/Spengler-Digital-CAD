@@ -9,6 +9,7 @@ import { profilSvg } from "../kern/zeichnung.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 
 const $ = (id) => document.getElementById(id);
+const VERSION = typeof __VERSION__ === "string" ? __VERSION__ : "dev"; // beim Bauen eingesetzt
 const SPEICHER = "sdcad-doc-0.2";
 const RASTER = 5; // mm
 
@@ -628,6 +629,17 @@ $("eOk").onclick = () => {
   einstSpeichern();
   regen(); status("Einstellungen gespeichert. Alle Teile neu berechnet.");
 };
+
+// ------------------------------------------------------------ Hilfe
+const hilfe = (auf) => { $("hilfe").hidden = !auf; };
+$("wHilfe").onclick = () => hilfe(true);
+$("hZu").onclick = () => hilfe(false);
+$("hVersion").textContent = `Version ${VERSION}` + (pc ? " · PC-Programm" : " · Web-Version");
+document.addEventListener("keydown", (e) => {
+  if (e.key === "F1") { e.preventDefault(); hilfe($("hilfe").hidden); }
+  else if (e.key === "Escape") { if (!$("hilfe").hidden) hilfe(false); else if (!$("einst").hidden) $("eAbbrechen").click(); }
+});
+document.querySelectorAll(".modal").forEach((m) => m.addEventListener("click", (e) => { if (e.target === m) (m.id === "hilfe" ? hilfe(false) : $("eAbbrechen").click()); }));
 
 // ------------------------------------------------------------ Ansichten
 function fitte(box) {
