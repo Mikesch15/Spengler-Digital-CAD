@@ -5,7 +5,7 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
 
 ## Funktionen
 
-- **Profile erstellen:** 11 Spengler-Vorlagen, freies Profil als Tabelle (Schenkel/Winkel),
+- **Profile erstellen:** 12 Spengler-Vorlagen, freies Profil als Tabelle (Schenkel/Winkel),
   Skizze mit Linienzug → Blechprofil, Extrusion für Volumenkörper
 - **Werkstatt:** Zuschnitt, Querschnitt-Zeichnung mit Massen, Abkantliste mit Anschlag ab Kante A,
   Lagerformat-Vorschlag (Spaltband/Coil/Tafel), Etikett, DXF-Abwicklung
@@ -23,7 +23,7 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
 ```
 kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Programm übernommen)
   geometrie.js   Profilrechnung, Zuschnitt, Abkantfolge, Blechkontur
-  profile.js     11 Vorlagen + freies Profil
+  profile.js     12 Vorlagen + freies Profil
   materialien.js Materialien, Lagerformate, K-Faktor aus Probebiegung
   dxf.js         DXF-Export der Abwicklung
   zeichnung.js   Querschnitt als SVG (Werkstatt, Druck)

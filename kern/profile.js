@@ -98,6 +98,18 @@ function kehle(p, m) {
   return { start, ops };
 }
 
+function fensterbank(p) {
+  // Kante A oben an der Aufkantung (Wandseite), Fläche mit Gefälle nach aussen, Stirn, Tropfnase nach aussen
+  const g = p.gefaelle;
+  const ops = [];
+  let start = -90;
+  if (p.aufkantung > 0) ops.push(L(p.aufkantung), B(90 - g));
+  else start = -g;
+  ops.push(L(p.tiefe), B(-(90 - g)), L(p.stirn));
+  if (p.tropf > 0) ops.push(B(45), L(p.tropf));
+  return { start, ops };
+}
+
 // [schlüssel, beschriftung, einheit, standard]
 export const VORLAGEN = [
   { id: "traufe", name: "Traufblech", gruppe: "Dachrand", bau: traufe, params: [
@@ -123,6 +135,9 @@ export const VORLAGEN = [
   { id: "attika", name: "Attikaabdeckung", gruppe: "Abdeckungen", bau: abdeckung, params: [
     ["breite", "Breite oben", "mm", 350], ["links", "Schenkel aussen", "mm", 80],
     ["rechts", "Schenkel innen", "mm", 120], ["gefaelle", "Gefälle nach innen", "°", 5], ["tropf", "Tropfnase", "mm", 15]] },
+  { id: "fensterbank", name: "Fensterbank", gruppe: "Abdeckungen", bau: fensterbank, params: [
+    ["tiefe", "Tiefe", "mm", 200], ["aufkantung", "Aufkantung hinten", "mm", 30],
+    ["gefaelle", "Gefälle", "°", 5], ["stirn", "Stirn", "mm", 40], ["tropf", "Tropfnase", "mm", 10]] },
   { id: "haengerinne", name: "Hängerinne halbrund", gruppe: "Rinnen und Kehlen", bau: haengerinne, params: [
     ["radius", "Rinnenradius innen", "mm", 63], ["rueckwand", "Rückwand über Rundung", "mm", 30], ["wulst", "Wulstradius", "mm", 8]] },
   { id: "kastenrinne", name: "Kastenrinne", gruppe: "Rinnen und Kehlen", bau: kastenrinne, params: [

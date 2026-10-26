@@ -15,9 +15,11 @@ const ok = (bed, msg) => { if (!bed) { fehler++; console.log("FEHLER:", msg); } 
 for (const v of VORLAGEN) {
   const { start, ops } = v.bau(standardwerte(v.id), m);
   const r = berechne(start, ops, m.t, m.ri, m.k);
-  const py = ref[v.id];
-  ok(Math.abs(r.zuschnitt - py.flat) < 1e-6, `${v.id} Zuschnitt ${r.zuschnitt} vs ${py.flat}`);
-  r.biegungen.forEach((b, i) => ok(Math.abs(b.pos - py.bends[i]) < 1e-6, `${v.id} B${i + 1}`));
+  const py = ref[v.id]; // Referenz aus dem Python-Add-in (nur für die ursprünglichen Vorlagen)
+  if (py) {
+    ok(Math.abs(r.zuschnitt - py.flat) < 1e-6, `${v.id} Zuschnitt ${r.zuschnitt} vs ${py.flat}`);
+    r.biegungen.forEach((b, i) => ok(Math.abs(b.pos - py.bends[i]) < 1e-6, `${v.id} B${i + 1}`));
+  }
   // Kontur geschlossen und mit Fläche ≈ Zuschnitt × t
   const k = kontur(r.pfad, m.t, 1);
   let fl = 0;
@@ -41,6 +43,14 @@ const t = VORLAGEN[0].bau(standardwerte("traufe"), m);
 const z = alsZeilen(t.start, t.ops);
 const f = freiesProfil(z.start, z.zeilen, m);
 ok(Math.abs(berechne(f.start, f.ops, m.t, m.ri, m.k).zuschnitt - ref.traufe.flat) < 1e-6, "freies Profil Traufe");
+
+// Fensterbank (ohne Python-Referenz): 3 Biegungen, Zuschnitt etwas kleiner als die Summe der Schenkel
+{
+  const fb = VORLAGEN.find((v) => v.id === "fensterbank").bau(standardwerte("fensterbank"), m);
+  const r = berechne(fb.start, fb.ops, m.t, m.ri, m.k);
+  ok(r.biegungen.length === 3 && r.summeSchenkel === 280 && r.zuschnitt < 280 && r.zuschnitt > 270, `Fensterbank ${r.zuschnitt}`);
+  ok(r.biegungen.map((b) => b.richtung).join() === "oben,unten,oben", "Fensterbank Richtungen");
+}
 
 // Stückliste: 2 × 333.3 × 2000 mm Titanzink 0.70 = 1.3332 m², 6.72 kg
 const sl = stueckliste([
