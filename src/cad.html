@@ -122,6 +122,22 @@ table.liste td { padding: 5px 8px; border-bottom: 1px solid var(--line); font-va
 .auftrag { padding: 8px 12px; display: grid; gap: 6px; border-top: 1px solid var(--line); }
 .zeichnung { padding: 0 12px 6px; color: var(--fg); }
 .zeichnung svg { width: 100%; height: auto; display: block; }
+/* Einstellungen */
+.modal { position: fixed; inset: 0; background: rgb(0 0 0 / .35); display: grid; place-items: center; padding: 12px; z-index: 20; }
+.modalbox { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: min(760px, 100%); max-height: calc(100vh - 24px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; box-shadow: 0 10px 40px rgb(0 0 0 / .25); }
+.modalbox h3 { margin: 0; padding: 10px 14px; font: 600 15px var(--font-label); letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
+.modalbox .inhalt { overflow: auto; padding: 4px 14px 12px; }
+.modalbox h4 { margin: 14px 0 6px; font: 600 12px var(--font-label); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.modalbox .fuss { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: flex-end; padding: 10px 14px; border-top: 1px solid var(--line); }
+#eMeldung { flex: 1 1 200px; }
+.tabwrap { overflow-x: auto; }
+table.zeilen.mat { min-width: 560px; table-layout: auto; }
+table.zeilen.mat th { width: auto !important; }
+table.zeilen.mat td:first-child { min-width: 170px; }
+.probe { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+.probe label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); }
+.probe input, .probe select { width: 100%; min-width: 0; font: 13px var(--font-num); border: 1px solid var(--line); border-radius: 5px; padding: 5px 6px; background: var(--panel-2); color: var(--fg); }
+#pErgebnis b { font: 600 16px var(--font-num); color: var(--fg); }
 /* Druck: nur die Werkstattblätter */
 #druck { display: none; }
 @page { size: A4; margin: 12mm; }
@@ -174,6 +190,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg>Neu</button>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
     </div></div>
+    <div class="gruppe"><div class="gtitel">Werkstatt</div><div class="knoepfe">
+      <button class="wz" id="wEinst" title="Materialien kalibrieren, Lagerformate"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Einstellungen</button>
+    </div></div>
   </nav>
 
   <div class="mitte">
@@ -205,6 +224,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <span class="rechts"><button id="zurueck" title="Rückgängig (Strg+Z)">↶ Rückgängig</button><button id="vor" title="Wiederholen (Strg+Y)">↷ Wiederholen</button>
       <button id="rueckgaengig">Letzten Schritt löschen</button></span></footer>
 </div>
+<div class="modal" id="einst" hidden><div class="modalbox" role="dialog" aria-labelledby="eTitel">
+  <h3 id="eTitel">Einstellungen</h3><div class="inhalt" id="eInhalt"></div>
+  <div class="fuss"><button class="knopf weg" id="eStandard">Standardwerte</button><span id="eMeldung" class="hinweis" role="status"></span><button class="knopf" id="eAbbrechen">Abbrechen</button><button class="knopf haupt" id="eOk">Übernehmen</button></div>
+</div></div>
 <div id="druck" aria-hidden="true"></div>
 
 <script type="module">

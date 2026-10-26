@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { berechne, kontur } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
-import { MATERIALIEN, quelle } from "../kern/materialien.js";
+import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
 import { profilSvg } from "../kern/zeichnung.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
@@ -28,7 +28,14 @@ try { const s = JSON.parse(localStorage.getItem(SPEICHER) || "null"); if (s?.fea
 const speichern = () => { try { localStorage.setItem(SPEICHER, JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))); } catch {} };
 const neueId = () => "f" + doc.zaehler++;
 const finde = (id) => doc.features.find((f) => f.id === id);
-const material = (id) => MATERIALIEN.find((m) => m.id === id) || MATERIALIEN[0];
+// Werkstatt-Einstellungen (pro Gerät): kalibrierte und eigene Materialien, Lagerformate
+const EINST = "sdcad-einstellungen";
+const standardEinst = () => JSON.parse(JSON.stringify({ materialien: MATERIALIEN, ...LAGER }));
+let einst = standardEinst();
+try { const e = JSON.parse(localStorage.getItem(EINST) || "null"); if (e?.materialien?.length) einst = { ...einst, ...e }; } catch {}
+// Reihenfolge: Einstellungen, dann die im Projekt mitgespeicherten Werte (Projekt von einem anderen Gerät)
+const material = (id) => einst.materialien.find((m) => m.id === id) || doc.materialien?.find((m) => m.id === id) || einst.materialien[0];
+const matOpt = () => [...einst.materialien, ...(doc.materialien || []).filter((m) => !einst.materialien.some((e) => e.id === m.id))].map((m) => [m.id, m.name]);
 let auswahl = null;
 
 // ------------------------------------------------------------ Szene
@@ -116,6 +123,7 @@ function blechAusKette(pts, m) {
 
 // ------------------------------------------------------------ Körper erzeugen
 const FARBE = { zink07: 0x8d99a2, kupfer06: 0xb8734a, alu08: 0xc9cfd4, alu10: 0xc9cfd4, cns05: 0xb4bcc2, stahl06: 0x99a3aa };
+const farbe = (m) => FARBE[m.id] ?? (/kupfer/i.test(m.name) ? 0xb8734a : /alu/i.test(m.name) ? 0xc9cfd4 : 0x8d99a2);
 function koerper(formen_, ebene, tiefe, richtung, farbe, fid) {
   const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe, bevelEnabled: false, curveSegments: 48 });
   if (richtung === "umgekehrt") geo.translate(0, 0, -tiefe); else if (richtung === "symmetrisch") geo.translate(0, 0, -tiefe / 2);
@@ -146,6 +154,9 @@ function skizzenObjekt(f, farbe = 0x1f5fbf) {
 // ------------------------------------------------------------ Neuaufbau (parametrisch, in Reihenfolge der Zeitleiste)
 function regen() {
   leeren(modell);
+  // Verwendete Materialien ins Projekt schreiben, damit es auf jedem Gerät gleich rechnet
+  const benutzt = [...new Set(doc.features.map((f) => f.material).filter(Boolean))].map(material);
+  doc.materialien = benutzt.filter((m, i) => benutzt.indexOf(m) === i);
   for (const f of doc.features) {
     f._fehler = null; f._res = null;
     try {
@@ -160,18 +171,18 @@ function regen() {
         const k = ketten(s)[f.kette || 0]; if (!k) throw new Error("Skizze hat keinen offenen Linienzug");
         const m = material(f.material);
         f._res = blechAusKette(k, m);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, k[0])], s.ebene, f.laenge, f.richtung, FARBE[m.id], f.id));
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, k[0])], s.ebene, f.laenge, f.richtung, farbe(m), f.id));
       } else if (f.typ === "vorlage") {
         const m = material(f.material), v = VORLAGE[f.vorlage];
         const { start, ops } = v.bau(f.params, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t)], f.ebene, f.laenge, f.richtung, FARBE[m.id], f.id));
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t)], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
       } else if (f.typ === "profil") {
         const m = material(f.material);
         if (f.zeilen.some((z) => !(z.L > 0))) throw new Error("Jeder Schenkel braucht eine Länge grösser als 0");
         const { start, ops } = freiesProfil(f.start, f.zeilen, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t)], f.ebene, f.laenge, f.richtung, FARBE[m.id], f.id));
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t)], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
       }
     } catch (e) { f._fehler = e.message; }
   }
@@ -276,7 +287,7 @@ function zeigeWerkstatt() {
   document.querySelectorAll("[data-register]").forEach((b) => b.setAttribute("aria-selected", b.dataset.register === register));
   if (register === "auftrag") return zeigeAuftrag(w);
   if (!f || !f._res) { w.innerHTML = `<p class="leer">${f ? (f._fehler || "Volumenkörper: keine Abwicklung.") : "Blechteil anklicken, um Zuschnitt und Abkantfolge zu sehen."}</p>`; return; }
-  const r = f._res, m = material(f.material), q = quelle(r.zuschnitt);
+  const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst);
   w.innerHTML = `<div class="zahl"><b>${f1(r.zuschnitt)}</b><span>mm Zuschnitt</span></div>
     <div class="unter">${f.name} · ${r.biegungen.length} Biegungen${r.hatRundung ? "" : ` · Summe Schenkel ${r.summeSchenkel.toFixed(0)} mm`}</div>
     <div class="zeichnung">${profilSvg(r, { dicke: m.t, breite: 276, hoehe: 200, schrift: 11 })}</div>
@@ -300,7 +311,7 @@ function zeigeWerkstatt() {
 
 // ------------------------------------------------------------ Druck: Werkstattblatt je Blechteil (A4)
 function werkstattblatt(f) {
-  const r = f._res, m = material(f.material), q = quelle(r.zuschnitt);
+  const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst);
   return `<section class="blatt">
     <header><div><small>Werkstattblatt</small><h1>${esc(f.name)}</h1></div>
       <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
@@ -412,7 +423,6 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
   setze(f, werte()); regen();
 }
 const RICHTUNGEN = [["eine", "Eine Seite"], ["umgekehrt", "Umgekehrt"], ["symmetrisch", "Symmetrisch"]];
-const MAT_OPT = MATERIALIEN.map((m) => [m.id, m.name]);
 
 function bearbeite(f) {
   if (!f || skizze) return;
@@ -441,11 +451,11 @@ function blechDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
   if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: das Blechprofil auf der Blechmitte.");
-  f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: 0, material: MATERIALIEN[0].id, laenge: 1000, richtung: "eine" };
+  f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: 0, material: einst.materialien[0].id, laenge: 1000, richtung: "eine" };
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: "Linienzug aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "kette", label: "Linienzug", optionen: Array.from({ length: ketten(finde(f.skizze) || sk.at(-1)).length }, (_, i) => [i, `Nr. ${i + 1}`]), wert: f.kette },
-    { id: "material", label: "Material", optionen: MAT_OPT, wert: f.material },
+    { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
@@ -454,11 +464,11 @@ function blechDialog(f) {
 
 function vorlageDialog(f) {
   const istNeu = !f;
-  f ||= { id: neueId(), typ: "vorlage", name: VORLAGEN[0].name, vorlage: VORLAGEN[0].id, params: standardwerte(VORLAGEN[0].id), material: MATERIALIEN[0].id, laenge: 1000, richtung: "eine", ebene: "XY" };
+  f ||= { id: neueId(), typ: "vorlage", name: VORLAGEN[0].name, vorlage: VORLAGEN[0].id, params: standardwerte(VORLAGEN[0].id), material: einst.materialien[0].id, laenge: 1000, richtung: "eine", ebene: "XY" };
   const felder = (f) => [
     { id: "vorlage", label: "Vorlage", optionen: VORLAGEN.map((x) => [x.id, x.name]), wert: f.vorlage },
     ...VORLAGE[f.vorlage].params.map(([k, l, e]) => ({ id: "p_" + k, label: l, einheit: e, wert: f.params[k] })),
-    { id: "material", label: "Material", optionen: MAT_OPT, wert: f.material },
+    { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "ebene", label: "Querschnitt in", optionen: Object.entries(EBENEN).map(([k, e]) => [k, e.name]), wert: f.ebene },
@@ -476,11 +486,11 @@ const EBENEN_OPT = Object.entries(EBENEN).map(([k, e]) => [k, e.name]);
 function profilDialog(f) {
   const istNeu = !f;
   f ||= { id: neueId(), typ: "profil", name: "Profil " + (doc.features.filter((x) => x.typ === "profil").length + 1), start: 0,
-    zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 50, winkel: 0, art: "abkanten" }], material: MATERIALIEN[0].id, laenge: 1000, richtung: "eine", ebene: "XY" };
+    zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 50, winkel: 0, art: "abkanten" }], material: einst.materialien[0].id, laenge: 1000, richtung: "eine", ebene: "XY" };
   const felder = (f) => [
     { id: "name", label: "Name", text: true, wert: f.name },
     { id: "start", label: "Startwinkel", einheit: "°", wert: f.start },
-    { id: "material", label: "Material", optionen: MAT_OPT, wert: f.material },
+    { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "ebene", label: "Querschnitt in", optionen: EBENEN_OPT, wert: f.ebene },
@@ -509,6 +519,74 @@ function profilDialog(f) {
     "Winkel nach dem Schenkel: + biegt nach oben (links), − nach unten (rechts). Umschlag = 180°, Vorzeichen gibt die Seite. Masse auf der Blechmitte.",
     { zusatz: tabelle, binden });
 }
+
+// ------------------------------------------------------------ Einstellungen: Materialien kalibrieren, Lagerformate
+let entwurf = null; // Arbeitskopie, erst «Übernehmen» speichert
+const probeWerte = { mat: 0, z: 130, a: "", b: "" };
+const meldung = (t) => { $("eMeldung").textContent = t; };
+const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
+function zeigeEinst() {
+  const e = entwurf, feld = (i, k, wert, schritt = "any") => `<input data-i="${i}" data-k="${k}" type="${k === "name" ? "text" : "number"}" step="${schritt}" inputmode="decimal" value="${esc(wert)}">`;
+  $("eInhalt").innerHTML = `
+    <h4>Materialien</h4>
+    <div class="tabwrap"><table class="zeilen mat"><thead><tr><th>Name</th><th>Dicke mm</th><th>Innenradius mm</th><th>K-Faktor</th><th>Dichte kg/dm³</th><th></th></tr></thead><tbody>
+    ${e.materialien.map((m, i) => `<tr><td>${feld(i, "name", m.name)}</td><td>${feld(i, "t", m.t)}</td><td>${feld(i, "ri", m.ri)}</td><td>${feld(i, "k", m.k)}</td><td>${feld(i, "dichte", m.dichte ?? "")}</td>
+      <td>${e.materialien.length > 1 ? `<button class="weg" data-weg="${i}" aria-label="${esc(m.name)} entfernen">×</button>` : ""}</td></tr>`).join("")}
+    </tbody></table></div>
+    <button class="knopf" id="eNeuMat">+ Material</button>
+    <h4>K-Faktor aus Probebiegung</h4>
+    <p class="hinweis">Streifen zuschneiden, genau eine 90°-Biegung an der eigenen Abkantbank, dann beide Schenkel aussen messen.</p>
+    <div class="probe">
+      <label>Material <select id="pMat">${e.materialien.map((m, i) => `<option value="${i}" ${i === probeWerte.mat ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></label>
+      <label>Zuschnitt mm <input id="pZ" type="number" step="any" inputmode="decimal" value="${probeWerte.z}"></label>
+      <label>Schenkel a aussen <input id="pA" type="number" step="any" inputmode="decimal" value="${probeWerte.a}"></label>
+      <label>Schenkel b aussen <input id="pB" type="number" step="any" inputmode="decimal" value="${probeWerte.b}"></label>
+    </div>
+    <p id="pErgebnis" class="hinweis">a und b eingeben.</p>
+    <h4>Lagerformate</h4>
+    <div class="probe">
+      <label>Spaltbänder mm <input id="lBand" type="text" value="${e.spaltbaender.join(", ")}"></label>
+      <label>Coil-Breite mm <input id="lCoil" type="number" step="any" value="${e.coil}"></label>
+      <label>Tafeln B×L mm <input id="lTafeln" type="text" value="${e.tafeln.map(([b, l]) => `${b}×${l}`).join(", ")}"></label>
+    </div>`;
+  probe();
+}
+function probe() {
+  Object.assign(probeWerte, { mat: Math.min(+$("pMat").value, entwurf.materialien.length - 1), z: $("pZ").value, a: $("pA").value, b: $("pB").value });
+  const m = entwurf.materialien[probeWerte.mat], z = parseFloat(probeWerte.z), a = parseFloat(probeWerte.a), b = parseFloat(probeWerte.b);
+  if (!(z > 0 && a > 0 && b > 0)) { $("pErgebnis").textContent = "Zuschnitt, a und b eingeben."; return; }
+  const k = kFaktorAusProbe({ zuschnitt: z, a, b, t: m.t, ri: m.ri });
+  const plausibel = k > 0.1 && k < 0.6;
+  $("pErgebnis").innerHTML = `K-Faktor für ${esc(m.name)}: <b>${k.toFixed(3)}</b>${plausibel ? ` <button class="knopf" id="pUebernehmen">Übernehmen</button>` : " – unplausibel, Masse prüfen (üblich 0.3–0.5)."}`;
+  if (plausibel) $("pUebernehmen").onclick = () => { m.k = +k.toFixed(3); zeigeEinst(); meldung(`K-Faktor ${m.k} bei ${m.name} eingetragen – mit «Übernehmen» speichern.`); };
+}
+$("eInhalt").addEventListener("input", (ev) => {
+  const t = ev.target;
+  if (t.dataset.k) { const m = entwurf.materialien[+t.dataset.i]; m[t.dataset.k] = t.dataset.k === "name" ? t.value : parseFloat(t.value); }
+  else if (t.id === "lBand") entwurf.spaltbaender = zahlen(t.value);
+  else if (t.id === "lCoil") entwurf.coil = parseFloat(t.value) || 0;
+  else if (t.id === "lTafeln") entwurf.tafeln = t.value.split(/[,;]+/).map((x) => zahlen(x.replace(/[x×*]/gi, " "))).filter((x) => x.length === 2);
+  if (["pMat", "pZ", "pA", "pB"].includes(t.id)) probe();
+});
+$("eInhalt").addEventListener("change", (ev) => { if (ev.target.id === "pMat") probe(); });
+$("eInhalt").addEventListener("click", (ev) => {
+  if (ev.target.dataset.weg != null) { entwurf.materialien.splice(+ev.target.dataset.weg, 1); zeigeEinst(); }
+  else if (ev.target.id === "eNeuMat") {
+    const v = entwurf.materialien.at(-1);
+    entwurf.materialien.push({ ...v, id: "eigen" + Date.now().toString(36), name: v.name + " (Kopie)" }); zeigeEinst();
+    $("eInhalt").querySelector(`tr:nth-child(${entwurf.materialien.length}) input`)?.focus();
+  }
+});
+$("wEinst").onclick = () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); meldung(""); zeigeEinst(); $("einst").hidden = false; };
+$("eAbbrechen").onclick = () => { $("einst").hidden = true; entwurf = null; };
+$("eStandard").onclick = () => { entwurf = standardEinst(); zeigeEinst(); meldung("Standardwerte geladen – mit «Übernehmen» speichern."); };
+$("eOk").onclick = () => {
+  const falsch = entwurf.materialien.find((m) => !m.name.trim() || !(m.t > 0) || !(m.ri >= 0) || !(m.k > 0 && m.k < 1));
+  if (falsch) return meldung(`Material «${falsch.name || "ohne Namen"}»: Dicke > 0, Innenradius ≥ 0 und K-Faktor zwischen 0 und 1 nötig.`);
+  einst = entwurf; entwurf = null; $("einst").hidden = true;
+  try { localStorage.setItem(EINST, JSON.stringify(einst)); } catch {}
+  regen(); status("Einstellungen gespeichert. Alle Teile neu berechnet.");
+};
 
 // ------------------------------------------------------------ Ansichten
 function fitte(box) {
@@ -877,7 +955,7 @@ $("wNeu").onclick = () => {
 // ------------------------------------------------------------ Start
 groesse();
 if (!doc.features.length) { // Beispiel: Traufblech als Vorlage
-  doc.features.push({ id: neueId(), typ: "vorlage", name: "Traufblech", vorlage: "traufe", params: standardwerte("traufe"), material: MATERIALIEN[0].id, laenge: 1000, richtung: "eine", ebene: "XY" });
+  doc.features.push({ id: neueId(), typ: "vorlage", name: "Traufblech", vorlage: "traufe", params: standardwerte("traufe"), material: einst.materialien[0].id, laenge: 1000, richtung: "eine", ebene: "XY" });
 }
 regen();
 auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser(); zeigeWerkstatt();

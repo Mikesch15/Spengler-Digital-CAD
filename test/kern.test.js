@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { berechne, kontur, polylinie } from "../kern/geometrie.js";
 import { VORLAGEN, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
-import { MATERIALIEN, quelle } from "../kern/materialien.js";
+import { MATERIALIEN, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
 import { profilSvg } from "../kern/zeichnung.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
@@ -54,6 +54,17 @@ ok(sl.jeMaterial.length === 2 && sl.jeMaterial[0].stueck === 3 && Math.abs(sl.je
 ok(sl.summe.stueck === 6, "Stückliste Summe");
 const csv = stuecklisteCsv(sl, [["Objekt", "Muster; Bern"]]);
 ok(csv.startsWith("\ufeffObjekt;\"Muster; Bern\"") && csv.includes("Rinne;Titanzink 0.70;333.3;2000;2;4;1.333;6.719"), "Stückliste CSV");
+
+// K-Faktor aus Probebiegung: Rechnung mit bekanntem k und wieder zurück
+for (const k of [0.33, 0.4, 0.45]) {
+  const probe = berechne(0, [{ typ: "schenkel", L: 49.65 }, { typ: "biegung", winkel: 90, ri: null, modus: "sharp" }, { typ: "schenkel", L: 79.65 }], 0.7, 1, k);
+  const kk = kFaktorAusProbe({ zuschnitt: probe.zuschnitt, a: 50, b: 80, t: 0.7, ri: 1 });
+  ok(Math.abs(kk - k) < 1e-9, `K-Faktor aus Probe ${k} → ${kk}`);
+}
+// Eigene Lagerformate
+ok(quelle(210, { spaltbaender: [300, 220], coil: 0, tafeln: [] }).breite === 220, "eigene Spaltbänder");
+ok(quelle(900, { spaltbaender: [300], coil: 0, tafeln: [[1250, 2500], [1000, 2000]] }).breite === 1000, "eigene Tafeln");
+ok(quelle(2000, { spaltbaender: [], coil: 1000, tafeln: [] }) === null, "zu breit");
 
 // Fehlerfall: zu kurzer Schenkel
 let geworfen = false;
