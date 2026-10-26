@@ -283,8 +283,9 @@ function zeigeAuftrag(w) {
     <table class="liste summen"><thead><tr><th>Material</th><th class="num">lfm</th><th class="num">m²</th><th class="num">kg</th></tr></thead><tbody>
     ${a.jeMaterial.map((m) => `<tr><td>${esc(m.material)}</td><td class="num">${m.laufmeter.toFixed(1)}</td><td class="num">${f2(m.flaeche)}</td><td class="num">${m.gewicht.toFixed(1)}</td></tr>`).join("")}
     </tbody></table>
-    <div class="reihe"><button class="knopf haupt" id="kAlleDruck">Stückliste und Werkstattblätter drucken</button><button class="knopf" id="kCsv">Stückliste als CSV</button></div>`;
+    <div class="reihe"><button class="knopf haupt" id="kAlleDruck">Stückliste und Werkstattblätter drucken</button><button class="knopf" id="kCsv">Stückliste als CSV</button><button class="knopf" id="kEtiketten" title="Ein Etikett pro Stück, A4-Bogen 3 × 8 (70 × 37 mm)">Etiketten drucken</button></div>`;
   $("kAlleDruck").onclick = () => drucke(blechteile(), true);
+  $("kEtiketten").onclick = druckeEtiketten;
   $("kCsv").onclick = () => herunterladen(`${doc.nr || "auftrag"} Stückliste.csv`, stuecklisteCsv(a, [["Objekt", doc.objekt], ["Nr.", doc.nr], []]), "text/csv");
 }
 function zeigeWerkstatt() {
@@ -367,6 +368,19 @@ function stuecklisteBlatt() {
     <tr><td><b>Total</b></td><td class="num"><b>${a.summe.stueck}</b></td><td></td><td class="num"><b>${f2(a.summe.flaeche)}</b></td><td class="num"><b>${a.summe.gewicht.toFixed(1)}</b></td></tr>
     </tbody></table>
   </section>`;
+}
+// Etiketten: eins pro Stück, A4-Bogen 3 × 8 à 70 × 37 mm
+function druckeEtiketten() {
+  const etiketten = blechteile().flatMap((f) => {
+    const n = Math.max(0, Math.round(f.stueck ?? 1)), m = material(f.material);
+    return Array.from({ length: n }, (_, i) => `<dl class="etikett klebe"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd>
+      <dt>Teil</dt><dd>${esc(f.name)}${n > 1 ? ` <small>${i + 1}/${n}</small>` : ""}</dd><dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(f._res.zuschnitt)} × ${f.laenge}</dd></dl>`);
+  });
+  if (!etiketten.length) return status("Keine Blechteile für Etiketten.");
+  const boegen = [];
+  for (let i = 0; i < etiketten.length; i += 24) boegen.push(`<section class="etikettenbogen">${etiketten.slice(i, i + 24).join("")}</section>`);
+  $("druck").innerHTML = boegen.join("");
+  window.print();
 }
 function drucke(teile, mitListe = false) {
   teile = teile.filter((f) => f._res);

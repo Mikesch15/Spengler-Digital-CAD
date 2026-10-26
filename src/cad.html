@@ -176,7 +176,13 @@ ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--be
   .blatt .hinweis { color: #333; margin: 0; }
   .blatt .etikett { width: 90mm; margin: 0; border-color: #000; }
   .blatt .etikett dt { color: #555; }
+  .etikettenbogen { page: etiketten; break-after: page; display: grid; grid-template-columns: repeat(3, 70mm); grid-auto-rows: 37mm; }
+  .etikettenbogen:last-child { break-after: auto; }
+  .etikett.klebe { margin: 0; border: 0; border-radius: 0; padding: 3mm 4mm; font-size: 9pt; gap: 0 3mm; align-content: center; overflow: hidden; }
+  .etikett.klebe dt { color: #555; font-size: 7pt; }
+  .etikett.klebe dd { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
+@page etiketten { size: A4; margin: 0; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
 
