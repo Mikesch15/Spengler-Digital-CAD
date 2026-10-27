@@ -12,7 +12,7 @@ import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { dxfLesen } from "../kern/dxflesen.js";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
 import schriftDaten from "three/examples/fonts/droid/droid_sans_bold.typeface.json";
-import { BAUSTEINE_STANDARD, flaechenblech, kantenGruppen, gegenUhrzeiger, bausteinProfil } from "../kern/flaechenblech.js";
+import { BAUSTEINE_STANDARD, flaechenblech, kantenGruppen, gegenUhrzeiger, bausteinProfil, eckFaktoren } from "../kern/flaechenblech.js";
 import { profilSvg, abwicklungSvg, zuschnittSvg, bausteinSvg, bausteinGrenzen } from "../kern/zeichnung.js";
 import { folge } from "../kern/details.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
@@ -1498,20 +1498,19 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   // Ecken: Profile auf Gehrung (Nachbarkante mit Baustein) bzw. bündig zur Nachbarkante (ohne) – keine Überschneidungen
   const richt = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]); // + = links (konvexe Ecke)
-  const ende = (beta, gehrung) => (gehrung ? Math.max(-4, Math.min(4, Math.tan(beta / 2))) : 0); // ohne Nachbarbaustein: rechtwinklig abgeschnitten
-  const n = bl.gruppen.length, letzte = (g) => richt(g.punkte.at(-2), g.punkte.at(-1)), erste = (g) => richt(g.punkte[0], g.punkte[1]);
+  const ek = eckFaktoren(bl.gruppen, bl.profile); // dieselbe Eckregel wie die Abwicklung
+  const n = bl.gruppen.length;
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p) return;
     const k2 = bausteinKontur(p.baustein, m); if (!k2) return;
-    const vor = (k - 1 + n) % n, nach = (k + 1) % n;
     for (let i = 1; i < g.punkte.length; i++) {
       const a = g.punkte[i - 1], b = g.punkte[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
       const d = richt(a, b);
-      const k0 = i > 1 ? Math.tan(knick(richt(g.punkte[i - 2], a), d) / 2) : ende(knick(letzte(bl.gruppen[vor]), d), !!bl.profile[vor]);
-      const k1 = i < g.punkte.length - 1 ? Math.tan(knick(d, richt(b, g.punkte[i + 1])) / 2) : ende(knick(d, erste(bl.gruppen[nach])), !!bl.profile[nach]);
+      const k0 = i > 1 ? Math.tan(knick(richt(g.punkte[i - 2], a), d) / 2) : ek[k].k0;
+      const k1 = i < g.punkte.length - 1 ? Math.tan(knick(d, richt(b, g.punkte[i + 1])) / 2) : ek[k].k1;
       const geo = prisma(k2, L, k0, k1);
       geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
-      geo.applyMatrix4(B); geos.push(geo);
+      geo.applyMatrix4(B); geos.push(nachAussen(geo)); // Basis kann gespiegelt sein: Dreiecke wieder nach aussen
     }
   });
   for (const geo of geos) {
@@ -4118,7 +4117,7 @@ auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser
 ansicht("iso");
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
     const je = new Map(); ms.forEach((m) => { const k = m.userData.fid; if (!je.has(k)) je.set(k, []); je.get(k).push(m); });
     for (const [fid, l] of je) { const pr = l.slice(1); for (let i = 0; i < pr.length; i++) for (let j = i + 1; j < pr.length; j++) {

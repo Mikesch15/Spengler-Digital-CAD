@@ -22,17 +22,23 @@ for (const b of BAUSTEINE_STANDARD) { const p = bausteinProfil(b, m); ok(p.zugab
   const zu = r.profile[3].zugabe, zo = r.profile[1].zugabe, zt = r.profile[0].zugabe, zf = r.profile[2].zugabe;
   ok(r.gruppen.length === 4, "vier Kanten");
   ok(nah(r.abw.laenge, 2000 + zt + zf, 0.01) && nah(r.abw.breite, 600 + zu + zo, 0.01), `Zuschnitt ${r.abw.breite.toFixed(1)} × ${r.abw.laenge.toFixed(1)}`);
-  ok(r.abw.umriss.length === 12, `Umriss mit 4 Ausklinkungen (${r.abw.umriss.length} Punkte)`);
+  ok(r.abw.umriss.length > 12, `Umriss mit Eckausbildung (${r.abw.umriss.length} Punkte)`);
   ok(r.abw.linien.length === r.profile.reduce((s, p) => s + p.biegungen.length, 0), "eine Biegelinie je Biegung");
   console.log(`Bahn 600: Zuschnitt ${r.abw.breite.toFixed(1)} × ${r.abw.laenge.toFixed(1)} mm (Unterfalz ${zu.toFixed(1)}, Oberfalz ${zo.toFixed(1)}, Traufe ${zt.toFixed(1)}, First ${zf.toFixed(1)})`);
 }
-// Konische Bahn: Kante ohne Zugabe wird bis zur Nachbarkante verlängert (keine Ausklinkung)
+// Konische Bahn: Lappen neben Kanten ohne Baustein enden bündig zur Nachbarkante (im gekanteten Zustand)
 {
   const pts = [[0, 0], [500, 0], [400, 1500], [100, 1500]];
   const r = flaechenblech(pts, [B.trauf, null, null, null], m);
-  ok(r.abw.umriss.length === 4, `konisch: 4 Punkte (${r.abw.umriss.length})`);
-  const unten = r.abw.umriss.filter((p) => p[1] < -1);
-  ok(unten.length === 2 && unten[0][0] < 0 && unten[1][0] > 500, "Traufe verlängert die schrägen Kanten nach aussen");
+  const saum = r.abw.umriss.filter((p) => p[1] < -20);
+  ok(saum.length >= 2 && saum.every((p) => p[0] > 0 && p[0] < 500), "Traufsaum (unter dem Blech) kürzer als die Kante – ragt nicht über die schrägen Seiten");
+}
+// Gehrung: zwei Aufkantungen an einer Ecke – Enden symmetrisch zur Winkelhalbierenden
+{
+  const r = flaechenblech([[0, 0], [1000, 0], [1000, 600], [0, 600]], [B.ortgang, B.ortgang, null, null], m);
+  const p0 = r.profile[0], x = p0.lage.at(-1)[1];
+  ok(Math.abs(x) < 2, `Aufkantung steht senkrecht (x oben ${x.toFixed(2)} mm)`);
+  ok(r.abw.umriss.some((p) => Math.abs(p[0] - 1000) < 2 && p[1] < -20) && r.abw.umriss.some((p) => p[0] > 1020 && Math.abs(p[1]) < 2), "Ecke ausgeklinkt (Lappen enden an der Ecke)");
 }
 // Halbkreis-Kante (Wappen): viele kleine Strecken bilden eine Kante
 {
