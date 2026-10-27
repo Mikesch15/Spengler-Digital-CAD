@@ -38,7 +38,7 @@ export function bausteinProfil(b, m) {
   const v = +b.versatz || 0, zugabe = res.zuschnitt - X + v;
   // Anschlag ab Schnittkante des Zuschnitts; abstand = Lage der Biegelinie ab der gezeichneten Kante (nach aussen)
   const biegungen = res.biegungen.map((bg) => ({ ...bg, anschlag: res.zuschnitt - bg.pos, abstand: bg.pos - X + v }));
-  return { zeilen, res, zugabe, biegungen };
+  return { zeilen, res, zugabe, biegungen, versatz: v };
 }
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];

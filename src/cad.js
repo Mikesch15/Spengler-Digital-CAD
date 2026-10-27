@@ -5,8 +5,8 @@ import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geom
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
-import { BAUSTEINE_STANDARD, flaechenblech, kantenGruppen, gegenUhrzeiger } from "../kern/flaechenblech.js";
-import { profilSvg, abwicklungSvg, detailSvg, passenderMassstab, MASSSTAEBE, zuschnittSvg } from "../kern/zeichnung.js";
+import { BAUSTEINE_STANDARD, flaechenblech, kantenGruppen, gegenUhrzeiger, bausteinProfil } from "../kern/flaechenblech.js";
+import { profilSvg, abwicklungSvg, detailSvg, passenderMassstab, MASSSTAEBE, zuschnittSvg, bausteinSvg } from "../kern/zeichnung.js";
 import { DETAILS, DETAIL, detailStandard, baueDetail, teilKontur, folge, folgeText, ROLLEN, rollenVon } from "../kern/details.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 import { materialbedarf } from "../kern/zuschnitt.js";
@@ -1160,7 +1160,8 @@ function flaecheDialog(f) {
         <td><select data-b="${key}" aria-label="Baustein ${key}">${optionen(v)}</select>${v && typeof v === "object" ? `<input data-eigen="${key}" class="folge" value="${esc(v.folge)}" placeholder="90 25 U+ 7" title="Ab der Kante: Winkel Schenkel Winkel Schenkel …">` : ""}</td>
         <td class="num" data-z="${key}">${bl.profile[k] ? f1(bl.profile[k].zugabe) : "0"}</td></tr>`; })).join("")}
     </tbody></table>
-    <div class="reihe"><select id="kAlle" aria-label="Baustein für alle Kanten ohne Baustein">${optionen("")}</select><button class="knopf" data-alle>Allen freien Kanten zuweisen</button></div>`;
+    <div class="reihe"><select id="kAlle" aria-label="Baustein für alle Kanten ohne Baustein">${optionen("")}</select><button class="knopf" data-alle>Allen freien Kanten zuweisen</button></div>
+    <div class="reihe"><button class="knopf" data-bneu>+ Neuer Baustein …</button><button class="knopf" data-bkante ${dlg?.aktiveKante && f.kanten?.[dlg.aktiveKante] ? "" : "disabled"}>✎ Baustein der gewählten Kante</button></div>`;
   const neu = () => { const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); };
   const setzeKante = (key, v) => {
     f.kanten = { ...f.kanten }; if (v) f.kanten[key] = v; else delete f.kanten[key];
@@ -1174,6 +1175,12 @@ function flaecheDialog(f) {
       if (ek) { try { folge("100 " + e.target.value); setzeKante(ek, { folge: e.target.value, versatz: 0 }); e.target.classList.remove("ungueltig"); regen(); } catch (err) { e.target.classList.add("ungueltig"); status(err.message); } }
     });
     box.addEventListener("click", (e) => {
+      if (e.target.dataset.bneu != null || e.target.dataset.bkante != null) { // Baustein-Editor; gespeichert wird in die Bibliothek (Einstellungen)
+        const key = dlg.aktiveKante, v = key && f.kanten?.[key], vorhanden = typeof v === "string" && (einst.bausteine || []).find((b) => b.id === v);
+        const b = e.target.dataset.bneu != null ? neuerBaustein(v && typeof v === "object" ? v.folge : undefined) : vorhanden || { ...bausteinFuer(v), id: neuerBaustein().id, name: "Eigener Baustein" };
+        bausteinEditor(b, einst.bausteine, (neu) => { einstSpeichern(); if (key && (e.target.dataset.bneu != null || !vorhanden)) setzeKante(key, neu.id); dlg.aktiveKante = key; const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); zeigeKanten(); });
+        return;
+      }
       if (e.target.dataset.alle != null) { const v = $("kAlle").value; if (!v || v === "*") return; for (const bl of f._bleche || []) bl.gruppen.forEach((_, k) => { if (!f.kanten?.[`${bl.pi}:${k}`]) setzeKante(`${bl.pi}:${k}`, v); }); neu(); return; }
       const tr = e.target.closest("tr[data-k]"); if (tr && e.target.tagName !== "SELECT" && e.target.tagName !== "INPUT") { dlg.aktiveKante = tr.dataset.k; box.querySelectorAll("tr[data-k]").forEach((r) => r.classList.toggle("aktiv", r === tr)); zeigeKanten(); }
     });
@@ -1230,6 +1237,85 @@ function flaechenblatt(f) {
     <p class="hinweis">Masse in mm. Zuschnitt mit Eckausklinkungen; Biegelinien rot gestrichelt. Gezeichnete Grundfläche = Falzachse bzw. fertige Kante.</p>
   </section>`;
 }
+
+// ------------------------------------------------------------ Baustein-Editor: Abkantfolge als Tabelle mit Live-Querschnitt und Zugabe
+let bEdit = null; // { b: Arbeitskopie, liste: Ziel (Bibliothek bzw. Entwurf der Einstellungen), fertig(b), mat }
+const neuerBaustein = (folgeText = "90 25") => ({ id: "b" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: "Eigener Baustein", gruppe: "Eigene", folge: folgeText, versatz: 0 });
+// Abkantfolge ↔ Zeilen { winkel: Zahl | "U+" | "U-", ri, L }: Winkel an der Kante bzw. nach dem vorigen Schenkel, dann Schenkel
+function bZeilen(text) {
+  const z = folge("100 " + text);
+  return z.slice(0, -1).map((x, i) => ({ winkel: x.art === "umschlag" ? (x.winkel < 0 ? "U-" : "U+") : x.winkel, ri: x.ri || "", L: z[i + 1].L }));
+}
+const bText = (zeilen) => zeilen.map((r) => `${r.winkel}${r.ri ? "r" + r.ri : ""} ${r.L}`).join(" ");
+function bausteinEditor(b, liste, fertig) {
+  bEdit = { b: JSON.parse(JSON.stringify(b)), liste, fertig, mat: bEdit?.mat || neuMaterial() };
+  $("bMeldung").textContent = ""; zeigeBEditor(); $("bEditor").hidden = false;
+  $("bInhalt").querySelector("#b_name")?.select();
+}
+function bVorschau() {
+  const { b } = bEdit, m = material(bEdit.mat);
+  let p = null, fehler = "";
+  try { p = bausteinProfil(b, m); } catch (e) { fehler = e.message; }
+  $("bVorschau").innerHTML = p ? bausteinSvg(p, m.t, { breite: 440, hoehe: 230, schrift: 11 }) : "";
+  $("bZugabe").innerHTML = p ? `Zugabe <b>${f1(p.zugabe)} mm</b> ab der gezeichneten Kante · ${p.biegungen.length} Biegung${p.biegungen.length === 1 ? "" : "en"} · Anschlag ab Schnittkante ${p.biegungen.map((x) => f1(x.anschlag)).join(" / ")}`
+    : `<span class="fehler">⚠ ${esc(fehler || "Abkantfolge fehlt")}</span>`;
+}
+function zeigeBEditor() {
+  const { b, liste } = bEdit;
+  let zeilen = []; try { zeilen = bZeilen(b.folge); } catch {}
+  const gruppen = [...new Set(liste.map((x) => x.gruppe).filter(Boolean))];
+  $("bInhalt").innerHTML = `<div class="egitter">
+      <label class="feld"><span>Name</span><input id="b_name" data-bf="name" value="${esc(b.name)}"></label>
+      <label class="feld"><span>Gruppe</span><input data-bf="gruppe" list="bGruppen" value="${esc(b.gruppe || "")}"><datalist id="bGruppen">${gruppen.map((g) => `<option value="${esc(g)}">`).join("")}</datalist></label>
+      <label class="feld"><span>Versatz der Kante (mm)</span><input data-bf="versatz" type="number" step="any" value="${b.versatz || 0}"></label>
+      <label class="feld"><span>Partner (gemeinsame Kante)</span><select data-bf="partner"><option value="">–</option>${liste.filter((x) => x.id !== b.id).map((x) => `<option value="${esc(x.id)}" ${b.partner === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>
+      <label class="feld"><span>Vorschau mit Material</span><select data-bf="mat">${matOpt().map(([id, n]) => `<option value="${id}" ${id === bEdit.mat ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
+    </div>
+    <div class="bvorschau" id="bVorschau"></div><div class="bzugabe" id="bZugabe"></div>
+    <table class="zeilen bfolge"><thead><tr><th>#</th><th>Biegung</th><th>Winkel °</th><th>Radius innen</th><th>Schenkel mm</th><th></th></tr></thead><tbody>
+    ${zeilen.map((r, i) => { const u = typeof r.winkel === "string"; return `<tr data-i="${i}"><td>B${i + 1}</td>
+      <td><select data-z="art"><option value="ab" ${u ? "" : "selected"}>Abkanten</option><option value="U+" ${r.winkel === "U+" ? "selected" : ""}>Umschlag zur Sichtseite</option><option value="U-" ${r.winkel === "U-" ? "selected" : ""}>Umschlag nach hinten</option></select></td>
+      <td>${u ? "180" : `<input data-z="winkel" type="number" step="any" inputmode="decimal" value="${r.winkel}" aria-label="Winkel B${i + 1}">`}</td>
+      <td><input data-z="ri" type="number" step="any" inputmode="decimal" value="${r.ri}" placeholder="Material" aria-label="Radius B${i + 1}"></td>
+      <td><input data-z="L" type="number" step="any" inputmode="decimal" value="${r.L}" aria-label="Schenkel nach B${i + 1}"></td>
+      <td>${zeilen.length > 1 ? `<button class="weg" data-zweg="${i}" aria-label="B${i + 1} entfernen">×</button>` : ""}</td></tr>`; }).join("")}
+    </tbody></table>
+    <div class="reihe ohnerand"><button class="knopf" data-zneu>+ Biegung und Schenkel</button></div>
+    <label class="feld breit"><span>Kurzschrift</span><input id="bText" class="folge" value="${esc(b.folge)}"></label>
+    <p class="hinweis">Die erste Biegung sitzt an der gezeichneten Kante der Fläche. Winkel + biegt zur Sichtseite, − nach hinten. Radius leer = Innenradius des Materials; bei Umschlägen um weitere Lagen grösser wählen.
+      Schenkelmasse wie beim freien Profil (bis zur Kante, Umschlag bis Aussenkante). Versatz: Kante liegt so viel weiter aussen (Oberfalz = Blechdicke).</p>`;
+  bVorschau();
+}
+const bZeilenAusTabelle = () => [...$("bInhalt").querySelectorAll("table.bfolge tbody tr")].map((tr) => {
+  const art = tr.querySelector('[data-z="art"]').value, w = tr.querySelector('[data-z="winkel"]');
+  return { winkel: art === "ab" ? (w ? parseFloat(w.value) || 0 : 90) : art, ri: parseFloat(tr.querySelector('[data-z="ri"]').value) || "", L: parseFloat(tr.querySelector('[data-z="L"]').value) || 0 };
+});
+$("bInhalt").addEventListener("input", (e) => {
+  const t = e.target, b = bEdit?.b; if (!b) return;
+  if (t.dataset.bf) { if (t.dataset.bf === "mat") bEdit.mat = t.value; else if (t.dataset.bf === "versatz") b.versatz = parseFloat(t.value) || 0; else if (t.dataset.bf === "partner") b.partner = t.value || undefined; else b[t.dataset.bf] = t.value; return bVorschau(); }
+  if (t.id === "bText") { b.folge = t.value; try { bZeilen(t.value); t.classList.remove("ungueltig"); } catch { t.classList.add("ungueltig"); } return bVorschau(); }
+  if (t.dataset.z) { b.folge = bText(bZeilenAusTabelle()); $("bText").value = b.folge; $("bText").classList.remove("ungueltig"); bVorschau(); }
+});
+$("bInhalt").addEventListener("change", (e) => {
+  if (e.target.dataset.z === "art" || e.target.id === "bText") { try { bZeilen(bEdit.b.folge); zeigeBEditor(); } catch {} }
+});
+$("bInhalt").addEventListener("click", (e) => {
+  const z = (() => { try { return bZeilen(bEdit.b.folge); } catch { return []; } })();
+  if (e.target.dataset.zweg != null) { z.splice(+e.target.dataset.zweg, 1); bEdit.b.folge = bText(z); zeigeBEditor(); }
+  else if (e.target.dataset.zneu != null) { z.push({ winkel: 90, ri: "", L: 20 }); bEdit.b.folge = bText(z); zeigeBEditor(); $("bInhalt").querySelector("table.bfolge tr:last-child [data-z=L]")?.focus(); }
+});
+$("bAbbrechen").onclick = () => { $("bEditor").hidden = true; bEdit = null; };
+$("bOk").onclick = () => {
+  const { b, liste, fertig } = bEdit;
+  try { bZeilen(b.folge); } catch (err) { return ($("bMeldung").textContent = "Abkantfolge: " + err.message); }
+  if (!b.name.trim()) return ($("bMeldung").textContent = "Bitte einen Namen eingeben.");
+  b.name = b.name.trim();
+  const i = liste.findIndex((x) => x.id === b.id);
+  if (i >= 0) liste[i] = b; else liste.push(b);
+  const pt = b.partner && liste.find((x) => x.id === b.partner); if (pt && !pt.partner) pt.partner = b.id; // Gegenstück kennt den neuen Baustein
+  $("bEditor").hidden = true; bEdit = null;
+  fertig?.(b); status(`Baustein «${b.name}» gespeichert.`);
+};
 
 // ------------------------------------------------------------ Spenglerdetail: Holz + mehrere Blechteile in einem Querschnitt
 // f.detail = Vorlage (Parameter f.params) oder "frei" (f.aufbau: holz, teile mit Abkantfolge, masse)
@@ -1485,7 +1571,7 @@ function zeigeEinst() {
     ${e.bausteine.map((b, i) => `<tr data-bi="${i}"><td><input data-bk="name" value="${esc(b.name)}" aria-label="Name"></td><td><input data-bk="gruppe" value="${esc(b.gruppe || "")}" aria-label="Gruppe"></td>
       <td><input data-bk="folge" class="folge" value="${esc(b.folge)}" aria-label="Abkantfolge"></td><td><input data-bk="versatz" type="number" step="any" value="${b.versatz || 0}" aria-label="Versatz"></td>
       <td><select data-bk="partner" aria-label="Partner"><option value="">–</option>${e.bausteine.filter((x) => x !== b).map((x) => `<option value="${esc(x.id)}" ${b.partner === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></td>
-      <td><button class="weg" data-bweg="${i}" aria-label="${esc(b.name)} entfernen">×</button></td></tr>`).join("")}
+      <td class="nowrap"><button class="knopf klein" data-bedit="${i}" aria-label="${esc(b.name)} bearbeiten">✎</button><button class="weg" data-bweg="${i}" aria-label="${esc(b.name)} entfernen">×</button></td></tr>`).join("")}
     </tbody></table>
     <div class="reihe ohnerand"><button class="knopf" id="eNeuBaustein">+ Baustein</button><button class="knopf" id="eBausteineStandard">Standard-Bausteine ergänzen</button></div>`,
     vorlagen: `
@@ -1579,7 +1665,8 @@ $("eInhalt").addEventListener("click", async (ev) => {
   else if (ev.target.dataset.vweg != null) { entwurf.vorlagen.splice(+ev.target.dataset.vweg, 1); zeigeEinst(); }
   else if (ev.target.dataset.dweg != null) { entwurf.eigeneDetails.splice(+ev.target.dataset.dweg, 1); zeigeEinst(); }
   else if (ev.target.dataset.bweg != null) { const [b] = entwurf.bausteine.splice(+ev.target.dataset.bweg, 1); entwurf.bausteine.forEach((x) => { if (x.partner === b.id) delete x.partner; }); zeigeEinst(); }
-  else if (ev.target.id === "eNeuBaustein") { entwurf.bausteine.push({ id: "b" + Date.now().toString(36), name: "Eigener Baustein", gruppe: "Eigene", folge: "90 25", versatz: 0 }); zeigeEinst(); $("eInhalt").querySelector("table.bausteine tr:last-child input")?.focus(); }
+  else if (ev.target.id === "eNeuBaustein") bausteinEditor(neuerBaustein(), entwurf.bausteine, () => zeigeEinst());
+  else if (ev.target.dataset.bedit != null) bausteinEditor(entwurf.bausteine[+ev.target.dataset.bedit], entwurf.bausteine, () => zeigeEinst());
   else if (ev.target.id === "eBausteineStandard") { const n = BAUSTEINE_STANDARD.filter((b) => !entwurf.bausteine.some((x) => x.id === b.id)); entwurf.bausteine.push(...JSON.parse(JSON.stringify(n))); zeigeEinst(); meldung(n.length ? `${n.length} Standard-Bausteine ergänzt.` : "Alle Standard-Bausteine sind schon da."); }
   else if (ev.target.id === "eNeuMat") {
     const v = entwurf.materialien.at(-1);
@@ -1618,7 +1705,7 @@ $("hZu").onclick = () => hilfe(false);
 $("hVersion").textContent = `Version ${VERSION}` + (pc ? " · PC-Programm" : " · Web-Version");
 document.addEventListener("keydown", (e) => {
   if (e.key === "F1") { e.preventDefault(); hilfe($("hilfe").hidden); }
-  else if (e.key === "Escape") { if (!$("hilfe").hidden) hilfe(false); else if (!$("einst").hidden) $("eAbbrechen").click(); }
+  else if (e.key === "Escape") { if (!$("bEditor").hidden) $("bAbbrechen").click(); else if (!$("hilfe").hidden) hilfe(false); else if (!$("einst").hidden) $("eAbbrechen").click(); }
 });
 document.querySelectorAll(".modal").forEach((m) => m.addEventListener("click", (e) => { if (e.target === m) (m.id === "hilfe" ? hilfe(false) : $("eAbbrechen").click()); }));
 

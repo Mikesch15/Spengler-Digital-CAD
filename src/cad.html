@@ -91,6 +91,13 @@ table.zeilen.teile input, table.zeilen.holz input { width: 100%; min-width: 46px
 table.zeilen input.folge { min-width: 150px; font-family: var(--font-num); }
 table.zeilen input.ungueltig { border-color: #c4352b; background: color-mix(in srgb, #c4352b 10%, transparent); }
 table.zeilen.kanten select { max-width: 210px; } table.zeilen.kanten tr.aktiv td { background: color-mix(in srgb, #e0782b 16%, transparent); }
+#bEditor { z-index: 30; }
+.bvorschau { background: #fff; color: #111; border-radius: 6px; margin: 8px 0 4px; display: flex; justify-content: center; }
+.bvorschau svg { max-width: 100%; height: auto; }
+.bzugabe { font-size: 13px; margin-bottom: 6px; } .bzugabe b { font-family: var(--font-num); }
+table.zeilen.bfolge input { width: 80px; } .feld.breit { display: grid; gap: 2px; margin-top: 8px; } .feld.breit input { width: 100%; }
+#bInhalt .egitter label.feld { display: grid; grid-template-columns: 1fr; gap: 2px; font-size: 12px; align-items: end; } #bInhalt .egitter input, #bInhalt .egitter select { width: 100%; }
+td.nowrap { white-space: nowrap; }
 table.zeilen.bausteine input { width: 100%; min-width: 60px; } table.zeilen.bausteine select { max-width: 170px; }
 table.zeilen.kanten tr[data-k] td:first-child { cursor: pointer; white-space: nowrap; font-weight: 600; }
 tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in srgb, var(--sketch) 8%, transparent); }
@@ -342,6 +349,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   <h3 id="eTitel">Einstellungen</h3><div class="inhalt" id="eInhalt"></div>
   <div class="fuss"><button class="knopf weg" id="eStandard">Standardwerte</button><span id="eMeldung" class="hinweis" role="status"></span><button class="knopf" id="eAbbrechen">Abbrechen</button><button class="knopf haupt" id="eOk">Übernehmen</button></div>
 </div></div>
+<div class="modal" id="bEditor" hidden><div class="modalbox" role="dialog" aria-labelledby="bTitel">
+  <h3 id="bTitel">Kantenbaustein</h3><div class="inhalt" id="bInhalt"></div>
+  <div class="fuss"><span id="bMeldung" class="hinweis" role="status"></span><button class="knopf" id="bAbbrechen">Abbrechen</button><button class="knopf haupt" id="bOk">Baustein speichern</button></div>
+</div></div>
 <div class="modal" id="hilfe" hidden><div class="modalbox" role="dialog" aria-labelledby="hTitel">
   <h3 id="hTitel">Kurzanleitung</h3><div class="inhalt hilfetext">
     <h4>Blechteil erstellen</h4>
@@ -355,7 +366,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li>Nur die <b>Grundfläche</b> des Blechs skizzieren (Rechteck, Linienzug, auch konisch oder mit Bogen) – Masse auf der Falzachse bzw. der fertigen Kante. Mehrere Bahnen nebeneinander in einer Skizze geben je ein Blech.</li>
       <li><b>Flächenblech</b>: Kante in der Ansicht anklicken (oder in der Liste) und den Baustein wählen: Doppelstehfalz, Stehfalz, liegender Falz, Traufe, Ortgang, Wasserfalz, Saum, Abkantung … oder «Eigene Abkantfolge». Eine gemeinsame Kante zweier Bahnen bekommt automatisch das Gegenstück (Unterfalz ↔ Oberfalz).</li>
       <li>Das Programm rechnet Zugabe je Kante, Zuschnitt mit Eckausklinkungen, Biegelinien, Abkantliste (Anschlag ab Schnittkante), m² für die Stückliste, DXF und Werkstattblatt.</li>
-      <li><b>Einstellungen → Bausteine</b>: eigene Bausteine erfassen und alle anpassen (Name, Gruppe, Abkantfolge, Versatz, Partner). Verwendete Bausteine werden im Projekt mitgespeichert.</li>
+      <li><b>Bausteine erstellen</b>: im Flächenblech-Dialog «+ Neuer Baustein …» (wird gleich an die gewählte Kante gesetzt) oder «✎ Baustein der gewählten Kante»; ebenso unter Einstellungen → Bausteine. Der Editor zeigt den Querschnitt live mit Zugabe und Anschlagmassen; Biegungen als Tabelle (Abkanten oder Umschlag, Winkel, Radius, Schenkel) oder als Kurzschrift. Verwendete Bausteine werden im Projekt mitgespeichert.</li>
     </ul>
     <h4>Spenglerdetails</h4>
     <ul>
