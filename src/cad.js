@@ -1,6 +1,8 @@
 // Spengler Digital CAD 0.2 – Fusion-artige Oberfläche: Skizzen, Extrusion, Blechprofil, Vorlagen
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { planModul } from "./plan.js";
+import { kantenGeometrie } from "./ansicht.js";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
@@ -260,7 +262,7 @@ function verknuepfe(ziel, werkzeug, op) {
   a.updateMatrixWorld(); b.updateMatrixWorld();
   const r = csg.evaluate(a, b, { verbinden: ADDITION, ausschneiden: SUBTRACTION, schneiden: INTERSECTION }[op]).geometry;
   ziel.geometry.dispose(); ziel.geometry = r;
-  const kante = ziel.children[0]; kante.geometry.dispose(); kante.geometry = new THREE.EdgesGeometry(r, 28);
+  const kante = ziel.children[0]; kante.geometry.dispose(); kante.geometry = kantenGeometrie(r); // ohne Nähte der Booleschen Rechnung
 }
 function koerperGeometrie(formen_, ebene, tiefe, richtung) {
   const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe, bevelEnabled: false, curveSegments: 48 });
@@ -1860,6 +1862,25 @@ $("wSchnitt").onclick = () => {
     abbrechen: () => { schnitt = vorher; } });
   wendeSchnittAn();
 };
+
+// ------------------------------------------------------------ Planblatt (Zeichnung): Ansichten, Details, Bemassung, Schriftfeld
+const plaene = planModul({
+  renderer, status, herunterladen, einst: () => einst, doc: () => doc, signatur: () => zustand(), speichern: () => { speichern(); },
+  meshes: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.visible); },
+  groesse: () => { const b = alleBox(); return b.isEmpty() ? 1000 : Math.max(...b.getSize(new THREE.Vector3()).toArray()); },
+  details: () => doc.features.filter((f) => f.typ === "detail" && f._detail).map((f) => [f.id, f.name]),
+  detailSvg: (fid, M) => {
+    const f = finde(fid), d = f?._detail; if (!d) return null;
+    const b = (d.grenzen.x1 - d.grenzen.x0) / M + 6, h = (d.grenzen.y1 - d.grenzen.y0) / M + 6;
+    const svg = detailSvg(d, d.teile.map(teilKontur), { breite: b, hoehe: h, rand: 0, schrift: 2.5, massstab: 1 / M, papier: true, nummern: false })
+      .replace(/width="([\d.]+)mm" height="([\d.]+)mm"/, 'width="$1" height="$2"');
+    return { svg, b, h, name: f.name };
+  },
+  drucken: (html) => { $("druck").innerHTML = html; window.print(); },
+  fertig: () => { merke(); status("Pläne gespeichert – sie gehören zum Projekt."); },
+});
+plaene.binden();
+$("wPlan").onclick = () => { if (skizze) return status("Zuerst die Skizze beenden."); if (dlg) $("dAbbrechen").click(); regen(); plaene.oeffnen(); };
 
 // ------------------------------------------------------------ Einstellungen: Materialien kalibrieren, Lagerformate
 let entwurf = null; // Arbeitskopie, erst «Übernehmen» speichert

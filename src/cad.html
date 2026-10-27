@@ -95,6 +95,18 @@ table.zeilen input.folge { min-width: 150px; font-family: var(--font-num); }
 table.zeilen input.ungueltig { border-color: #c4352b; background: color-mix(in srgb, #c4352b 10%, transparent); }
 table.zeilen.kanten select { max-width: 210px; } table.zeilen.kanten tr.aktiv td { background: color-mix(in srgb, #e0782b 16%, transparent); }
 #bEditor { z-index: 30; }
+.modal.plan { padding: 6px; } #planEditor .planbox { width: 100%; height: 100%; max-height: none; display: flex; flex-direction: column; }
+.planbox .plinhalt { flex: 1; min-height: 0; }
+.plleiste { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; align-content: flex-start; flex: none; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.plleiste .trenner { width: 1px; align-self: stretch; background: var(--line); }
+.plleiste [aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); }
+.menuewrap { position: relative; } .menuewrap .menue { position: absolute; top: 100%; left: 0; z-index: 5; min-width: 200px; }
+.plinhalt { display: grid; grid-template-columns: minmax(0, 1fr) 240px; min-height: 0; }
+#plFlaeche { overflow: auto; background: #8a969e; padding: 12px; display: flex; justify-content: center; align-items: flex-start; touch-action: none; }
+#plFlaeche svg { width: 100%; max-width: 1400px; height: auto; box-shadow: 0 2px 12px rgb(0 0 0 / .3); background: #fff; }
+#plEigen { border-left: 1px solid var(--line); padding: 10px; overflow: auto; display: grid; gap: 8px; align-content: start; }
+#plEigen .feld { display: grid; gap: 2px; font-size: 12px; } #plEigen input, #plEigen select { width: 100%; }
+@media (max-width: 800px) { .plinhalt { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; } #plEigen { border-left: 0; border-top: 1px solid var(--line); } }
 .bvorschau { background: #fff; color: #111; border-radius: 6px; margin: 8px 0 4px; display: flex; justify-content: center; }
 .bvorschau svg { max-width: 100%; height: auto; }
 .bzugabe { font-size: 13px; margin-bottom: 6px; } .bzugabe b { font-family: var(--font-num); }
@@ -264,6 +276,12 @@ ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--be
 }
 @page etiketten { size: A4; margin: 0; }
 @page quer { size: A4 landscape; margin: 10mm; }
+@page planA3 { size: A3 landscape; margin: 0; }
+@page planA4 { size: A4 landscape; margin: 0; }
+@media print {
+  .planblatt { page: planA3; break-after: page; } .planblatt.planA4 { page: planA4; } .planblatt:last-child { break-after: auto; }
+  .planblatt svg { width: 420mm; height: 297mm; display: block; } .planblatt.planA4 svg { width: 297mm; height: 210mm; }
+}
 @media print {
   .detailblatt { page: quer; }
   .detailblatt .grosszeichnung.massstabgetreu svg { width: 275mm; height: 122mm; max-height: none; }
@@ -324,6 +342,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <span class="trenner" aria-hidden="true"></span>
       <button class="wz" id="tFertig"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Skizze beenden</button>
     </div></div>
+    <div class="gruppe"><div class="gtitel">Zeichnung</div><div class="knoepfe">
+      <button class="wz" id="wPlan" title="Planblatt: Ansichten des Modells, Details, Bemassung, Schriftfeld – A3/A4 drucken oder als PDF/SVG"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M13 15h8M13 20v-5M6 8h5v5H6z"/></svg>Plan</button>
+    </div></div>
     <div class="gruppe"><div class="gtitel">Datei</div><div class="knoepfe">
       <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
       <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Öffnen</button>
@@ -376,6 +397,23 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 <div class="modal" id="bEditor" hidden><div class="modalbox" role="dialog" aria-labelledby="bTitel">
   <h3 id="bTitel">Kantenbaustein</h3><div class="inhalt" id="bInhalt"></div>
   <div class="fuss"><span id="bMeldung" class="hinweis" role="status"></span><button class="knopf" id="bAbbrechen">Abbrechen</button><button class="knopf haupt" id="bOk">Baustein speichern</button></div>
+</div></div>
+<div class="modal plan" id="planEditor" hidden><div class="modalbox planbox" role="dialog" aria-labelledby="plTitel">
+  <h3 id="plTitel">Planblatt</h3>
+  <div class="plleiste">
+    <select id="plBlatt" aria-label="Plan"></select><button class="knopf" id="plNeu">+ Blatt</button><button class="knopf" id="plUmbenennen">Umbenennen</button><button class="knopf weg" id="plWeg">Blatt löschen</button>
+    <select id="plFormat" aria-label="Format"><option value="A3">A3 quer</option><option value="A4">A4 quer</option></select>
+    <span class="trenner"></span>
+    <button class="knopf" data-modus="auswahl">Auswahl</button><button class="knopf" data-modus="mass">Bemassen</button><button class="knopf" data-modus="text">Text / Hinweis</button>
+    <span class="trenner"></span>
+    <span class="menuewrap"><button class="knopf haupt" id="plNeuAnsicht">+ Ansicht ▾</button><div class="menue" id="plAnsichtMenue" hidden>
+      <button data-plansicht="vorne">Ansicht vorne</button><button data-plansicht="hinten">Ansicht hinten</button><button data-plansicht="links">Ansicht links</button><button data-plansicht="rechts">Ansicht rechts</button>
+      <button data-plansicht="oben">Draufsicht</button><button data-plansicht="unten">Untersicht</button><button data-plansicht="iso">Isometrie</button></div></span>
+    <span class="menuewrap"><button class="knopf" id="plNeuDetail">+ Detail ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
+    <span class="trenner"></span>
+    <button class="knopf" id="plDruck" title="Alle Blätter drucken oder als PDF speichern">Drucken / PDF</button><button class="knopf" id="plSvg">SVG speichern</button><button class="knopf haupt" id="plZu">Fertig</button>
+  </div>
+  <div class="plinhalt"><div id="plFlaeche"></div><aside id="plEigen"></aside></div>
 </div></div>
 <div class="modal" id="hilfe" hidden><div class="modalbox" role="dialog" aria-labelledby="hTitel">
   <h3 id="hTitel">Kurzanleitung</h3><div class="inhalt hilfetext">
