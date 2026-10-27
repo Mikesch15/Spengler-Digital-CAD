@@ -50,4 +50,8 @@ cpSync(url("./web/"), url("./dist/"), { recursive: true }); // Manifest, Icons, 
 // STEP-Leser (OpenCascade als WebAssembly) – wird erst beim ersten STEP-Import geladen
 mkdirSync(url("./dist/occt/"), { recursive: true });
 for (const d of ["occt-import-js.js", "occt-import-js.wasm", "license.occt-import-js.txt", "license.occt.txt"]) cpSync(url(`./node_modules/occt-import-js/dist/${d}`), url(`./dist/occt/${d}`));
+// PDF-Leser (pdf.js) – erst beim ersten PDF-Hintergrund geladen
+mkdirSync(url("./dist/pdfjs/"), { recursive: true });
+for (const d of ["pdf.min.mjs", "pdf.worker.min.mjs"]) cpSync(url(`./node_modules/pdfjs-dist/build/${d}`), url(`./dist/pdfjs/${d}`));
+cpSync(url("./node_modules/pdfjs-dist/LICENSE"), url("./dist/pdfjs/LICENSE"));
 console.log("index.html gebaut,", (html.length / 1024).toFixed(0), "KB");

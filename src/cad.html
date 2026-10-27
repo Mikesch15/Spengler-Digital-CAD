@@ -59,6 +59,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .baum li .typ { width: 14px; height: 14px; border-radius: 3px; flex: none; }
 .typ.skizze { border: 1.5px solid var(--sketch); }
 .typ.koerper { background: var(--muted); }
+.typ.bild { background: linear-gradient(135deg, #cfd8de 50%, #9fb3c0 50%); border: 1px solid var(--line); }
 .typ.blech { background: var(--accent); }
 .typ.achse { height: 2px !important; margin-top: 5px; background: #c77d16; border-radius: 0; }
 .typ.konpunkt { width: 7px !important; height: 7px !important; border-radius: 50%; background: #c77d16; }
@@ -366,6 +367,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="tTrennen" title="An Schnittpunkten teilen"><svg viewBox="0 0 24 24"><path d="M3 12h7M14 12h7"/><path d="M12 5v14" opacity=".6"/><circle cx="10" cy="12" r="1.5"/><circle cx="14" cy="12" r="1.5"/></svg>Trennen</button>
       <button class="wz" id="tVerschieben" title="Verschieben, Kopieren, Drehen"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><span>Verschieben <span class="pfeil" title="Varianten">▾</span></span></button>
       <button class="wz" id="tMuster" title="Rechteckiges oder kreisförmiges Muster"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><rect x="15" y="15" width="6" height="6"/></svg><span>Muster <span class="pfeil" title="Varianten">▾</span></span></button>
+      <button class="wz" id="tDxf" title="DXF-Datei (Plan, Kontur) in diese Skizze einfügen"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M9 14h6M12 11v6"/></svg>DXF</button>
       <button class="wz" id="tProjizieren" title="Körperkanten und andere Skizzen projizieren"><svg viewBox="0 0 24 24"><path d="M4 18l8 3 8-3"/><path d="M8 4h8v6H8z"/><path d="M8 10l-4 8M16 10l4 8" stroke-dasharray="2 2"/></svg>Projizieren</button>
       <button class="wz" id="tHilfslinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4" stroke-dasharray="3 2.5"/></svg>Hilfslinie</button>
       <span class="trenner" aria-hidden="true"></span>
@@ -387,6 +389,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg>Neu</button>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
       <input type="file" id="importDatei" accept=".step,.stp,.stl" hidden>
+      <input type="file" id="bildDatei" accept="image/*,.pdf,application/pdf" hidden>
+      <input type="file" id="dxfDatei" accept=".dxf" hidden>
       <input type="file" id="einstDatei" accept=".json,application/json" hidden>
     </div></div>
     <div class="gruppe"><div class="gtitel">Werkstatt</div><div class="knoepfe">
@@ -476,6 +480,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Sweep</b> (Profil entlang Pfad) und <b>Übergang</b> (Loft zwischen zwei Profilen).</li>
       <li><b>Körper ▾</b> (Ändern): Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
       <li><b>Text</b> (Skizze): Stelle anklicken, Text und Höhe eingeben (Umlaute, °, € gehen). Extrudieren mit «Ausschneiden» = Gravur, mit «Vereinigen» = Prägung. Doppelklick (Auswahl) ändert Text, Höhe und Winkel.</li>
+      <li><b>Bild / PDF-Plan</b> (Austausch ▾): Foto oder Plan auf eine Ebene legen, mit «Kalibrieren» (zwei Punkte + wirkliches Mass) auf Mass bringen und darüber skizzieren. Bei PDF genügt der Plan-Massstab.</li>
+      <li><b>DXF</b> (in der Skizze): Linien, Polylinien, Bögen, Kreise, Ellipsen, Splines und Blöcke aus einer DXF-Datei einfügen (fixiert; Einheit wird umgerechnet).</li>
       <li><b>Darstellung</b>: Rechtsklick auf einen Körper → «Darstellung …» (Titanzink, Kupfer blank/brüniert/Patina, Alu, Chromstahl, verzinkt, Holz, Beton …). Bleche zeigen automatisch ihr Material.</li>
       <li><b>Austausch ▾</b> (Datei): STEP und STL exportieren (Fusion, SolidWorks, FreeCAD, 3D-Druck) sowie STEP/STL importieren – importierte Teile sind normale Körper.</li>
       <li><b>Komponenten</b>: Rechtsklick auf einen Körper → «In Komponente …» fasst Teile zu Baugruppen zusammen (z. B. «Dach», «Fassade»); im Browser gemeinsam ein-/ausblenden, Doppelklick benennt um.</li>

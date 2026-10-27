@@ -9,6 +9,7 @@ import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../ke
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
+import { dxfLesen } from "../kern/dxflesen.js";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
 import schriftDaten from "three/examples/fonts/droid/droid_sans_bold.typeface.json";
 import { BAUSTEINE_STANDARD, flaechenblech, kantenGruppen, gegenUhrzeiger, bausteinProfil } from "../kern/flaechenblech.js";
@@ -647,7 +648,7 @@ function uebernimmWahl(e) {
 
 // ------------------------------------------------------------ Neuaufbau (parametrisch, in Reihenfolge der Zeitleiste)
 function regen() {
-  leeren(modell);
+  leeren(modell); bilder.clear();
   // Verwendete Materialien ins Projekt schreiben, damit es auf jedem Gerät gleich rechnet
   const benutzt = [...new Set(doc.features.map((f) => f.material).filter(Boolean))].map(material);
   doc.materialien = benutzt.filter((m, i) => benutzt.indexOf(m) === i);
@@ -697,6 +698,9 @@ function regen() {
         const fs = formen(s); if (!fs.length) throw new Error("Skizze hat kein geschlossenes Profil");
         const kr = doc.features.filter((x) => x.typ === "kantenrund" && x.ziel === f.id && !x._aus);
         volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, f.abstand, f.richtung, (f.vorgang || "neu") === "neu" ? 0 : 0.01));
+      } else if (f.typ === "bild") {
+        if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
+        if (!f.versteckt) bilder.add(bildObjekt(f));
       } else if (f.typ === "import") {
         if (!f._geo) { const bin = atob(f.daten || ""), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
           f._geo = new THREE.BufferGeometry(); f._geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(u8.buffer), 3)); f._geo.computeVertexNormals(); }
@@ -852,9 +856,9 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 function zeigeBrowser() {
-  const KON = ["ebene", "achse", "konpunkt"];
+  const KON = ["ebene", "achse", "konpunkt", "bild"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
   const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}"><span class="typ ${typ}"></span>${f.name}${f._fehler ? " ⚠" : ""}
     <button class="auge" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}">${f.versteckt ? "○" : "●"}</button></li>`;
@@ -1238,6 +1242,7 @@ function bearbeite(f) {
   if (f.typ === "extrusion") return extrusionDialog(f);
   if (f.typ === "drehung") return drehungDialog(f);
   if (f.typ === "sweep") return sweepDialog(f);
+  if (f.typ === "bild") return bildDialog(f);
   if (KOERPER_WZ[f.typ]) return koerperDialog(f.typ, f);
   if (f.typ === "loft") return loftDialog(f);
   if (f.typ === "blech") return blechDialog(f);
@@ -1918,6 +1923,103 @@ function koerperDialog(typ, f) {
   }
 }
 
+// ------------------------------------------------------------ Bild / PDF-Plan als Hintergrund (wie «Arbeitsfläche» in Fusion) und DXF in die Skizze
+const bilder = new THREE.Group(); szene.add(bilder); // nicht im Modell: zählt nicht für Auswahl, Export, Plan
+const BILDTEX = new Map();
+function bildObjekt(f) {
+  let tex = BILDTEX.get(f.id);
+  if (!tex || tex.userData.quelle !== f.daten) { const img = new Image(); img.src = f.daten; tex = new THREE.Texture(img); img.onload = () => { tex.needsUpdate = true; }; tex.colorSpace = THREE.SRGBColorSpace; tex.userData.quelle = f.daten; BILDTEX.set(f.id, tex); }
+  const b = Math.max(1, +f.breite || 1000), h = (b * (f.pxH || 1)) / (f.pxB || 1);
+  const geo = new THREE.PlaneGeometry(b, h); geo.translate(b / 2, h / 2, 0);
+  const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: f.deckkraft ?? 0.6, side: THREE.DoubleSide, depthWrite: false }));
+  const w = ((f.drehung || 0) * Math.PI) / 180;
+  m.applyMatrix4(new THREE.Matrix4().makeRotationZ(w).setPosition(+f.x || 0, +f.y || 0, -0.5));
+  m.applyMatrix4(basis(f.ebene)); m.renderOrder = -1; m.userData.bild = f.id;
+  return m;
+}
+// Bild verkleinern (max. 3000 px, JPEG) – das Projekt bleibt handlich
+function bildAusQuelle(quelle, b0, h0) {
+  const k = Math.min(1, 3000 / Math.max(b0, h0)), c = document.createElement("canvas");
+  c.width = Math.round(b0 * k); c.height = Math.round(h0 * k);
+  const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(quelle, 0, 0, c.width, c.height);
+  return { daten: c.toDataURL("image/jpeg", 0.85), pxB: c.width, pxH: c.height };
+}
+let pdfjs = null;
+async function pdfLaden() {
+  if (pdfjs) return pdfjs;
+  for (const basis of ["pdfjs/", "dist/pdfjs/"]) {
+    try { const m = await import(/* @vite-ignore */ new URL(basis + "pdf.min.mjs", location.href).href); m.GlobalWorkerOptions.workerSrc = new URL(basis + "pdf.worker.min.mjs", location.href).href; return (pdfjs = m); } catch {}
+  }
+  throw new Error("PDF-Leser nicht gefunden (Ordner «pdfjs» fehlt neben dem Programm)");
+}
+async function bildEinfuegen(datei) {
+  try {
+    let bild, papier = null;
+    if (/\.pdf$/i.test(datei.name)) {
+      status("PDF wird gelesen …"); const lib = await pdfLaden(), pdf = await lib.getDocument({ data: new Uint8Array(await datei.arrayBuffer()) }).promise;
+      let nr = 1; if (pdf.numPages > 1) { nr = Math.max(1, Math.min(pdf.numPages, parseInt(prompt(`Welche Seite? (1–${pdf.numPages})`, "1")) || 1)); }
+      const seite = await pdf.getPage(nr), v1 = seite.getViewport({ scale: 1 }), k = Math.min(3000 / Math.max(v1.width, v1.height), 6), v = seite.getViewport({ scale: k });
+      const c = document.createElement("canvas"); c.width = Math.round(v.width); c.height = Math.round(v.height);
+      await seite.render({ canvasContext: c.getContext("2d"), viewport: v, background: "#ffffff" }).promise;
+      bild = bildAusQuelle(c, c.width, c.height); papier = (v1.width / 72) * 25.4; // Papierbreite in mm
+    } else {
+      const url = URL.createObjectURL(datei), img = new Image(); img.src = url; await img.decode();
+      bild = bildAusQuelle(img, img.naturalWidth, img.naturalHeight); URL.revokeObjectURL(url);
+    }
+    const ziel = finde(auswahl)?.typ === "ebene" ? auswahl : einst.neu.ebene || "XY";
+    const f = { id: neueId(), typ: "bild", name: datei.name.replace(/\.[^.]+$/, ""), ebene: ziel, x: 0, y: 0, drehung: 0, deckkraft: 0.6, ...bild,
+      ...(papier ? { papier, massstab: 50, breite: papier * 50 } : { breite: 1000 }) };
+    bildDialog(f);
+  } catch (err) { status("Bild/PDF konnte nicht gelesen werden: " + err.message); }
+}
+function bildDialog(f) {
+  const istNeu = !finde(f.id);
+  const felder = (f) => [
+    { id: "name", label: "Name", text: true, wert: f.name },
+    { id: "ebene", label: "Ebene", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
+    ...(f.papier ? [{ id: "massstab", label: "Plan-Massstab 1:", wert: f.massstab }] : []),
+    { id: "breite", label: "Breite in Wirklichkeit", einheit: "mm", wert: +(+f.breite).toFixed(1) },
+    { id: "x", label: "Lage links (u)", einheit: "mm", wert: f.x }, { id: "y", label: "Lage unten (v)", einheit: "mm", wert: f.y },
+    { id: "drehung", label: "Drehung", einheit: "°", wert: f.drehung },
+    { id: "deckkraft", label: "Deckkraft", optionen: [["0.25", "25 %"], ["0.4", "40 %"], ["0.6", "60 %"], ["0.8", "80 %"], ["1", "100 %"]], wert: String(f.deckkraft ?? 0.6) },
+  ];
+  featureDialog(f, istNeu, felder, (f, w) => {
+    const alt = f.massstab;
+    Object.assign(f, w, { name: w.name?.trim() || f.name, deckkraft: +w.deckkraft });
+    if (f.papier && Number.isFinite(w.massstab) && w.massstab > 0 && w.massstab !== alt) { f.breite = f.papier * w.massstab; if ($("d_breite")) $("d_breite").value = +f.breite.toFixed(1); }
+  }, "Bild / Plan als Hintergrund",
+  `Bild oder PDF-Plan auf eine Ebene legen und darauf skizzieren. ${f.papier ? "Breite ergibt sich aus Papiergrösse × Massstab. " : ""}Genauer: «Kalibrieren» – zwei Punkte im Bild anklicken und das wirkliche Mass eingeben.`,
+  { wahlNr: -1, zusatz: () => `<div class="reihe ohnerand"><button class="knopf" data-kalib>Kalibrieren …</button></div>`,
+    binden: (box) => box.addEventListener("click", (e) => { if (e.target.dataset.kalib == null) return; dlg.kalib = []; status("Kalibrieren: ersten Punkt im Bild anklicken."); }),
+    kantenWahl: (e) => {
+      if (!dlg.kalib) return false;
+      strahl.setFromCamera(ndc(e), kamera);
+      const t = strahl.intersectObjects(bilder.children.filter((o) => o.userData.bild === f.id))[0]; if (!t) { status("Ins Bild klicken."); return true; }
+      const uv = aufEbene(f.ebene, t.point); dlg.kalib.push(uv);
+      if (dlg.kalib.length === 1) { status("Zweiten Punkt anklicken (möglichst weit weg, z. B. Ende einer Masslinie)."); return true; }
+      const [a, b] = dlg.kalib, ist = abst(a, b); dlg.kalib = null;
+      const soll = parseFloat(String(prompt(`Gemessen ${f1(ist)} mm. Wirkliches Mass zwischen den Punkten (mm)?`, f1(ist))).replace(",", "."));
+      if (!(soll > 0) || ist < 1e-6) return true;
+      const k = soll / ist; // um den ersten Punkt skalieren
+      f.breite *= k; f.x = a[0] + (f.x - a[0]) * k; f.y = a[1] + (f.y - a[1]) * k; if (f.papier) f.massstab = f.breite / f.papier;
+      const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); status(`Kalibriert: Faktor ${k.toFixed(4)}${f.papier ? ` · Massstab ≈ 1:${f.massstab.toFixed(1)}` : ""}.`); return true;
+    } });
+}
+$("bildDatei").onchange = async (e) => { const d = e.target.files[0]; e.target.value = ""; if (d) await bildEinfuegen(d); };
+// DXF in die offene Skizze (fixiert, wie projizierte Linien – Abhängigkeit «fix» lässt sich löschen)
+$("dxfDatei").onchange = async (e) => {
+  const d = e.target.files[0]; e.target.value = ""; if (!d || !skizze) return;
+  try {
+    const r = dxfLesen(await d.text()), f = skizze.f;
+    if (!r.elemente.length) return status("In der DXF-Datei sind keine Linien, Bögen oder Kreise.");
+    if (r.elemente.length > 3000 && !confirm(`${r.elemente.length} Elemente – das kann langsam werden. Trotzdem einfügen?`)) return;
+    for (const el of r.elemente) { el.id = neueElementId(f); f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); }
+    loeseSkizze(f); zeichneLive();
+    const weg = Object.entries(r.uebersprungen).map(([k, n]) => `${n}× ${k}`).join(", ");
+    status(`${r.elemente.length} Elemente aus «${d.name}» eingefügt (fixiert)${r.faktor !== 1 ? `, Einheit umgerechnet ×${r.faktor}` : ""}${weg ? ` · übersprungen: ${weg}` : ""}.`);
+  } catch (err) { status("DXF konnte nicht gelesen werden: " + err.message); }
+};
+
 // ------------------------------------------------------------ Sweep und Loft (wie in Fusion)
 const v3 = (a) => new THREE.Vector3(...a);
 // Ring-Netz: ringe[k][j] (gleich viele Punkte, Schleifen gegen den Uhrzeiger um die Laufrichtung), Deckel an beiden Enden
@@ -2429,7 +2531,7 @@ function fitte(box) {
   steuerung.target.copy(c); kamera.position.copy(c.clone().add(dir.multiplyScalar(r * 3)));
   kamera.near = r / 100; kamera.far = r * 50; kamera.updateProjectionMatrix();
 }
-const alleBox = () => { const b = new THREE.Box3(); modell.children.forEach((o) => { if (!o.userData.konstruktion) b.expandByObject(o); }); b.union(new THREE.Box3().setFromObject(live)); return b; }; // Achsen sind «unendlich» lang
+const alleBox = () => { const b = new THREE.Box3(); modell.children.forEach((o) => { if (!o.userData.konstruktion) b.expandByObject(o); }); b.union(new THREE.Box3().setFromObject(live)); if (bilder.children.length) b.union(new THREE.Box3().setFromObject(bilder)); return b; }; // Achsen sind «unendlich» lang
 function ansicht(name) {
   const d = { oben: [0, 1, 0.0001], vorne: [0, 0, 1], rechts: [1, 0, 0], iso: [0.7, 0.5, 0.8] }[name];
   kamera.position.copy(steuerung.target.clone().add(V(d).normalize()));
@@ -3513,7 +3615,7 @@ $("wEbene").onclick = (e) => {
 $("ebenenMenue").onclick = (e) => {
   const b = e.target.closest("button"); if (!b) return; $("ebenenMenue").hidden = true; if (dlg) $("dAbbrechen").click();
   if (b.dataset.kwz) return koerperDialog(b.dataset.kwz);
-  if (b.dataset.aus) { return b.dataset.aus === "import" ? $("importDatei").click() : exportiere(b.dataset.aus); }
+  if (b.dataset.aus) { return b.dataset.aus === "import" ? $("importDatei").click() : b.dataset.aus === "bild" ? $("bildDatei").click() : exportiere(b.dataset.aus); }
   if (b.dataset.art) ebeneDialog(b.dataset.art); else if (b.dataset.achse) konstruktionDialog("achse", b.dataset.achse); else if (b.dataset.punkt) konstruktionDialog("konpunkt", b.dataset.punkt);
 };
 document.addEventListener("click", (e) => { if (!e.target.closest?.("#ebenenMenue")) $("ebenenMenue").hidden = true; });
@@ -3615,13 +3717,15 @@ async function importiereDatei(datei) {
     status("Nur STEP (.step/.stp) und STL lassen sich importieren.");
   } catch (err) { status("Import fehlgeschlagen: " + err.message); }
 }
+$("tDxf").onclick = () => { if (skizze) $("dxfDatei").click(); };
 $("wAustausch").onclick = (e) => {
   e.stopPropagation(); const m = $("ebenenMenue");
   if (!m.hidden && m.dataset.quelle === "austausch") { m.hidden = true; return; }
   m.dataset.quelle = "austausch";
   m.innerHTML = `<button data-aus="step"><b>STEP exportieren</b><small>alle sichtbaren Körper und Bleche – für Fusion, SolidWorks, FreeCAD …</small></button>
     <button data-aus="stl"><b>STL exportieren</b><small>Dreiecksnetz – 3D-Druck, Visualisierung</small></button>
-    <button data-aus="import"><b>STEP / STL importieren …</b><small>als Körper ins Modell (z. B. Bauteil vom Architekten)</small></button>`;
+    <button data-aus="import"><b>STEP / STL importieren …</b><small>als Körper ins Modell (z. B. Bauteil vom Architekten)</small></button>
+    <button data-aus="bild"><b>Bild / PDF-Plan als Hintergrund …</b><small>auf eine Ebene legen, kalibrieren und darauf skizzieren</small></button>`;
   const r = $("wAustausch").getBoundingClientRect(); Object.assign(m.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" }); m.hidden = false;
 };
 $("importDatei").onchange = async (e) => { const d = e.target.files[0]; e.target.value = ""; if (d) await importiereDatei(d); };
