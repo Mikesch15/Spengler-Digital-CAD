@@ -23,6 +23,7 @@ import { rechne, parameterWerte, istZahl, namenIn, NAME as PARAMNAME } from "../
 import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
 import { BASIS, ACHSEN, versetzt, unterWinkel, mittelebene, zweiKanten, dreiPunkte, tangential, entlangPfad, aufFlaeche, zuWelt, zuLokal } from "../kern/ebenen.js";
+const zuWeltK = zuWelt;
 
 const $ = (id) => document.getElementById(id);
 const VERSION = typeof __VERSION__ === "string" ? __VERSION__ : "dev"; // beim Bauen eingesetzt
@@ -330,13 +331,13 @@ function koerperMesh(geo, farbe, fid) {
 }
 // Vereinigen, Ausschneiden, Schneiden (wie in Fusion) – Geometrie des Zielkörpers wird ersetzt
 function verknuepfe(ziel, werkzeug, op) {
-  const nurPos = (g) => { const n = g.index ? g.toNonIndexed() : g.clone(); for (const k of Object.keys(n.attributes)) if (k !== "position" && k !== "normal") n.deleteAttribute(k); if (!n.attributes.normal) n.computeVertexNormals(); return n; };
   const a = new Brush(nurPos(ziel.geometry)), b = new Brush(nurPos(werkzeug));
   a.updateMatrixWorld(); b.updateMatrixWorld();
   const r = csg.evaluate(a, b, { verbinden: ADDITION, ausschneiden: SUBTRACTION, schneiden: INTERSECTION }[op]).geometry;
   ziel.geometry.dispose(); ziel.geometry = r;
   const kante = ziel.children[0]; kante.geometry.dispose(); kante.geometry = kantenGeometrie(r); // ohne Nähte der Booleschen Rechnung
 }
+const nurPos = (g) => { const n = g.index ? g.toNonIndexed() : g.clone(); for (const k of Object.keys(n.attributes)) if (k !== "position" && k !== "normal") n.deleteAttribute(k); if (!n.attributes.normal) n.computeVertexNormals(); return n; };
 // ueber > 0: Werkzeug für Vereinigen/Ausschneiden an beiden Enden etwas länger – deckungsgleiche Flächen (Skizze auf der
 // Körperfläche) machen die Boolesche Rechnung sonst sehr langsam und unsauber; 0.01 mm ist für die Werkstatt ohne Belang
 function koerperGeometrie(formen_, ebene, tiefe, richtung, ueber = 0) {
@@ -648,7 +649,7 @@ function uebernimmWahl(e) {
 
 // ------------------------------------------------------------ Neuaufbau (parametrisch, in Reihenfolge der Zeitleiste)
 function regen() {
-  leeren(modell); bilder.clear();
+  leeren(modell); bilder.clear(); try { kollisionen.children.forEach((o) => o.geometry.dispose()); kollisionen.clear(); } catch {}
   // Verwendete Materialien ins Projekt schreiben, damit es auf jedem Gerät gleich rechnet
   const benutzt = [...new Set(doc.features.map((f) => f.material).filter(Boolean))].map(material);
   doc.materialien = benutzt.filter((m, i) => benutzt.indexOf(m) === i);
@@ -777,6 +778,7 @@ function regen() {
       }
     } catch (e) { f._fehler = e.message; }
   }
+  wendeKomponentenLageAn();
   ebenenGroesse();
   zeigeKanten();
   try { if (schnitt) zeigeKappen(renderer.clippingPlanes[0]); } catch {} // gefüllte Schnittfläche neu (beim Start noch nicht da)
@@ -925,12 +927,23 @@ function featureMenue(f, x, y) {
   m.dataset.id = f.id; m.hidden = false;
   Object.assign(m.style, { left: Math.min(x, innerWidth - 240) + "px", top: Math.min(y, innerHeight - 330) + "px" });
 }
+$("baum").addEventListener("contextmenu", (e) => {
+  const k = e.target.closest("li.komp")?.dataset.komp; if (k == null || skizze) return;
+  e.preventDefault(); e.stopImmediatePropagation(); const m = $("featureMenue");
+  m.innerHTML = `<button data-komphan="lage">Verschieben / Drehen …</button><button data-komphan="name">Umbenennen …</button><button data-komphan="loesen">Komponente auflösen</button>`;
+  m.dataset.komp = k; m.dataset.id = ""; m.hidden = false; Object.assign(m.style, { left: Math.min(e.clientX, innerWidth - 240) + "px", top: Math.min(e.clientY, innerHeight - 160) + "px" });
+});
 for (const box of ["zeit", "baum"]) $(box).addEventListener("contextmenu", (e) => {
   const id = e.target.closest("[data-id]")?.dataset.id, f = finde(id); if (!f || skizze) return;
   e.preventDefault(); featureMenue(f, e.clientX, e.clientY);
 });
 document.addEventListener("click", (e) => { if (e.target.isConnected && !e.target.closest?.("#featureMenue")) $("featureMenue").hidden = true; }); // ersetzte Knöpfe (Untermenü) zählen nicht als «daneben»
 $("featureMenue").onclick = (e) => {
+  const kh = e.target.closest("button")?.dataset.komphan;
+  if (kh) { const k = $("featureMenue").dataset.komp; $("featureMenue").hidden = true; if (dlg) $("dAbbrechen").click();
+    if (kh === "lage") return komponenteDialog(k);
+    if (kh === "name") { const n = prompt("Komponente umbenennen", k)?.trim(); if (!n) return; doc.features.forEach((f) => { if (f.komponente === k) f.komponente = n; }); if (doc.komponentenLage?.[k]) { doc.komponentenLage[n] = doc.komponentenLage[k]; delete doc.komponentenLage[k]; } return regen(); }
+    if (kh === "loesen") { doc.features.forEach((f) => { if (f.komponente === k) delete f.komponente; }); if (doc.komponentenLage) delete doc.komponentenLage[k]; regen(); return status(`Komponente «${k}» aufgelöst – Körper bleiben.`); } }
   const dz = e.target.closest("button")?.dataset.darst;
   if (dz != null) { const f = finde($("featureMenue").dataset.id); $("featureMenue").hidden = true; if (!f) return; if (dz) f.darstellung = dz; else delete f.darstellung; regen(); return status(`Darstellung «${f.name}»: ${dz ? OBERFLAECHEN[dz].name : "automatisch"}.`); }
   const k = e.target.closest("button")?.dataset.fm; if (!k) return;
@@ -1485,6 +1498,7 @@ function zeigeKanten() {
   const f = dlg?.feature?.typ === "flaeche" ? dlg.feature : hauptVon(auswahl);
   if (f?.typ !== "flaeche" || !f._bleche || skizze || f.versteckt) return;
   const ebene = finde(f.skizze)?.ebene, aktiv = dlg?.feature === f ? dlg.aktiveKante : menueKante?.fid === f.id ? menueKante.key : null;
+  const LM = lageVon(f), zu3D = (e, p) => { const v = V(zuWelt(E_(e), p)); return LM ? v.applyMatrix4(LM) : v; }; // Komponente verschoben
   f._bleche.forEach((bl) => bl.gruppen.forEach((g, k) => {
     const an = aktiv === `${bl.pi}:${k}`, belegt = !!f.kanten?.[`${bl.pi}:${k}`];
     // Beschriftung in der Kantenmitte: antippen öffnet das Bausteinmenü (gut auf dem Handy)
@@ -1502,7 +1516,7 @@ function zeigeKanten() {
 }
 // Nächste Kante unter dem Mauszeiger (Bildschirmabstand) → «Blech:Kante»
 function kanteUnterMaus(f, e) {
-  const ebene = finde(f.skizze)?.ebene, sm = smPos(e);
+  const ebene = finde(f.skizze)?.ebene, sm = smPos(e), LM = lageVon(f), zuWelt = (E, p) => { const v = V(zuWeltK(E, p)); return (LM ? v.applyMatrix4(LM) : v).toArray(); };
   let best = null, bd = e.pointerType === "touch" ? 30 : 14; // Finger: grösserer Fangbereich
   for (const bl of f._bleche || []) bl.gruppen.forEach((g, k) => {
     for (let i = 1; i < g.punkte.length; i++) {
@@ -1511,6 +1525,56 @@ function kanteUnterMaus(f, e) {
     }
   });
   return best;
+}
+// ------------------------------------------------------------ Komponenten: Lage (verschieben/drehen als Ganzes) und Kollisionsprüfung
+// doc.komponentenLage = { Name: { dx, dy, dz, achse, winkel } } – wirkt nach allen Features auf alle Körper der Komponente
+function lageMatrix(name) {
+  const l = name && doc.komponentenLage?.[name]; if (!l) return null;
+  const M = new THREE.Matrix4().makeTranslation(+l.dx || 0, +l.dy || 0, +l.dz || 0);
+  if (+l.winkel && l.achse) { try { const a = bezugKante(l.achse), p = V(a.p), d = V(a.d).normalize();
+    M.multiply(new THREE.Matrix4().makeTranslation(p.x, p.y, p.z).multiply(new THREE.Matrix4().makeRotationAxis(d, (l.winkel * Math.PI) / 180)).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z))); } catch {} }
+  return M;
+}
+const lageVon = (f) => lageMatrix(f?.komponente);
+function wendeKomponentenLageAn() {
+  for (const o of modell.children) {
+    if (!o.isMesh || !o.userData.fid) continue;
+    const M = lageVon(hauptVon(o.userData.fid)); if (!M) continue;
+    o.geometry = o.geometry.clone().applyMatrix4(M); // Geometrie selbst verschieben: Export, Plan, Messen sehen die Lage
+    for (const c of o.children) if (c.geometry) c.geometry = c.geometry.clone().applyMatrix4(M);
+  }
+}
+function komponenteDialog(name) {
+  doc.komponentenLage ||= {};
+  const vorher = JSON.stringify(doc.komponentenLage[name] || null), l = (doc.komponentenLage[name] ||= { dx: 0, dy: 0, dz: 0, achse: "A:Z", winkel: 0 });
+  dialog({ titel: "Komponente verschieben / drehen", feature: null, wahlNr: -1,
+    hinweis: `Bewegt alle Körper und Bleche von «${name}» gemeinsam (z. B. Dachteil ans Modell setzen). Wirkt nach allen Features – Masse und Abwicklungen bleiben gleich.`,
+    felder: [{ id: "dx", label: "Verschieben X", einheit: "mm", wert: l.dx }, { id: "dy", label: "Verschieben Y", einheit: "mm", wert: l.dy }, { id: "dz", label: "Verschieben Z", einheit: "mm", wert: l.dz },
+      { id: "achse", label: "Drehachse", wahl: "kante", optionen: mitWert(kantenListe(null), l.achse), wert: l.achse }, { id: "winkel", label: "Drehwinkel", einheit: "°", wert: l.winkel }],
+    aendern: (w) => { Object.assign(l, Object.fromEntries(Object.entries(w).map(([k, v]) => [k, k === "achse" ? v : Number.isFinite(v) ? v : 0]))); regen(); },
+    abbrechen: () => { if (vorher === "null") delete doc.komponentenLage[name]; else doc.komponentenLage[name] = JSON.parse(vorher); },
+    ok: () => { if (!l.dx && !l.dy && !l.dz && !l.winkel) delete doc.komponentenLage[name]; regen(); merke(); status(`Lage von «${name}» gespeichert.`); } });
+}
+// Kollision (Interferenz wie in Fusion): sich durchdringende Körper verschiedener Features finden und rot zeigen
+const kollisionen = new THREE.Group(); szene.add(kollisionen);
+function pruefeKollision() {
+  kollisionen.children.forEach((o) => o.geometry.dispose()); kollisionen.clear();
+  const ks = modell.children.filter((o) => o.isMesh && o.visible && o.userData.fid).map((o) => { o.geometry.computeBoundingBox(); return { o, f: hauptVon(o.userData.fid), box: o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld) }; });
+  const treffer = []; let paare = 0;
+  for (let i = 0; i < ks.length; i++) for (let j = i + 1; j < ks.length; j++) {
+    const a = ks[i], b = ks[j]; if (!a.f || !b.f || a.f === b.f || !a.box.intersectsBox(b.box)) continue;
+    paare++;
+    try {
+      const A = new Brush(nurPos(a.o.geometry)), B = new Brush(nurPos(b.o.geometry)); A.updateMatrixWorld(); B.updateMatrixWorld();
+      const g = csg.evaluate(A, B, INTERSECTION).geometry, p = g.attributes.position?.array || [];
+      let v = 0; for (let k = 0; k + 8 < p.length; k += 9) v += p[k] * (p[k + 4] * p[k + 8] - p[k + 5] * p[k + 7]) - p[k + 1] * (p[k + 3] * p[k + 8] - p[k + 5] * p[k + 6]) + p[k + 2] * (p[k + 3] * p[k + 7] - p[k + 4] * p[k + 6]);
+      v = Math.abs(v / 6);
+      if (v > 1) { treffer.push({ a: a.f.name, b: b.f.name, v }); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xe02424, depthTest: false, transparent: true, opacity: 0.75 })); m.renderOrder = 20; kollisionen.add(m); }
+      else g.dispose();
+    } catch {}
+  }
+  const zus = new Map(); for (const t of treffer) { const k = t.a < t.b ? `${t.a} ↔ ${t.b}` : `${t.b} ↔ ${t.a}`; zus.set(k, (zus.get(k) || 0) + t.v); }
+  return { liste: [...zus.entries()].map(([k, v]) => ({ paar: k, volumen: v })), paare };
 }
 // Baustein einer Kante setzen (v: Baustein-ID, {folge, versatz} oder leer); Gegenstück bekommt den Partner
 // Querschnitt (bausteinProfil) einer belegten Kante mit Namen – für Schnitte im Plan
@@ -2232,6 +2296,16 @@ function wendeSchnittAn() {
   zeigeKappen(renderer.clippingPlanes[0]);
   $("wSchnitt").setAttribute("aria-pressed", true);
 }
+$("wKollision").onclick = () => {
+  if (skizze) return; if (dlg) $("dAbbrechen").click();
+  if (kollisionen.children.length) { kollisionen.children.forEach((o) => o.geometry.dispose()); kollisionen.clear(); return status("Kollisionsanzeige aus."); }
+  status("Prüfe Kollisionen …");
+  setTimeout(() => {
+    const r = pruefeKollision();
+    status(r.liste.length ? `⚠ ${r.liste.length} Kollision${r.liste.length === 1 ? "" : "en"} (rot): ` + r.liste.map((t) => `${t.paar} ${t.volumen > 1000 ? (t.volumen / 1000).toFixed(1) + " cm³" : t.volumen.toFixed(0) + " mm³"}`).join(" · ") + " – nochmals klicken blendet aus."
+      : `Keine Kollisionen (${r.paare} Körperpaare nahe beieinander geprüft).`);
+  }, 30);
+};
 $("wSchnitt").onclick = () => {
   if (skizze) return;
   if (schnitt && !dlg) { schnitt = null; wendeSchnittAn(); return status("Schnittanalyse aus."); }

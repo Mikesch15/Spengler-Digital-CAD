@@ -344,6 +344,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     </div></div>
     <div class="gruppe"><div class="gtitel">Prüfen</div><div class="knoepfe">
       <button class="wz" id="wMessen" title="Messen: Abstand zwischen zwei Punkten (Ecken, Kantenmitten, Flächen)"><svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg>Messen</button>
+      <button class="wz" id="wKollision" title="Kollision: durchdringende Körper und Bleche verschiedener Teile finden (rot)"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="10" height="10"/><rect x="11" y="4" width="10" height="10"/><path d="M11 7h2v7h-2z" fill="currentColor"/></svg>Kollision</button>
       <button class="wz" id="wSchnitt" title="Schnittanalyse: Modell an einer Ebene aufschneiden"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 12h16" stroke-dasharray="2 2"/></svg>Schnitt</button>
     </div></div>
     <div class="gruppe skizzengruppe" id="gSkizze" hidden><div class="gtitel">Skizze</div><div class="knoepfe">
@@ -484,6 +485,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>DXF</b> (in der Skizze): Linien, Polylinien, Bögen, Kreise, Ellipsen, Splines und Blöcke aus einer DXF-Datei einfügen (fixiert; Einheit wird umgerechnet).</li>
       <li><b>Darstellung</b>: Rechtsklick auf einen Körper → «Darstellung …» (Titanzink, Kupfer blank/brüniert/Patina, Alu, Chromstahl, verzinkt, Holz, Beton …). Bleche zeigen automatisch ihr Material.</li>
       <li><b>Austausch ▾</b> (Datei): STEP und STL exportieren (Fusion, SolidWorks, FreeCAD, 3D-Druck) sowie STEP/STL importieren – importierte Teile sind normale Körper.</li>
+      <li><b>Komponente verschieben/drehen</b>: Rechtsklick auf die Komponente im Browser → «Verschieben / Drehen …» bewegt alle ihre Körper und Bleche gemeinsam. <b>Kollision</b> (Prüfen) zeigt rot, wo sich Teile verschiedener Features durchdringen.</li>
       <li><b>Komponenten</b>: Rechtsklick auf einen Körper → «In Komponente …» fasst Teile zu Baugruppen zusammen (z. B. «Dach», «Fassade»); im Browser gemeinsam ein-/ausblenden, Doppelklick benennt um.</li>
       <li><b>Zeitleiste</b>: Rückrollmarke ziehen, Feature ziehen zum Verschieben; Rechtsklick (Handy: lange tippen) für Unterdrücken, Zurückrollen, Umbenennen, Duplizieren, Löschen.</li>
     </ul>
