@@ -39,6 +39,9 @@ export function profilSvg(res, { breite = 300, hoehe = 220, rand = 34, schrift =
   const a = P(pts[0]);
   teile.push(`<circle cx="${z(a[0])}" cy="${z(a[1])}" r="${schrift * 0.4}" class="kante-a"/>`);
   marke(a, vonMitte(a), "A", "kante-a-text", schrift * 0.6 + 4);
+  const e = P(pts.at(-1)); // Kante B: Ende des Profils
+  teile.push(`<circle cx="${z(e[0])}" cy="${z(e[1])}" r="${schrift * 0.3}" class="kante-b"/>`);
+  marke(e, vonMitte(e), "B", "kante-b-text", schrift * 0.6 + 4);
 
   const belegt = [];
   const ueberlappt = (k) => belegt.some((o) => Math.abs(o.x - k.x) < (o.b + k.b) / 2 + 2 && Math.abs(o.y - k.y) < schrift + 1);
@@ -57,14 +60,14 @@ export function profilSvg(res, { breite = 300, hoehe = 220, rand = 34, schrift =
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
-<style>.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}.kante-a-text{fill:#2e9b4f;font-weight:600}</style>
+<style>.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}.kante-a-text{fill:#2e9b4f;font-weight:600}.kante-b{fill:#8a969e}.kante-b-text{fill:#8a969e;font-weight:600}</style>
 ${teile.join("\n")}
 </svg>`;
 }
 
 // Abwicklung als SVG: Blechstreifen (Zuschnitt) mit Biegelinien und Anschlagmass ab Kante A
 export function abwicklungSvg(res, { breite = 300, schrift = 11 } = {}) {
-  const rand = 14, streifen = 22;
+  const rand = 18, streifen = 22;
   const s = (breite - 2 * rand) / Math.max(res.zuschnitt, 1);
   const X = (v) => z(rand + v * s), y0 = schrift * 2 + 10;
   const teile = [`<rect x="${X(0)}" y="${y0}" width="${z(res.zuschnitt * s)}" height="${streifen}" class="streifen"/>`];
@@ -79,9 +82,11 @@ export function abwicklungSvg(res, { breite = 300, schrift = 11 } = {}) {
     teile.push(`<text x="${x}" y="${y0 + streifen + schrift + 2 + zeile * (schrift + 2)}" class="mass">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : b.pos.toFixed(1)}</text>`);
   }
   teile.push(`<circle cx="${X(0)}" cy="${y0 + streifen / 2}" r="${schrift * 0.4}" class="kante-a"/>`);
+  const ym = z(y0 + streifen / 2 + schrift * 0.35); // Kantenbuchstaben seitlich neben dem Streifen
+  teile.push(`<text x="${z(rand / 2 - 1)}" y="${ym}" class="kante-a-text">A</text>`, `<text x="${z(breite - rand / 2 + 1)}" y="${ym}" class="kante-b-text">B</text>`);
   const h = y0 + streifen + (schrift + 2) * 2 + 6;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${h}" width="${breite}" height="${h}" font-size="${schrift}" text-anchor="middle">
-<style>.streifen{fill:none;stroke:currentColor;stroke-width:1.5}.rundung{fill:#c4352b;opacity:.15}.biegelinie{stroke:#c4352b;stroke-width:1.5;stroke-dasharray:4 2}.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}</style>
+<style>.streifen{fill:none;stroke:currentColor;stroke-width:1.5}.rundung{fill:#c4352b;opacity:.15}.biegelinie{stroke:#c4352b;stroke-width:1.5;stroke-dasharray:4 2}.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}.kante-a-text{fill:#2e9b4f;font-weight:600}.kante-b-text{fill:#8a969e;font-weight:600}</style>
 ${teile.join("\n")}
 </svg>`;
 }
