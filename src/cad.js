@@ -249,11 +249,61 @@ function blechAusKette(pts, m, riAn = () => null) {
 }
 
 // ------------------------------------------------------------ Körper erzeugen
-const FARBE = { zink07: 0x8d99a2, kupfer06: 0xb8734a, alu08: 0xc9cfd4, alu10: 0xc9cfd4, cns05: 0xb4bcc2, stahl06: 0x99a3aa };
-const farbe = (m) => FARBE[m.id] ?? (/kupfer/i.test(m.name) ? 0xb8734a : /alu/i.test(m.name) ? 0xc9cfd4 : 0x8d99a2);
+// ------------------------------------------------------------ Darstellung (wie «Erscheinungsbild» in Fusion): Metalle der Spenglerei, Holz, Beton
+const OBERFLAECHEN = {
+  grau: { name: "Standard grau", farbe: 0x9aa5ad, metall: 0.5, rauh: 0.45 },
+  titanzink: { name: "Titanzink walzblank", farbe: 0x9aa4ab, metall: 0.75, rauh: 0.38, textur: "fleck" },
+  titanzink_vb: { name: "Titanzink vorbewittert (blaugrau)", farbe: 0x7b8790, metall: 0.35, rauh: 0.7, textur: "fleck" },
+  titanzink_sw: { name: "Titanzink vorbewittert (schiefergrau)", farbe: 0x5c656c, metall: 0.3, rauh: 0.72, textur: "fleck" },
+  kupfer: { name: "Kupfer blank", farbe: 0xc4774a, metall: 0.9, rauh: 0.3 },
+  kupfer_braun: { name: "Kupfer brüniert", farbe: 0x7a4a33, metall: 0.6, rauh: 0.55, textur: "fleck" },
+  kupfer_patina: { name: "Kupfer Patina", farbe: 0x6fae96, metall: 0.15, rauh: 0.8, textur: "fleck" },
+  aluminium: { name: "Aluminium blank", farbe: 0xd2d7db, metall: 0.85, rauh: 0.32 },
+  alu_anthrazit: { name: "Aluminium anthrazit (RAL 7016)", farbe: 0x3a4148, metall: 0.3, rauh: 0.55 },
+  chromstahl: { name: "Chromstahl", farbe: 0xc3cacf, metall: 0.95, rauh: 0.2, textur: "schliff" },
+  stahl_verzinkt: { name: "Stahl verzinkt", farbe: 0xaab3b8, metall: 0.8, rauh: 0.4, textur: "zinkblume" },
+  holz: { name: "Holz (Schalung, Lattung)", farbe: 0xc49a64, metall: 0, rauh: 0.75, textur: "holz" },
+  beton: { name: "Beton", farbe: 0xa8a7a1, metall: 0, rauh: 0.9, textur: "fleck" },
+  ziegel: { name: "Ziegel / Mauerwerk", farbe: 0xa65a3e, metall: 0, rauh: 0.85, textur: "fleck" },
+};
+// Darstellung nach Material (Blech) – eigene Wahl am Feature geht vor
+const oberflaecheFuer = (m) => /kupfer/i.test(m?.name) ? "kupfer" : /chrom|cns|inox/i.test(m?.name) ? "chromstahl" : /alu/i.test(m?.name) ? "aluminium" : /stahl/i.test(m?.name) ? "stahl_verzinkt" : /zink/i.test(m?.name) ? "titanzink" : "grau";
+const farbe = (m) => oberflaecheFuer(m);
+const TEXTUREN = {};
+function textur(art) { // kleine Kacheln aus Zufallsmustern (keine Bilddateien nötig, offline)
+  if (TEXTUREN[art]) return TEXTUREN[art];
+  const c = document.createElement("canvas"); c.width = c.height = 256; const g = c.getContext("2d"); let z = 7;
+  const rnd = () => ((z = (z * 16807) % 2147483647) / 2147483647);
+  g.fillStyle = "#fff"; g.fillRect(0, 0, 256, 256);
+  if (art === "holz") for (let y = 0; y < 256; y++) { const v = 200 + 40 * Math.sin(y * 0.35 + Math.sin(y * 0.05) * 4) + 15 * rnd(); g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, 256, 1); }
+  else if (art === "schliff") for (let y = 0; y < 256; y++) { const v = 225 + 30 * rnd(); g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, 256, 1); }
+  else if (art === "zinkblume") for (let i = 0; i < 90; i++) { const v = 200 + 55 * rnd(); g.fillStyle = `rgb(${v},${v},${v})`; g.beginPath(); const x = rnd() * 256, y = rnd() * 256; for (let k = 0; k < 6; k++) { const w = k * Math.PI / 3 + rnd() * 0.5, r = 12 + 22 * rnd(); g.lineTo(x + Math.cos(w) * r, y + Math.sin(w) * r); } g.fill(); }
+  else for (let i = 0; i < 2500; i++) { const v = 205 + 50 * rnd(); g.fillStyle = `rgba(${v},${v},${v},0.5)`; g.beginPath(); g.arc(rnd() * 256, rnd() * 256, 2 + 9 * rnd(), 0, 7); g.fill(); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  return (TEXTUREN[art] = t);
+}
+// Texturkoordinaten in mm (Würfelprojektion), damit Muster auf allen Körpern gleich gross sind
+function wuerfelUV(geo, mm = 400) {
+  const pos = geo.attributes.position; if (!geo.attributes.normal) geo.computeVertexNormals();
+  const nor = geo.attributes.normal, uv = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    const ax = Math.abs(nor.getX(i)), ay = Math.abs(nor.getY(i)), az = Math.abs(nor.getZ(i)), x = pos.getX(i), y = pos.getY(i), zz = pos.getZ(i);
+    const [u, v] = ax >= ay && ax >= az ? [zz, y] : ay >= az ? [x, zz] : [x, y];
+    uv[2 * i] = u / mm; uv[2 * i + 1] = v / mm;
+  }
+  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+}
+function oberflaechenMaterial(art, geo) {
+  if (typeof art === "number") return new THREE.MeshStandardMaterial({ color: art, metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  const o = OBERFLAECHEN[art] || OBERFLAECHEN.grau;
+  if (o.textur && geo) wuerfelUV(geo, o.textur === "holz" ? 600 : 400);
+  return new THREE.MeshStandardMaterial({ color: o.farbe, metalness: o.metall, roughness: o.rauh, map: o.textur && geo ? textur(o.textur) : null,
+    side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+}
+const darstellungVon = (f, m) => f?.darstellung || (m ? oberflaecheFuer(m) : "grau");
 const csg = new Evaluator(); csg.attributes = ["position", "normal"]; csg.useGroups = false;
 function koerperMesh(geo, farbe, fid) {
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: farbe, metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+  const mesh = new THREE.Mesh(geo, oberflaechenMaterial(farbe, geo)); mesh.userData.art = farbe;
   mesh.add(new THREE.LineSegments(kantenGeometrie(geo), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.6 })));
   mesh.userData.fid = fid; return mesh;
 }
@@ -315,8 +365,7 @@ function koerper(formen_, ebene, tiefe, richtung, farbe, fid) {
   const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe, bevelEnabled: false, curveSegments: 48 });
   if (richtung === "umgekehrt") geo.translate(0, 0, -tiefe); else if (richtung === "symmetrisch") geo.translate(0, 0, -tiefe / 2);
   geo.applyMatrix4(basis(ebene));
-  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: farbe, metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide,
-    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
+  const mesh = new THREE.Mesh(geo, oberflaechenMaterial(farbe, geo)); mesh.userData.art = farbe;
   mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 28), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.6 })));
   mesh.userData.fid = fid;
   return mesh;
@@ -585,7 +634,7 @@ function regen() {
   const volumen = new Map(); // Volumenkörper (Extrusion, Drehung) für Vereinigen/Ausschneiden/Schneiden
   const volumenKoerper = (f, geo) => {
     const op = f.vorgang || "neu";
-    if (op === "neu") { const m = koerperMesh(geo, 0x9aa5ad, f.id); volumen.set(f.id, m); if (!f.versteckt) modell.add(m); return; }
+    if (op === "neu") { const m = koerperMesh(geo, darstellungVon(f), f.id); volumen.set(f.id, m); if (!f.versteckt) modell.add(m); return; }
     const ziele = f.ziel && f.ziel !== "alle" ? [volumen.get(f.ziel)].filter(Boolean) : [...volumen.values()];
     if (!ziele.length) throw new Error("Kein Körper zum " + ({ verbinden: "Vereinigen", ausschneiden: "Ausschneiden", schneiden: "Schneiden" })[op]);
     for (const z of op === "verbinden" ? ziele.slice(0, 1) : ziele) verknuepfe(z, geo, op);
@@ -663,13 +712,13 @@ function regen() {
         // Abrundung der Skizze → Radius auf der Blechmitte (Innenseite kleiner) → Innenradius der Biegung
         const riAn = (i) => (radien[i] > 0 ? Math.max(radien[i] - d * Math.sign(drehung(k, i)) - m.t / 2, 0) : null);
         f._res = blechAusKette(kk, m, riAn);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, kk[0])], s.ebene, f.laenge, f.richtung, farbe(m), f.id));
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, kk[0])], s.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id));
       } else if (f.typ === "vorlage") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         const m = material(f.material), v = VORLAGE[f.vorlage];
         const { start, ops } = v.bau(f.params, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id));
       } else if (f.typ === "flaeche") {
         f._bleche = null; f._teile = null;
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
@@ -684,7 +733,7 @@ function regen() {
         f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
           laenge: +bl.abw.laenge.toFixed(1), stueck: f.stueck ?? 1, notiz: f.notiz, _blech: bl,
           _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
-        if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, s.ebene, m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`).forEach((o) => modell.add(o)));
+        if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, s.ebene, m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
       } else if (f.typ === "detail") {
         f._teile = null; throw new Error("Spenglerdetails gibt es nicht mehr – als Flächenblech mit Kantenbausteinen zeichnen und dieses Feature löschen");
       } else if (f.typ === "profil") {
@@ -693,12 +742,13 @@ function regen() {
         if (f.zeilen.some((z) => !(z.L > 0))) throw new Error("Jeder Schenkel braucht eine Länge grösser als 0");
         const { start, ops } = freiesProfil(f.start, f.zeilen, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id));
       }
     } catch (e) { f._fehler = e.message; }
   }
   ebenenGroesse();
   zeigeKanten();
+  try { if (schnitt) zeigeKappen(renderer.clippingPlanes[0]); } catch {} // gefüllte Schnittfläche neu (beim Start noch nicht da)
   markiere();
   zeigeBrowser(); zeigeZeit(); zeigeWerkstatt();
   speichern(); merke();
@@ -838,6 +888,7 @@ function featureMenue(f, x, y) {
   const m = $("featureMenue"), i = doc.features.indexOf(f);
   const punkte = [["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
     ["zurueck", "Bis hier zurückrollen (danach aus)"], ["ende", "Alle aktivieren (Marke ans Ende)"], ["links", "Nach vorne verschieben"], ["rechts", "Nach hinten verschieben"],
+    ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["darst", "Darstellung …"]]),
     ["komp", f.komponente ? `Komponente «${esc(f.komponente)}» ändern …` : "In Komponente …"], ["kopie", "Duplizieren"], ["weg", "Löschen"]];
   m.innerHTML = punkte.map(([k, t]) => `<button data-fm="${k}" ${(k === "links" && i === 0) || (k === "rechts" && i === doc.features.length - 1) || (k === "ende" && doc.marke == null) ? "disabled" : ""}>${t}</button>`).join("");
   m.dataset.id = f.id; m.hidden = false;
@@ -847,8 +898,10 @@ for (const box of ["zeit", "baum"]) $(box).addEventListener("contextmenu", (e) =
   const id = e.target.closest("[data-id]")?.dataset.id, f = finde(id); if (!f || skizze) return;
   e.preventDefault(); featureMenue(f, e.clientX, e.clientY);
 });
-document.addEventListener("click", (e) => { if (!e.target.closest?.("#featureMenue")) $("featureMenue").hidden = true; });
+document.addEventListener("click", (e) => { if (e.target.isConnected && !e.target.closest?.("#featureMenue")) $("featureMenue").hidden = true; }); // ersetzte Knöpfe (Untermenü) zählen nicht als «daneben»
 $("featureMenue").onclick = (e) => {
+  const dz = e.target.closest("button")?.dataset.darst;
+  if (dz != null) { const f = finde($("featureMenue").dataset.id); $("featureMenue").hidden = true; if (!f) return; if (dz) f.darstellung = dz; else delete f.darstellung; regen(); return status(`Darstellung «${f.name}»: ${dz ? OBERFLAECHEN[dz].name : "automatisch"}.`); }
   const k = e.target.closest("button")?.dataset.fm; if (!k) return;
   const f = finde($("featureMenue").dataset.id), i = doc.features.indexOf(f); $("featureMenue").hidden = true; if (!f) return;
   if (dlg) $("dAbbrechen").click();
@@ -859,6 +912,12 @@ $("featureMenue").onclick = (e) => {
   else if (k === "ende") { doc.marke = null; regen(); status("Alle Features aktiv."); }
   else if (k === "links") verschiebeFeature(f, i - 1);
   else if (k === "rechts") verschiebeFeature(f, i + 2);
+  else if (k === "darst") {
+    const m = $("featureMenue"), hex = (c) => "#" + c.toString(16).padStart(6, "0");
+    m.innerHTML = `<button data-darst="">Automatisch${f.material ? " (nach Material)" : " (grau)"}</button>` + Object.entries(OBERFLAECHEN).map(([id, o]) =>
+      `<button data-darst="${id}" class="${f.darstellung === id ? "an" : ""}"><span class="farbfeld" style="background:${hex(o.farbe)}"></span>${esc(o.name)}</button>`).join("");
+    m.dataset.id = f.id; m.hidden = false; return;
+  }
   else if (k === "komp") {
     const da = [...new Set(doc.features.map((x) => x.komponente).filter(Boolean))];
     const n = prompt(`Komponente (Baugruppe) für «${f.name}»${da.length ? " – vorhanden: " + da.join(", ") : ""}. Leer = keine.`, f.komponente || da[0] || "Komponente 1");
@@ -1360,8 +1419,7 @@ function bausteinKontur(b, m) {
   }
   return null;
 }
-function flaechenKoerper(bl, ebene, m, seite, fid) {
-  const mat = () => new THREE.MeshStandardMaterial({ color: farbe(m), metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   const B = basis(ebene), teile = [];
   const flaeche = new THREE.ExtrudeGeometry(new THREE.Shape(bl.pts.map(([u, v]) => new THREE.Vector2(u, v))), { depth: m.t, bevelEnabled: false });
   flaeche.translate(0, 0, -m.t / 2); flaeche.applyMatrix4(B);
@@ -1379,7 +1437,7 @@ function flaechenKoerper(bl, ebene, m, seite, fid) {
     }
   });
   for (const geo of geos) {
-    const mesh = new THREE.Mesh(geo, mat()); mesh.userData.fid = fid;
+    const mesh = new THREE.Mesh(geo, oberflaechenMaterial(art, geo)); mesh.userData.fid = fid; mesh.userData.art = art;
     mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 28), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.5 })));
     teile.push(mesh);
   }
@@ -1791,7 +1849,7 @@ function koerperTransform(f, volumen) {
       let geo = q.geometry.clone().applyMatrix4(M);
       if (spiegel) { geo = geo.index ? geo.toNonIndexed() : geo; geo = nachAussen(geo); }
       if (!kopie) { q.geometry.dispose(); q.geometry = geo; const e = q.children[0]; if (e) { e.geometry.dispose(); e.geometry = kantenGeometrie(geo); } return; }
-      const m = koerperMesh(geo, q.material.color.getHex(), `${f.id}:${k}:${n}`);
+      const m = koerperMesh(geo, q.userData.art ?? q.material.color.getHex(), `${f.id}:${k}:${n}`);
       if (volumen.get(f.ziel) === q) volumen.set(`${f.id}:${k}`, m); // Kopie eines Volumenkörpers: zählt für spätere Verknüpfungen
       if (!f.versteckt) modell.add(m);
     });
@@ -2009,10 +2067,40 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && messen &
 
 let schnitt = null; // { ebene, versatz, umkehren }
 renderer.localClippingEnabled = false;
+// Gefüllte Schnittfläche (Schablonenpuffer wie im three.js-Beispiel): Rück- und Vorderseiten zählen, wo innen → Deckel mit Schraffur
+const kappen = new THREE.Group(); szene.add(kappen);
+let schraffur = null;
+function schraffurTextur() {
+  if (schraffur) return schraffur;
+  const c = document.createElement("canvas"); c.width = c.height = 64; const g = c.getContext("2d");
+  g.fillStyle = "#e46d3a"; g.fillRect(0, 0, 64, 64); g.strokeStyle = "#8a2f12"; g.lineWidth = 3;
+  for (let i = -64; i < 128; i += 16) { g.beginPath(); g.moveTo(i, 64); g.lineTo(i + 64, 0); g.stroke(); }
+  schraffur = new THREE.CanvasTexture(c); schraffur.wrapS = schraffur.wrapT = THREE.RepeatWrapping; schraffur.colorSpace = THREE.SRGBColorSpace; return schraffur;
+}
+function zeigeKappen(ebene) {
+  kappen.children.forEach((o) => o.geometry !== undefined && o.userData.eigen && o.geometry.dispose()); kappen.clear();
+  if (!schnitt || !ebene) return;
+  const zaehl = (seite, op) => new THREE.MeshBasicMaterial({ side: seite, depthWrite: false, depthTest: false, colorWrite: false, stencilWrite: true, stencilFunc: THREE.AlwaysStencilFunc, stencilFail: op, stencilZFail: op, stencilZPass: op });
+  const hinten = zaehl(THREE.BackSide, THREE.IncrementWrapStencilOp), vorne = zaehl(THREE.FrontSide, THREE.DecrementWrapStencilOp);
+  modell.updateMatrixWorld(true);
+  for (const o of modell.children) if (o.isMesh && o.visible) for (const mat of [hinten, vorne]) {
+    const k = new THREE.Mesh(o.geometry, mat); k.matrixAutoUpdate = false; k.matrix.copy(o.matrixWorld); k.renderOrder = 1; kappen.add(k);
+  }
+  // Deckel: grosse Fläche in der Schnittebene, minimal auf die sichtbare Seite versetzt (sonst schneidet sie sich selbst weg)
+  const box = alleBox(), gr = box.isEmpty() ? 5000 : box.getSize(new THREE.Vector3()).length() * 2;
+  const tex = schraffurTextur(); tex.repeat.set(gr / 120, gr / 120);
+  const deckel = new THREE.Mesh(new THREE.PlaneGeometry(gr, gr), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, stencilWrite: true, stencilRef: 0,
+    stencilFunc: THREE.NotEqualStencilFunc, stencilFail: THREE.ReplaceStencilOp, stencilZFail: THREE.ReplaceStencilOp, stencilZPass: THREE.ReplaceStencilOp }));
+  deckel.userData.eigen = true;
+  const n = ebene.normal.clone(), p = n.clone().multiplyScalar(-ebene.constant + 0.05);
+  deckel.position.copy(p); deckel.lookAt(p.clone().add(n)); deckel.position.add(box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3()).projectOnPlane(n));
+  deckel.renderOrder = 2; deckel.onAfterRender = (r) => r.clearStencil(); kappen.add(deckel);
+}
 function wendeSchnittAn() {
-  if (!schnitt) { renderer.clippingPlanes = []; $("wSchnitt").setAttribute("aria-pressed", false); return; }
+  if (!schnitt) { renderer.clippingPlanes = []; zeigeKappen(null); $("wSchnitt").setAttribute("aria-pressed", false); return; }
   const E = E_(schnitt.ebene), n = V(E.n).multiplyScalar(schnitt.umkehren ? 1 : -1);
   renderer.clippingPlanes = [new THREE.Plane().setFromNormalAndCoplanarPoint(n, V(E.o).add(V(E.n).multiplyScalar(schnitt.versatz || 0)))];
+  zeigeKappen(renderer.clippingPlanes[0]);
   $("wSchnitt").setAttribute("aria-pressed", true);
 }
 $("wSchnitt").onclick = () => {
