@@ -198,7 +198,9 @@ function regen() {
         if (!f.versteckt) modell.add(koerper(fs, s.ebene, f.abstand, f.richtung, 0x9aa5ad, f.id));
       } else if (f.typ === "blech") {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
-        const k = ketten(s)[f.kette || 0]; if (!k) throw new Error("Skizze hat keinen offenen Linienzug");
+        let k = ketten(s)[f.kette || 0]; if (!k) throw new Error("Skizze hat keinen offenen Linienzug");
+        if (f.umkehren) k = k.slice().reverse(); // Kante A am anderen Ende des Linienzugs
+        f._linie = { pts: k, ebene: s.ebene };
         const m = material(f.material);
         // Lage des Blechs zur Linie: Mitte, oder Linie = Blechoberfläche und Blech links/rechts daneben
         const kk = versatzLinie(k, ({ links: m.t / 2, rechts: -m.t / 2 })[f.lage] ?? 0);
@@ -263,7 +265,30 @@ document.addEventListener("keydown", (e) => {
 
 function markiere() {
   modell.children.forEach((o) => { if (o.isMesh) o.material.emissive?.setHex(o.userData.fid === auswahl ? 0x1d5c4f : 0x000000); });
+  zeigeRichtung();
 }
+
+// Gewähltes Blechprofil aus Skizze: Linienzug, Kante A (grün) und Zeichenrichtung (Pfeil),
+// damit «Blech links/rechts der Linie» eindeutig ist
+const richtung = new THREE.Group(); szene.add(richtung);
+function zeigeRichtung() {
+  leeren(richtung);
+  const f = finde(auswahl);
+  if (!f?._linie || skizze) return;
+  const { pts, ebene } = f._linie, p3 = pts.map((p) => zu3D(ebene, p));
+  const ohneTiefe = (m) => Object.assign(m, { depthTest: false, transparent: true });
+  const linie = new THREE.Line(new THREE.BufferGeometry().setFromPoints(p3), ohneTiefe(new THREE.LineBasicMaterial({ color: 0xe0782b })));
+  // Punkt und Pfeil in Einheitsgrösse; die Bildschleife skaliert sie nach Kameraabstand (immer gleich gross sichtbar)
+  const punkt = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), ohneTiefe(new THREE.MeshBasicMaterial({ color: 0x2e9b4f })));
+  punkt.position.copy(p3[0]); punkt.userData.bildschirm = 0.008;
+  const pfeil = new THREE.ArrowHelper(p3[1].clone().sub(p3[0]).normalize(), p3[0], 1, 0xe0782b, 0.35, 0.22);
+  pfeil.traverse((o) => { if (o.material) ohneTiefe(o.material); });
+  pfeil.userData.bildschirm = 0.07;
+  [linie, punkt, pfeil].forEach((o) => { o.renderOrder = 12; richtung.add(o); });
+}
+const richtungSkalieren = () => richtung.children.forEach((o) => {
+  if (o.userData.bildschirm) o.scale.setScalar(kamera.position.distanceTo(o.position) * o.userData.bildschirm);
+});
 
 // ------------------------------------------------------------ Browser und Zeitleiste
 const NAMEN = { skizze: "Skizze", extrusion: "Extrusion", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil" };
@@ -553,12 +578,13 @@ function blechDialog(f) {
     { id: "skizze", label: "Linienzug aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "kette", label: "Linienzug", optionen: Array.from({ length: ketten(finde(f.skizze) || sk.at(-1)).length }, (_, i) => [i, `Nr. ${i + 1}`]), wert: f.kette },
     { id: "lage", label: "Blech zur Linie", optionen: LAGEN, wert: f.lage ?? "mitte" },
+    { id: "umkehren", label: "Kante A", optionen: [["", "Am Anfang der Linie"], ["1", "Am Ende der Linie"]], wert: f.umkehren ? "1" : "" },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
-  ], (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1) }), "Blechprofil",
-  "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Zeichenrichtung – vom ersten Punkt (Kante A) aus gesehen – links bzw. rechts davon.");
+  ], (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1), umkehren: w.umkehren === "1" }), "Blechprofil",
+  "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Pfeilrichtung gesehen links bzw. rechts davon. In der Ansicht: grüner Punkt = Kante A, oranger Pfeil = Richtung.");
 }
 
 function vorlageDialog(f) {
@@ -1272,7 +1298,7 @@ if (!doc.features.length) { // Beispiel: Traufblech als Vorlage
 regen();
 auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser(); zeigeWerkstatt();
 ansicht("iso");
-(function schleife() { steuerung.update(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
+(function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
 // PC-Programm: Update-Prüfung beim Start (abschaltbar in den Einstellungen)
 if (pc && einst.programm.updates) pc.invoke("nach_update_suchen").catch(() => {}); // ohne Netz still weiter
 // PC-Programm: per Doppelklick geöffnete .sdcad-Datei laden
