@@ -11,10 +11,16 @@ const { outputFiles } = await build({
   entryPoints: [fileURLToPath(url("./src/cad.js"))],
   bundle: true,
   format: "esm",
-  minify: true,
+  minify: !process.env.SDCAD_DEBUG,
   target: "es2020",
   write: false,
   legalComments: "none",
+  // Schrift für Skizzentext: nur Latein inkl. Umlaute, Akzente, Satzzeichen, €, ° (spart ~⅔ der Datei)
+  plugins: [{ name: "schrift", setup(b) { b.onLoad({ filter: /typeface\.json$/ }, (a) => {
+    const f = JSON.parse(readFileSync(a.path, "utf8"));
+    f.glyphs = Object.fromEntries(Object.entries(f.glyphs).filter(([c]) => { const n = c.codePointAt(0); return n < 0x250 || (n >= 0x2000 && n < 0x20d0) || n === 0x2300; }));
+    return { contents: JSON.stringify(f), loader: "json" };
+  }); } }],
   define: { __VERSION__: JSON.stringify(process.env.SDCAD_VERSION || JSON.parse(lies("./package.json")).version) },
 });
 const js = outputFiles[0].text.replace(/<\/script/gi, "<\\/script");

@@ -9,6 +9,8 @@ import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../ke
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
+import { Font } from "three/examples/jsm/loaders/FontLoader.js";
+import schriftDaten from "three/examples/fonts/droid/droid_sans_bold.typeface.json";
 import { BAUSTEINE_STANDARD, flaechenblech, kantenGruppen, gegenUhrzeiger, bausteinProfil } from "../kern/flaechenblech.js";
 import { profilSvg, abwicklungSvg, zuschnittSvg, bausteinSvg, bausteinGrenzen } from "../kern/zeichnung.js";
 import { folge } from "../kern/details.js";
@@ -160,8 +162,25 @@ const leeren = (g) => g.children.slice().forEach((c) => { g.remove(c); c.travers
 
 // ------------------------------------------------------------ Skizzengeometrie
 // Jedes Element liefert seine Geometrie: linien (zum Zeichnen und Treffen), kontur (geschlossen) oder offen (Stück eines Linienzugs)
+// Skizzentext: Umrisse der Buchstaben (Droid Sans Bold, mit Umlauten) als geschlossene Konturen – Löcher (o, a, e …) inklusive
+let schrift = null;
+const TEXTE = new Map();
+function textKonturen(el) {
+  const key = `${el.text}|${el.hoehe}|${el.winkel || 0}|${el.p[0]}|${el.p[1]}`;
+  if (TEXTE.has(key)) return TEXTE.get(key);
+  schrift ||= new Font(schriftDaten);
+  const w = ((el.winkel || 0) * Math.PI) / 180, c = Math.cos(w), sn = Math.sin(w);
+  const zu = (q) => [el.p[0] + q.x * c - q.y * sn, el.p[1] + q.x * sn + q.y * c], out = [];
+  for (const sh of schrift.generateShapes(String(el.text || ""), Math.max(0.1, +el.hoehe || 10))) {
+    const { shape, holes } = sh.extractPoints(4);
+    for (const l of [shape, ...holes]) { const q = l.map(zu); if (q.length > 2 && gleich(q[0], q.at(-1))) q.pop(); if (q.length > 2) out.push(q); }
+  }
+  if (TEXTE.size > 200) TEXTE.clear();
+  TEXTE.set(key, out); return out;
+}
 function elGeo(el) {
   switch (el.art) {
+    case "text": { const k = textKonturen(el); return { linien: k.map((q) => [...q, q[0]]), konturen: k }; }
     case "linie": {
       const pts = rundePolylinie(el.pts, el.radien || {}, !!el.geschlossen);
       return el.geschlossen ? { linien: [[...pts, pts[0]]], kontur: pts } : { linien: [pts], offen: pts };
@@ -186,7 +205,7 @@ function zugPunkte(z) {
 }
 function schleifen(f) {
   // geschlossene Profile als Punktlisten [u,v]
-  const out = profilElemente(f).map((el) => elGeo(el).kontur).filter(Boolean);
+  const out = profilElemente(f).flatMap((el) => { const g = elGeo(el); return g.konturen || (g.kontur ? [g.kontur] : []); });
   for (const z of verbunden(f).filter((z) => z.geschlossen)) out.push(zugPunkte(z));
   return out;
 }
@@ -317,8 +336,11 @@ function verknuepfe(ziel, werkzeug, op) {
   ziel.geometry.dispose(); ziel.geometry = r;
   const kante = ziel.children[0]; kante.geometry.dispose(); kante.geometry = kantenGeometrie(r); // ohne Nähte der Booleschen Rechnung
 }
-function koerperGeometrie(formen_, ebene, tiefe, richtung) {
-  const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe, bevelEnabled: false, curveSegments: 48 });
+// ueber > 0: Werkzeug für Vereinigen/Ausschneiden an beiden Enden etwas länger – deckungsgleiche Flächen (Skizze auf der
+// Körperfläche) machen die Boolesche Rechnung sonst sehr langsam und unsauber; 0.01 mm ist für die Werkstatt ohne Belang
+function koerperGeometrie(formen_, ebene, tiefe, richtung, ueber = 0) {
+  const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe + 2 * ueber, bevelEnabled: false, curveSegments: 48 });
+  geo.translate(0, 0, -ueber);
   if (richtung === "umgekehrt") geo.translate(0, 0, -tiefe); else if (richtung === "symmetrisch") geo.translate(0, 0, -tiefe / 2);
   geo.applyMatrix4(basis(ebene));
   return geo;
@@ -674,7 +696,7 @@ function regen() {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
         const fs = formen(s); if (!fs.length) throw new Error("Skizze hat kein geschlossenes Profil");
         const kr = doc.features.filter((x) => x.typ === "kantenrund" && x.ziel === f.id && !x._aus);
-        volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, f.abstand, f.richtung));
+        volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, f.abstand, f.richtung, (f.vorgang || "neu") === "neu" ? 0 : 0.01));
       } else if (f.typ === "import") {
         if (!f._geo) { const bin = atob(f.daten || ""), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
           f._geo = new THREE.BufferGeometry(); f._geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(u8.buffer), 3)); f._geo.computeVertexNormals(); }
@@ -2435,6 +2457,7 @@ const WERKZEUGE = {
   spline: { knopf: "tSpline", text: "Spline: Stützpunkte anklicken – die Kurve geht durch alle Punkte. Doppelklick, Enter oder Esc beendet, Klick auf den ersten Punkt schliesst." },
   ellipse: { knopf: "tEllipse", ein: (n) => (n === 2 ? ["b"] : ["a"]), text: "Ellipse: Mitte, Ende der Hauptachse, dann die Breite anklicken – oder Halbachsen a/b eintippen." },
   punkt: { knopf: "tPunkt", text: "Punkt: Stelle anklicken (z. B. als Bezug für Konstruktionsebenen)." },
+  text: { knopf: "tText", text: "Text: Stelle anklicken (linke Grundlinie), Text und Höhe eingeben. Mit Extrudieren → Gravur (Ausschneiden) oder Prägung (Vereinigen)." },
   abrunden: { aendern: true, knopf: "tAbrunden", ein: () => ["R"], immer: true, text: "Abrunden: Radius eintippen (Enter), dann Ecken anklicken. Beim Blechprofil wird daraus der Biegeradius." },
   versatz: { aendern: true, knopf: "tVersatz", ein: () => ["Abst."], text: "Versatz: Element anklicken, dann mit der Maus die Seite zeigen und klicken – oder Abstand eintippen und Enter." },
   spiegeln: { aendern: true, knopf: "tSpiegeln", text: "Spiegeln: zu spiegelndes Element anklicken, dann die Spiegellinie (gerade Kante) anklicken." },
@@ -2617,6 +2640,12 @@ function klick(uv, fang, sm, ref) {
       else { const r = abstandZurGeraden(uv, P[0], P[1]); fertig(r > 0 ? { art: "langloch", a: P[0], b: P[1], r } : null); }
       break;
     case "punkt": fertig({ art: "punkt", p: uv }); break;
+    case "text": {
+      const t = prompt("Text (z. B. Objektnummer, Firmenname)", s.letzterText || "SM 2026"); if (!t?.trim()) break;
+      const h = parseFloat(String(prompt("Schrifthöhe in mm", s.letzteHoehe || 40)).replace(",", ".")); if (!(h > 0)) break;
+      s.letzterText = t; s.letzteHoehe = h;
+      fertig({ art: "text", p: uv, text: t.trim(), hoehe: h, winkel: 0 }); status("Text gesetzt – Doppelklick (Auswahl) ändert ihn. Extrudieren mit «Ausschneiden» = Gravur, «Vereinigen» = Prägung."); break;
+    }
     case "spline": {
       const erster = P[0];
       if (erster && P.length >= 3 && fang && uv[0] === erster[0] && uv[1] === erster[1]) fertig({ art: "spline", pts: P.slice(), geschlossen: true });
@@ -2724,7 +2753,7 @@ function spiegelnKlick(sm) {
   const sp = (p) => spiegelPunkt(p, achse[0], achse[1]), q = s.quelle;
   const neu = { linie: () => ({ art: "linie", pts: q.pts.map(sp), geschlossen: q.geschlossen, ...(q.radien ? { radien: { ...q.radien } } : {}) }),
     rechteck: () => ({ art: "linie", pts: elementPunkte(q).map(sp), geschlossen: true }), kreis: () => ({ art: "kreis", c: sp(q.c), r: q.r }),
-    bogen: () => ({ art: "bogen", a: sp(q.a), b: sp(q.b), m: sp(q.m) }), spline: () => ({ art: "spline", pts: q.pts.map(sp), geschlossen: q.geschlossen }), ellipse: () => ({ art: "ellipse", c: sp(q.c), a: sp(q.a), r2: q.r2 }), langloch: () => ({ art: "langloch", a: sp(q.a), b: sp(q.b), r: q.r }), punkt: () => ({ art: "punkt", p: sp(q.p) }) }[q.art]();
+    bogen: () => ({ art: "bogen", a: sp(q.a), b: sp(q.b), m: sp(q.m) }), spline: () => ({ art: "spline", pts: q.pts.map(sp), geschlossen: q.geschlossen }), ellipse: () => ({ art: "ellipse", c: sp(q.c), a: sp(q.a), r2: q.r2 }), langloch: () => ({ art: "langloch", a: sp(q.a), b: sp(q.b), r: q.r }), punkt: () => ({ art: "punkt", p: sp(q.p) }), text: () => ({ art: "text", p: sp(q.p), text: q.text, hoehe: q.hoehe, winkel: q.winkel }) }[q.art]();
   if (q.hilfs) neu.hilfs = true;
   s.f.elemente.push(neu); s.quelle = null; status("Gespiegelt. Nächstes Element anklicken.");
 }
@@ -3409,7 +3438,14 @@ leinwand.addEventListener("pointerup", (e) => {
   const ebenenTreffer = strahl.intersectObjects(modell.children.filter((o) => o.userData.ebene), true).find((x) => x.object.isMesh);
   waehle(treffer ? treffer.object.userData.fid : ebenenTreffer ? ebenenTreffer.object.userData.ebene : null);
 });
-leinwand.addEventListener("dblclick", () => { if (skizze?.werkzeug === "linie" || skizze?.werkzeug === "spline") abschliessenLinie(); });
+leinwand.addEventListener("dblclick", () => {
+  if (skizze?.werkzeug === "linie" || skizze?.werkzeug === "spline") abschliessenLinie();
+  else if (skizze?.werkzeug === "auswahl" && skizze.sel?.art === "text") { // Text ändern: Inhalt, Höhe, Winkel
+    const el = skizze.sel, t = prompt("Text", el.text); if (t == null) return;
+    const h = parseFloat(String(prompt("Schrifthöhe in mm", el.hoehe)).replace(",", ".")), w = parseFloat(String(prompt("Drehwinkel in °", el.winkel || 0)).replace(",", "."));
+    if (t.trim()) el.text = t.trim(); if (h > 0) el.hoehe = h; if (Number.isFinite(w)) el.winkel = w; TEXTE.clear(); zeichneLive();
+  }
+});
 document.addEventListener("keydown", (e) => {
   if (!skizze) return;
   const imFeld = e.target.closest?.("#eingabe");

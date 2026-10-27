@@ -48,7 +48,7 @@ export function punkte(f) {
     else if (el.art === "ellipse") { p("c", el.c); p("a", el.a); }
     else if (el.art === "bogen") { p("a", el.a); p("b", el.b); const d = bogenDaten(el); if (d) p("c", d.c); }
     else if (el.art === "langloch") { p("a", el.a); p("b", el.b); }
-    else if (el.art === "punkt") p("p", el.p);
+    else if (el.art === "punkt" || el.art === "text") p("p", el.p);
   }
   return out;
 }
@@ -70,7 +70,7 @@ export function modell(f) {
     else if (el.art === "ellipse") { k("c", el.c); k("a", el.a); r(el.r2); }
     else if (el.art === "bogen") { const d = bogenDaten(el); if (d) { k("c", d.c); k("a", el.a); k("b", el.b); bogen.push({ el, sg: Math.sign(d.sweep) || 1 }); } }
     else if (el.art === "langloch") { k("a", el.a); k("b", el.b); r(el.r); }
-    else if (el.art === "punkt") k("p", el.p);
+    else if (el.art === "punkt" || el.art === "text") k("p", el.p);
   }
   const punkt = (ref) => (ref?.e === "O" ? pkt.get("O") : pkt.get(ref?.e + ":" + ref?.k)) || null;
   const strecke = (ref) => {
@@ -172,7 +172,7 @@ function schreibe(f, M, x, fest) {
     else if (el.art === "ellipse") { el.c = P(id + ":c"); el.a = P(id + ":a"); el.r2 = Math.abs(x[M.rad.get(id)]); }
     else if (el.art === "kreis") { el.c = P(id + ":c"); el.r = Math.abs(x[M.rad.get(id)]); }
     else if (el.art === "langloch") { el.a = P(id + ":a"); el.b = P(id + ":b"); el.r = Math.abs(x[M.rad.get(id)]); }
-    else if (el.art === "punkt") el.p = P(id + ":p");
+    else if (el.art === "punkt" || el.art === "text") el.p = P(id + ":p");
   }
   for (const { el, sg } of M.bogen) {
     const c = P(el.id + ":c"), a = P(el.id + ":a"), b = P(el.id + ":b"), r = Math.hypot(a[0] - c[0], a[1] - c[1]);
