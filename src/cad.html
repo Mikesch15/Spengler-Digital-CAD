@@ -15,7 +15,7 @@
   --bg: #e9edf0; --panel: #ffffff; --panel-2: #f4f6f8; --line: #d3d9de; --fg: #1d2429; --muted: #5f6b74;
   --accent: #217a68; --accent-soft: #dcefe9; --bend: #c4352b; --view: #dfe5e9; --sketch: #1f5fbf;
   --font-body: "Barlow", "Segoe UI", system-ui, sans-serif; --font-label: "Barlow Condensed", "Arial Narrow", sans-serif;
-  --font-num: "JetBrains Mono", Consolas, monospace;
+  --font-num: "Barlow", "Segoe UI", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #13181b; --panel: #1b2125; --panel-2: #222a2f; --line: #323b41; --fg: #e3e8eb; --muted: #93a0a8;
@@ -25,7 +25,7 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font-body);
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font-body); font-variant-numeric: tabular-nums;
   padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); padding-block: 8px; }
 .app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; }
 .mitte { display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 8px; min-height: 0; }
@@ -45,6 +45,18 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .wz:hover:not(:disabled) { background: var(--panel-2); border-color: var(--line); }
 .wz[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .wz:disabled { opacity: .35; cursor: default; }
+/* Werkzeugleiste: Klappmenüs, je Zustand nur die passenden Werkzeuge */
+.klappmenue { position: fixed; z-index: 40; display: grid; gap: 2px; min-width: 250px; max-height: 75vh; overflow: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgb(0 0 0 / .2); }
+.klappmenue .wz { flex-direction: row; justify-content: flex-start; align-items: center; gap: 10px; min-width: 0; width: 100%; padding: 6px 10px; text-align: left; }
+.klappmenue .wz svg { width: 18px; height: 18px; flex: none; }
+.klappmenue .wz small { display: block; color: var(--muted); font-size: 11px; }
+.klappmenue .wz b { font-weight: 500; }
+.klappknopf .kpfeil, .wz .kpfeil { font-size: 10px; margin-left: 2px; opacity: .7; }
+.klappknopf[aria-expanded="true"] { background: var(--panel-2); border-color: var(--line); }
+.leiste.imSkizze #gHaupt, .leiste.imDialog #gHaupt, .leiste.imDialog #gSkizze { display: none; }
+.aktivwz { align-self: center; padding: 0 12px; font: 600 15px var(--font-label); letter-spacing: .05em; color: var(--accent); }
+.leiste > .gruppe { border-left: 0; }
+
 .skizzengruppe .trenner { width: 1px; background: color-mix(in srgb, var(--sketch) 30%, transparent); margin: 4px 3px; flex: none; }
 .menue button[aria-pressed="true"] { background: var(--accent-soft); }
 .wz .pfeil { display: inline-block; padding: 0 3px; border-radius: 3px; }
@@ -127,6 +139,7 @@ table.zeilen.bfolge input { width: 100%; } .feld.breit { display: grid; gap: 2px
 td.nowrap { white-space: nowrap; }
 table.zeilen.bausteine input { width: 100%; min-width: 60px; } table.zeilen.bausteine select { max-width: 170px; }
 table.zeilen.kanten tr[data-k] td:first-child { cursor: pointer; white-space: nowrap; font-weight: 600; }
+input, select, textarea, button { font-family: var(--font-body); font-variant-numeric: tabular-nums; }
 input.zahlfeld.formel { color: var(--accent); font-style: italic; } input.ungueltig { border-color: #c4352b !important; }
 table.zeilen.parameter input { width: 100%; min-width: 70px; }
 #messAnzeige { position: absolute; left: 12px; top: 48px; z-index: 4; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: 12px var(--font-num); box-shadow: 0 2px 8px rgb(0 0 0 / .12); }
@@ -322,34 +335,67 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 </style>
 
 <div class="app">
-  <nav class="leiste" aria-label="Werkzeuge">
+  <nav class="leiste" aria-label="Werkzeuge" id="leiste">
     <div class="marke">Spengler Digital <span>CAD</span></div>
-    <div class="gruppe"><div class="gtitel">Erstellen</div><div class="knoepfe">
+    <div class="aktivwz" id="aktivWz" hidden></div>
+    <div class="gruppe" id="gHaupt"><div class="knoepfe">
       <button class="wz" id="wSkizze"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 16l4-8 3 5 3-3"/></svg>Skizze</button>
+    <div class="klapp" data-klapp="koerper"><button class="wz klappknopf" aria-haspopup="true" title="Extrudieren, Drehen, Sweep, Übergang"><svg viewBox="0 0 24 24"><path d="M4 16l8 4 8-4M4 16V9l8-4 8 4v7M12 13v7M4 9l8 4 8-4"/></svg><span class="kl">Körper</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
       <button class="wz" id="wExtrusion"><svg viewBox="0 0 24 24"><path d="M4 16l8 4 8-4M4 16V9l8-4 8 4v7M12 13v7M4 9l8 4 8-4"/></svg>Extrudieren</button>
       <button class="wz" id="wDrehung" title="Drehen: Profil um eine Achse drehen (Rohr, Kugel, Kegel …)"><svg viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M8 6a6 3 0 1 0 8 0"/><path d="M8 18a6 3 0 0 0 8 0M6 7v10M18 7v10"/></svg>Drehen</button>
       <button class="wz" id="wSweep" title="Sweep: Profil entlang eines Pfads"><svg viewBox="0 0 24 24"><path d="M4 18c4 0 6-12 16-12" stroke-dasharray="2 2"/><rect x="2" y="15" width="5" height="6"/><rect x="17" y="3" width="5" height="6"/></svg>Sweep</button>
       <button class="wz" id="wLoft" title="Übergang (Loft) zwischen zwei Profilen"><svg viewBox="0 0 24 24"><rect x="4" y="16" width="16" height="5"/><ellipse cx="12" cy="5" rx="5" ry="2"/><path d="M4 16L7 5M20 16l-3-11"/></svg>Übergang</button>
+    </div></div>
+    <div class="klapp" data-klapp="blech"><button class="wz klappknopf" aria-haspopup="true" title="Blechprofil, Vorlage, Flächenblech, Kehle/Grat"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg><span class="kl">Blech</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
       <button class="wz" id="wBlech"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg>Blechprofil</button>
       <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path d="M3 6h10l-3 12h11"/><circle cx="3" cy="6" r="1.5"/></svg>Spengler-Vorlage</button>
-      <button class="wz" id="wFlaeche" title="Blech als Grundfläche aus der Skizze; Kanten anklicken und Spenglerbaustein zuweisen (Falz, Traufe, Ortgang …)"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg>Flächenblech</button>
       <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14"/></svg>Freies Profil</button>
+      <button class="wz" id="wFlaeche" title="Blech als Grundfläche aus der Skizze; Kanten anklicken und Spenglerbaustein zuweisen (Falz, Traufe, Ortgang …)"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg>Flächenblech</button>
+      <button class="wz" id="wBlechAufFlaeche"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg><span><b>Blech auf Körperfläche</b><small>Fläche anklicken – Umriss wird übernommen</small></span></button>
+      <button class="wz" id="wKehle"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg><span><b>Kehle / Grat</b><small>zwei Flächen anklicken</small></span></button>
     </div></div>
-    <div class="gruppe"><div class="gtitel">Konstruieren</div><div class="knoepfe">
-      <button class="wz" id="wEbene" title="Konstruktionsebene: versetzt, unter Winkel, Mitte, zwei Kanten, drei Punkte, tangential, entlang Pfad"><svg viewBox="0 0 24 24"><path d="M3 15l6-6h12l-6 6z"/><path d="M12 9V3M12 3l-2 2M12 3l2 2" /></svg>Ebene ▾</button>
-    </div></div>
-    <div class="gruppe"><div class="gtitel">Ändern</div><div class="knoepfe">
-      <button class="wz" id="wKoerper" title="Körper ändern: Abrunden/Fasen, Schale, Muster, Spiegeln, Verschieben/Kopieren"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg>Körper ▾</button>
+      <button class="wz" id="wEbene" title="Konstruktionsebene: versetzt, unter Winkel, Mitte, zwei Kanten, drei Punkte, tangential, entlang Pfad"><svg viewBox="0 0 24 24"><path d="M3 15l6-6h12l-6 6z"/><path d="M12 9V3M12 3l-2 2M12 3l2 2" /></svg>Ebene<span class="kpfeil">▾</span></button>
+    <div class="klapp" data-klapp="aendern"><button class="wz klappknopf" aria-haspopup="true" title="Abrunden, Schale, Muster, Spiegeln, Parameter"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span class="kl">Ändern</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
+      <button class="wz" data-kwz="kanten3d"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Kanten abrunden / fasen</b><small>einzelne Kanten anklicken</small></span></button>
+      <button class="wz" data-kwz="kantenrund"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Extrusion ringsum abrunden</b><small>alle Kanten einer Extrusion</small></span></button>
+      <button class="wz" data-kwz="schale"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Schale</b><small>aushöhlen mit Wanddicke</small></span></button>
+      <button class="wz" data-kwz="kmuster"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Muster</b><small>rechteckig oder kreisförmig</small></span></button>
+      <button class="wz" data-kwz="kspiegel"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Spiegeln</b><small>an einer Ebene</small></span></button>
+      <button class="wz" data-kwz="bewegen"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Verschieben / Kopieren</b><small>Körper bewegen</small></span></button>
       <button class="wz" id="wParameter" title="Parameter ändern: benannte Werte und Formeln für alle Masse"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 17h5M17 7h3M13 17h7"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="17" r="2"/></svg>Parameter</button>
     </div></div>
-    <div class="gruppe"><div class="gtitel">Prüfen</div><div class="knoepfe">
+    <div class="klapp" data-klapp="pruefen"><button class="wz klappknopf" aria-haspopup="true" title="Messen, Kollision, Schnitt"><svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg><span class="kl">Prüfen</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
       <button class="wz" id="wMessen" title="Messen: Abstand zwischen zwei Punkten (Ecken, Kantenmitten, Flächen)"><svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg>Messen</button>
       <button class="wz" id="wKollision" title="Kollision: durchdringende Körper und Bleche verschiedener Teile finden (rot)"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="10" height="10"/><rect x="11" y="4" width="10" height="10"/><path d="M11 7h2v7h-2z" fill="currentColor"/></svg>Kollision</button>
       <button class="wz" id="wSchnitt" title="Schnittanalyse: Modell an einer Ebene aufschneiden"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 12h16" stroke-dasharray="2 2"/></svg>Schnitt</button>
     </div></div>
-    <div class="gruppe skizzengruppe" id="gSkizze" hidden><div class="gtitel">Skizze</div><div class="knoepfe">
+      <button class="wz" id="wPlan" title="Planblatt: Ansichten des Modells, Bausteinschnitte, Bemassung, Schriftfeld – A3/A4 drucken oder als PDF/SVG"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M13 15h8M13 20v-5M6 8h5v5H6z"/></svg>Plan</button>
+      <span class="trenner" aria-hidden="true"></span>
+    <div class="klapp" data-klapp="datei"><button class="wz klappknopf" aria-haspopup="true" title="Speichern, Öffnen, Austausch, Drucken"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><span class="kl">Datei</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
+      <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
+      <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Öffnen</button>
+      <button class="wz" id="wZuletzt" title="Zuletzt geöffnete Projekte" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Zuletzt</button>
+      <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg>Neu</button>
+      <button class="wz" id="wDrucken" title="Stückliste und Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-8h16v8h-3"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
+      <button class="wz" data-aus="step"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>STEP exportieren</b><small>für Fusion, SolidWorks, FreeCAD …</small></span></button>
+      <button class="wz" data-aus="stl"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>STL exportieren</b><small>3D-Druck, Visualisierung</small></span></button>
+      <button class="wz" data-aus="import"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>STEP / STL importieren</b><small>als Körper ins Modell</small></span></button>
+      <button class="wz" data-aus="bild"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>Bild / PDF-Plan als Hintergrund</b><small>auf Ebene legen, kalibrieren</small></span></button>
+      <input type="file" id="datei" accept=".json,.sdcad" hidden>
+      <input type="file" id="importDatei" accept=".step,.stp,.stl" hidden>
+      <input type="file" id="bildDatei" accept="image/*,.pdf,application/pdf" hidden>
+      <input type="file" id="dxfDatei" accept=".dxf" hidden>
+      <input type="file" id="einstDatei" accept=".json,application/json" hidden>
+    </div></div>
+    <div class="klapp" data-klapp="werkstatt"><button class="wz klappknopf" aria-haspopup="true" title="Einstellungen, Hilfe"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg><span class="kl">Werkstatt</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
+      <button class="wz" id="wEinst" title="Materialien kalibrieren, Lagerformate"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Einstellungen</button>
+      <button class="wz" id="wHilfe" title="Kurzanleitung und Tastenkürzel (F1)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></svg>Hilfe</button>
+    </div></div>
+    </div></div>
+    <div class="gruppe skizzengruppe" id="gSkizze" hidden><div class="knoepfe">
       <button class="wz" id="tAuswahl"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-2 6z"/></svg>Auswahl</button>
       <button class="wz" id="tLinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><circle cx="4" cy="20" r="1.8"/><circle cx="20" cy="4" r="1.8"/></svg>Linie</button>
+    <div class="klapp" data-klapp="formen"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg><span class="kl">Formen</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
       <button class="wz" id="tRechteck"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg><span>Rechteck <span class="pfeil" title="Varianten">▾</span></span></button>
       <button class="wz" id="tKreis"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12h8"/></svg><span>Kreis <span class="pfeil" title="Varianten">▾</span></span></button>
       <button class="wz" id="tBogen"><svg viewBox="0 0 24 24"><path d="M4 18A9 9 0 0 1 20 18"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="18" r="1.6"/></svg><span>Bogen <span class="pfeil" title="Varianten">▾</span></span></button>
@@ -359,7 +405,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="tLangloch"><svg viewBox="0 0 24 24"><path d="M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7z"/></svg>Langloch</button>
       <button class="wz" id="tText" title="Text in die Skizze – extrudiert als Gravur oder Prägung"><svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg>Text</button>
       <button class="wz" id="tPunkt"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4"/></svg>Punkt</button>
-      <span class="trenner" aria-hidden="true"></span>
+    </div></div>
+    <div class="klapp" data-klapp="skaendern"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><path d="M4 20V12a8 8 0 0 1 8-8h8"/></svg><span class="kl">Ändern</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
       <button class="wz" id="tAbrunden"><svg viewBox="0 0 24 24"><path d="M4 20V12a8 8 0 0 1 8-8h8"/></svg>Abrunden</button>
       <button class="wz" id="tVersatz"><svg viewBox="0 0 24 24"><path d="M4 20V8h12"/><path d="M8 20v-8h12" opacity=".6"/></svg>Versatz</button>
       <button class="wz" id="tSpiegeln"><svg viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L4 17h5zM15 7l5 10h-5z"/></svg>Spiegeln</button>
@@ -368,35 +415,18 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="tTrennen" title="An Schnittpunkten teilen"><svg viewBox="0 0 24 24"><path d="M3 12h7M14 12h7"/><path d="M12 5v14" opacity=".6"/><circle cx="10" cy="12" r="1.5"/><circle cx="14" cy="12" r="1.5"/></svg>Trennen</button>
       <button class="wz" id="tVerschieben" title="Verschieben, Kopieren, Drehen"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><span>Verschieben <span class="pfeil" title="Varianten">▾</span></span></button>
       <button class="wz" id="tMuster" title="Rechteckiges oder kreisförmiges Muster"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><rect x="15" y="15" width="6" height="6"/></svg><span>Muster <span class="pfeil" title="Varianten">▾</span></span></button>
-      <button class="wz" id="tDxf" title="DXF-Datei (Plan, Kontur) in diese Skizze einfügen"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M9 14h6M12 11v6"/></svg>DXF</button>
-      <button class="wz" id="tProjizieren" title="Körperkanten und andere Skizzen projizieren"><svg viewBox="0 0 24 24"><path d="M4 18l8 3 8-3"/><path d="M8 4h8v6H8z"/><path d="M8 10l-4 8M16 10l4 8" stroke-dasharray="2 2"/></svg>Projizieren</button>
       <button class="wz" id="tHilfslinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4" stroke-dasharray="3 2.5"/></svg>Hilfslinie</button>
+    </div></div>
+    <div class="klapp" data-klapp="einfuegen"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><path d="M4 18l8 3 8-3"/><path d="M8 4h8v6H8z"/><path d="M8 10l-4 8M16 10l4 8" stroke-dasharray="2 2"/></svg><span class="kl">Einfügen</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
+      <button class="wz" id="tProjizieren" title="Körperkanten und andere Skizzen projizieren"><svg viewBox="0 0 24 24"><path d="M4 18l8 3 8-3"/><path d="M8 4h8v6H8z"/><path d="M8 10l-4 8M16 10l4 8" stroke-dasharray="2 2"/></svg>Projizieren</button>
+      <button class="wz" id="tDxf" title="DXF-Datei (Plan, Kontur) in diese Skizze einfügen"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M9 14h6M12 11v6"/></svg>DXF</button>
+    </div></div>
       <span class="trenner" aria-hidden="true"></span>
       <button class="wz" id="tAbh" title="Abhängigkeiten wie in Fusion"><svg viewBox="0 0 24 24"><path d="M4 20L14 6"/><path d="M15 15h6M18 12v6"/><circle cx="14" cy="6" r="1.8"/></svg><span>Abhängigkeit <span class="pfeil" title="Alle Abhängigkeiten">▾</span></span></button>
       <button class="wz" id="tMass" title="Bemassung (D)"><svg viewBox="0 0 24 24"><path d="M4 8v12M20 8v12M4 14h16"/><path d="M7 11l-3 3 3 3M17 11l3 3-3 3"/></svg>Bemassung</button>
       <span class="fg" id="fgAnzeige" aria-live="polite"></span>
       <span class="trenner" aria-hidden="true"></span>
       <button class="wz" id="tFertig"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Skizze beenden</button>
-    </div></div>
-    <div class="gruppe"><div class="gtitel">Zeichnung</div><div class="knoepfe">
-      <button class="wz" id="wPlan" title="Planblatt: Ansichten des Modells, Bausteinschnitte, Bemassung, Schriftfeld – A3/A4 drucken oder als PDF/SVG"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M13 15h8M13 20v-5M6 8h5v5H6z"/></svg>Plan</button>
-    </div></div>
-    <div class="gruppe"><div class="gtitel">Datei</div><div class="knoepfe">
-      <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
-      <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Öffnen</button>
-      <button class="wz" id="wZuletzt" title="Zuletzt geöffnete Projekte" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Zuletzt</button>
-      <button class="wz" id="wAustausch" title="STEP/STL exportieren oder importieren (Austausch mit anderen CAD-Programmen)"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>Austausch ▾</button>
-      <button class="wz" id="wDrucken" title="Stückliste und Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-8h16v8h-3"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
-      <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg>Neu</button>
-      <input type="file" id="datei" accept=".json,.sdcad" hidden>
-      <input type="file" id="importDatei" accept=".step,.stp,.stl" hidden>
-      <input type="file" id="bildDatei" accept="image/*,.pdf,application/pdf" hidden>
-      <input type="file" id="dxfDatei" accept=".dxf" hidden>
-      <input type="file" id="einstDatei" accept=".json,application/json" hidden>
-    </div></div>
-    <div class="gruppe"><div class="gtitel">Werkstatt</div><div class="knoepfe">
-      <button class="wz" id="wEinst" title="Materialien kalibrieren, Lagerformate"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Einstellungen</button>
-      <button class="wz" id="wHilfe" title="Kurzanleitung und Tastenkürzel (F1)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></svg>Hilfe</button>
     </div></div>
   </nav>
 
@@ -471,7 +501,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li>Nur die <b>Grundfläche</b> des Blechs skizzieren (Rechteck, Linienzug, auch konisch oder mit Bogen) – Masse auf der Falzachse bzw. der fertigen Kante. Mehrere Bahnen nebeneinander in einer Skizze geben je ein Blech.</li>
       <li><b>Flächenblech</b>: Kante in der Ansicht anklicken (oder in der Liste) und den Baustein wählen: Doppelstehfalz, Stehfalz, liegender Falz, Traufe, Ortgang, Wasserfalz, Saum, Abkantung … oder «Eigene Abkantfolge». Eine gemeinsame Kante zweier Bahnen bekommt automatisch das Gegenstück (Unterfalz ↔ Oberfalz).</li>
       <li>Das Programm rechnet Zugabe je Kante, Zuschnitt mit Eckausklinkungen, Biegelinien, Abkantliste (Anschlag ab Schnittkante), m² für die Stückliste, DXF und Werkstattblatt.</li>
-      <li><b>Flächenblech ▾</b>: aus Skizze, <b>auf Körperfläche</b> (Fläche anklicken – Umriss wird übernommen, Blech liegt aussen auf) oder <b>Kehle / Grat</b> (zwei Flächen anklicken – gekantetes Blech entlang der Kehl- bzw. Gratlinie, Länge automatisch, an den Enden Kantenbausteine wie Saum; mit Zuschnitt und Abkantliste).</li>
+      <li><b>Blech ▾</b>: Flächenblech aus Skizze, <b>auf Körperfläche</b> (Fläche anklicken – Umriss wird übernommen, Blech liegt aussen auf) oder <b>Kehle / Grat</b> (zwei Flächen anklicken – gekantetes Blech entlang der Kehl- bzw. Gratlinie, Länge automatisch, an den Enden Kantenbausteine wie Saum; mit Zuschnitt und Abkantliste).</li>
       <li><b>Kante antippen</b>: Flächenblech wählen (oder öffnen) – jede Kante trägt ein Schild (K1, K2 …; grün = belegt). Kante oder Schild antippen öffnet die Bausteinliste direkt an der Stelle; Gegenstück (Ober-/Unterfalz) kommt automatisch. Auf dem Handy klappt ▾ den Dialog ein, damit die Ansicht frei ist.</li>
       <li><b>Bausteine erstellen</b>: im Flächenblech-Dialog «+ Neuer Baustein …» (wird gleich an die gewählte Kante gesetzt) oder «✎ Baustein der gewählten Kante»; ebenso unter Einstellungen → Bausteine. Der Editor zeigt den Querschnitt live mit Zugabe und Anschlagmassen; Biegungen als Tabelle (Abkanten oder Umschlag, Winkel, Radius, Schenkel) oder als Kurzschrift. Verwendete Bausteine werden im Projekt mitgespeichert.</li>
     </ul>
@@ -489,13 +519,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Konstruieren ▾</b>: Ebenen, Achsen (durch Kante, zwei Punkte, senkrecht zur Ebene, Schnitt zweier Ebenen) und Punkte (Koordinaten, Kantenmitte, zwischen zwei Punkten, Kante × Ebene).</li>
       <li><b>Profil anklicken</b>: Bei Extrudieren, Drehen, Sweep, Übergang und Flächenblech einfach in die geschlossene Skizzenfläche (oder auf ihre Linie) tippen, beim Blechprofil auf den Linienzug – wie in Fusion.</li>
       <li><b>Sweep</b> (Profil entlang Pfad) und <b>Übergang</b> (Loft zwischen zwei Profilen).</li>
-      <li><b>Kanten abrunden / fasen</b> (Körper ▾): einzelne gerade Kanten eines beliebigen Volumenkörpers anklicken – Aussenkanten werden gerundet bzw. gefast, Innenkanten als Kehle ausgefüllt. Ecken mit drei gerundeten Kanten werden nicht kugelig verschliffen.</li>
-      <li><b>Körper ▾</b> (Ändern): Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
+      <li><b>Kanten abrunden / fasen</b> (Ändern ▾): einzelne gerade Kanten eines beliebigen Volumenkörpers anklicken – Aussenkanten werden gerundet bzw. gefast, Innenkanten als Kehle ausgefüllt. Ecken mit drei gerundeten Kanten werden nicht kugelig verschliffen.</li>
+      <li><b>Ändern ▾</b>: Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
       <li><b>Text</b> (Skizze): Stelle anklicken, Text und Höhe eingeben (Umlaute, °, € gehen). Extrudieren mit «Ausschneiden» = Gravur, mit «Vereinigen» = Prägung. Doppelklick (Auswahl) ändert Text, Höhe und Winkel.</li>
-      <li><b>Bild / PDF-Plan</b> (Austausch ▾): Foto oder Plan auf eine Ebene legen, mit «Kalibrieren» (zwei Punkte + wirkliches Mass) auf Mass bringen und darüber skizzieren. Bei PDF genügt der Plan-Massstab.</li>
+      <li><b>Bild / PDF-Plan</b> (Datei ▾): Foto oder Plan auf eine Ebene legen, mit «Kalibrieren» (zwei Punkte + wirkliches Mass) auf Mass bringen und darüber skizzieren. Bei PDF genügt der Plan-Massstab.</li>
       <li><b>DXF</b> (in der Skizze): Linien, Polylinien, Bögen, Kreise, Ellipsen, Splines und Blöcke aus einer DXF-Datei einfügen (fixiert; Einheit wird umgerechnet).</li>
       <li><b>Darstellung</b>: Rechtsklick auf einen Körper → «Darstellung …» (Titanzink, Kupfer blank/brüniert/Patina, Alu, Chromstahl, verzinkt, Holz, Beton …). Bleche zeigen automatisch ihr Material.</li>
-      <li><b>Austausch ▾</b> (Datei): STEP und STL exportieren (Fusion, SolidWorks, FreeCAD, 3D-Druck) sowie STEP/STL importieren – importierte Teile sind normale Körper.</li>
+      <li><b>Datei ▾</b>: STEP und STL exportieren (Fusion, SolidWorks, FreeCAD, 3D-Druck) sowie STEP/STL importieren – importierte Teile sind normale Körper.</li>
       <li><b>Komponente verschieben/drehen</b>: Rechtsklick auf die Komponente im Browser → «Verschieben / Drehen …» bewegt alle ihre Körper und Bleche gemeinsam. <b>Kollision</b> (Prüfen) zeigt rot, wo sich Teile verschiedener Features durchdringen.</li>
       <li><b>Komponenten</b>: Rechtsklick auf einen Körper → «In Komponente …» fasst Teile zu Baugruppen zusammen (z. B. «Dach», «Fassade»); im Browser gemeinsam ein-/ausblenden, Doppelklick benennt um.</li>
       <li><b>Zeitleiste</b>: Rückrollmarke ziehen, Feature ziehen zum Verschieben; Rechtsklick (Handy: lange tippen) für Unterdrücken, Zurückrollen, Umbenennen, Duplizieren, Löschen.</li>

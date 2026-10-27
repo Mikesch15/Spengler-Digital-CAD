@@ -60,7 +60,7 @@ export function profilSvg(res, { breite = 300, hoehe = 220, rand = 34, schrift =
   }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
-<style>.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}.kante-a-text{fill:#2e9b4f;font-weight:600}.kante-b{fill:#8a969e}.kante-b-text{fill:#8a969e;font-weight:600}</style>
+<style>.mass{font-family:Barlow,"Segoe UI",Arial,sans-serif;fill:currentColor}.biegung{font-family:Barlow,"Segoe UI",Arial,sans-serif;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}.kante-a-text{fill:#2e9b4f;font-weight:600}.kante-b{fill:#8a969e}.kante-b-text{fill:#8a969e;font-weight:600}</style>
 ${teile.join("\n")}
 </svg>`;
 }
@@ -86,7 +86,7 @@ export function abwicklungSvg(res, { breite = 300, schrift = 11 } = {}) {
   teile.push(`<text x="${z(rand / 2 - 1)}" y="${ym}" class="kante-a-text">A</text>`, `<text x="${z(breite - rand / 2 + 1)}" y="${ym}" class="kante-b-text">B</text>`);
   const h = y0 + streifen + (schrift + 2) * 2 + 6;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${h}" width="${breite}" height="${h}" font-size="${schrift}" text-anchor="middle">
-<style>.streifen{fill:none;stroke:currentColor;stroke-width:1.5}.rundung{fill:#c4352b;opacity:.15}.biegelinie{stroke:#c4352b;stroke-width:1.5;stroke-dasharray:4 2}.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}.kante-a-text{fill:#2e9b4f;font-weight:600}.kante-b-text{fill:#8a969e;font-weight:600}</style>
+<style>.streifen{fill:none;stroke:currentColor;stroke-width:1.5}.rundung{fill:#c4352b;opacity:.15}.biegelinie{stroke:#c4352b;stroke-width:1.5;stroke-dasharray:4 2}.mass{font-family:Barlow,"Segoe UI",Arial,sans-serif;fill:currentColor}.biegung{font-family:Barlow,"Segoe UI",Arial,sans-serif;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}.kante-a-text{fill:#2e9b4f;font-weight:600}.kante-b-text{fill:#8a969e;font-weight:600}</style>
 ${teile.join("\n")}
 </svg>`;
 }
@@ -138,7 +138,7 @@ export function detailSvg(d, konturen, { breite = 420, hoehe = 320, rand = 30, s
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}${e}" height="${hoehe}${e}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
 <defs><pattern id="${id}s" width="${ms}" height="${ms}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="${ms}" stroke="currentColor" stroke-width="${sw(0.6)}"/></pattern>
 <marker id="${id}p" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="${papier ? 18 : 7}" markerHeight="${papier ? 18 : 7}" orient="auto-start-reverse"><path d="M0 2L10 5L0 8z" fill="currentColor"/></marker></defs>
-<style>.holz{stroke:currentColor;stroke-width:${sw(0.7)}}.led{fill:currentColor}.blech{fill:currentColor;stroke:currentColor;stroke-width:${sw(0.5)};stroke-linejoin:round}.hilfslinie{stroke:currentColor;stroke-width:${sw(0.4)};fill:none}.masslinie{stroke:currentColor;stroke-width:${sw(0.5)}}.schenkeltext{font-family:"JetBrains Mono",Consolas,monospace;font-size:${schrift * 0.8}px;fill:#1f5fbf}.masstext{font-family:Arial,Helvetica,sans-serif;fill:currentColor}.titel{font-family:Arial,Helvetica,sans-serif;font-size:${schrift * 1.4}px;fill:currentColor}.pos{fill:none;stroke:#c4352b;stroke-width:${sw(0.8)}}.postext{font-family:Arial,sans-serif;font-size:${schrift * 0.85}px;fill:#c4352b;font-weight:600}</style>
+<style>.holz{stroke:currentColor;stroke-width:${sw(0.7)}}.led{fill:currentColor}.blech{fill:currentColor;stroke:currentColor;stroke-width:${sw(0.5)};stroke-linejoin:round}.hilfslinie{stroke:currentColor;stroke-width:${sw(0.4)};fill:none}.masslinie{stroke:currentColor;stroke-width:${sw(0.5)}}.schenkeltext{font-family:Barlow,"Segoe UI",Arial,sans-serif;font-size:${schrift * 0.8}px;fill:#1f5fbf}.masstext{font-family:Arial,Helvetica,sans-serif;fill:currentColor}.titel{font-family:Arial,Helvetica,sans-serif;font-size:${schrift * 1.4}px;fill:currentColor}.pos{fill:none;stroke:#c4352b;stroke-width:${sw(0.8)}}.postext{font-family:Arial,sans-serif;font-size:${schrift * 0.85}px;fill:#c4352b;font-weight:600}</style>
 ${out.join("\n")}
 </svg>`;
 }
@@ -161,7 +161,7 @@ export function zuschnittSvg(abw, gruppen, { breite = 300, hoehe = 220, rand = 2
   out.push(`<text x="${z((A[0] + B[0]) / 2)}" y="${z(A[1] + schrift + 4)}" class="mass">${abw.laenge.toFixed(1)}</text>`);
   out.push(`<text x="${z(B[0] + 6)}" y="${z((B[1] + C[1]) / 2)}" class="mass" transform="rotate(-90 ${z(B[0] + 6)} ${z((B[1] + C[1]) / 2)})">${abw.breite.toFixed(1)}</text>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
-<style>.umriss{fill:color-mix(in srgb,currentColor 6%,transparent);stroke:currentColor;stroke-width:1.4;stroke-linejoin:round}.biegelinie{fill:none;stroke:#c4352b;stroke-width:1;stroke-dasharray:5 3}.biegelinie.aktiv{stroke-width:2.2}.kante{font-family:Arial,sans-serif;font-weight:600;fill:#1f5fbf}.kante.aktiv{fill:#e0782b}.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}</style>
+<style>.umriss{fill:color-mix(in srgb,currentColor 6%,transparent);stroke:currentColor;stroke-width:1.4;stroke-linejoin:round}.biegelinie{fill:none;stroke:#c4352b;stroke-width:1;stroke-dasharray:5 3}.biegelinie.aktiv{stroke-width:2.2}.kante{font-family:Arial,sans-serif;font-weight:600;fill:#1f5fbf}.kante.aktiv{fill:#e0782b}.mass{font-family:Barlow,"Segoe UI",Arial,sans-serif;fill:currentColor}</style>
 ${out.join("\n")}
 </svg>`;
 }
@@ -198,7 +198,7 @@ export function bausteinSvg(p, t, { breite = 320, hoehe = 220, rand = 26, schrif
   out.push(`<text x="${z(f[0])}" y="${z(f[1] + schrift)}" class="hinweis" text-anchor="start">Fläche</text>`, `<text x="${z(k0[0])}" y="${z(hoehe - (papier ? schrift * 0.6 : 6))}" class="hinweis">Kante</text>`);
   out.push(`<text x="${z(f[0])}" y="${z(f[1] - schrift * 1.4)}" class="hinweis" text-anchor="start">↑ Sichtseite</text>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
-<style>.flaeche{fill:none;stroke:#8a969e;stroke-width:${papier ? 0.5 : 4};stroke-linecap:round}.kante{stroke:#1f5fbf;stroke-width:${papier ? 0.18 : 1};stroke-dasharray:${papier ? "1.5 1" : "4 3"}}.blech{fill:none;stroke:currentColor;stroke-linejoin:round;stroke-linecap:round}.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.hinweis{font-family:Arial,sans-serif;font-size:${schrift * 0.85}px;fill:#8a969e}</style>
+<style>.flaeche{fill:none;stroke:#8a969e;stroke-width:${papier ? 0.5 : 4};stroke-linecap:round}.kante{stroke:#1f5fbf;stroke-width:${papier ? 0.18 : 1};stroke-dasharray:${papier ? "1.5 1" : "4 3"}}.blech{fill:none;stroke:currentColor;stroke-linejoin:round;stroke-linecap:round}.mass{font-family:Barlow,"Segoe UI",Arial,sans-serif;fill:currentColor}.biegung{font-family:Barlow,"Segoe UI",Arial,sans-serif;font-weight:600;fill:#c4352b}.hinweis{font-family:Arial,sans-serif;font-size:${schrift * 0.85}px;fill:#8a969e}</style>
 ${out.join("\n")}
 </svg>`;
 }

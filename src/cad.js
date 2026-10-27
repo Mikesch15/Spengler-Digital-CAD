@@ -1193,6 +1193,7 @@ $("dKlein").onclick = () => $("dialog").classList.toggle("klein");
 function dialog(opt) {
   if (opt !== dlg && opt.titel !== dlg?.titel) $("dialog").classList.remove("klein");
   dlg = opt;
+  setTimeout(leisteZustand);
   $("dTitel").textContent = opt.titel;
   $("dInfo").textContent = "";
   $("dLoeschen").hidden = !opt.loeschen;
@@ -1227,7 +1228,7 @@ function merkeAusdruecke(f) {
 }
 function schliesse() {
   if (dlg?.felder.some((fd) => fd.wahl)) status(""); // Hinweis «… anklicken» gilt nur im Dialog
-  $("dialog").hidden = true; dlg = null; grundebenen.visible = false;
+  $("dialog").hidden = true; dlg = null; grundebenen.visible = false; setTimeout(leisteZustand);
 }
 $("dOk").onclick = () => { dlg?.ok?.(werte()); schliesse(); regen(); };
 $("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); if (typeof wendeSchnittAn === "function") wendeSchnittAn(); };
@@ -1497,7 +1498,7 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   // Ecken: Profile auf Gehrung (Nachbarkante mit Baustein) bzw. bündig zur Nachbarkante (ohne) – keine Überschneidungen
   const richt = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]); // + = links (konvexe Ecke)
-  const ende = (beta, gehrung) => Math.max(-4, Math.min(4, gehrung || Math.abs(Math.sin(beta)) < 0.2 ? Math.tan(beta / 2) : -1 / Math.tan(beta)));
+  const ende = (beta, gehrung) => (gehrung ? Math.max(-4, Math.min(4, Math.tan(beta / 2))) : 0); // ohne Nachbarbaustein: rechtwinklig abgeschnitten
   const n = bl.gruppen.length, letzte = (g) => richt(g.punkte.at(-2), g.punkte.at(-1)), erste = (g) => richt(g.punkte[0], g.punkte[1]);
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p) return;
@@ -2931,7 +2932,7 @@ function setzeWerkzeug(w) {
 function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
-  $("gSkizze").hidden = false;
+  $("gSkizze").hidden = false; setTimeout(leisteZustand);
   ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = true));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
   steuerung.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
@@ -2957,7 +2958,7 @@ function beendeSkizze() {
   const f = skizze.f;
   skizze = null;
   if (!f.elemente.length) entferneFeature(f);
-  $("gSkizze").hidden = true;
+  $("gSkizze").hidden = true; setTimeout(leisteZustand);
   ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
   steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
@@ -3898,25 +3899,46 @@ $("wSkizze").onclick = () => {
 $("wExtrusion").onclick = () => { if (dlg) $("dAbbrechen").click(); extrusionDialog(); };
 $("wDrehung").onclick = () => { if (dlg) $("dAbbrechen").click(); drehungDialog(); };
 $("wSweep").onclick = () => { if (dlg) $("dAbbrechen").click(); sweepDialog(); };
-$("wKoerper").onclick = (e) => {
-  e.stopPropagation(); const m = $("ebenenMenue");
-  if (!m.hidden && m.dataset.quelle === "koerper") { m.hidden = true; return; }
-  m.dataset.quelle = "koerper"; m.innerHTML = `<button data-kwz="kanten3d"><b>Kanten abrunden / fasen</b><small>einzelne Kanten anklicken – jeder Körper</small></button>` + Object.entries(KOERPER_WZ).map(([k, t]) => `<button data-kwz="${k}"><b>${k === "kantenrund" ? "Extrusion ringsum abrunden / fasen" : t}</b></button>`).join("");
-  const r = $("wKoerper").getBoundingClientRect(); Object.assign(m.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" }); m.hidden = false;
-};
+$("wFlaeche").onclick = () => { if (dlg) $("dAbbrechen").click(); flaecheDialog(); };
+$("wBlechAufFlaeche").onclick = () => blechAufFlaecheStart();
+$("wKehle").onclick = () => { if (dlg) $("dAbbrechen").click(); kehleDialog(); };
+// ------------------------------------------------------------ Werkzeugleiste: Klappmenüs (fest positioniert, die Leiste rollt seitlich)
+const leiste = $("leiste");
+function klappZu() { leiste.querySelectorAll(".klappmenue").forEach((m) => (m.hidden = true)); leiste.querySelectorAll(".klappknopf").forEach((k) => k.setAttribute("aria-expanded", "false")); }
+leiste.addEventListener("click", (e) => {
+  const k = e.target.closest(".klappknopf");
+  if (k) {
+    const m = k.nextElementSibling, offen = !m.hidden; klappZu(); if (offen) return;
+    m.hidden = false; k.setAttribute("aria-expanded", "true");
+    const r = k.getBoundingClientRect(), b = m.getBoundingClientRect();
+    Object.assign(m.style, { left: Math.max(8, Math.min(r.left, innerWidth - b.width - 8)) + "px", top: r.bottom + 4 + "px" });
+    return;
+  }
+  const b = e.target.closest(".klappmenue button"); if (!b) return;
+  if (!e.target.closest(".pfeil")) setTimeout(klappZu); // ▾ im Menü öffnet die Varianten, Menü bleibt offen
+  if (b.dataset.kwz || b.dataset.aus) { if (dlg) $("dAbbrechen").click();
+    if (b.dataset.kwz === "kanten3d") return kantenDialog(); if (b.dataset.kwz) return koerperDialog(b.dataset.kwz);
+    return b.dataset.aus === "import" ? $("importDatei").click() : b.dataset.aus === "bild" ? $("bildDatei").click() : exportiere(b.dataset.aus); }
+}, true);
+document.addEventListener("pointerdown", (e) => { if (!e.target.closest?.(".klapp") && !e.target.closest?.("#skizzenMenue")) klappZu(); });
+// Klappknopf zeigt das aktive Werkzeug darin
+new MutationObserver(() => leiste.querySelectorAll(".klapp").forEach((kp) => {
+  const k = kp.querySelector(".klappknopf"), an = kp.querySelector(".klappmenue .wz[aria-pressed='true']");
+  const soll = an ? "true" : "false", kl = k.querySelector(".kl"); k.dataset.label ||= kl.textContent;
+  if (k.getAttribute("aria-pressed") !== soll) k.setAttribute("aria-pressed", soll); // nur bei Änderung, sonst ruft sich der Beobachter endlos auf
+  const text = an ? an.textContent.replace("▾", "").trim().split(/\s{2,}/)[0] : k.dataset.label; if (kl.textContent !== text) kl.textContent = text;
+})).observe(leiste, { subtree: true, attributes: true, attributeFilter: ["aria-pressed"] });
+// Nur zeigen, was gerade gebraucht wird: in der Skizze die Skizzenwerkzeuge, bei offenem Befehl nur dessen Name
+function leisteZustand() {
+  leiste.classList.toggle("imSkizze", !!skizze);
+  const imDialog = !!dlg && !skizze; leiste.classList.toggle("imDialog", imDialog);
+  $("aktivWz").hidden = !imDialog; if (imDialog) $("aktivWz").textContent = dlg.titel + " – im Dialog fertigstellen";
+  klappZu();
+}
 $("wLoft").onclick = () => { if (dlg) $("dAbbrechen").click(); loftDialog(); };
 $("wBlech").onclick = () => { if (dlg) $("dAbbrechen").click(); blechDialog(); };
 $("wVorlage").onclick = () => { if (dlg) $("dAbbrechen").click(); vorlageDialog(); };
 $("wProfil").onclick = () => { if (dlg) $("dAbbrechen").click(); profilDialog(); };
-$("wFlaeche").onclick = (e) => {
-  e.stopPropagation(); const m = $("ebenenMenue");
-  if (!m.hidden && m.dataset.quelle === "blech") { m.hidden = true; return; }
-  m.dataset.quelle = "blech";
-  m.innerHTML = `<button data-blech="skizze"><b>Flächenblech aus Skizze</b><small>Grundfläche skizzieren, Kanten antippen</small></button>
-    <button data-blech="flaeche"><b>Blech auf Körperfläche</b><small>Fläche eines Körpers anklicken – Umriss wird übernommen</small></button>
-    <button data-blech="kehle"><b>Kehle / Grat</b><small>zwei Flächen anklicken – gekantetes Blech entlang der Linie</small></button>`;
-  const r = $("wFlaeche").getBoundingClientRect(); Object.assign(m.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" }); m.hidden = false;
-};
 // Konstruieren: Menü mit allen Ebenenarten
 $("wEbene").onclick = (e) => {
   e.stopPropagation();
@@ -3954,7 +3976,7 @@ for (const [knopf, varianten] of Object.entries(KNOPF_MENUE)) $(knopf).onclick =
   Object.assign(m.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" });
   m.hidden = false;
 };
-$("skizzenMenue").onclick = (e) => { const w = e.target.closest("button")?.dataset.wz; if (!w) return; $("skizzenMenue").hidden = true; letzteVariante[WERKZEUGE[w].knopf] = w; abschliessenLinie(); setzeWerkzeug(w); };
+$("skizzenMenue").onclick = (e) => { const w = e.target.closest("button")?.dataset.wz; if (!w) return; $("skizzenMenue").hidden = true; klappZu(); letzteVariante[WERKZEUGE[w].knopf] = w; abschliessenLinie(); setzeWerkzeug(w); };
 document.addEventListener("click", (e) => { if (!e.target.closest?.("#skizzenMenue")) $("skizzenMenue").hidden = true; });
 $("tFertig").onclick = beendeSkizze;
 let projektPfad = null; // PC-Programm: Speichern schreibt ohne Rückfrage in diese Datei
@@ -4038,16 +4060,6 @@ async function importiereDatei(datei) {
   } catch (err) { status("Import fehlgeschlagen: " + err.message); }
 }
 $("tDxf").onclick = () => { if (skizze) $("dxfDatei").click(); };
-$("wAustausch").onclick = (e) => {
-  e.stopPropagation(); const m = $("ebenenMenue");
-  if (!m.hidden && m.dataset.quelle === "austausch") { m.hidden = true; return; }
-  m.dataset.quelle = "austausch";
-  m.innerHTML = `<button data-aus="step"><b>STEP exportieren</b><small>alle sichtbaren Körper und Bleche – für Fusion, SolidWorks, FreeCAD …</small></button>
-    <button data-aus="stl"><b>STL exportieren</b><small>Dreiecksnetz – 3D-Druck, Visualisierung</small></button>
-    <button data-aus="import"><b>STEP / STL importieren …</b><small>als Körper ins Modell (z. B. Bauteil vom Architekten)</small></button>
-    <button data-aus="bild"><b>Bild / PDF-Plan als Hintergrund …</b><small>auf eine Ebene legen, kalibrieren und darauf skizzieren</small></button>`;
-  const r = $("wAustausch").getBoundingClientRect(); Object.assign(m.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" }); m.hidden = false;
-};
 $("importDatei").onchange = async (e) => { const d = e.target.files[0]; e.target.value = ""; if (d) await importiereDatei(d); };
 if (pc) $("wZuletzt").hidden = false;
 $("wZuletzt").onclick = (e) => {

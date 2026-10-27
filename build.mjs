@@ -31,8 +31,6 @@ const SCHRIFTEN = [
   ["Barlow", 600, "barlow/files/barlow-latin-600-normal"],
   ["Barlow Condensed", 500, "barlow-condensed/files/barlow-condensed-latin-500-normal"],
   ["Barlow Condensed", 600, "barlow-condensed/files/barlow-condensed-latin-600-normal"],
-  ["JetBrains Mono", 400, "jetbrains-mono/files/jetbrains-mono-latin-400-normal"],
-  ["JetBrains Mono", 600, "jetbrains-mono/files/jetbrains-mono-latin-600-normal"],
 ];
 const schriften = SCHRIFTEN.map(([familie, gewicht, datei]) => {
   const b64 = readFileSync(url(`./node_modules/@fontsource/${datei}.woff2`)).toString("base64");
