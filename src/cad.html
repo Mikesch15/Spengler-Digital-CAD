@@ -116,6 +116,8 @@ table.liste.summen { margin-top: 10px; }
 .zahl b { font: 600 32px var(--font-num); }
 .zahl span, .unter { color: var(--muted); font-size: 13px; }
 .unter { padding: 0 12px 8px; }
+.notiz { margin: 0 12px 10px; padding: 6px 8px; border-left: 3px solid var(--sketch); background: var(--panel-2); border-radius: 4px; font-size: 13px; white-space: pre-wrap; }
+.notiz b { font: 600 10px var(--font-label); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
 .quelle { margin: 0 12px 10px; padding: 6px 8px; border-radius: 6px; background: var(--accent-soft); font-size: 13px; }
 table.liste { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.liste th { font: 600 10px var(--font-label); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); }
@@ -201,6 +203,7 @@ ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--be
   .abwicklung svg { width: 100%; height: auto; display: block; }
   .blatt table.liste th, .blatt table.liste td { border-bottom: 1px solid #999; color: #000; }
   .blatt .hinweis { color: #333; margin: 0; }
+  .blatt .notiz { margin: 0; font-size: 13px; background: none; border: 1px solid #999; border-left: 3px solid #000; }
   .blatt .etikett { width: 90mm; margin: 0; border-color: #000; }
   .blatt .etikett dt { color: #555; }
   .etikettenbogen { page: etiketten; break-after: page; display: grid; box-sizing: border-box; height: 297mm; align-content: start; }
