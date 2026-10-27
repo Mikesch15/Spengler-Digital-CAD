@@ -32,10 +32,10 @@ export function planModul(ctx) {
         <path d="${r.sichtbar.map(([x1, y1, x2, y2]) => `M${z(x1)} ${z(y1)}L${z(x2)} ${z(y2)}`).join("")}" class="sichtbar"/>
         <text x="${z(r.breite / 2)}" y="${z(r.hoehe + 6)}" class="t35">${esc(a.titel || RICHTUNGEN[a.art]?.name)} 1:${a.massstab}</text></g>`);
     }
-    // Details (Schnitte aus Spenglerdetails)
+    // Schnitte (Querschnitte der Kantenbausteine)
     for (const d of plan.details) {
       const r = ctx.detailSvg(d.fid, d.massstab); const sel = auswahl === d.id;
-      if (!r) { out.push(`<text x="${d.x}" y="${d.y}" class="t3">(Detail fehlt)</text>`); continue; }
+      if (!r) { out.push(`<text x="${d.x}" y="${d.y}" class="t3">(Schnitt fehlt)</text>`); continue; }
       out.push(`<g data-id="${d.id}">${bildschirm ? `<rect x="${z(d.x)}" y="${z(d.y)}" width="${z(r.b)}" height="${z(r.h)}" class="treffer${sel ? " sel" : ""}"/>` : ""}${r.svg.replace("<svg ", `<svg x="${z(d.x)}" y="${z(d.y)}" `)}
         <text x="${z(d.x + r.b / 2)}" y="${z(d.y + r.h + 5)}" class="t35">${esc(d.titel || r.name)} 1:${d.massstab}</text></g>`);
     }
@@ -102,7 +102,7 @@ ${out.join("\n")}
   }
   function eigenschaften() {
     const e = sel && element(sel), box = $("plEigen");
-    if (!e) { box.innerHTML = `<p class="hinweis">${{ auswahl: "Element anklicken und ziehen. «+ Ansicht» oder «+ Detail» platziert eine Zeichnung.", mass: "Bemassen: zwei Eckpunkte einer Ansicht anklicken, dann die Lage des Masses (oben/unten = waagrecht, seitlich = senkrecht).", text: "Text: Stelle anklicken, Text eingeben. Mit gedrückter Maus ziehen = Hinweispfeil." }[modus]}</p>`; return; }
+    if (!e) { box.innerHTML = `<p class="hinweis">${{ auswahl: "Element anklicken und ziehen. «+ Ansicht» oder «+ Schnitt» platziert eine Zeichnung.", mass: "Bemassen: zwei Eckpunkte einer Ansicht anklicken, dann die Lage des Masses (oben/unten = waagrecht, seitlich = senkrecht).", text: "Text: Stelle anklicken, Text eingeben. Mit gedrückter Maus ziehen = Hinweispfeil." }[modus]}</p>`; return; }
     const ms = (v) => PLAN_MASSSTAEBE.map((m) => `<option value="${m}" ${+v === m ? "selected" : ""}>1:${m}</option>`).join("");
     if (plan.ansichten.includes(e)) box.innerHTML = `<label class="feld"><span>Ansicht</span><select data-e="art">${Object.entries(RICHTUNGEN).map(([k, r]) => `<option value="${k}" ${e.art === k ? "selected" : ""}>${r.name}</option>`).join("")}</select></label>
       <label class="feld"><span>Massstab</span><select data-e="massstab">${ms(e.massstab)}</select></label>
@@ -166,9 +166,9 @@ ${out.join("\n")}
         const a = { id: neuId(), art: b.dataset.plansicht, massstab: M, verdeckt: b.dataset.plansicht !== "iso", x: 30, y: 25 };
         if (vorige) { const r = ansicht(vorige); a.x = vorige.x + (r?.breite || 50) + 20; a.y = vorige.y; }
         plan.ansichten.push(a); sel = a.id; $("plAnsichtMenue").hidden = true; zeige();
-      } else if (b.dataset.detail) { plan.details.push({ id: neuId(), fid: b.dataset.detail, massstab: 2, x: 40, y: 150 }); $("plDetailMenue").hidden = true; zeige(); }
+      } else if (b.dataset.detail) { plan.details.push({ id: neuId(), fid: b.dataset.detail, massstab: 1, x: 40, y: 150 }); $("plDetailMenue").hidden = true; zeige(); }
       else if (b.id === "plNeuAnsicht") { $("plAnsichtMenue").hidden = !$("plAnsichtMenue").hidden; }
-      else if (b.id === "plNeuDetail") { const d = ctx.details(); $("plDetailMenue").innerHTML = d.length ? d.map(([id, n]) => `<button data-detail="${id}">${esc(n)}</button>`).join("") : '<p class="hinweis">Noch keine Spenglerdetails.</p>'; $("plDetailMenue").hidden = !$("plDetailMenue").hidden; }
+      else if (b.id === "plNeuDetail") { const d = ctx.details(); $("plDetailMenue").innerHTML = d.length ? d.map(([id, n]) => `<button data-detail="${id}">${esc(n)}</button>`).join("") : '<p class="hinweis">Noch keine Kanten mit Baustein – Flächenblech wählen und Kanten antippen.</p>'; $("plDetailMenue").hidden = !$("plDetailMenue").hidden; }
       else if (b.id === "plNeu") { plan = neuerPlan(); sel = null; zeige(); }
       else if (b.id === "plUmbenennen") { const n = prompt("Name des Plans", plan.name); if (n?.trim()) { plan.name = n.trim(); zeige(); } }
       else if (b.id === "plWeg") { if (!confirm(`«${plan.name}» löschen?`)) return; plaene().splice(plaene().indexOf(plan), 1); plan = plaene()[0] || neuerPlan(); zeige(); }

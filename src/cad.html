@@ -83,6 +83,17 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 #labels div.glyph { font: 700 10px var(--font-num); color: #fff; background: #2f8a4c; border-radius: 3px; padding: 0 3px; min-width: 10px; text-align: center; line-height: 14px; }
 #labels div.glyph.klickbar { pointer-events: auto; cursor: pointer; }
 #labels div.gewaehlt { background: #e0782b; color: #fff; }
+#labels div.kante { pointer-events: auto; cursor: pointer; font: 700 11px var(--font-num); color: #fff; background: #1f5fbf; border-radius: 10px; padding: 3px 7px; box-shadow: 0 1px 4px rgb(0 0 0 / .25); }
+#labels div.kante.belegt { background: #2e9b4f; } #labels div.kante.an { background: #e0782b; }
+@media (pointer: coarse) { #labels div.kante { padding: 6px 10px; font-size: 13px; } }
+#kantenMenue { position: fixed; z-index: 30; width: min(300px, calc(100vw - 16px)); max-height: min(70vh, 520px); overflow: auto; padding: 0 0 6px; }
+#kantenMenue .kmkopf { position: sticky; top: 0; display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--line); font-size: 13px; }
+#kantenMenue .kmzu { margin-left: auto; border: 0; background: none; font-size: 18px; color: var(--muted); cursor: pointer; padding: 0 4px; width: auto; }
+#kantenMenue .kmgruppe { padding: 8px 10px 2px; font: 600 10px var(--font-label); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+#kantenMenue button[data-kb], #kantenMenue button[data-kneu] { display: block; width: 100%; text-align: left; }
+#kantenMenue button small { display: block; font: 11px var(--font-num); color: var(--muted); }
+#kantenMenue button.an { background: var(--accent-soft); font-weight: 600; }
+#kantenMenue button.an::before { content: "✓ "; }
 .fg { align-self: center; font: 600 11px var(--font-num); padding: 3px 8px; border-radius: 10px; background: color-mix(in srgb, var(--sketch) 15%, transparent); color: var(--sketch); white-space: nowrap; }
 .fg.voll { background: color-mix(in srgb, #2f8a4c 18%, transparent); color: #2f8a4c; }
 .fg:empty { display: none; }
@@ -131,6 +142,9 @@ tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in
 /* Befehlsdialog */
 .dialog { position: absolute; top: 44px; right: 8px; width: 330px; max-width: calc(100% - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / .15); }
 .dialog h3 { margin: 0; padding: 8px 12px; font: 600 14px var(--font-label); letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
+.dialog h3 { padding-right: 40px; }
+.dialog .dklein { position: absolute; top: 3px; right: 6px; border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px 8px; }
+.dialog.klein .inhalt, .dialog.klein .info { display: none; } .dialog.klein .dklein { transform: rotate(180deg); }
 .dialog .inhalt { padding: 8px 12px; display: grid; gap: 6px; max-height: 55vh; overflow: auto; }
 .feld { display: grid; grid-template-columns: 1fr 120px; align-items: center; gap: 6px; }
 .feld input, .feld select { width: 100%; font: 13px var(--font-num); border: 1px solid var(--line); border-radius: 5px; padding: 5px 6px; background: var(--panel-2); color: var(--fg); }
@@ -316,7 +330,6 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wBlech"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg>Blechprofil</button>
       <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path d="M3 6h10l-3 12h11"/><circle cx="3" cy="6" r="1.5"/></svg>Spengler-Vorlage</button>
       <button class="wz" id="wFlaeche" title="Blech als Grundfläche aus der Skizze; Kanten anklicken und Spenglerbaustein zuweisen (Falz, Traufe, Ortgang …)"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg>Flächenblech</button>
-      <button class="wz" id="wDetail" title="Spenglerdetail: Holz und mehrere Blechteile im Querschnitt (Falze, SwissSkills-Details)"><svg viewBox="0 0 24 24"><path d="M3 17h18v4H3z"/><path d="M4 17V9h7v-3M20 17V9h-7V5"/></svg>Spenglerdetail</button>
       <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14"/></svg>Freies Profil</button>
     </div></div>
     <div class="gruppe"><div class="gtitel">Konstruieren</div><div class="knoepfe">
@@ -360,7 +373,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="tFertig"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Skizze beenden</button>
     </div></div>
     <div class="gruppe"><div class="gtitel">Zeichnung</div><div class="knoepfe">
-      <button class="wz" id="wPlan" title="Planblatt: Ansichten des Modells, Details, Bemassung, Schriftfeld – A3/A4 drucken oder als PDF/SVG"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M13 15h8M13 20v-5M6 8h5v5H6z"/></svg>Plan</button>
+      <button class="wz" id="wPlan" title="Planblatt: Ansichten des Modells, Bausteinschnitte, Bemassung, Schriftfeld – A3/A4 drucken oder als PDF/SVG"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M13 15h8M13 20v-5M6 8h5v5H6z"/></svg>Plan</button>
     </div></div>
     <div class="gruppe"><div class="gtitel">Datei</div><div class="knoepfe">
       <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
@@ -389,7 +402,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <div class="eingabe" id="eingabe" hidden>
         <label>L <input id="eLaenge" type="number" step="any"></label><label>∠ <input id="eWinkel" type="number" step="any"></label>
       </div>
-      <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><div class="inhalt" id="dInhalt"></div>
+      <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><button class="dklein" id="dKlein" title="Dialog einklappen – Ansicht frei zum Antippen" aria-label="Dialog einklappen">▾</button><div class="inhalt" id="dInhalt"></div>
         <div class="fuss"><span id="dInfo" role="status"></span><button class="knopf weg" id="dLoeschen" hidden>Löschen</button><button class="knopf" id="dAbbrechen">Abbrechen</button><button class="knopf haupt" id="dOk">OK</button></div></div>
       <div id="messAnzeige" hidden></div>
       <div id="status"></div>
@@ -426,7 +439,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <span class="menuewrap"><button class="knopf haupt" id="plNeuAnsicht">+ Ansicht ▾</button><div class="menue" id="plAnsichtMenue" hidden>
       <button data-plansicht="vorne">Ansicht vorne</button><button data-plansicht="hinten">Ansicht hinten</button><button data-plansicht="links">Ansicht links</button><button data-plansicht="rechts">Ansicht rechts</button>
       <button data-plansicht="oben">Draufsicht</button><button data-plansicht="unten">Untersicht</button><button data-plansicht="iso">Isometrie</button></div></span>
-    <span class="menuewrap"><button class="knopf" id="plNeuDetail">+ Detail ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
+    <span class="menuewrap"><button class="knopf" id="plNeuDetail" title="Querschnitt eines Kantenbausteins (Flächenblech) massstäblich aufs Blatt">+ Schnitt ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
     <span class="trenner"></span>
     <button class="knopf" id="plDruck" title="Alle Blätter drucken oder als PDF speichern">Drucken / PDF</button><button class="knopf" id="plSvg">SVG speichern</button><button class="knopf haupt" id="plZu">Fertig</button>
   </div>
@@ -445,13 +458,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li>Nur die <b>Grundfläche</b> des Blechs skizzieren (Rechteck, Linienzug, auch konisch oder mit Bogen) – Masse auf der Falzachse bzw. der fertigen Kante. Mehrere Bahnen nebeneinander in einer Skizze geben je ein Blech.</li>
       <li><b>Flächenblech</b>: Kante in der Ansicht anklicken (oder in der Liste) und den Baustein wählen: Doppelstehfalz, Stehfalz, liegender Falz, Traufe, Ortgang, Wasserfalz, Saum, Abkantung … oder «Eigene Abkantfolge». Eine gemeinsame Kante zweier Bahnen bekommt automatisch das Gegenstück (Unterfalz ↔ Oberfalz).</li>
       <li>Das Programm rechnet Zugabe je Kante, Zuschnitt mit Eckausklinkungen, Biegelinien, Abkantliste (Anschlag ab Schnittkante), m² für die Stückliste, DXF und Werkstattblatt.</li>
+      <li><b>Kante antippen</b>: Flächenblech wählen (oder öffnen) – jede Kante trägt ein Schild (K1, K2 …; grün = belegt). Kante oder Schild antippen öffnet die Bausteinliste direkt an der Stelle; Gegenstück (Ober-/Unterfalz) kommt automatisch. Auf dem Handy klappt ▾ den Dialog ein, damit die Ansicht frei ist.</li>
       <li><b>Bausteine erstellen</b>: im Flächenblech-Dialog «+ Neuer Baustein …» (wird gleich an die gewählte Kante gesetzt) oder «✎ Baustein der gewählten Kante»; ebenso unter Einstellungen → Bausteine. Der Editor zeigt den Querschnitt live mit Zugabe und Anschlagmassen; Biegungen als Tabelle (Abkanten oder Umschlag, Winkel, Radius, Schenkel) oder als Kurzschrift. Verwendete Bausteine werden im Projekt mitgespeichert.</li>
-    </ul>
-    <h4>Spenglerdetails</h4>
-    <ul>
-      <li><b>Spenglerdetail</b>: Querschnitt aus Holz (Unterkonstruktion) und mehreren Blechteilen – Doppelstehfalz, Winkelstehfalz und die SwissSkills-2026-Details A–K als Vorlagen mit Massen. Material je Rolle (Dach, Fassade, Wappen, Hafte).</li>
-      <li><b>Frei anpassen</b>: jedes Blechteil als Abkantfolge in Kurzschrift, z. B. «150 90 25 U+ 7» (Schenkel, Winkel, Schenkel …; + = links/oben, − = rechts/unten; U+ / U− = Umschlag; «90r5» = Radius 5). Holz als Eckpunkte «x,y x,y …». Eigene Teile und Holz hinzufügen. «Als eigene Detailvorlage speichern» legt das Detail in die eigene Bibliothek.</li>
-      <li>Jedes Blechteil erscheint mit Zuschnitt und Abkantfolge in Werkstatt und Stückliste; <b>Detailblatt</b> druckt den Schnitt mit Schraffur, Massen und Positionsliste (A4 quer).</li>
     </ul>
     <h4>Modellieren wie in Fusion</h4>
     <ul>
@@ -461,7 +469,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Konstruieren ▾</b>: Ebenen, Achsen (durch Kante, zwei Punkte, senkrecht zur Ebene, Schnitt zweier Ebenen) und Punkte (Koordinaten, Kantenmitte, zwischen zwei Punkten, Kante × Ebene).</li>
       <li><b>Profil anklicken</b>: Bei Extrudieren, Drehen, Sweep, Übergang und Flächenblech einfach in die geschlossene Skizzenfläche (oder auf ihre Linie) tippen, beim Blechprofil auf den Linienzug – wie in Fusion.</li>
       <li><b>Sweep</b> (Profil entlang Pfad) und <b>Übergang</b> (Loft zwischen zwei Profilen).</li>
-      <li><b>Körper ▾</b> (Ändern): Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile und Details – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
+      <li><b>Körper ▾</b> (Ändern): Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
       <li><b>Komponenten</b>: Rechtsklick auf einen Körper → «In Komponente …» fasst Teile zu Baugruppen zusammen (z. B. «Dach», «Fassade»); im Browser gemeinsam ein-/ausblenden, Doppelklick benennt um.</li>
       <li><b>Zeitleiste</b>: Rückrollmarke ziehen, Feature ziehen zum Verschieben; Rechtsklick (Handy: lange tippen) für Unterdrücken, Zurückrollen, Umbenennen, Duplizieren, Löschen.</li>
     </ul>
@@ -514,6 +522,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 <div class="menue" id="ebenenMenue" hidden></div>
 <div class="menue" id="skizzenMenue" hidden></div>
 <div class="menue" id="featureMenue" hidden></div>
+<div class="menue" id="kantenMenue" hidden role="menu" aria-label="Baustein für Kante"></div>
 <div id="druck" aria-hidden="true"></div>
 
 <script type="module">

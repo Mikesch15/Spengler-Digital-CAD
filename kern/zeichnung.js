@@ -168,18 +168,24 @@ ${out.join("\n")}
 
 // Kantenbaustein als Querschnitt: Stück der Fläche (grau), Kante (gestrichelt), Blech mit Dicke, Schenkelmasse,
 // Biegungen B1…, Sichtseite. p = bausteinProfil(), t = Blechdicke
-export function bausteinSvg(p, t, { breite = 320, hoehe = 220, rand = 26, schrift = 11 } = {}) {
-  if (!p?.res) return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}"></svg>`;
+// Ausdehnung des Querschnitts (mm) inkl. 30 mm Fläche – für massstäbliche Schnitte im Plan
+function bausteinPunkte(p) {
   const v = p.versatz || 0, X = p.res.zuschnitt - p.zugabe + v; // Länge des Anfangsschenkels (Fläche)
   const sx = ([x, y]) => [x - X + v, y];
-  const linie = polylinie(p.res.pfad, 3).map(sx), sicht = linie.filter(([x]) => x > -30);
-  const pts = [...sicht, [-30, 0], [0, 0]], g = grenzen(pts), w = Math.max(g.x1 - g.x0, 1), h = Math.max(g.y1 - g.y0, 1);
-  const s = Math.min((breite - 2 * rand) / w, (hoehe - 2 * rand) / h), ox = (breite - w * s) / 2 - g.x0 * s, oy = (hoehe + h * s) / 2 + g.y0 * s;
+  const sicht = polylinie(p.res.pfad, 3).map(sx).filter(([x]) => x > -30);
+  return { sx, sicht, g: grenzen([...sicht, [-30, 0], [0, 0]]) };
+}
+export const bausteinGrenzen = (p) => { const { g } = bausteinPunkte(p); return { w: Math.max(g.x1 - g.x0, 1), h: Math.max(g.y1 - g.y0, 1) }; };
+// massstab: Papier-mm je mm (fester Massstab, sonst eingepasst); papier: Strichstärken in mm statt Pixel
+export function bausteinSvg(p, t, { breite = 320, hoehe = 220, rand = 26, schrift = 11, massstab = 0, papier = false } = {}) {
+  if (!p?.res) return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}"></svg>`;
+  const { sx, sicht, g } = bausteinPunkte(p), w = Math.max(g.x1 - g.x0, 1), h = Math.max(g.y1 - g.y0, 1);
+  const s = massstab || Math.min((breite - 2 * rand) / w, (hoehe - 2 * rand) / h), ox = (breite - w * s) / 2 - g.x0 * s, oy = (hoehe + h * s) / 2 + g.y0 * s;
   const P = ([x, y]) => [ox + x * s, oy - y * s], pf = (q) => q.map(P).map(([x, y], i) => `${i ? "L" : "M"}${z(x)} ${z(y)}`).join("");
   const out = [`<path d="${pf([[-30, 0], [0, 0]])}" class="flaeche"/>`];
   const k0 = P([0, g.y0]), k1 = P([0, g.y1]);
-  out.push(`<line x1="${z(k0[0])}" y1="${z(Math.max(k0[1], k1[1]) + 6)}" x2="${z(k1[0])}" y2="${z(Math.min(k0[1], k1[1]) - 6)}" class="kante"/>`);
-  out.push(`<path d="${pf(sicht)}" class="blech" stroke-width="${Math.max(2, t * s)}"/>`);
+  out.push(`<line x1="${z(k0[0])}" y1="${z(Math.max(k0[1], k1[1]) + (papier ? 2 : 6))}" x2="${z(k1[0])}" y2="${z(Math.min(k0[1], k1[1]) - (papier ? 2 : 6))}" class="kante"/>`);
+  out.push(`<path d="${pf(sicht)}" class="blech" stroke-width="${Math.max(papier ? 0.35 : 2, t * s)}"/>`);
   const mitte = P([(g.x0 + g.x1) / 2, (g.y0 + g.y1) / 2]);
   p.res.beschriftungen.slice(1).forEach((b) => { // Schenkelmasse (ohne die Fläche)
     const q = P(sx([b.x, b.y])); let nx = Math.sin(b.richtung), ny = Math.cos(b.richtung);
@@ -189,10 +195,10 @@ export function bausteinSvg(p, t, { breite = 320, hoehe = 220, rand = 26, schrif
   let nr = 0;
   for (const el of p.res.pfad) if (el.typ === "bogen") { const q = P(sx(el.pm)), c = P(sx(el.zentrum)), dx = q[0] - c[0], dy = q[1] - c[1], l = Math.hypot(dx, dy) || 1; out.push(`<text x="${z(q[0] + (dx / l) * schrift)}" y="${z(q[1] + (dy / l) * schrift)}" class="biegung">B${++nr}</text>`); }
   const f = P([-28, 0]);
-  out.push(`<text x="${z(f[0])}" y="${z(f[1] + schrift)}" class="hinweis" text-anchor="start">Fläche</text>`, `<text x="${z(k0[0])}" y="${z(hoehe - 6)}" class="hinweis">Kante</text>`);
+  out.push(`<text x="${z(f[0])}" y="${z(f[1] + schrift)}" class="hinweis" text-anchor="start">Fläche</text>`, `<text x="${z(k0[0])}" y="${z(hoehe - (papier ? schrift * 0.6 : 6))}" class="hinweis">Kante</text>`);
   out.push(`<text x="${z(f[0])}" y="${z(f[1] - schrift * 1.4)}" class="hinweis" text-anchor="start">↑ Sichtseite</text>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
-<style>.flaeche{fill:none;stroke:#8a969e;stroke-width:4;stroke-linecap:round}.kante{stroke:#1f5fbf;stroke-width:1;stroke-dasharray:4 3}.blech{fill:none;stroke:currentColor;stroke-linejoin:round;stroke-linecap:round}.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.hinweis{font-family:Arial,sans-serif;font-size:${schrift * 0.85}px;fill:#8a969e}</style>
+<style>.flaeche{fill:none;stroke:#8a969e;stroke-width:${papier ? 0.5 : 4};stroke-linecap:round}.kante{stroke:#1f5fbf;stroke-width:${papier ? 0.18 : 1};stroke-dasharray:${papier ? "1.5 1" : "4 3"}}.blech{fill:none;stroke:currentColor;stroke-linejoin:round;stroke-linecap:round}.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}.biegung{font-family:"JetBrains Mono",Consolas,monospace;font-weight:600;fill:#c4352b}.hinweis{font-family:Arial,sans-serif;font-size:${schrift * 0.85}px;fill:#8a969e}</style>
 ${out.join("\n")}
 </svg>`;
 }

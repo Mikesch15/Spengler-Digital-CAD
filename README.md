@@ -33,9 +33,6 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
 - **Flächenblech mit Kantenbausteinen:** nur die Grundfläche skizzieren, Kante anklicken und Baustein zuweisen
   (Doppelstehfalz mit automatischem Gegenstück, Traufe, Ortgang, Wasserfalz, Saum …); Zuschnitt mit
   Eckausklinkung, Biegelinien, Abkantliste, DXF; Bausteine in den Einstellungen selbst erfassen und anpassen
-- **Spenglerdetails:** Querschnitt aus Holz und mehreren Blechteilen (Doppelstehfalz, Winkelstehfalz,
-  SwissSkills-2026-Details A–K) mit Massen, frei anpassbar über Abkantfolge in Kurzschrift («150 90 25 U+ 7»);
-  Teile in Stückliste und Werkstatt, Detailblatt mit Schraffur, Massen und Positionsliste
 - **Blechprofil aus Skizze:** Blech mittig, links oder rechts der Linie, Kante A an Anfang oder Ende
 - **PC-Programm:** Speichern/Öffnen mit Windows-Dialog, zuletzt geöffnete Projekte, `.sdcad` per Doppelklick,
   automatische Updates
@@ -58,7 +55,7 @@ kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Progra
   loeser.js      Gleichungslöser (Levenberg–Marquardt, Freiheitsgrade)
   bedingungen.js Abhängigkeiten und Masse als Gleichungen
   flaechenblech.js Flächenblech: Kantenbausteine, Zugaben, Zuschnitt mit Ausklinkung, Biegelinien
-  details.js     Spenglerdetails: Falze, SwissSkills-Details, Abkantfolge in Kurzschrift
+  details.js     Abkantfolge in Kurzschrift (Grundlage der Kantenbausteine)
   skizzenloeser.js Skizze ↔ Löser (Bezüge, Ziehen, Prüfen auf Widerspruch/überzählig)
 src/cad.js       Oberfläche
 src/cad.html     Seitenvorlage
