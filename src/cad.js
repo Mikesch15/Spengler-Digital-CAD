@@ -706,6 +706,9 @@ function regen() {
         if (!f._geo) { const bin = atob(f.daten || ""), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
           f._geo = new THREE.BufferGeometry(); f._geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(u8.buffer), 3)); f._geo.computeVertexNormals(); }
         volumenKoerper({ ...f, vorgang: "neu" }, f._geo.clone());
+      } else if (f.typ === "kehle") {
+        const r = kehlBlech(f); f._res = r.res; f._kehle = r;
+        if (!f.versteckt) { const m = koerperMesh(r.geo, darstellungVon(f, material(f.material)), f.id); modell.add(m); }
       } else if (f.typ === "kanten3d") {
         const m = volumen.get(f.ziel); if (!m) throw new Error("Körper fehlt – Kanten eines Volumenkörpers anklicken");
         if (doc.features.indexOf(finde(f.ziel)) > doc.features.indexOf(f)) throw new Error("Der Körper muss vor dem Abrunden stehen");
@@ -864,7 +867,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
@@ -1263,6 +1266,7 @@ function bearbeite(f) {
   if (f.typ === "sweep") return sweepDialog(f);
   if (f.typ === "bild") return bildDialog(f);
   if (f.typ === "kanten3d") return kantenDialog(f);
+  if (f.typ === "kehle") return kehleDialog(f);
   if (KOERPER_WZ[f.typ]) return koerperDialog(f.typ, f);
   if (f.typ === "loft") return loftDialog(f);
   if (f.typ === "blech") return blechDialog(f);
@@ -2189,6 +2193,110 @@ function kantenDialog(f) {
         }
         const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); return true;
       } });
+}
+
+// ------------------------------------------------------------ Kehl- und Gratblech zwischen zwei Flächen (gekantet, mit Abwicklung)
+// Flächen: Körperfläche «F:Punkt;Normale» oder Ebene. Schenkel liegen auf den Flächen (Blech aussen), Enden mit Kantenbausteinen.
+function flaechenEbene(ref) { const e = bezugEbene(ref); if (!e) throw new Error("Fläche fehlt"); return { o: V(e.o), n: V(e.n).normalize() }; }
+function flaechenAusdehnung(ref, t) { // Lage der Körperfläche entlang t (aus dem Netz) – für die automatische Länge
+  if (!String(ref).startsWith("F:")) return null;
+  const { o, n } = flaechenEbene(ref); let lo = Infinity, hi = -Infinity;
+  for (const m of modell.children) { if (!m.isMesh || !m.userData.fid) continue;
+    const p = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry).attributes.position;
+    for (let i = 0; i + 2 < p.count; i += 3) {
+      const P = [0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(p, i + k)), nn = P[1].clone().sub(P[0]).cross(P[2].clone().sub(P[0]));
+      if (nn.lengthSq() < 1e-12 || nn.normalize().dot(n) < 0.999 || P.some((q) => Math.abs(q.clone().sub(o).dot(n)) > 0.05)) continue;
+      for (const q of P) { const s = q.dot(t); lo = Math.min(lo, s); hi = Math.max(hi, s); }
+    } }
+  return lo < hi ? [lo, hi] : null;
+}
+// Kurzschrift-Zeilen einer Endung umkehren (vom Ende her gelesen: Längen rückwärts, Biegungen gespiegelt)
+function umkehren(z) { return z.map((_, j) => { const o = z[z.length - 1 - j], b = z[z.length - 2 - j]; return b ? { L: o.L, winkel: -b.winkel, art: b.art, ri: b.ri } : { L: o.L }; }); }
+function kehlBlech(f) {
+  const m = material(f.material), F1 = flaechenEbene(f.flaeche1), F2 = flaechenEbene(f.flaeche2);
+  const t = F1.n.clone().cross(F2.n); if (t.length() < 1e-4) throw new Error("Die Flächen sind parallel – keine Kehle/Grat"); t.normalize();
+  // Punkt auf beiden Ebenen (nächster zum Mittel der Bezugspunkte)
+  const c1 = F1.n.dot(F1.o), c2 = F2.n.dot(F2.o), n12 = F1.n.dot(F2.n), det = 1 - n12 * n12;
+  const E0 = F1.n.clone().multiplyScalar((c1 - c2 * n12) / det).add(F2.n.clone().multiplyScalar((c2 - c1 * n12) / det));
+  const mitte = F1.o.clone().add(F2.o).multiplyScalar(0.5); E0.addScaledVector(t, mitte.clone().sub(E0).dot(t));
+  const d1 = t.clone().cross(F1.n).normalize(), d2 = t.clone().cross(F2.n).normalize();
+  if (d1.dot(F1.o.clone().sub(E0)) < 0) d1.negate(); if (d2.dot(F2.o.clone().sub(E0)) < 0) d2.negate();
+  const phi = Math.acos(Math.max(-1, Math.min(1, d1.dot(d2)))), winkel = 180 - (phi * 180) / Math.PI;
+  if (winkel < 1) throw new Error("Die Flächen liegen in einer Ebene");
+  // Länge: Überlappung der beiden Körperflächen entlang der Kehllinie – oder von Hand
+  let s0, L;
+  const a1 = flaechenAusdehnung(f.flaeche1, t), a2 = flaechenAusdehnung(f.flaeche2, t), ab = a1 && a2 ? [Math.max(a1[0], a2[0]), Math.min(a1[1], a2[1])] : a1 || a2;
+  if (+f.laengeVorgabe > 0) { L = +f.laengeVorgabe; s0 = ab ? (ab[0] + ab[1]) / 2 - L / 2 : E0.dot(t) - L / 2; } else { if (!ab || ab[1] - ab[0] < 1) throw new Error("Länge angeben (Flächen sind Ebenen, keine Körperflächen)"); s0 = ab[0]; L = ab[1] - ab[0]; }
+  const ende = (id) => { const b = id && bausteinFuer(id); return b?.folge?.trim() ? b.folge : ""; };
+  const baue = (s1, s2) => {
+    const e1 = ende(f.ende1), e2 = ende(f.ende2), flip = (z, s) => z.map((x) => (x.winkel ? { ...x, winkel: x.winkel * s } : x));
+    const z1 = flip(folge(`${+f.breite1 || 150}${e1 ? " " + e1 : ""}`), s1), z2 = flip(folge(`${+f.breite2 || 150}${e2 ? " " + e2 : ""}`), s2);
+    const r1 = umkehren(z1); r1[r1.length - 1] = { ...r1.at(-1), winkel, art: "abkanten" };
+    const zeilen = [...r1, ...z2], { start, ops } = freiesProfil(0, zeilen, m), res = berechne(start, ops, m.t, m.ri, m.k);
+    const linien = res.pfad.filter((e) => e.typ === "linie"); if (linien.length !== zeilen.length) throw new Error("Schenkel zu kurz für die Biegungen");
+    return { res, l1: linien[r1.length - 1], l2: linien[r1.length] };
+  };
+  const rot = ([x, y]) => [-y, x];
+  let s1 = 1, s2 = 1, r, M, V2;
+  for (let durchgang = 0; durchgang < 2; durchgang++) { // 1. Lage bestimmen, 2. mit richtig gespiegelten Enden
+    r = baue(s1, s2);
+    const { l1, l2 } = r, dir1 = norm2([l1.p2[0] - l1.p1[0], l1.p2[1] - l1.p1[1]]), dir2 = norm2([l2.p2[0] - l2.p1[0], l2.p2[1] - l2.p1[1]]);
+    V2 = schnitt2(l1.p1, dir1, l2.p1, dir2) || l1.p2;
+    // 2D → 3D: (−dir1) ↦ d1, dir2 ↦ d2
+    const a = [-dir1[0], -dir1[1]], b = dir2, dt = a[0] * b[1] - a[1] * b[0];
+    const ex = d1.clone().multiplyScalar(b[1] / dt).add(d2.clone().multiplyScalar(-a[1] / dt)), ey = d1.clone().multiplyScalar(-b[0] / dt).add(d2.clone().multiplyScalar(a[0] / dt));
+    M = (v) => ex.clone().multiplyScalar(v[0]).add(ey.clone().multiplyScalar(v[1]));
+    // Sichtseite: «+» der Endbausteine biegt zur Flächennormale (Aussenseite)
+    // links der Richtung nach aussen ↦ Flächennormale? Sonst die Biegungen dieses Endes spiegeln (die Kehlbiegung bleibt)
+    if (durchgang === 0) { s1 = M(rot(a)).dot(F1.n) > 0 ? 1 : -1; s2 = M(rot(b)).dot(F2.n) > 0 ? 1 : -1; if (s1 === 1 && s2 === 1) break; }
+  }
+  const ex = M([1, 0]), ey = M([0, 1]);
+  const al = (m.t / 2) / d1.dot(F2.n), be = (m.t / 2) / d2.dot(F1.n), E = E0.clone().addScaledVector(d1, al).addScaledVector(d2, be); // Blechmitte über den Flächen
+  E.addScaledVector(t, s0 - E.dot(t));
+  const geo = new THREE.ExtrudeGeometry(konturForm(r.res, m.t), { depth: L, bevelEnabled: false });
+  const T = new THREE.Matrix4().makeBasis(ex, ey, t).setPosition(E.clone().sub(ex.clone().multiplyScalar(V2[0])).sub(ey.clone().multiplyScalar(V2[1])));
+  geo.applyMatrix4(T);
+  let g = geo; if (T.determinant() < 0) { g = geo.toNonIndexed(); g = nachAussen(g); }
+  f.laenge = +L.toFixed(1); // tatsächliche Länge (Werkstatt, Stückliste); Vorgabe steht in laengeVorgabe
+  return { res: r.res, geo: g, laenge: L, winkel };
+}
+const norm2 = (v) => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; };
+function schnitt2(p, u, q, v) { const d = u[0] * v[1] - u[1] * v[0]; if (Math.abs(d) < 1e-9) return null; const s = ((q[0] - p[0]) * v[1] - (q[1] - p[1]) * v[0]) / d; return [p[0] + u[0] * s, p[1] + u[1] * s]; }
+function kehleDialog(f) {
+  const istNeu = !f;
+  f ||= { id: neueId(), typ: "kehle", name: "Kehle " + (doc.features.filter((x) => x.typ === "kehle").length + 1), flaeche1: "", flaeche2: "", breite1: 150, breite2: 150, ende1: "", ende2: "", laengeVorgabe: 0, material: neuMaterial(), stueck: 1 };
+  const bOpt = [["", "– keine (Schnittkante)"], ...alleBausteine().map((b) => [b.id, `${b.name} (${b.folge})`])];
+  const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name },
+    { id: "flaeche1", label: "Fläche 1", wahl: "ebene", optionen: mitWert([["", "– anklicken –"], ...ebenenOpt(f).slice(0)], f.flaeche1), wert: f.flaeche1 },
+    { id: "flaeche2", label: "Fläche 2", wahl: "ebene", optionen: mitWert([["", "– anklicken –"], ...ebenenOpt(f).slice(0)], f.flaeche2), wert: f.flaeche2 },
+    { id: "breite1", label: "Schenkel auf Fläche 1", einheit: "mm", wert: f.breite1 }, { id: "breite2", label: "Schenkel auf Fläche 2", einheit: "mm", wert: f.breite2 },
+    { id: "ende1", label: "Ende 1", optionen: bOpt, wert: f.ende1 || "" }, { id: "ende2", label: "Ende 2", optionen: bOpt, wert: f.ende2 || "" },
+    { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
+    { id: "laengeVorgabe", label: "Länge (0 = automatisch)", einheit: "mm", wert: f.laengeVorgabe || 0 }, { id: "stueck", label: "Stück", wert: f.stueck ?? 1 }];
+  featureDialog(f, istNeu, felder, (f, w) => Object.assign(f, w, { name: w.name?.trim() || f.name }), "Kehle / Grat",
+    "Zwei Körperflächen anklicken (z. B. zwei Dachflächen). Das Blech liegt aussen auf beiden Flächen, gekantet entlang der Kehl- bzw. Gratlinie; Länge aus den Flächen. An den Enden Kantenbausteine (z. B. Saum, Wasserfalz). Zuschnitt und Abkantliste in der Werkstatt.",
+    { info: () => (f._fehler ? "⚠ " + f._fehler : f._res ? `Zuschnitt ${f1(f._res.zuschnitt)} × ${f1(f.laenge || 0)} mm · Winkel ${f1(f._kehle?.winkel || 0)}° · ${f._res.biegungen.length} Biegungen` : "") });
+}
+// Blech auf eine Körperfläche: Ebene (um halbe Blechdicke versetzt) + Skizze mit dem Umriss + Flächenblech – dann Kanten antippen
+function blechAufFlaeche(ref) {
+  const m = material(neuMaterial()), { o, n } = flaechenEbene(ref);
+  const e = { id: neueId(), typ: "ebene", art: "versatz", name: "Ebene Blech " + (doc.features.filter((x) => x.typ === "ebene").length + 1), ref, abstand: +(m.t / 2).toFixed(3), versteckt: true };
+  einfuegen(e); regen();
+  const E = E_(e.id), inEbene = (w) => Math.abs(V(w).sub(o).dot(n)) < 0.05;
+  const stuecke = koerperKanten().filter(([a, b]) => inEbene(a) && inEbene(b)).map(([a, b]) => ({ pts: [zuLokal(E, a), zuLokal(E, b)] }));
+  const zuege = verbindeStuecke(stuecke).filter((z) => z.geschlossen && z.pts.length > 3);
+  if (!zuege.length) { entferneFeature(e); regen(); return status("Kein geschlossener Umriss auf dieser Fläche gefunden."); }
+  const sk = { id: neueId(), typ: "skizze", name: "Umriss Blech", ebene: e.id, versteckt: true, elemente: zuege.map((z, i) => { const pts = z.pts.slice(); if (gleich(pts[0], pts.at(-1))) pts.pop(); return { art: "linie", pts, geschlossen: true, projiziert: true, id: i + 1 }; }) };
+  einfuegen(sk); regen();
+  const f = { id: neueId(), typ: "flaeche", name: "Blech auf Fläche " + (doc.features.filter((x) => x.typ === "flaeche").length + 1), skizze: sk.id, profil: "alle", kanten: {}, material: m.id, stueck: 1, sichtseite: 1 };
+  einfuegen(f); regen(); auswahl = f.id; flaecheDialog(f);
+  status("Blech liegt auf der Fläche – jetzt Kanten antippen und Bausteine zuweisen.");
+}
+function blechAufFlaecheStart() {
+  if (dlg) $("dAbbrechen").click();
+  dialog({ titel: "Blech auf Körperfläche", sofort: true, felder: [{ id: "flaeche", label: "Fläche", wahl: "ebene", optionen: [["", "– Körperfläche anklicken –"]], wert: "" }],
+    hinweis: "Ebene Fläche eines Körpers anklicken (z. B. Dachfläche, Brüstung). Das Blech bekommt ihren Umriss; danach die Kanten antippen und Bausteine zuweisen.",
+    ok: (w) => { if (String(w.flaeche).startsWith("F:")) setTimeout(() => blechAufFlaeche(w.flaeche)); else status("Bitte eine Körperfläche anklicken."); } });
 }
 
 // ------------------------------------------------------------ Sweep und Loft (wie in Fusion)
@@ -3779,7 +3887,15 @@ $("wLoft").onclick = () => { if (dlg) $("dAbbrechen").click(); loftDialog(); };
 $("wBlech").onclick = () => { if (dlg) $("dAbbrechen").click(); blechDialog(); };
 $("wVorlage").onclick = () => { if (dlg) $("dAbbrechen").click(); vorlageDialog(); };
 $("wProfil").onclick = () => { if (dlg) $("dAbbrechen").click(); profilDialog(); };
-$("wFlaeche").onclick = () => { if (dlg) $("dAbbrechen").click(); flaecheDialog(); };
+$("wFlaeche").onclick = (e) => {
+  e.stopPropagation(); const m = $("ebenenMenue");
+  if (!m.hidden && m.dataset.quelle === "blech") { m.hidden = true; return; }
+  m.dataset.quelle = "blech";
+  m.innerHTML = `<button data-blech="skizze"><b>Flächenblech aus Skizze</b><small>Grundfläche skizzieren, Kanten antippen</small></button>
+    <button data-blech="flaeche"><b>Blech auf Körperfläche</b><small>Fläche eines Körpers anklicken – Umriss wird übernommen</small></button>
+    <button data-blech="kehle"><b>Kehle / Grat</b><small>zwei Flächen anklicken – gekantetes Blech entlang der Linie</small></button>`;
+  const r = $("wFlaeche").getBoundingClientRect(); Object.assign(m.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" }); m.hidden = false;
+};
 // Konstruieren: Menü mit allen Ebenenarten
 $("wEbene").onclick = (e) => {
   e.stopPropagation();
@@ -3796,6 +3912,7 @@ $("wEbene").onclick = (e) => {
 $("ebenenMenue").onclick = (e) => {
   const b = e.target.closest("button"); if (!b) return; $("ebenenMenue").hidden = true; if (dlg) $("dAbbrechen").click();
   if (b.dataset.kwz === "kanten3d") return kantenDialog();
+  if (b.dataset.blech) return b.dataset.blech === "skizze" ? flaecheDialog() : b.dataset.blech === "flaeche" ? blechAufFlaecheStart() : kehleDialog();
   if (b.dataset.kwz) return koerperDialog(b.dataset.kwz);
   if (b.dataset.aus) { return b.dataset.aus === "import" ? $("importDatei").click() : b.dataset.aus === "bild" ? $("bildDatei").click() : exportiere(b.dataset.aus); }
   if (b.dataset.art) ebeneDialog(b.dataset.art); else if (b.dataset.achse) konstruktionDialog("achse", b.dataset.achse); else if (b.dataset.punkt) konstruktionDialog("konpunkt", b.dataset.punkt);

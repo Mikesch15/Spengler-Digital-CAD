@@ -30,6 +30,11 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
   in allen Massen; Messen und Schnittanalyse; Konstruktionsachsen und -punkte; Zeitleiste mit Rückrollmarke,
   Unterdrücken und Verschieben; Spline und Ellipse in der Skizze; Sweep und Übergang; Abrunden/Fasen, Schale,
   Körpermuster, Spiegeln, Verschieben/Kopieren; Komponenten (Baugruppen) im Browser; Planblatt A3/A4 mit Ansichten
+- **Blech an 3D-Flächen:** Blech auf eine Körperfläche legen (Umriss übernommen), Kehl- und Gratbleche aus zwei
+  Flächen (Winkel und Länge automatisch, Endbausteine), alles mit Zuschnitt und Abkantliste
+- **Wie Fusion:** Kanten einzeln abrunden/fasen, Komponenten verschieben/drehen, Kollisionsprüfung, Skizzentext
+  (Gravur/Prägung), DXF in Skizze, Bild/PDF-Plan als Hintergrund mit Kalibrieren; Plan mit Schnittansicht
+  (Schraffur, Schnittlinie A–A), Detail (Lupe) und Auto-Masse
 - **Austausch:** STEP-Export als echter B-Rep-Körper (ebene Flächen, gemeinsame Kanten), STL-Export,
   STEP-/STL-Import (STEP über OpenCascade als WebAssembly, wird erst beim ersten Import geladen)
 - **Darstellung:** Materialfarben der Spenglerei (Titanzink, Kupfer, Patina, Alu, Chromstahl …), Holz, Beton;
