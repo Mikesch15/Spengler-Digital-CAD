@@ -41,4 +41,7 @@ writeFileSync(url("./index.html"), html);
 mkdirSync(url("./dist/"), { recursive: true });
 writeFileSync(url("./dist/index.html"), html); // für das PC-Programm (Tauri) und die Web-Version
 cpSync(url("./web/"), url("./dist/"), { recursive: true }); // Manifest, Icons, Service Worker fürs Handy
+// STEP-Leser (OpenCascade als WebAssembly) – wird erst beim ersten STEP-Import geladen
+mkdirSync(url("./dist/occt/"), { recursive: true });
+for (const d of ["occt-import-js.js", "occt-import-js.wasm", "license.occt-import-js.txt", "license.occt.txt"]) cpSync(url(`./node_modules/occt-import-js/dist/${d}`), url(`./dist/occt/${d}`));
 console.log("index.html gebaut,", (html.length / 1024).toFixed(0), "KB");

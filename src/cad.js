@@ -8,6 +8,7 @@ import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geom
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
+import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { BAUSTEINE_STANDARD, flaechenblech, kantenGruppen, gegenUhrzeiger, bausteinProfil } from "../kern/flaechenblech.js";
 import { profilSvg, abwicklungSvg, zuschnittSvg, bausteinSvg, bausteinGrenzen } from "../kern/zeichnung.js";
 import { folge } from "../kern/details.js";
@@ -674,6 +675,10 @@ function regen() {
         const fs = formen(s); if (!fs.length) throw new Error("Skizze hat kein geschlossenes Profil");
         const kr = doc.features.filter((x) => x.typ === "kantenrund" && x.ziel === f.id && !x._aus);
         volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, f.abstand, f.richtung));
+      } else if (f.typ === "import") {
+        if (!f._geo) { const bin = atob(f.daten || ""), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+          f._geo = new THREE.BufferGeometry(); f._geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(u8.buffer), 3)); f._geo.computeVertexNormals(); }
+        volumenKoerper({ ...f, vorgang: "neu" }, f._geo.clone());
       } else if (f.typ === "kantenrund") {
         const z = finde(f.ziel); if (z?.typ !== "extrusion") throw new Error("Abrunden/Fasen geht an Extrusionen – Extrusion wählen");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Die Extrusion muss vor dem Abrunden stehen");
@@ -825,7 +830,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
@@ -3472,6 +3477,7 @@ $("wEbene").onclick = (e) => {
 $("ebenenMenue").onclick = (e) => {
   const b = e.target.closest("button"); if (!b) return; $("ebenenMenue").hidden = true; if (dlg) $("dAbbrechen").click();
   if (b.dataset.kwz) return koerperDialog(b.dataset.kwz);
+  if (b.dataset.aus) { return b.dataset.aus === "import" ? $("importDatei").click() : exportiere(b.dataset.aus); }
   if (b.dataset.art) ebeneDialog(b.dataset.art); else if (b.dataset.achse) konstruktionDialog("achse", b.dataset.achse); else if (b.dataset.punkt) konstruktionDialog("konpunkt", b.dataset.punkt);
 };
 document.addEventListener("click", (e) => { if (!e.target.closest?.("#ebenenMenue")) $("ebenenMenue").hidden = true; });
@@ -3526,6 +3532,63 @@ async function projektOeffnen() {
 }
 $("wSpeichern").onclick = () => projektSpeichern();
 $("wOeffnen").onclick = projektOeffnen;
+// ------------------------------------------------------------ Austausch: STEP/STL exportieren, STEP/STL importieren
+function sichtbareKoerper() {
+  modell.updateMatrixWorld(true);
+  return modell.children.filter((o) => o.isMesh && o.visible && !o.userData.konstruktion && o.userData.fid).map((o) => {
+    const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld);
+    const f = hauptVon(o.userData.fid); return { name: f?.name || "Koerper", dreiecke: g.attributes.position.array };
+  });
+}
+const dateiBasis = () => `${doc.nr || ""} ${doc.objekt || "Modell"}`.trim().replace(/[\\/:*?"<>|]+/g, "-");
+function exportiere(art) {
+  const k = sichtbareKoerper(); if (!k.length) return status("Keine sichtbaren Körper zum Exportieren.");
+  if (art === "step") herunterladen(dateiBasis() + ".step", stepDatei(k, { name: doc.objekt || "Modell" }), "application/step");
+  else herunterladen(dateiBasis() + ".stl", stlDatei(k, doc.objekt || "Modell"), "model/stl");
+}
+let occt = null;
+async function occtLaden() { // OpenCascade (WebAssembly, ~7 MB) erst beim ersten STEP-Import laden
+  if (occt) return occt;
+  for (const basis of ["occt/", "dist/occt/"]) {
+    try {
+      await new Promise((ok, nein) => { const sc = document.createElement("script"); sc.src = basis + "occt-import-js.js"; sc.onload = ok; sc.onerror = nein; document.head.appendChild(sc); });
+      occt = await window.occtimportjs({ locateFile: (n) => basis + n }); return occt;
+    } catch {}
+  }
+  throw new Error("STEP-Leser nicht gefunden (Ordner «occt» fehlt neben dem Programm)");
+}
+function importFeature(name, pos) {
+  if (pos.length < 9) return status("In der Datei sind keine Dreiecke.");
+  const u8 = new Uint8Array(pos.buffer, pos.byteOffset, pos.byteLength); let bin = "";
+  for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  const f = { id: neueId(), typ: "import", name, daten: btoa(bin) };
+  einfuegen(f); auswahl = f.id; regen(); merke?.();
+  status(`«${name}» importiert: ${pos.length / 9} Dreiecke${bin.length > 3e6 ? " – gross: das Projekt wird entsprechend gross" : ""}. Wie ein Körper verwendbar (Verschieben, Vereinigen, Ausschneiden …).`);
+}
+async function importiereDatei(datei) {
+  const name = datei.name.replace(/\.[^.]+$/, ""), endung = datei.name.split(".").pop().toLowerCase(), puffer = await datei.arrayBuffer();
+  try {
+    if (endung === "stl") return importFeature(name, stlLesen(puffer));
+    if (endung === "step" || endung === "stp") {
+      status("STEP wird gelesen …"); const o = await occtLaden(), r = o.ReadStepFile(new Uint8Array(puffer), null);
+      if (!r.success || !r.meshes.length) return status("STEP-Datei enthält keine lesbaren Körper.");
+      const teile = r.meshes.map((m) => { const p = m.attributes.position.array, ix = m.index?.array; if (!ix) return Float32Array.from(p); const out = new Float32Array(ix.length * 3); ix.forEach((v, i) => { out[i * 3] = p[v * 3]; out[i * 3 + 1] = p[v * 3 + 1]; out[i * 3 + 2] = p[v * 3 + 2]; }); return out; });
+      const alle = new Float32Array(teile.reduce((s, t) => s + t.length, 0)); let o2 = 0; for (const t of teile) { alle.set(t, o2); o2 += t.length; }
+      return importFeature(name, alle);
+    }
+    status("Nur STEP (.step/.stp) und STL lassen sich importieren.");
+  } catch (err) { status("Import fehlgeschlagen: " + err.message); }
+}
+$("wAustausch").onclick = (e) => {
+  e.stopPropagation(); const m = $("ebenenMenue");
+  if (!m.hidden && m.dataset.quelle === "austausch") { m.hidden = true; return; }
+  m.dataset.quelle = "austausch";
+  m.innerHTML = `<button data-aus="step"><b>STEP exportieren</b><small>alle sichtbaren Körper und Bleche – für Fusion, SolidWorks, FreeCAD …</small></button>
+    <button data-aus="stl"><b>STL exportieren</b><small>Dreiecksnetz – 3D-Druck, Visualisierung</small></button>
+    <button data-aus="import"><b>STEP / STL importieren …</b><small>als Körper ins Modell (z. B. Bauteil vom Architekten)</small></button>`;
+  const r = $("wAustausch").getBoundingClientRect(); Object.assign(m.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" }); m.hidden = false;
+};
+$("importDatei").onchange = async (e) => { const d = e.target.files[0]; e.target.value = ""; if (d) await importiereDatei(d); };
 if (pc) $("wZuletzt").hidden = false;
 $("wZuletzt").onclick = (e) => {
   e.stopPropagation();

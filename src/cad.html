@@ -381,9 +381,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
       <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Öffnen</button>
       <button class="wz" id="wZuletzt" title="Zuletzt geöffnete Projekte" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Zuletzt</button>
+      <button class="wz" id="wAustausch" title="STEP/STL exportieren oder importieren (Austausch mit anderen CAD-Programmen)"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>Austausch ▾</button>
       <button class="wz" id="wDrucken" title="Stückliste und Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-8h16v8h-3"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
       <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg>Neu</button>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
+      <input type="file" id="importDatei" accept=".step,.stp,.stl" hidden>
       <input type="file" id="einstDatei" accept=".json,application/json" hidden>
     </div></div>
     <div class="gruppe"><div class="gtitel">Werkstatt</div><div class="knoepfe">
@@ -472,6 +474,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Profil anklicken</b>: Bei Extrudieren, Drehen, Sweep, Übergang und Flächenblech einfach in die geschlossene Skizzenfläche (oder auf ihre Linie) tippen, beim Blechprofil auf den Linienzug – wie in Fusion.</li>
       <li><b>Sweep</b> (Profil entlang Pfad) und <b>Übergang</b> (Loft zwischen zwei Profilen).</li>
       <li><b>Körper ▾</b> (Ändern): Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
+      <li><b>Darstellung</b>: Rechtsklick auf einen Körper → «Darstellung …» (Titanzink, Kupfer blank/brüniert/Patina, Alu, Chromstahl, verzinkt, Holz, Beton …). Bleche zeigen automatisch ihr Material.</li>
+      <li><b>Austausch ▾</b> (Datei): STEP und STL exportieren (Fusion, SolidWorks, FreeCAD, 3D-Druck) sowie STEP/STL importieren – importierte Teile sind normale Körper.</li>
       <li><b>Komponenten</b>: Rechtsklick auf einen Körper → «In Komponente …» fasst Teile zu Baugruppen zusammen (z. B. «Dach», «Fassade»); im Browser gemeinsam ein-/ausblenden, Doppelklick benennt um.</li>
       <li><b>Zeitleiste</b>: Rückrollmarke ziehen, Feature ziehen zum Verschieben; Rechtsklick (Handy: lange tippen) für Unterdrücken, Zurückrollen, Umbenennen, Duplizieren, Löschen.</li>
     </ul>
