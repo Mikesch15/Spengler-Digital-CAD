@@ -75,6 +75,17 @@ async fn datei_oeffnen(app: AppHandle, filter: String, endungen: Vec<String>) ->
     lies(gewaehlt.into_path().map_err(|e| e.to_string())?).map(Some)
 }
 
+// Zuletzt verwendetes Projekt direkt öffnen (nur Projekt-/Einstellungsdateien)
+#[tauri::command]
+fn datei_lesen(pfad: String) -> Result<Datei, String> {
+    let p = PathBuf::from(&pfad);
+    let endung = p.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if endung != "sdcad" && endung != "json" {
+        return Err(format!("{pfad}: keine Projektdatei"));
+    }
+    lies(p)
+}
+
 // Datei, mit der das Programm gestartet wurde (Doppelklick auf eine .sdcad-Datei)
 #[tauri::command]
 fn startdatei() -> Result<Option<Datei>, String> {
@@ -89,7 +100,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![datei_speichern, datei_oeffnen, startdatei])
+        .invoke_handler(tauri::generate_handler![datei_speichern, datei_oeffnen, datei_lesen, startdatei])
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

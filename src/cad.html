@@ -153,6 +153,11 @@ table.zeilen.mat td:first-child { min-width: 170px; }
 .hilfetext p { margin: 6px 0; }
 table.kuerzel td:first-child { font-family: var(--font-num); font-size: 12px; white-space: nowrap; }
 .reihe.ohnerand { padding: 0; }
+.menue { position: fixed; z-index: 25; width: 320px; max-width: calc(100vw - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgb(0 0 0 / .2); padding: 4px; display: grid; }
+.menue button { display: grid; text-align: left; gap: 1px; border: 0; background: none; color: var(--fg); padding: 6px 8px; border-radius: 5px; cursor: pointer; font: 13px var(--font-body); }
+.menue button:hover { background: var(--panel-2); }
+.menue small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menue .hinweis { margin: 6px 8px; }
 ul.eigene { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 ul.eigene li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
 ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--bend); font-size: 16px; cursor: pointer; }
@@ -216,6 +221,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <div class="gruppe"><div class="gtitel">Datei</div><div class="knoepfe">
       <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
       <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Öffnen</button>
+      <button class="wz" id="wZuletzt" title="Zuletzt geöffnete Projekte" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Zuletzt</button>
       <button class="wz" id="wDrucken" title="Stückliste und Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-8h16v8h-3"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
       <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg>Neu</button>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
@@ -270,10 +276,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     </ul>
     <h4>Werkstatt</h4>
     <ul>
-      <li><b>Teil</b>: Zuschnitt, Zeichnung, Abkantliste mit Anschlag ab Kante A (grüner Punkt), Etikett, DXF.</li>
-      <li><b>Auftrag</b>: Stückliste mit m², kg und Laufmetern je Material, CSV für Excel.</li>
-      <li><b>Drucken</b>: Stückliste und ein Werkstattblatt (A4) je Teil.</li>
-      <li><b>Einstellungen</b>: Materialien kalibrieren (K-Faktor aus Probebiegung), eigene Materialien, Lagerformate, eigene Vorlagen.</li>
+      <li><b>Teil</b>: Zuschnitt, Querschnitt und Abwicklung, Abkantliste mit Anschlag ab Kante A (grüner Punkt) und ab Kante B, Etikett, DXF.</li>
+      <li><b>Auftrag</b>: Stückliste mit m², kg und Laufmetern, Materialbedarf (Spaltband/Coil in lfm, Anzahl Tafeln), CSV für Excel, Etiketten.</li>
+      <li><b>Drucken</b>: Stückliste mit Materialbedarf und ein Werkstattblatt (A4) je Teil.</li>
+      <li><b>Einstellungen</b>: Materialien kalibrieren (K-Faktor aus Probebiegung), eigene Materialien, Lagerformate, eigene Vorlagen; als Datei sichern und auf einem anderen Gerät laden.</li>
+      <li><b>Zuletzt</b> (PC-Programm): die letzten 8 Projekte direkt öffnen.</li>
     </ul>
     <h4>Tastenkürzel</h4>
     <table class="liste kuerzel"><tbody>
@@ -292,6 +299,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   </div>
   <div class="fuss"><button class="knopf haupt" id="hZu">Schliessen</button></div>
 </div></div>
+<div class="menue" id="zuletztMenue" hidden></div>
 <div id="druck" aria-hidden="true"></div>
 
 <script type="module">

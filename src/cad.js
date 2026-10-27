@@ -1063,6 +1063,14 @@ $("tRechteck").onclick = () => { abschliessenLinie(); setzeWerkzeug("rechteck");
 $("tKreis").onclick = () => { abschliessenLinie(); setzeWerkzeug("kreis"); };
 $("tFertig").onclick = beendeSkizze;
 let projektPfad = null; // PC-Programm: Speichern schreibt ohne Rückfrage in diese Datei
+// PC-Programm: zuletzt geöffnete/gespeicherte Projekte
+const ZULETZT = "sdcad-zuletzt";
+const zuletzt = () => { try { return JSON.parse(localStorage.getItem(ZULETZT) || "[]"); } catch { return []; } };
+function merkeDatei(pfad) {
+  if (!pfad) return;
+  const liste = [pfad, ...zuletzt().filter((p) => p !== pfad)].slice(0, 8);
+  try { localStorage.setItem(ZULETZT, JSON.stringify(liste)); } catch {}
+}
 function titel() {
   document.title = (projektPfad ? dateiname(projektPfad) + " – " : "") + "Spengler Digital CAD";
   window.__TAURI__?.window.getCurrentWindow().setTitle(document.title).catch(() => {});
@@ -1070,12 +1078,12 @@ function titel() {
 async function projektSpeichern(unter = false) {
   const inhalt = JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v), 1);
   const ziel = await herunterladen(`${doc.nr || "projekt"}.sdcad`, inhalt, "application/json", unter ? null : projektPfad);
-  if (ziel) { projektPfad = ziel; titel(); }
+  if (ziel) { projektPfad = ziel; titel(); merkeDatei(ziel); }
 }
 function ladeProjekt(text, pfad = null) {
   try {
     const d = JSON.parse(text); if (!d.features) throw 0;
-    doc = d; auswahl = null; projektPfad = pfad; titel(); verlauf.stapel = []; verlauf.pos = -1;
+    doc = d; auswahl = null; projektPfad = pfad; titel(); merkeDatei(pfad); verlauf.stapel = []; verlauf.pos = -1;
     $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; regen();
     waehle(doc.features.find((f) => f._res)?.id || null); ansicht("iso"); status("Projekt geöffnet.");
   } catch { status("Diese Datei ist kein Spengler-Digital-CAD-Projekt."); }
@@ -1087,6 +1095,28 @@ async function projektOeffnen() {
 }
 $("wSpeichern").onclick = () => projektSpeichern();
 $("wOeffnen").onclick = projektOeffnen;
+if (pc) $("wZuletzt").hidden = false;
+$("wZuletzt").onclick = (e) => {
+  e.stopPropagation();
+  const menue = $("zuletztMenue"), liste = zuletzt();
+  if (!menue.hidden) { menue.hidden = true; return; }
+  menue.innerHTML = liste.length ? liste.map((p, i) => `<button data-i="${i}" title="${esc(p)}"><b>${esc(dateiname(p))}</b><small>${esc(p.slice(0, -dateiname(p).length))}</small></button>`).join("")
+    : '<p class="hinweis">Noch keine Projekte gespeichert oder geöffnet.</p>';
+  const r = $("wZuletzt").getBoundingClientRect();
+  Object.assign(menue.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" });
+  menue.hidden = false;
+};
+$("zuletztMenue").onclick = async (e) => {
+  const i = e.target.closest("button")?.dataset.i; if (i == null) return;
+  $("zuletztMenue").hidden = true;
+  const pfad = zuletzt()[+i];
+  try { const d = await pc.invoke("datei_lesen", { pfad }); ladeProjekt(d.inhalt, d.pfad); }
+  catch (err) {
+    try { localStorage.setItem(ZULETZT, JSON.stringify(zuletzt().filter((p) => p !== pfad))); } catch {}
+    status("Datei nicht gefunden, aus der Liste entfernt: " + err);
+  }
+};
+document.addEventListener("click", (e) => { if (!e.target.closest?.("#zuletztMenue")) $("zuletztMenue").hidden = true; });
 $("datei").onchange = async (e) => { ladeProjekt(await e.target.files[0].text()); e.target.value = ""; };
 document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;

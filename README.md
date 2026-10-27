@@ -7,14 +7,15 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
 
 - **Profile erstellen:** 12 Spengler-Vorlagen, freies Profil als Tabelle (Schenkel/Winkel),
   Skizze mit Linienzug → Blechprofil, Extrusion für Volumenkörper
-- **Werkstatt:** Zuschnitt, Querschnitt-Zeichnung mit Massen, Abkantliste mit Anschlag ab Kante A,
+- **Werkstatt:** Zuschnitt, Querschnitt und Abwicklung mit Massen, Abkantliste mit Anschlag ab Kante A und B,
   Lagerformat-Vorschlag (Spaltband/Coil/Tafel), Etikett, DXF-Abwicklung
-- **Auftrag:** Stückzahlen, Stückliste mit m², kg und Laufmetern je Material, CSV für Excel
-- **Drucken:** Stückliste und Werkstattblatt (A4) je Teil
+- **Auftrag:** Stückzahlen, Stückliste mit m², kg und Laufmetern je Material, Materialbedarf
+  (Spaltband/Coil in Laufmetern, Anzahl Tafeln), CSV für Excel
+- **Drucken:** Stückliste, Werkstattblatt (A4) je Teil, Etiketten (A4-Bogen 3 × 8)
 - **Einstellungen:** Materialien kalibrieren (K-Faktor aus Probebiegung), eigene Materialien,
-  Lagerformate, eigene Vorlagen
+  Lagerformate, eigene Vorlagen; als Datei auf ein anderes Gerät übertragen
 - **Bearbeiten:** Rückgängig/Wiederholen, Duplizieren, Teile umbenennen
-- **PC-Programm:** Speichern/Öffnen mit Windows-Dialog, `.sdcad`-Dateien per Doppelklick,
+- **PC-Programm:** Speichern/Öffnen mit Windows-Dialog, zuletzt geöffnete Projekte, `.sdcad` per Doppelklick,
   automatische Updates
 - Kurzanleitung und Tastenkürzel im Programm unter **Hilfe** (F1)
 
@@ -28,6 +29,7 @@ kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Progra
   dxf.js         DXF-Export der Abwicklung
   zeichnung.js   Querschnitt als SVG (Werkstatt, Druck)
   auftrag.js     Stückliste, CSV
+  zuschnitt.js   Materialbedarf (Spaltband, Coil, Tafeln)
 src/cad.js       Oberfläche
 src/cad.html     Seitenvorlage
 build.mjs        baut index.html und dist/ (eine Datei inkl. three.js und Schriften)
