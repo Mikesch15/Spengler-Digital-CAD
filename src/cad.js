@@ -4,7 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
-import { abwicklungDxf } from "../kern/dxf.js";
+import { abwicklungDxf, abwicklungenDxf } from "../kern/dxf.js";
 import { profilSvg, abwicklungSvg } from "../kern/zeichnung.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 import { materialbedarf } from "../kern/zuschnitt.js";
@@ -359,9 +359,11 @@ function zeigeAuftrag(w) {
     ${a.jeMaterial.map((m) => `<tr><td>${esc(m.material)}</td><td class="num">${m.laufmeter.toFixed(1)}</td><td class="num">${f2(m.flaeche)}</td><td class="num">${m.gewicht.toFixed(1)}</td></tr>`).join("")}
     </tbody></table>
     ${bedarfHtml()}
-    <div class="reihe"><button class="knopf haupt" id="kAlleDruck">Stückliste und Werkstattblätter drucken</button><button class="knopf" id="kCsv">Stückliste als CSV</button><button class="knopf" id="kEtiketten" title="Ein Etikett pro Stück, Bogen ${einst.etiketten.spalten} × ${einst.etiketten.zeilen} (${einst.etiketten.breite} × ${einst.etiketten.hoehe} mm)">Etiketten drucken</button></div>`;
+    <div class="reihe"><button class="knopf haupt" id="kAlleDruck">Stückliste und Werkstattblätter drucken</button><button class="knopf" id="kCsv">Stückliste als CSV</button><button class="knopf" id="kAlleDxf" title="Alle Abwicklungen übereinander in einer DXF-Datei">Alle als DXF</button><button class="knopf" id="kEtiketten" title="Ein Etikett pro Stück, Bogen ${einst.etiketten.spalten} × ${einst.etiketten.zeilen} (${einst.etiketten.breite} × ${einst.etiketten.hoehe} mm)">Etiketten drucken</button></div>`;
   $("kAlleDruck").onclick = () => drucke(blechteile(), true);
   $("kEtiketten").onclick = druckeEtiketten;
+  $("kAlleDxf").onclick = () => herunterladen(`${doc.nr || "auftrag"} Abwicklungen.dxf`,
+    abwicklungenDxf(blechteile().map((f) => ({ res: f._res, laenge: f.laenge, titel: `${f.name} ${f.stueck ?? 1} Stk ${material(f.material).name}` })), einst.skizze.abstand), "application/dxf");
   $("kCsv").onclick = () => herunterladen(`${doc.nr || "auftrag"} Stückliste.csv`, stuecklisteCsv(a, [["Objekt", doc.objekt], ["Nr.", doc.nr], []]) + bedarfCsv(), "text/csv");
 }
 function zeigeWerkstatt() {
@@ -1287,6 +1289,15 @@ document.addEventListener("keydown", (e) => {
   else if (k === "p") { e.preventDefault(); drucke(blechteile(), true); }
   else if (k === "d" && !e.target.closest?.("input,select,textarea")) { e.preventDefault(); dupliziere(finde(auswahl)); }
   else if (k === "o") { e.preventDefault(); projektOeffnen(); }
+});
+// Entf: gewähltes Teil löschen (Rückgängig holt es zurück)
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Delete" || skizze || dlg || !$("einst").hidden || e.target.closest?.("input,select,textarea")) return;
+  const f = finde(auswahl); if (!f) return;
+  e.preventDefault();
+  const benutzt = doc.features.filter((x) => x.skizze === f.id);
+  doc.features.splice(doc.features.indexOf(f), 1); auswahl = null; regen();
+  status(`«${f.name}» gelöscht${benutzt.length ? ` – ${benutzt.map((x) => x.name).join(", ")} hat jetzt keine Skizze mehr` : ""}. Strg+Z holt es zurück.`);
 });
 let neuBestaetigt = 0;
 $("wDrucken").onclick = () => drucke(blechteile(), true);

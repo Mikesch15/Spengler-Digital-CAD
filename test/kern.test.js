@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { berechne, kontur, polylinie, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, quelle, kFaktorAusProbe } from "../kern/materialien.js";
-import { abwicklungDxf } from "../kern/dxf.js";
+import { abwicklungDxf, abwicklungenDxf } from "../kern/dxf.js";
 import { profilSvg, abwicklungSvg } from "../kern/zeichnung.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 import { materialbedarf, tafelnBelegen } from "../kern/zuschnitt.js";
@@ -112,6 +112,15 @@ ok(quelle(2000, { spaltbaender: [], coil: 1000, tafeln: [] }) === null, "zu brei
   const e = versatzLinie([[0, 0], [100, 0], [150, 50]], 1)[1];
   const abstand2 = Math.abs((-(e[0] - 100) + e[1]) / Math.SQRT2); // Linie durch (100,0) in Richtung (1,1)
   ok(Math.abs(e[1] - 1) < 1e-9 && Math.abs(abstand2 - 1) < 1e-9, `Versatz 45° auf Gehrung ${e}`);
+}
+
+// Sammel-DXF: so viele Linien wie die Einzeldateien zusammen, zweites Teil weiter oben
+{
+  const teile = VORLAGEN.slice(0, 3).map((v) => { const { start, ops } = v.bau(standardwerte(v.id), m); return { res: berechne(start, ops, m.t, m.ri, m.k), laenge: 1000, titel: v.name }; });
+  const zaehle = (d) => d.split("\n").filter((z) => z === "LINE").length;
+  const alle = abwicklungenDxf(teile);
+  ok(zaehle(alle) === teile.reduce((s, x) => s + zaehle(abwicklungDxf(x.res, x.laenge, x.titel)), 0) && alle.trimEnd().endsWith("EOF"), "Sammel-DXF Linien");
+  ok(abwicklungDxf(teile[0].res, 1000, "x") === abwicklungDxf(teile[0].res, 1000, "x") && alle.includes("Ortgangblech"), "Sammel-DXF Inhalt");
 }
 
 // Fehlerfall: zu kurzer Schenkel

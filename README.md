@@ -10,12 +10,13 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
 - **Werkstatt:** Zuschnitt, Querschnitt und Abwicklung mit Massen, Abkantliste mit Anschlag ab Kante A und B,
   Lagerformat-Vorschlag (Spaltband/Coil/Tafel), Etikett, DXF-Abwicklung
 - **Auftrag:** Stückzahlen, Stückliste mit m², kg und Laufmetern je Material, Materialbedarf
-  (Spaltband/Coil in Laufmetern, Anzahl Tafeln), CSV für Excel
+  (Spaltband/Coil in Laufmetern, Anzahl Tafeln), CSV für Excel, alle Abwicklungen in einer DXF-Datei
 - **Drucken:** Stückliste, Werkstattblatt (A4) je Teil, Etiketten (A4-Bogen 3 × 8)
 - **Einstellungen:** Materialien kalibrieren (K-Faktor aus Probebiegung), eigene Materialien,
   Lagerformate, eigene Vorlagen, Vorgaben für neue Teile, Fangraster, Druckinhalt und Kopfzeile,
   Etikettenbogen, hell/dunkel, Update-Prüfung; alles als Datei auf ein anderes Gerät übertragen
-- **Bearbeiten:** Rückgängig/Wiederholen, Duplizieren, Teile umbenennen
+- **Bearbeiten:** Rückgängig/Wiederholen, Duplizieren, Löschen (Entf), Teile umbenennen, Notiz pro Teil
+- **Blechprofil aus Skizze:** Blech mittig, links oder rechts der Linie, Kante A an Anfang oder Ende
 - **PC-Programm:** Speichern/Öffnen mit Windows-Dialog, zuletzt geöffnete Projekte, `.sdcad` per Doppelklick,
   automatische Updates
 - Kurzanleitung und Tastenkürzel im Programm unter **Hilfe** (F1)

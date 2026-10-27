@@ -2,18 +2,18 @@
 // Abwicklung mit Biegelinien und darüber der Querschnitt. Öffnet in BricsCAD, AutoCAD, Fusion.
 import { polylinie, grenzen } from "./geometrie.js";
 
-export function abwicklungDxf(res, laenge, titel) {
-  const out = ["0", "SECTION", "2", "ENTITIES"];
+// Zeichnet ein Teil ab (x0, y0) in out und gibt die belegte Höhe zurück
+function teil(out, res, laenge, titel, x0 = 0, y0 = 0) {
   const f = (v) => v.toFixed(4);
   const linie = (lay, x1, y1, x2, y2, farbe) => {
     out.push("0", "LINE", "8", lay);
     if (farbe != null) out.push("62", String(farbe));
-    out.push("10", f(x1), "20", f(y1), "30", "0", "11", f(x2), "21", f(y2), "31", "0");
+    out.push("10", f(x1 + x0), "20", f(y1 + y0), "30", "0", "11", f(x2 + x0), "21", f(y2 + y0), "31", "0");
   };
   const text = (lay, x, y, h, s, farbe) => {
     out.push("0", "TEXT", "8", lay);
     if (farbe != null) out.push("62", String(farbe));
-    out.push("10", f(x), "20", f(y), "30", "0", "40", h.toFixed(2), "1", ascii(s));
+    out.push("10", f(x + x0), "20", f(y + y0), "30", "0", "40", h.toFixed(2), "1", ascii(s));
   };
   const W = res.zuschnitt, H = laenge;
   [[0, 0, W, 0], [W, 0, W, H], [W, H, 0, H], [0, H, 0, 0]].forEach(([a, b, c, d]) => linie("ZUSCHNITT", a, b, c, d, 7));
@@ -26,6 +26,21 @@ export function abwicklungDxf(res, laenge, titel) {
   const g = grenzen(pts);
   const ox = -g.x0, oy = H + 40 - g.y0;
   for (let i = 0; i < pts.length - 1; i++) linie("PROFIL", pts[i][0] + ox, pts[i][1] + oy, pts[i + 1][0] + ox, pts[i + 1][1] + oy, 5);
+  return H + 40 + (g.y1 - g.y0);
+}
+
+export function abwicklungDxf(res, laenge, titel) {
+  const out = ["0", "SECTION", "2", "ENTITIES"];
+  teil(out, res, laenge, titel);
+  out.push("0", "ENDSEC", "0", "EOF");
+  return out.join("\n") + "\n";
+}
+
+// Alle Teile eines Auftrags in einer Datei, übereinander mit Abstand: teile = [{ res, laenge, titel }]
+export function abwicklungenDxf(teile, abstand = 80) {
+  const out = ["0", "SECTION", "2", "ENTITIES"];
+  let y = 0;
+  for (const t of teile) y += teil(out, t.res, t.laenge, t.titel, 0, y) + abstand;
   out.push("0", "ENDSEC", "0", "EOF");
   return out.join("\n") + "\n";
 }
