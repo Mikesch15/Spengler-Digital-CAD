@@ -100,6 +100,11 @@ table.zeilen.bfolge input { width: 80px; } .feld.breit { display: grid; gap: 2px
 td.nowrap { white-space: nowrap; }
 table.zeilen.bausteine input { width: 100%; min-width: 60px; } table.zeilen.bausteine select { max-width: 170px; }
 table.zeilen.kanten tr[data-k] td:first-child { cursor: pointer; white-space: nowrap; font-weight: 600; }
+input.zahlfeld.formel { color: var(--accent); font-style: italic; } input.ungueltig { border-color: #c4352b !important; }
+table.zeilen.parameter input { width: 100%; min-width: 70px; }
+#messAnzeige { position: absolute; left: 12px; top: 48px; z-index: 4; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: 12px var(--font-num); box-shadow: 0 2px 8px rgb(0 0 0 / .12); }
+#messAnzeige b { font-size: 14px; color: #e0782b; }
+.wz[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in srgb, var(--sketch) 8%, transparent); }
 .knopf.klein { padding: 2px 8px; font-size: 11px; }
 .massfeld { position: static; transform: none; }
@@ -274,6 +279,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <div class="gruppe"><div class="gtitel">Konstruieren</div><div class="knoepfe">
       <button class="wz" id="wEbene" title="Konstruktionsebene: versetzt, unter Winkel, Mitte, zwei Kanten, drei Punkte, tangential, entlang Pfad"><svg viewBox="0 0 24 24"><path d="M3 15l6-6h12l-6 6z"/><path d="M12 9V3M12 3l-2 2M12 3l2 2" /></svg>Ebene ▾</button>
     </div></div>
+    <div class="gruppe"><div class="gtitel">Ändern</div><div class="knoepfe">
+      <button class="wz" id="wParameter" title="Parameter ändern: benannte Werte und Formeln für alle Masse"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 17h5M17 7h3M13 17h7"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="17" r="2"/></svg>Parameter</button>
+    </div></div>
+    <div class="gruppe"><div class="gtitel">Prüfen</div><div class="knoepfe">
+      <button class="wz" id="wMessen" title="Messen: Abstand zwischen zwei Punkten (Ecken, Kantenmitten, Flächen)"><svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg>Messen</button>
+      <button class="wz" id="wSchnitt" title="Schnittanalyse: Modell an einer Ebene aufschneiden"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 12h16" stroke-dasharray="2 2"/></svg>Schnitt</button>
+    </div></div>
     <div class="gruppe skizzengruppe" id="gSkizze" hidden><div class="gtitel">Skizze</div><div class="knoepfe">
       <button class="wz" id="tAuswahl"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-2 6z"/></svg>Auswahl</button>
       <button class="wz" id="tLinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><circle cx="4" cy="20" r="1.8"/><circle cx="20" cy="4" r="1.8"/></svg>Linie</button>
@@ -330,6 +342,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       </div>
       <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><div class="inhalt" id="dInhalt"></div>
         <div class="fuss"><span id="dInfo" role="status"></span><button class="knopf weg" id="dLoeschen" hidden>Löschen</button><button class="knopf" id="dAbbrechen">Abbrechen</button><button class="knopf haupt" id="dOk">OK</button></div></div>
+      <div id="messAnzeige" hidden></div>
       <div id="status"></div>
     </section>
     <aside class="panel werkstatt"><div class="register" role="tablist" aria-label="Werkstatt">

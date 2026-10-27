@@ -12,6 +12,7 @@ import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 import { materialbedarf } from "../kern/zuschnitt.js";
 import { vorbereiten, loeseSkizze, analyse, fuegeHinzu, bereinige, punkte as skizzenPunkte, kantenZahl, rechteckBedingungen, neueElementId, sichereIds, IST_MASS } from "../kern/skizzenloeser.js";
 import { abstandGerade, winkelZwischen } from "../kern/bedingungen.js";
+import { rechne, parameterWerte, istZahl, namenIn, NAME as PARAMNAME } from "../kern/ausdruck.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
 import { BASIS, ACHSEN, versetzt, unterWinkel, mittelebene, zweiKanten, dreiPunkte, tangential, entlangPfad, aufFlaeche, zuWelt, zuLokal } from "../kern/ebenen.js";
 
@@ -41,6 +42,27 @@ try { const s = JSON.parse(localStorage.getItem(SPEICHER) || "null"); if (s?.fea
 const speichern = () => { try { localStorage.setItem(SPEICHER, JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))); } catch {} };
 const neueId = () => "f" + doc.zaehler++;
 const finde = (id) => doc.features.find((f) => f.id === id);
+// Parameter (wie «Parameter ändern» in Fusion): in jedem Zahlenfeld und Skizzenmass als Formel nutzbar, z. B. «breite / 3»
+const paramWerte = () => parameterWerte(doc.parameter || []).werte;
+const zahlAus = (text) => { const t = String(text ?? "").trim(); if (!t) return NaN; if (istZahl(t)) return parseFloat(t.replace(",", ".")); try { return rechne(t, paramWerte()); } catch { return NaN; } };
+function wendeAusdrueckeAn(f, P) {
+  for (const [id, a] of Object.entries(f.ausdruecke || {})) {
+    let v; try { v = rechne(a, P); } catch (e) { throw new Error(`Ausdruck «${a}»: ${e.message}`); }
+    if (id.startsWith("p_")) (f.params ||= {})[id.slice(2)] = v;
+    else if (id === "lage") f.anteil = Math.min(Math.max(v / 100, 0), 1);
+    else f[id] = v;
+  }
+}
+// Skizzenmasse mit Ausdruck nachführen; true, wenn sich ein Wert geändert hat
+function skizzenAusdruecke(f, P) {
+  let neu = false;
+  for (const b of f.bedingungen || []) if (b.ausdruck) {
+    let v = rechne(b.ausdruck, P);
+    if (b.typ === "winkel" || b.typ === "knick") v = Math.sign(b.w || 1) * Math.abs(v) * Math.PI / 180;
+    if (Math.abs(v - b.w) > 1e-9) { b.w = v; neu = true; }
+  }
+  return neu;
+}
 // Blechteile eines Spenglerdetails haben die ID «detail:nr»; sie sind keine eigenen Features
 const teilFinden = (id) => { const [fid, i] = String(id ?? "").split(":"); return i == null ? null : finde(fid)?._teile?.[+i] || null; };
 const waehlbar = (id) => finde(id) || teilFinden(id);
@@ -448,15 +470,18 @@ function regen() {
   doc.bausteine = [...bIds].map((id) => alleBausteine().find((b) => b.id === id)).filter(Boolean);
   let platz = 0; // Vorlagen und freie Profile haben keine Lage: nebeneinander aufreihen statt übereinander
   const daneben = (res) => { const g = grenzen(polylinie(res.pfad)), v = [platz - g.x0, 0]; platz += g.x1 - g.x0 + einst.skizze.abstand; return v; };
+  const P = (() => { const r = parameterWerte(doc.parameter || []); return r.werte; })();
   for (const f of doc.features) {
     f._fehler = null; f._res = null;
     try {
+      wendeAusdrueckeAn(f, P);
       if (f.typ === "ebene") {
         f._ebene = null;
         f._ebene = baueEbene(f);
         if (!f.versteckt) modell.add(ebenenObjekt(f._ebene, f.id));
       } else if (f.typ === "skizze") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
+        if (skizzenAusdruecke(f, P) && !loeseSkizze(f).ok) throw new Error("Skizze lässt sich mit den Parameterwerten nicht lösen");
         if (!f.versteckt && f !== skizze?.f) modell.add(skizzenObjekt(f));
       } else if (f.typ === "extrusion") {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
@@ -595,7 +620,7 @@ function zeigeRichtung() {
   pfeil.userData.bildschirm = 0.07;
   [linie, punkt, pfeil].forEach((o) => { o.renderOrder = 12; richtung.add(o); });
 }
-const richtungSkalieren = () => richtung.children.forEach((o) => {
+const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe === "undefined" ? [] : messGruppe.children)].forEach((o) => {
   if (o.userData.bildschirm) o.scale.setScalar(kamera.position.distanceTo(o.position) * o.userData.bildschirm);
 });
 
@@ -842,7 +867,7 @@ function dialog(opt) {
     const inp = fd.optionen
       ? `<select id="d_${fd.id}">${fd.optionen.map(([w, t]) => `<option value="${w}" ${String(w) === String(fd.wert) ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`
       : fd.text ? `<input id="d_${fd.id}" type="text" value="${esc(fd.wert)}">`
-      : `<input id="d_${fd.id}" type="number" step="any" inputmode="decimal" value="${fd.wert}">`;
+      : `<input id="d_${fd.id}" type="text" class="zahlfeld" inputmode="${(doc.parameter || []).length ? "text" : "decimal"}" autocomplete="off" value="${esc(opt.feature?.ausdruecke?.[fd.id] ?? fd.wert)}">`;
     return `<div class="feld"${fd.wahl ? ` data-wahl="${fd.wahl}" data-feld="${fd.id}"` : ""}><label for="d_${fd.id}">${fd.wahl ? "⊕ " : ""}${fd.label}${fd.einheit ? ` (${fd.einheit})` : ""}</label>${inp}</div>`;
   }).join("") + (opt.zusatz ? `<div id="dZusatz">${opt.zusatz()}</div>` : "") + (opt.hinweis ? `<p class="hinweis">${opt.hinweis}</p>` : "");
   $("dialog").hidden = false;
@@ -852,13 +877,27 @@ function dialog(opt) {
   document.querySelectorAll("#dInhalt .feld[data-wahl]").forEach((el) => el.addEventListener("pointerdown", () => { dlg.wahlNr = opt.felder.filter((fd) => fd.wahl).findIndex((fd) => fd.id === el.dataset.feld); zeigeWahl(); }));
   zeigeWahl();
 }
-const werte = () => Object.fromEntries(dlg.felder.map((fd) => { const v = $("d_" + fd.id).value; return [fd.id, fd.optionen || fd.text ? v : parseFloat(v)]; }));
+const werte = () => Object.fromEntries(dlg.felder.map((fd) => { const v = $("d_" + fd.id).value; return [fd.id, fd.optionen || fd.text ? v : zahlAus(v)]; }));
+// Formeln der Zahlenfelder (keine reinen Zahlen) → f.ausdruecke; ungültige Formeln rot markieren
+function merkeAusdruecke(f) {
+  if (!f || !dlg) return;
+  const a = {};
+  for (const fd of dlg.felder) {
+    if (fd.optionen || fd.text) continue;
+    const el = $("d_" + fd.id), t = el?.value.trim() ?? "";
+    const gut = !t || istZahl(t) || Number.isFinite(zahlAus(t));
+    el?.classList.toggle("ungueltig", !gut); el?.classList.toggle("formel", gut && !!t && !istZahl(t));
+    if (el) el.title = gut && t && !istZahl(t) ? `= ${+zahlAus(t).toFixed(4)}` : gut ? "" : "Formel ungültig";
+    if (gut && t && !istZahl(t)) a[fd.id] = t;
+  }
+  if (Object.keys(a).length) f.ausdruecke = a; else delete f.ausdruecke;
+}
 function schliesse() {
   if (dlg?.felder.some((fd) => fd.wahl)) status(""); // Hinweis «… anklicken» gilt nur im Dialog
   $("dialog").hidden = true; dlg = null; grundebenen.visible = false;
 }
 $("dOk").onclick = () => { dlg?.ok?.(werte()); schliesse(); regen(); };
-$("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); };
+$("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); if (typeof wendeSchnittAn === "function") wendeSchnittAn(); };
 $("dLoeschen").onclick = () => { dlg?.loeschen?.(); schliesse(); regen(); };
 
 // Neue oder bestehende Features mit Live-Vorschau. felder(f) liefert die Felder, setze(f, w) übernimmt Werte.
@@ -871,11 +910,11 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
     info: () => (f._fehler ? "⚠ " + f._fehler : f._res ? `Zuschnitt ${f1(f._res.zuschnitt)} × ${f.laenge} mm · ${f._res.biegungen.length} Biegungen` : ""),
     ...extra,
     aendern: (w, feld) => {
-      setze(f, w);
+      setze(f, w); merkeAusdruecke(f);
       if (feld === "vorlage" || feld === "skizze" || feld === "detail") { const d = dlg; dialog({ ...d, felder: felder(f) }); setze(f, werte()); }
       regen();
     },
-    ok: (w) => { setze(f, w); auswahl = f.id; },
+    ok: (w) => { setze(f, w); merkeAusdruecke(f); auswahl = f.id; },
     abbrechen: () => { if (istNeu) { doc.features.splice(doc.features.indexOf(f), 1); auswahl = alteAuswahl; } else Object.assign(f, kopie); },
     loeschen: istNeu ? null : () => { doc.features.splice(doc.features.indexOf(f), 1); auswahl = null; },
   });
@@ -1448,6 +1487,111 @@ function detailDialog(f) {
     { zusatz: tabelle, binden, nachRegen: zeigeVorschau, wahlNr: -1,
       info: () => (f._fehler ? "⚠ " + f._fehler : f._detail ? f._detail.teile.map((tl, i) => `${i + 1} ${tl.name} ${f1(tl.res.zuschnitt)}`).join(" · ") : "") });
 }
+
+// ------------------------------------------------------------ Parameter ändern (Fusion: Ändern → Parameter ändern)
+function parameterDialog() {
+  if (dlg) $("dAbbrechen").click();
+  const alt = JSON.parse(JSON.stringify(doc.parameter || []));
+  let liste = JSON.parse(JSON.stringify(alt));
+  const verwendet = (name) => {
+    const n = doc.features.filter((f) => Object.values(f.ausdruecke || {}).some((a) => namenIn(a).includes(name)) || (f.bedingungen || []).some((b) => b.ausdruck && namenIn(b.ausdruck).includes(name))).length;
+    return n + liste.filter((q) => q.name !== name && namenIn(q.ausdruck).includes(name)).length;
+  };
+  const tabelle = () => {
+    const r = parameterWerte(liste);
+    return `<table class="zeilen parameter"><thead><tr><th>Name</th><th>Ausdruck</th><th class="num">Wert</th><th>Kommentar</th><th class="num">verw.</th><th></th></tr></thead><tbody>
+      ${liste.map((q, i) => `<tr data-i="${i}"><td><input data-p="name" value="${esc(q.name)}" class="${r.fehler[q.name]?.startsWith("Name") ? "ungueltig" : ""}" aria-label="Name"></td>
+        <td><input data-p="ausdruck" value="${esc(q.ausdruck)}" class="folge ${r.fehler[q.name] && !r.fehler[q.name].startsWith("Name") ? "ungueltig" : ""}" title="${esc(r.fehler[q.name] || "")}" aria-label="Ausdruck"></td>
+        <td class="num" data-wert="${i}">${q.name in r.werte ? +r.werte[q.name].toFixed(4) : "⚠"}</td><td><input data-p="kommentar" value="${esc(q.kommentar || "")}" aria-label="Kommentar"></td>
+        <td class="num">${verwendet(q.name)}</td><td><button class="weg" data-pweg="${i}" aria-label="${esc(q.name)} entfernen">×</button></td></tr>`).join("") || '<tr><td colspan="6" class="hinweis">Noch keine Parameter.</td></tr>'}
+      </tbody></table><div class="reihe ohnerand"><button class="knopf" data-pneu>+ Parameter</button></div>
+      <p class="hinweis">Parameter in jedem Zahlenfeld und in Skizzenmassen verwenden, z. B. «breite / 3» oder «falz + 2 * t». Erlaubt: + − * / ^, Klammern, mm/cm/m, sqrt, sin/cos/tan (Grad), min, max, round, pi.
+        Ändert man hier einen Wert, rechnet das ganze Modell nach.</p>`;
+  };
+  const zeige = () => { const d = dlg; dialog({ ...d }); };
+  const pruefen = () => {
+    const r = parameterWerte(liste), namen = liste.map((q) => q.name), doppelt = namen.find((n, i) => namen.indexOf(n) !== i);
+    document.querySelectorAll("#dInhalt [data-wert]").forEach((c) => { const q = liste[+c.dataset.wert]; c.textContent = q && q.name in r.werte ? +r.werte[q.name].toFixed(4) : "⚠"; });
+    document.querySelectorAll("#dInhalt tr[data-i]").forEach((tr) => { const q = liste[+tr.dataset.i], e = r.fehler[q.name];
+      tr.querySelector('[data-p="name"]').classList.toggle("ungueltig", !!e?.startsWith("Name") || q.name === doppelt);
+      const a = tr.querySelector('[data-p="ausdruck"]'); a.classList.toggle("ungueltig", !!e && !e.startsWith("Name")); a.title = e || ""; });
+    const fehler = doppelt ? `Name «${doppelt}» doppelt` : Object.entries(r.fehler).map(([n, e]) => `${n}: ${e}`)[0];
+    $("dInfo").textContent = fehler ? "⚠ " + fehler : `${liste.length} Parameter`; $("dInfo").className = fehler ? "fehler" : "";
+    return !fehler;
+  };
+  dialog({ titel: "Parameter ändern", felder: [], zusatz: tabelle,
+    binden: (box) => {
+      box.addEventListener("input", (e) => { const k = e.target.dataset.p; if (!k) return; liste[+e.target.closest("tr").dataset.i][k] = e.target.value.trim(); if (pruefen()) { doc.parameter = liste; regen(); } });
+      box.addEventListener("click", (e) => {
+        if (e.target.dataset.pneu != null) { let n = 1; while (liste.some((q) => q.name === "p" + n)) n++; liste.push({ name: "p" + n, ausdruck: "100", kommentar: "" }); zeige(); box.querySelector("tr:last-child input")?.select(); }
+        else if (e.target.dataset.pweg != null) { liste.splice(+e.target.dataset.pweg, 1); doc.parameter = liste; zeige(); regen(); }
+      });
+      setTimeout(pruefen);
+    },
+    ok: () => { if (!pruefen()) { doc.parameter = alt; return status("Parameter nicht übernommen – Fehler in der Liste."); } doc.parameter = liste; status("Parameter übernommen."); },
+    abbrechen: () => { doc.parameter = alt; } });
+}
+$("wParameter").onclick = parameterDialog;
+
+// ------------------------------------------------------------ Prüfen: Messen und Schnittanalyse (wie in Fusion)
+let messen = null; // { a: Punkt | null }
+const messGruppe = new THREE.Group(); szene.add(messGruppe);
+// Messpunkt: Körperecke oder Kantenmitte in der Nähe (Fang), sonst Treffpunkt auf der Körperfläche
+function messPunkt(e) {
+  const sm = smPos(e); let best = null, bd = 12, art = "";
+  const nimm = (q, a) => { const S = aufSchirm(q); if (S[2] < 1) { const d = Math.hypot(S[0] - sm[0], S[1] - sm[1]); if (d < bd) { bd = d; best = q; art = a; } } };
+  for (const [a, b] of koerperKanten()) { nimm(a, "Ecke"); nimm(b, "Ecke"); nimm(a.map((v, i) => (v + b[i]) / 2), "Kantenmitte"); }
+  if (best) return { p: best, art };
+  strahl.setFromCamera(ndc(e), kamera);
+  const t = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
+  return t ? { p: t.point.toArray(), art: "Fläche" } : null;
+}
+function messMarke(p, farbe = 0xe0782b) {
+  const k = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: farbe, depthTest: false }));
+  k.position.set(...p); k.userData.bildschirm = 0.006; k.renderOrder = 15; messGruppe.add(k); return k;
+}
+function messKlick(e) {
+  const q = messPunkt(e); if (!q) return status("Hier ist kein Körper – eine Ecke, Kante oder Fläche anklicken.");
+  if (!messen.a || messen.b) { leeren(messGruppe); messen = { a: q.p }; messMarke(q.p); $("messAnzeige").innerHTML = `<b>Punkt 1</b> (${q.art}) ${q.p.map((v) => f1(v)).join(" / ")} – zweiten Punkt anklicken`; return; }
+  messen.b = q.p; messMarke(q.p);
+  const a = messen.a, b = q.p, d = b.map((v, i) => v - a[i]), L = Math.hypot(...d);
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(a), V(b)]), new THREE.LineBasicMaterial({ color: 0xe0782b, depthTest: false }));
+  l.renderOrder = 15; messGruppe.add(l);
+  $("messAnzeige").innerHTML = `<b>Abstand ${f1(L)} mm</b><br>ΔX ${f1(d[0])} · ΔY ${f1(d[1])} · ΔZ ${f1(d[2])} <small>(${q.art})</small>`;
+  status(`Abstand ${f1(L)} mm – nächster Klick beginnt eine neue Messung, Esc beendet.`);
+}
+function messenUmschalten(an = !messen) {
+  messen = an ? { a: null } : null; leeren(messGruppe);
+  $("messAnzeige").hidden = !an; $("messAnzeige").innerHTML = "Ersten Punkt anklicken: Körperecke, Kantenmitte oder Fläche.";
+  $("wMessen").setAttribute("aria-pressed", an);
+  status(an ? "Messen: zwei Punkte anklicken. Esc beendet." : "");
+}
+$("wMessen").onclick = () => { if (skizze) return status("Messen ausserhalb der Skizze – in der Skizze zeigen die Masse die Längen."); if (dlg) $("dAbbrechen").click(); messenUmschalten(); };
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && messen && !skizze) { messenUmschalten(false); e.preventDefault(); } });
+
+let schnitt = null; // { ebene, versatz, umkehren }
+renderer.localClippingEnabled = false;
+function wendeSchnittAn() {
+  if (!schnitt) { renderer.clippingPlanes = []; $("wSchnitt").setAttribute("aria-pressed", false); return; }
+  const E = E_(schnitt.ebene), n = V(E.n).multiplyScalar(schnitt.umkehren ? 1 : -1);
+  renderer.clippingPlanes = [new THREE.Plane().setFromNormalAndCoplanarPoint(n, V(E.o).add(V(E.n).multiplyScalar(schnitt.versatz || 0)))];
+  $("wSchnitt").setAttribute("aria-pressed", true);
+}
+$("wSchnitt").onclick = () => {
+  if (skizze) return;
+  if (schnitt && !dlg) { schnitt = null; wendeSchnittAn(); return status("Schnittanalyse aus."); }
+  if (dlg) $("dAbbrechen").click();
+  const vorher = schnitt; schnitt = schnitt || { ebene: "XZ", versatz: 0, umkehren: false };
+  dialog({ titel: "Schnittanalyse", felder: [
+      { id: "ebene", label: "Schnittebene", wahl: "ebene", optionen: ebenenOpt(null, schnitt.ebene), wert: schnitt.ebene },
+      { id: "versatz", label: "Versatz", einheit: "mm", wert: schnitt.versatz },
+      { id: "umkehren", label: "Seite", optionen: [["", "Vorderseite wegschneiden"], ["1", "Rückseite wegschneiden"]], wert: schnitt.umkehren ? "1" : "" }],
+    hinweis: "Ebene in der Ansicht anklicken oder wählen, Versatz eintippen. Der Schnitt bleibt nach OK aktiv – nochmals «Schnitt» klicken schaltet ihn aus.",
+    aendern: (w) => { schnitt = { ebene: w.ebene, versatz: Number.isFinite(w.versatz) ? w.versatz : 0, umkehren: !!w.umkehren }; wendeSchnittAn(); },
+    ok: (w) => { schnitt = { ebene: w.ebene, versatz: Number.isFinite(w.versatz) ? w.versatz : 0, umkehren: !!w.umkehren }; status("Schnittanalyse aktiv – «Schnitt» schaltet sie aus."); },
+    abbrechen: () => { schnitt = vorher; } });
+  wendeSchnittAn();
+};
 
 // ------------------------------------------------------------ Einstellungen: Materialien kalibrieren, Lagerformate
 let entwurf = null; // Arbeitskopie, erst «Übernehmen» speichert
@@ -2319,10 +2463,11 @@ function entferneBed(b) {
   status(`${ABH_NAME[b.typ] || "Mass"} entfernt.`); zeichneLive();
 }
 // Referenzmass anklicken und Wert eintippen → treibendes Mass (wie in Fusion); bestehendes treibendes Mass → neuer Wert
-function massAendern(m, wert) {
+function massAendern(m, wert, ausdruck = null) {
   if (!Number.isFinite(wert) || wert <= 0) return status("Bitte einen Wert grösser als 0 eingeben.");
   if (m.bed) {
     const b = m.bed, alt = b.w;
+    if (ausdruck) b.ausdruck = ausdruck; else delete b.ausdruck;
     b.w = b.typ === "knick" || b.typ === "winkel" ? Math.sign(alt || 1) * wert * RAD : wert;
     if (!loeseSkizze(skizze.f).ok) { b.w = alt; loeseSkizze(skizze.f); status(GRUND.widerspruch); }
     return zeichneLive();
@@ -2334,6 +2479,7 @@ function massAendern(m, wert) {
     winkel: () => ({ typ: "knick", a: { e, k: ring(m.i - 1) }, p: { e, k: "p" + m.i }, n: { e, k: ring(m.i + 1) }, w: (drehung(el.pts, m.i) < 0 ? -1 : 1) * wert * RAD }),
     durchmesser: () => ({ typ: "durchmesser", k: { e }, w: wert }), langB: () => ({ typ: "durchmesser", k: { e }, w: wert }),
     bogenR: () => ({ typ: "radius", k: { e }, w: wert }), langL: () => ({ typ: "abstand", a: { e, k: "a" }, b: { e, k: "b" }, w: wert }) }[m.art]?.();
+  if (b && ausdruck) b.ausdruck = ausdruck;
   if (b) uebernimm(b);
 }
 // Bezüge → Koordinaten
@@ -2448,10 +2594,10 @@ function massFuerWahl(sm) {
       wert = Math.abs(d); fertig = (w) => ({ typ: "punktLinie", p, l: l1, w, s: d < 0 ? -1 : 1 });
     } else { wert = Math.abs(w0) / RAD; fertig = (w) => (w < 180 ? { typ: "winkel", l1, l2, w: Math.sign(w0) * w * RAD } : null); }
   }
-  massEingabe(sm[0] + "px", sm[1] + "px", wert, (w, typ) => {
+  massEingabe(sm[0] + "px", sm[1] + "px", wert, (w, typ, ausdruck) => {
     s.picks = [];
     if (!(w > 0)) return status("Bitte einen Wert grösser als 0 eingeben.");
-    const b = fertig(w, typ); if (b) uebernimm(b); else status("Winkel kleiner als 180° eingeben.");
+    const b = fertig(w, typ); if (b) { if (ausdruck) b.ausdruck = ausdruck; uebernimm(b); } else status("Winkel kleiner als 180° eingeben.");
   }, optionen);
   zeichneLive();
 }
@@ -2462,10 +2608,16 @@ function massEingabe(left, top, wert, ok, optionen = null) {
   box.innerHTML = `<input type="number" step="any" class="massfeld">` + (optionen ? `<select>${optionen.map(([k, t]) => `<option value="${k}">${t}</option>`).join("")}</select>` : "");
   $("ansicht").appendChild(box);
   const inp = box.querySelector("input"), sel = box.querySelector("select");
-  inp.value = +(+wert).toFixed(3); inp.focus(); inp.select();
+  inp.type = "text"; inp.setAttribute("inputmode", (doc.parameter || []).length ? "text" : "decimal");
+  inp.value = typeof wert === "string" ? wert : +(+wert).toFixed(3); inp.focus(); inp.select();
   sel?.addEventListener("change", () => { inp.value = +optionen.find((o) => o[0] === sel.value)[2].toFixed(3); inp.focus(); inp.select(); });
   let erledigt = false;
-  const fertig = (an) => { if (erledigt) return; erledigt = true; box.remove(); if (an) ok(inp.value.trim() === "" ? null : parseFloat(inp.value), sel?.value); };
+  const fertig = (an) => {
+    if (erledigt) return;
+    const t = inp.value.trim(), v = t === "" ? null : zahlAus(t);
+    if (an && v !== null && !Number.isFinite(v)) { inp.classList.add("ungueltig"); return status("Formel ungültig – Zahl oder Parameter eingeben, z. B. «breite / 3»."); }
+    erledigt = true; box.remove(); if (an) ok(v, sel?.value, t && !istZahl(t) ? t : null);
+  };
   box.addEventListener("keydown", (ev) => { ev.stopPropagation(); if (ev.key === "Enter") fertig(true); if (ev.key === "Escape") fertig(false); });
   box.addEventListener("focusout", (ev) => { if (!box.contains(ev.relatedTarget)) setTimeout(() => { if (!box.contains(document.activeElement)) fertig(false); }); });
 }
@@ -2500,7 +2652,7 @@ $("labels").addEventListener("click", (e) => {
   const l = labels[+d.dataset.i]; if (!l) return;
   if (l.glyph) { skizze.bsel = l.bed; skizze.sel = null; status(`${ABH_NAME[l.bed.typ]} gewählt – Entf löscht die Abhängigkeit.`); return zeichneLive(); }
   if (!l.edit) return;
-  massEingabe(d.style.left, d.style.top, parseFloat(l.t.replace(/[^\d.\-]/g, "")), (w) => (w == null && l.edit.bed ? entferneBed(l.edit.bed) : massAendern(l.edit, w)));
+  massEingabe(d.style.left, d.style.top, l.edit.bed?.ausdruck ?? parseFloat(l.t.replace(/[^\d.\-]/g, "")), (w, _, ausdruck) => (w == null && l.edit.bed ? entferneBed(l.edit.bed) : massAendern(l.edit, w, ausdruck)));
 });
 
 let labels = [];
@@ -2583,7 +2735,7 @@ function zeichneLive() {
     else if (el.art === "langloch") { if (frei("L:" + el.id + ":a:b")) lab(el.a, el.b, f1(abst(el.a, el.b)), ed && { el, art: "langL" }); if (frei("K:" + el.id)) lab(el.b, el.b, "B " + f1(el.r * 2), ed && { el, art: "langB" }, true); }
   }
   // Treibende Masse (fett, umrandet) und Symbole der Abhängigkeiten (anklicken → Entf löscht)
-  const dim = (uv, t, b, w) => uv && labels.push({ p: zu3D(f.ebene, uv), t, edit: { bed: b }, bed: b, treibend: true, winkel: w });
+  const dim = (uv, t, b, w) => uv && labels.push({ p: zu3D(f.ebene, uv), t: b.ausdruck ? `fx ${t}` : t, edit: { bed: b }, bed: b, treibend: true, winkel: w });
   const zaehler = new Map(), lm = (r) => { const l = B.L(r); return l && mitte(l[0], l[1]); };
   const glyph = (uv, b) => {
     if (!uv) return;
@@ -2674,6 +2826,7 @@ leinwand.addEventListener("pointerup", (e) => {
   runter = null;
   if (skizze?.werkzeug === "auswahl") { skizze.sel = trefferElement(smPos(e)); skizze.bsel = null; zeichneLive(); return; }
   if (skizze) { const r = ebenenPunkt(e); if (r) klick(r.uv, r.fang, smPos(e), r.ref); return; }
+  if (messen && !skizze) { messKlick(e); return; }
   if (dlg?.kantenWahl?.(e)) return;
   if (uebernimmWahl(e)) return;
   strahl.setFromCamera(ndc(e), kamera);
