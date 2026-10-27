@@ -706,6 +706,12 @@ function regen() {
         if (!f._geo) { const bin = atob(f.daten || ""), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
           f._geo = new THREE.BufferGeometry(); f._geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(u8.buffer), 3)); f._geo.computeVertexNormals(); }
         volumenKoerper({ ...f, vorgang: "neu" }, f._geo.clone());
+      } else if (f.typ === "kanten3d") {
+        const m = volumen.get(f.ziel); if (!m) throw new Error("Körper fehlt – Kanten eines Volumenkörpers anklicken");
+        if (doc.features.indexOf(finde(f.ziel)) > doc.features.indexOf(f)) throw new Error("Der Körper muss vor dem Abrunden stehen");
+        const fehlt = kantenBearbeiten(m, f);
+        if (dlg?.feature === f) for (const k of f.kanten || []) { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(k.a), V(k.b)]), new THREE.LineBasicMaterial({ color: 0xe0782b, depthTest: false })); l.renderOrder = 15; l.userData.konstruktion = true; modell.add(l); }
+        if (fehlt) throw new Error(`${fehlt} Kante${fehlt === 1 ? "" : "n"} nicht mehr gefunden (Körper geändert?) – neu anklicken`);
       } else if (f.typ === "kantenrund") {
         const z = finde(f.ziel); if (z?.typ !== "extrusion") throw new Error("Abrunden/Fasen geht an Extrusionen – Extrusion wählen");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Die Extrusion muss vor dem Abrunden stehen");
@@ -858,7 +864,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
@@ -1256,6 +1262,7 @@ function bearbeite(f) {
   if (f.typ === "drehung") return drehungDialog(f);
   if (f.typ === "sweep") return sweepDialog(f);
   if (f.typ === "bild") return bildDialog(f);
+  if (f.typ === "kanten3d") return kantenDialog(f);
   if (KOERPER_WZ[f.typ]) return koerperDialog(f.typ, f);
   if (f.typ === "loft") return loftDialog(f);
   if (f.typ === "blech") return blechDialog(f);
@@ -2083,6 +2090,106 @@ $("dxfDatei").onchange = async (e) => {
     status(`${r.elemente.length} Elemente aus «${d.name}» eingefügt (fixiert)${r.faktor !== 1 ? `, Einheit umgerechnet ×${r.faktor}` : ""}${weg ? ` · übersprungen: ${weg}` : ""}.`);
   } catch (err) { status("DXF konnte nicht gelesen werden: " + err.message); }
 };
+
+// ------------------------------------------------------------ Abrunden / Fasen an angeklickten Kanten (beliebige Volumenkörper, gerade Kanten zwischen ebenen Flächen)
+// Kante (a, b) im Netz: die zwei angrenzenden Flächen (Normale n, Richtung d in der Fläche weg von der Kante)
+function kantenInfo(geo, a, b) {
+  const A = V(a), B = V(b), t = B.clone().sub(A), L = t.length(); if (L < 1e-6) return null; t.normalize();
+  const p = (geo.index ? geo.toNonIndexed() : geo).attributes.position, aufLinie = (q) => q.clone().sub(A).cross(t).length() < 2e-3;
+  const fl = [];
+  for (let i = 0; i + 2 < p.count; i += 3) {
+    const P = [0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(p, i + k));
+    for (let k = 0; k < 3; k++) {
+      const q1 = P[k], q2 = P[(k + 1) % 3], q3 = P[(k + 2) % 3]; if (!aufLinie(q1) || !aufLinie(q2) || aufLinie(q3)) continue;
+      const s1 = q1.clone().sub(A).dot(t), s2 = q2.clone().sub(A).dot(t); if (Math.max(s1, s2) < 1e-3 || Math.min(s1, s2) > L - 1e-3) continue; // Überlappung mit der Kante
+      const n = P[1].clone().sub(P[0]).cross(P[2].clone().sub(P[0])); if (n.lengthSq() < 1e-14) continue; n.normalize();
+      if (!fl.some((x) => x.n.dot(n) > 0.9999)) { const d = t.clone().cross(n).normalize(); if (d.dot(q3.clone().sub(q1)) < 0) d.negate(); fl.push({ n, d }); }
+    }
+  }
+  if (fl.length !== 2) return null;
+  return { A, B, t, L, f1: fl[0], f2: fl[1], konvex: fl[0].n.dot(fl[1].d) < 0 };
+}
+function kantenWerkzeug(k, art, mass) {
+  const { A, t, L, f1, f2, konvex } = k, d1 = f1.d, d2 = f2.d, phi = Math.acos(Math.max(-1, Math.min(1, d1.dot(d2))));
+  if (phi < 0.05 || phi > Math.PI - 0.05) return null;
+  const w = t.clone().cross(d1).normalize(), zu2 = (v) => [v.dot(d1), v.dot(w)], eps = 0.05;
+  const raus = konvex ? 1 : -1; // Werkzeug minimal über die Körperflächen hinaus (konvex) bzw. hinein (konkav): keine deckungsgleichen Flächen
+  const n1 = f1.n.clone().multiplyScalar(raus * eps), n2 = f2.n.clone().multiplyScalar(raus * eps);
+  const pts = [n1.clone().add(n2)];
+  if (art === "fase") { // Fasenlinie exakt, nur über ihre Enden hinaus verlängert
+    const T1 = d1.clone().multiplyScalar(mass), T2 = d2.clone().multiplyScalar(mass), r = T1.clone().sub(T2).normalize().multiplyScalar(2 * eps);
+    pts.push(T1.clone().add(r), T2.clone().sub(r));
+  }
+  else {
+    const s = mass / Math.tan(phi / 2), m = d1.clone().add(d2).normalize(), C = m.clone().multiplyScalar(mass / Math.sin(phi / 2));
+    const T1 = d1.clone().multiplyScalar(s), T2 = d2.clone().multiplyScalar(s), a1 = T1.clone().sub(C), a2 = T2.clone().sub(C), bogen = Math.acos(Math.max(-1, Math.min(1, a1.dot(a2) / (a1.length() * a2.length()))));
+    pts.push(T1.clone().add(n1));
+    const ax = a1.clone().cross(a2).normalize();
+    for (let i = 1; i < 16; i++) pts.push(C.clone().add(a1.clone().applyAxisAngle(ax, (bogen * i) / 16)));
+    pts.push(T2.clone().add(n2));
+  }
+  let q = pts.map(zu2); if (flaeche(q) < 0) q = q.reverse();
+  const verl = konvex ? 0.5 : 0; // konvex: über die Kantenenden hinaus (dort ist Luft)
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(q.map(([x, y]) => new THREE.Vector2(x, y))), { depth: L + 2 * verl, bevelEnabled: false });
+  geo.applyMatrix4(new THREE.Matrix4().makeBasis(d1, w, t).setPosition(A.clone().addScaledVector(t, -verl)));
+  return { geo, konvex };
+}
+function kantenBearbeiten(mesh, f) {
+  let fehlt = 0;
+  for (const k of f.kanten || []) {
+    const info = kantenInfo(mesh.geometry, k.a, k.b); if (!info) { fehlt++; continue; }
+    const wz = kantenWerkzeug(info, f.art, Math.max(0.1, +f.mass || 1)); if (!wz) { fehlt++; continue; }
+    verknuepfe(mesh, wz.geo, wz.konvex ? "ausschneiden" : "verbinden");
+  }
+  return fehlt;
+}
+// Angeklickte Körperkante → ganze gerade Kante (zusammenhängende Stücke auf derselben Geraden)
+function kanteAmKoerper(e) {
+  const sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 24 : 10;
+  for (const m of modell.children) {
+    if (!m.isMesh || !m.userData.fid) continue; const pos = m.children[0]?.geometry.attributes.position; if (!pos) continue;
+    for (let i = 0; i < pos.count; i += 2) {
+      const a = [pos.getX(i), pos.getY(i), pos.getZ(i)], b = [pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1)], A = aufSchirm(a), B = aufSchirm(b);
+      if (A[2] < 1 && B[2] < 1) { const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = { m, a, b }; } }
+    }
+  }
+  if (!best) return null;
+  const A = V(best.a), t = V(best.b).sub(A).normalize(), pos = best.m.children[0].geometry.attributes.position; let lo = 0, hi = V(best.b).sub(A).dot(t);
+  for (let wieder = 0; wieder < 50; wieder++) { let mehr = false;
+    for (let i = 0; i < pos.count; i += 2) {
+      const p = new THREE.Vector3(pos.getX(i), pos.getY(i), pos.getZ(i)), q = new THREE.Vector3(pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1));
+      if (p.clone().sub(A).cross(t).length() > 1e-3 || q.clone().sub(A).cross(t).length() > 1e-3) continue;
+      const s1 = Math.min(p.sub(A).dot(t), q.sub(A).dot(t)), s2 = Math.max(V([pos.getX(i), pos.getY(i), pos.getZ(i)]).sub(A).dot(t), V([pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1)]).sub(A).dot(t));
+      if (s1 <= hi + 1e-3 && s2 >= lo - 1e-3 && (s1 < lo - 1e-6 || s2 > hi + 1e-6)) { lo = Math.min(lo, s1); hi = Math.max(hi, s2); mehr = true; }
+    }
+    if (!mehr) break; }
+  const r3 = (v) => v.toArray().map((x) => +x.toFixed(4));
+  return { fid: hauptVon(best.m.userData.fid)?.id, a: r3(A.clone().addScaledVector(t, lo)), b: r3(A.clone().addScaledVector(t, hi)) };
+}
+function kantenDialog(f) {
+  const istNeu = !f;
+  f ||= { id: neueId(), typ: "kanten3d", name: "Kanten abrunden " + (doc.features.filter((x) => x.typ === "kanten3d").length + 1), art: "rund", mass: 5, kanten: [], ziel: null };
+  const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name },
+    { id: "art", label: "Art", optionen: [["rund", "Abrunden (Radius)"], ["fase", "Fasen (Abstand)"]], wert: f.art },
+    { id: "mass", label: f.art === "fase" ? "Fase" : "Radius", einheit: "mm", wert: f.mass }];
+  featureDialog(f, istNeu, felder, (f, w) => Object.assign(f, w, { name: w.name?.trim() || f.name }), "Kanten abrunden / fasen",
+    "Gerade Kanten eines Körpers anklicken (nochmals anklicken = abwählen). Aussenkanten werden abgerundet, Innenkanten (Kehlen) ausgefüllt – wie in Fusion. Ecken, an denen drei gerundete Kanten zusammenkommen, werden nicht kugelig verschliffen.",
+    { wahlNr: -1, zusatz: () => `<p class="hinweis" id="kKanten">${f.kanten.length} Kante${f.kanten.length === 1 ? "" : "n"} gewählt${f.ziel ? ` an «${esc(finde(f.ziel)?.name || "?")}»` : ""}</p><div class="reihe ohnerand"><button class="knopf" data-kleer>Auswahl leeren</button></div>`,
+      binden: (box) => box.addEventListener("click", (e) => { if (e.target.dataset.kleer == null) return; f.kanten = []; f.ziel = null; const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); }),
+      kantenWahl: (e) => {
+        // gewählte Kante wieder anklicken = abwählen (sie ist nach dem Abrunden nicht mehr im Netz)
+        const sm = smPos(e), weg = f.kanten.findIndex((k) => { const A = aufSchirm(k.a), B = aufSchirm(k.b); return abstandStrecke(sm, A, B) < 8; });
+        if (weg >= 0) { f.kanten.splice(weg, 1); if (!f.kanten.length) f.ziel = null; }
+        else {
+          const k = kanteAmKoerper(e); if (!k) return false;
+          const z = finde(k.fid); if (!z || !["extrusion", "drehung", "sweep", "loft", "import"].includes(z.typ) || (z.vorgang || "neu") !== "neu") { status("Nur Kanten von Volumenkörpern (Extrusion, Drehung, Sweep, Übergang, Import)."); return true; }
+          if (f.ziel && f.ziel !== z.id) { status("Alle Kanten müssen zum selben Körper gehören – für einen anderen Körper ein neues Abrunden anlegen."); return true; }
+          f.ziel = z.id; f.kanten.push({ a: k.a, b: k.b });
+          if (doc.features.indexOf(f) < doc.features.indexOf(z)) { doc.features.splice(doc.features.indexOf(f), 1); doc.features.splice(doc.features.indexOf(z) + 1, 0, f); }
+        }
+        const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); return true;
+      } });
+}
 
 // ------------------------------------------------------------ Sweep und Loft (wie in Fusion)
 const v3 = (a) => new THREE.Vector3(...a);
@@ -3665,7 +3772,7 @@ $("wSweep").onclick = () => { if (dlg) $("dAbbrechen").click(); sweepDialog(); }
 $("wKoerper").onclick = (e) => {
   e.stopPropagation(); const m = $("ebenenMenue");
   if (!m.hidden && m.dataset.quelle === "koerper") { m.hidden = true; return; }
-  m.dataset.quelle = "koerper"; m.innerHTML = Object.entries(KOERPER_WZ).map(([k, t]) => `<button data-kwz="${k}"><b>${t}</b></button>`).join("");
+  m.dataset.quelle = "koerper"; m.innerHTML = `<button data-kwz="kanten3d"><b>Kanten abrunden / fasen</b><small>einzelne Kanten anklicken – jeder Körper</small></button>` + Object.entries(KOERPER_WZ).map(([k, t]) => `<button data-kwz="${k}"><b>${k === "kantenrund" ? "Extrusion ringsum abrunden / fasen" : t}</b></button>`).join("");
   const r = $("wKoerper").getBoundingClientRect(); Object.assign(m.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" }); m.hidden = false;
 };
 $("wLoft").onclick = () => { if (dlg) $("dAbbrechen").click(); loftDialog(); };
@@ -3688,6 +3795,7 @@ $("wEbene").onclick = (e) => {
 };
 $("ebenenMenue").onclick = (e) => {
   const b = e.target.closest("button"); if (!b) return; $("ebenenMenue").hidden = true; if (dlg) $("dAbbrechen").click();
+  if (b.dataset.kwz === "kanten3d") return kantenDialog();
   if (b.dataset.kwz) return koerperDialog(b.dataset.kwz);
   if (b.dataset.aus) { return b.dataset.aus === "import" ? $("importDatei").click() : b.dataset.aus === "bild" ? $("bildDatei").click() : exportiere(b.dataset.aus); }
   if (b.dataset.art) ebeneDialog(b.dataset.art); else if (b.dataset.achse) konstruktionDialog("achse", b.dataset.achse); else if (b.dataset.punkt) konstruktionDialog("konpunkt", b.dataset.punkt);
