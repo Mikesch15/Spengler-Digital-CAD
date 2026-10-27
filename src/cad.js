@@ -1,7 +1,7 @@
 // Spengler Digital CAD 0.2 – Fusion-artige Oberfläche: Skizzen, Extrusion, Blechprofil, Vorlagen
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { berechne, kontur, polylinie, grenzen } from "../kern/geometrie.js";
+import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
@@ -33,7 +33,7 @@ const finde = (id) => doc.features.find((f) => f.id === id);
 const EINST = "sdcad-einstellungen";
 const standardEinst = () => JSON.parse(JSON.stringify({
   materialien: MATERIALIEN, ...LAGER, vorlagen: [],
-  neu: { laenge: 1000, stueck: 1, material: MATERIALIEN[0].id, ebene: "XY" },         // Vorgaben für neue Teile
+  neu: { laenge: 1000, stueck: 1, material: MATERIALIEN[0].id, ebene: "XY", lage: "mitte" }, // Vorgaben für neue Teile
   skizze: { raster: 5, abstand: 80 },                                                 // Fangraster mm, Abstand der Teile in 3D mm
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
   druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
@@ -200,8 +200,10 @@ function regen() {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
         const k = ketten(s)[f.kette || 0]; if (!k) throw new Error("Skizze hat keinen offenen Linienzug");
         const m = material(f.material);
-        f._res = blechAusKette(k, m);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, k[0])], s.ebene, f.laenge, f.richtung, farbe(m), f.id));
+        // Lage des Blechs zur Linie: Mitte, oder Linie = Blechoberfläche und Blech links/rechts daneben
+        const kk = versatzLinie(k, ({ links: m.t / 2, rechts: -m.t / 2 })[f.lage] ?? 0);
+        f._res = blechAusKette(kk, m);
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, kk[0])], s.ebene, f.laenge, f.richtung, farbe(m), f.id));
       } else if (f.typ === "vorlage") {
         const m = material(f.material), v = VORLAGE[f.vorlage];
         const { start, ops } = v.bau(f.params, m);
@@ -517,6 +519,7 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
   setze(f, werte()); regen();
 }
 const RICHTUNGEN = [["eine", "Eine Seite"], ["umgekehrt", "Umgekehrt"], ["symmetrisch", "Symmetrisch"]];
+const LAGEN = [["mitte", "Mitte"], ["links", "Links"], ["rechts", "Rechts"]];
 
 function bearbeite(f) {
   if (!f || skizze) return;
@@ -544,16 +547,18 @@ function extrusionDialog(f) {
 function blechDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
-  if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: das Blechprofil auf der Blechmitte.");
-  f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: 0, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
+  if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: Blechmitte oder eine Blechoberfläche.");
+  f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: 0, lage: einst.neu.lage, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: "Linienzug aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "kette", label: "Linienzug", optionen: Array.from({ length: ketten(finde(f.skizze) || sk.at(-1)).length }, (_, i) => [i, `Nr. ${i + 1}`]), wert: f.kette },
+    { id: "lage", label: "Blech zur Linie", optionen: LAGEN, wert: f.lage ?? "mitte" },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
-  ], (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1) }), "Blechprofil", "Der Linienzug ist die Blechmitte. Jeder Knick wird zur Biegung mit dem Innenradius des Materials.");
+  ], (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1) }), "Blechprofil",
+  "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Zeichenrichtung – vom ersten Punkt (Kante A) aus gesehen – links bzw. rechts davon.");
 }
 
 function vorlageDialog(f) {
@@ -704,6 +709,7 @@ function zeigeEinst() {
       ${einstFeld("neu.laenge", "Länge mm")}
       ${einstFeld("neu.stueck", "Stück")}
       ${einstFeld("neu.ebene", "Querschnitt in", "wahl", Object.entries(EBENEN).map(([k, x]) => [k, x.name]))}
+      ${einstFeld("neu.lage", "Blechprofil aus Skizze: Blech zur Linie", "wahl", LAGEN)}
     </div>
     <h4>Skizze und 3D-Ansicht</h4>
     <div class="egitter">

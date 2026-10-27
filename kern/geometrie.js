@@ -111,6 +111,21 @@ export function polylinie(pfad, schrittGrad = 4) {
   return pts;
 }
 
+// Linienzug parallel versetzen, d > 0 nach links (in Zeichenrichtung), Ecken auf Gehrung.
+// Für Blech aus Skizze: Linie = Blechoberfläche → Blechmitte liegt t/2 daneben.
+export function versatzLinie(pts, d) {
+  if (!d || pts.length < 2) return pts.map((p) => p.slice());
+  const normale = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [-dy / l, dx / l]; };
+  const n = pts.slice(0, -1).map((p, i) => normale(p, pts[i + 1]));
+  return pts.map((p, i) => {
+    if (i === 0) return [p[0] + n[0][0] * d, p[1] + n[0][1] * d];
+    if (i === pts.length - 1) return [p[0] + n[i - 1][0] * d, p[1] + n[i - 1][1] * d];
+    const a = n[i - 1], b = n[i], k = 1 + a[0] * b[0] + a[1] * b[1];
+    if (k < 1e-6) return [p[0] + a[0] * d, p[1] + a[1] * d]; // Umkehr um 180°: keine Gehrung möglich
+    return [p[0] + ((a[0] + b[0]) / k) * d, p[1] + ((a[1] + b[1]) / k) * d];
+  });
+}
+
 export function grenzen(pts) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const [x, y] of pts) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }

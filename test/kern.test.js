@@ -1,6 +1,6 @@
 // Prüft den JavaScript-Kern gegen die Werte des Python-Add-ins
 import { readFileSync } from "node:fs";
-import { berechne, kontur, polylinie } from "../kern/geometrie.js";
+import { berechne, kontur, polylinie, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
@@ -100,6 +100,18 @@ ok(quelle(2000, { spaltbaender: [], coil: 1000, tafeln: [] }) === null, "zu brei
   const tb = tafelnBelegen(Array.from({ length: 6 }, () => ({ b: 300, l: 1000 })), [1000, 2000]);
   ok(tb.anzahl === 1 && Math.abs(tb.ausnutzung - 0.9) < 1e-9, `Tafeln belegen ${JSON.stringify(tb)}`);
   ok(tafelnBelegen(Array.from({ length: 7 }, () => ({ b: 300, l: 1000 })), [1000, 2000]).anzahl === 2, "7. Streifen braucht 2. Tafel");
+}
+
+// Linienzug versetzen (Blech links/rechts der Skizze): Winkel 100 nach rechts, dann 50 nach oben
+{
+  const L = [[0, 0], [100, 0], [100, 50]], laengen = (p) => p.slice(1).map((q, i) => +Math.hypot(q[0] - p[i][0], q[1] - p[i][1]).toFixed(6));
+  ok(laengen(versatzLinie(L, 0.35)).join() === "99.65,49.65", "Versatz links (innen)");
+  ok(laengen(versatzLinie(L, -0.35)).join() === "100.35,50.35", "Versatz rechts (aussen)");
+  ok(JSON.stringify(versatzLinie(L, 0)) === JSON.stringify(L), "Versatz 0 = Mitte");
+  // 45°-Knick: versetzter Eckpunkt hat zu beiden Ursprungslinien den Abstand 1
+  const e = versatzLinie([[0, 0], [100, 0], [150, 50]], 1)[1];
+  const abstand2 = Math.abs((-(e[0] - 100) + e[1]) / Math.SQRT2); // Linie durch (100,0) in Richtung (1,1)
+  ok(Math.abs(e[1] - 1) < 1e-9 && Math.abs(abstand2 - 1) < 1e-9, `Versatz 45° auf Gehrung ${e}`);
 }
 
 // Fehlerfall: zu kurzer Schenkel
