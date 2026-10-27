@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/kern.test.js && node test/ebenen.test.js && node test/skizze.test.js && node test/loeser.test.js && node test/skizzenloeser.test.js && node test/details.test.js",
+    "test": "node test/kern.test.js && node test/ebenen.test.js && node test/skizze.test.js && node test/loeser.test.js && node test/skizzenloeser.test.js && node test/details.test.js && node test/flaechenblech.test.js",
     "build": "node build.mjs",
     "tauri": "tauri"
   },

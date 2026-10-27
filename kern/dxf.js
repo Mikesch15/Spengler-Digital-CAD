@@ -36,11 +36,27 @@ export function abwicklungDxf(res, laenge, titel) {
   return out.join("\n") + "\n";
 }
 
-// Alle Teile eines Auftrags in einer Datei, übereinander mit Abstand: teile = [{ res, laenge, titel }]
+// Flächenblech: Umriss mit Ausklinkungen und Biegelinien (längste Kante waagrecht); gibt die Höhe zurück
+function flaeche(out, abw, titel, x0 = 0, y0 = 0) {
+  const f = (v) => v.toFixed(4), R = (p) => abw.dreh(p), U = abw.umriss.map(R), g = grenzen(U), dx = x0 - g.x0, dy = y0 - g.y0;
+  const linie = (lay, a, b, farbe) => out.push("0", "LINE", "8", lay, "62", String(farbe), "10", f(a[0] + dx), "20", f(a[1] + dy), "30", "0", "11", f(b[0] + dx), "21", f(b[1] + dy), "31", "0");
+  U.forEach((p, i) => linie("ZUSCHNITT", p, U[(i + 1) % U.length], 7));
+  for (const l of abw.linien) { const q = l.punkte.map(R); for (let i = 1; i < q.length; i++) linie("BIEGELINIEN", q[i - 1], q[i], 1); }
+  out.push("0", "TEXT", "8", "TEXT", "10", f(x0), "20", f(y0 - 10), "30", "0", "40", "6.00", "1", ascii(`${titel}  Zuschnitt ${abw.breite.toFixed(1)} x ${abw.laenge.toFixed(1)} mm`));
+  return g.y1 - g.y0;
+}
+export function flaecheDxf(abw, titel) {
+  const out = ["0", "SECTION", "2", "ENTITIES"];
+  flaeche(out, abw, titel);
+  out.push("0", "ENDSEC", "0", "EOF");
+  return out.join("\n") + "\n";
+}
+
+// Alle Teile eines Auftrags in einer Datei, übereinander mit Abstand: teile = [{ res, laenge, titel }] oder [{ abw, titel }]
 export function abwicklungenDxf(teile, abstand = 80) {
   const out = ["0", "SECTION", "2", "ENTITIES"];
   let y = 0;
-  for (const t of teile) y += teil(out, t.res, t.laenge, t.titel, 0, y) + abstand;
+  for (const t of teile) y += (t.abw ? flaeche(out, t.abw, t.titel, 0, y) : teil(out, t.res, t.laenge, t.titel, 0, y)) + abstand;
   out.push("0", "ENDSEC", "0", "EOF");
   return out.join("\n") + "\n";
 }

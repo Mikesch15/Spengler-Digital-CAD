@@ -4,8 +4,9 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
-import { abwicklungDxf, abwicklungenDxf } from "../kern/dxf.js";
-import { profilSvg, abwicklungSvg, detailSvg, passenderMassstab, MASSSTAEBE } from "../kern/zeichnung.js";
+import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
+import { BAUSTEINE_STANDARD, flaechenblech, kantenGruppen, gegenUhrzeiger } from "../kern/flaechenblech.js";
+import { profilSvg, abwicklungSvg, detailSvg, passenderMassstab, MASSSTAEBE, zuschnittSvg } from "../kern/zeichnung.js";
 import { DETAILS, DETAIL, detailStandard, baueDetail, teilKontur, folge, folgeText, ROLLEN, rollenVon } from "../kern/details.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 import { materialbedarf } from "../kern/zuschnitt.js";
@@ -47,7 +48,7 @@ const hauptVon = (id) => finde(String(id ?? "").split(":")[0]);
 // Werkstatt-Einstellungen (pro Gerät): kalibrierte und eigene Materialien, Lagerformate
 const EINST = "sdcad-einstellungen";
 const standardEinst = () => JSON.parse(JSON.stringify({
-  materialien: MATERIALIEN, ...LAGER, vorlagen: [],
+  materialien: MATERIALIEN, ...LAGER, vorlagen: [], bausteine: BAUSTEINE_STANDARD, eigeneDetails: [],
   neu: { laenge: 1000, stueck: 1, material: MATERIALIEN[0].id, ebene: "XY", lage: "mitte" }, // Vorgaben für neue Teile
   skizze: { raster: 5, abstand: 80 },                                                 // Fangraster mm, Abstand der Teile in 3D mm
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
@@ -62,6 +63,8 @@ function mitStandard(e) {
   const r = { ...s, ...e };
   for (const g of GRUPPEN) r[g] = { ...s[g], ...(e?.[g] || {}) };
   if (!Array.isArray(r.materialien) || !r.materialien.length) r.materialien = s.materialien;
+  if (!Array.isArray(r.bausteine)) r.bausteine = s.bausteine;
+  if (!Array.isArray(r.eigeneDetails)) r.eigeneDetails = [];
   return r;
 }
 let einst = standardEinst();
@@ -440,6 +443,9 @@ function regen() {
   // Verwendete Materialien ins Projekt schreiben, damit es auf jedem Gerät gleich rechnet
   const benutzt = [...new Set(doc.features.map((f) => f.material).filter(Boolean))].map(material);
   doc.materialien = benutzt.filter((m, i) => benutzt.indexOf(m) === i);
+  // Verwendete Kantenbausteine ebenfalls ins Projekt (andere Geräte haben evtl. andere Bausteine)
+  const bIds = new Set(doc.features.filter((f) => f.typ === "flaeche").flatMap((f) => Object.values(f.kanten || {})).filter((v) => typeof v === "string"));
+  doc.bausteine = [...bIds].map((id) => alleBausteine().find((b) => b.id === id)).filter(Boolean);
   let platz = 0; // Vorlagen und freie Profile haben keine Lage: nebeneinander aufreihen statt übereinander
   const daneben = (res) => { const g = grenzen(polylinie(res.pfad)), v = [platz - g.x0, 0]; platz += g.x1 - g.x0 + einst.skizze.abstand; return v; };
   for (const f of doc.features) {
@@ -480,6 +486,21 @@ function regen() {
         const { start, ops } = v.bau(f.params, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
+      } else if (f.typ === "flaeche") {
+        f._bleche = null; f._teile = null;
+        const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
+        const loops = schleifen(s); if (!loops.length) throw new Error("Skizze hat keine geschlossene Fläche");
+        const m = material(f.material), nr = f.profil === "alle" || f.profil == null ? loops.map((_, i) => i) : [+f.profil];
+        f._bleche = nr.map((pi) => {
+          if (!loops[pi]) throw new Error(`Fläche ${pi + 1} fehlt in der Skizze`);
+          const n = kantenGruppen(gegenUhrzeiger(loops[pi])).length;
+          return { pi, ...flaechenblech(loops[pi], [...Array(n).keys()].map((k) => bausteinFuer(f.kanten?.[`${pi}:${k}`])), m) };
+        });
+        const viele = f._bleche.length > 1;
+        f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
+          laenge: +bl.abw.laenge.toFixed(1), stueck: f.stueck ?? 1, notiz: f.notiz, _blech: bl,
+          _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
+        if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, s.ebene, m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`).forEach((o) => modell.add(o)));
       } else if (f.typ === "detail") {
         f._detail = null; f._teile = null;
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
@@ -502,6 +523,7 @@ function regen() {
     } catch (e) { f._fehler = e.message; }
   }
   ebenenGroesse();
+  zeigeKanten();
   markiere();
   zeigeBrowser(); zeigeZeit(); zeigeWerkstatt();
   speichern(); merke();
@@ -547,6 +569,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 function markiere() {
+  zeigeKanten();
   modell.children.forEach((o) => {
     if (o.isMesh) o.material.emissive?.setHex(o.userData.fid === auswahl || String(o.userData.fid).startsWith(auswahl + ":") ? 0x1d5c4f : 0x000000);
     else if (o.userData.ebene) o.children[0].material.opacity = o.userData.ebene === auswahl ? 0.42 : 0.2;
@@ -577,7 +600,7 @@ const richtungSkalieren = () => richtung.children.forEach((o) => {
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { skizze: "Skizze", extrusion: "Extrusion", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail" };
+const NAMEN = { skizze: "Skizze", extrusion: "Extrusion", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 function zeigeBrowser() {
   const eb = doc.features.filter((f) => f.typ === "ebene"), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && f.typ !== "ebene");
   const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}"><span class="typ ${typ}"></span>${f.name}${f._fehler ? " ⚠" : ""}
@@ -653,7 +676,7 @@ function zeigeAuftrag(w) {
   $("kAlleDruck").onclick = () => drucke(blechteile(), true);
   $("kEtiketten").onclick = druckeEtiketten;
   $("kAlleDxf").onclick = () => herunterladen(`${doc.nr || "auftrag"} Abwicklungen.dxf`,
-    abwicklungenDxf(blechteile().map((f) => ({ res: f._res, laenge: f.laenge, titel: `${f.name} ${f.stueck ?? 1} Stk ${material(f.material).name}` })), einst.skizze.abstand), "application/dxf");
+    abwicklungenDxf(blechteile().map((f) => ({ res: f._res, abw: f._blech?.abw, laenge: f.laenge, titel: `${f.name} ${f.stueck ?? 1} Stk ${material(f.material).name}` })), einst.skizze.abstand), "application/dxf");
   $("kCsv").onclick = () => herunterladen(`${doc.nr || "auftrag"} Stückliste.csv`, stuecklisteCsv(a, [["Objekt", doc.objekt], ["Nr.", doc.nr], []]) + bedarfCsv(), "text/csv");
 }
 function zeigeWerkstatt() {
@@ -669,6 +692,8 @@ function zeigeWerkstatt() {
     return;
   }
   if (f?.typ === "detail" && f._detail) return zeigeDetail(w, f);
+  if (f?.typ === "flaeche" && f._teile?.length) return waehle(f._teile[0].id);
+  if (f?._blech) return zeigeFlaechenteil(w, f);
   if (!f || !f._res) { w.innerHTML = `<p class="leer">${f ? (f._fehler || "Volumenkörper: keine Abwicklung.") : "Blechteil anklicken, um Zuschnitt und Abkantfolge zu sehen."}</p>`; return; }
   const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst), abB = einst.anzeige.abB;
   w.innerHTML = `<div class="zahl"><b>${f1(r.zuschnitt)}</b><span>mm Zuschnitt</span></div>
@@ -716,6 +741,7 @@ function dupliziere(f) {
 // ------------------------------------------------------------ Druck: Werkstattblatt je Blechteil (A4)
 const kopf = (art) => `<small>${art}${einst.druck.betrieb ? " · " + esc(einst.druck.betrieb) : ""}</small>`;
 function werkstattblatt(f) {
+  if (f._blech) return flaechenblatt(f);
   const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst), d = einst.druck, abB = einst.anzeige.abB;
   return `<section class="blatt">
     <header><div>${kopf("Werkstattblatt")}<h1>${esc(f.name)}</h1></div>
@@ -798,7 +824,7 @@ async function herunterladen(name, inhalt, typ, pfad = null) {
   }
   const a = document.createElement("a");
   // Browser verwerfen Download-Namen mit Umlauten teils («download»), daher umschreiben
-  const sicher = name.replace(/[äöüÄÖÜß]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue", Ä: "Ae", Ö: "Oe", Ü: "Ue", ß: "ss" })[c]);
+  const sicher = name.replace(/[äöüÄÖÜß]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue", Ä: "Ae", Ö: "Oe", Ü: "Ue", ß: "ss" })[c]).replace(/[^\x20-\x7e]/g, "-");
   a.href = URL.createObjectURL(new Blob([inhalt], { type: typ })); a.download = sicher;
   document.body.appendChild(a); a.click(); a.remove();
   status(`${sicher} gespeichert (Download-Ordner).`);
@@ -868,7 +894,8 @@ function bearbeite(f) {
   if (f.typ === "vorlage") return vorlageDialog(f);
   if (f.typ === "profil") return profilDialog(f);
   if (f.typ === "detail") return detailDialog(f);
-  if (f.typ === "detailteil") return bearbeite(f.eltern);
+  if (f.typ === "detailteil" || f.typ === "flaechenteil") return bearbeite(f.eltern);
+  if (f.typ === "flaeche") return flaecheDialog(f);
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
 }
 
@@ -1025,6 +1052,185 @@ function profilDialog(f) {
 }
 
 
+// ------------------------------------------------------------ Flächenblech: Grundfläche aus der Skizze, Kantenbausteine je Kante
+const alleBausteine = () => [...(einst.bausteine || []), ...(doc.bausteine || []).filter((b) => !(einst.bausteine || []).some((e) => e.id === b.id))];
+const bausteinFuer = (v) => !v ? null : typeof v === "string" ? alleBausteine().find((b) => b.id === v) || null : { id: "", name: "Eigene Abkantfolge", folge: v.folge, versatz: +v.versatz || 0 };
+const bausteinName = (v) => (!v ? "–" : bausteinFuer(v)?.name || `fehlt (${v})`);
+// Profilquerschnitt eines Bausteins für 3D: kurzer Anfangsschenkel auf der Fläche, Kante bei x = 0
+function bausteinKontur(b, m) {
+  const zeilen0 = (L) => folge(`${L} ${b.folge}`);
+  for (const L of [1, 2, 4, 8, 16, 30]) {
+    try {
+      const { start, ops } = freiesProfil(0, zeilen0(L), m), res = berechne(start, ops, m.t, m.ri, m.k), v = +b.versatz || 0;
+      return kontur(res.pfad, m.t, 6).map(([x, y]) => [x - L + v, y]);
+    } catch {}
+  }
+  return null;
+}
+function flaechenKoerper(bl, ebene, m, seite, fid) {
+  const mat = () => new THREE.MeshStandardMaterial({ color: farbe(m), metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  const B = basis(ebene), teile = [];
+  const flaeche = new THREE.ExtrudeGeometry(new THREE.Shape(bl.pts.map(([u, v]) => new THREE.Vector2(u, v))), { depth: m.t, bevelEnabled: false });
+  flaeche.translate(0, 0, -m.t / 2); flaeche.applyMatrix4(B);
+  const geos = [flaeche];
+  bl.gruppen.forEach((g, k) => {
+    const p = bl.profile[k]; if (!p) return;
+    const k2 = bausteinKontur(p.baustein, m); if (!k2) return;
+    const form = new THREE.Shape(k2.map(([x, y]) => new THREE.Vector2(x, y)));
+    for (let i = 1; i < g.punkte.length; i++) {
+      const a = g.punkte[i - 1], b = g.punkte[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
+      const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L];
+      const geo = new THREE.ExtrudeGeometry(form, { depth: L, bevelEnabled: false });
+      geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
+      geo.applyMatrix4(B); geos.push(geo);
+    }
+  });
+  for (const geo of geos) {
+    const mesh = new THREE.Mesh(geo, mat()); mesh.userData.fid = fid;
+    mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 28), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.5 })));
+    teile.push(mesh);
+  }
+  return teile;
+}
+// Kanten des gewählten Flächenblechs in 3D zeigen; die aktive Kante (Dialog) orange und dick
+const kantenZeiger = new THREE.Group(); szene.add(kantenZeiger);
+function zeigeKanten() {
+  leeren(kantenZeiger);
+  const f = dlg?.feature?.typ === "flaeche" ? dlg.feature : hauptVon(auswahl);
+  if (f?.typ !== "flaeche" || !f._bleche || skizze) return;
+  const ebene = finde(f.skizze)?.ebene, aktiv = dlg?.feature === f ? dlg.aktiveKante : null;
+  f._bleche.forEach((bl) => bl.gruppen.forEach((g, k) => {
+    const an = aktiv === `${bl.pi}:${k}`, belegt = !!f.kanten?.[`${bl.pi}:${k}`];
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(g.punkte.map((p) => zu3D(ebene, p))),
+      new THREE.LineBasicMaterial({ color: an ? 0xe0782b : belegt ? 0x2e9b4f : 0x1f5fbf, depthTest: false, transparent: true, linewidth: an ? 3 : 1 }));
+    l.renderOrder = 13; kantenZeiger.add(l);
+    if (an) { // dicker: zusätzlich eine Röhre
+      const kurve = new THREE.CatmullRomCurve3(g.punkte.map((p) => zu3D(ebene, p)), false, "catmullrom", 0);
+      const r = new THREE.Mesh(new THREE.TubeGeometry(kurve, Math.max(2, g.punkte.length * 2), Math.max(2, g.laenge / 150), 6), new THREE.MeshBasicMaterial({ color: 0xe0782b, depthTest: false, transparent: true, opacity: 0.85 }));
+      r.renderOrder = 14; kantenZeiger.add(r);
+    }
+  }));
+}
+// Nächste Kante unter dem Mauszeiger (Bildschirmabstand) → «Blech:Kante»
+function kanteUnterMaus(f, e) {
+  const ebene = finde(f.skizze)?.ebene, sm = smPos(e);
+  let best = null, bd = 14;
+  for (const bl of f._bleche || []) bl.gruppen.forEach((g, k) => {
+    for (let i = 1; i < g.punkte.length; i++) {
+      const A = aufSchirm(zuWelt(E_(ebene), g.punkte[i - 1])), B = aufSchirm(zuWelt(E_(ebene), g.punkte[i]));
+      const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = `${bl.pi}:${k}`; }
+    }
+  });
+  return best;
+}
+// Gemeinsame Kante zweier Bleche (gleiche Endpunkte, gegenläufig) → Gegenstück bekommt den Partner-Baustein
+function partnerKante(f, key) {
+  const [pi, k] = key.split(":").map(Number), bl = f._bleche.find((b) => b.pi === pi); if (!bl) return null;
+  const g = bl.gruppen[k], a = g.punkte[0], b = g.punkte.at(-1), nah = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.5;
+  for (const o of f._bleche) if (o.pi !== pi) for (let kk = 0; kk < o.gruppen.length; kk++) {
+    const h = o.gruppen[kk]; if (nah(h.punkte[0], b) && nah(h.punkte.at(-1), a)) return `${o.pi}:${kk}`;
+  }
+  return null;
+}
+function flaecheDialog(f) {
+  const istNeu = !f;
+  const sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
+  if (!sk.length && !f) return status("Zuerst die Grundfläche des Blechs als geschlossenes Profil skizzieren (z. B. Rechteck oder Linienzug, Dachbahnen nebeneinander).");
+  f ||= { id: neueId(), typ: "flaeche", name: "Flächenblech " + (doc.features.filter((x) => x.typ === "flaeche").length + 1), skizze: sk.at(-1).id, profil: "alle",
+    kanten: {}, material: neuMaterial(), stueck: einst.neu.stueck, sichtseite: 1 };
+  const felder = (f) => [
+    { id: "skizze", label: "Grundfläche aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
+    { id: "profil", label: "Flächen", optionen: [["alle", "Alle Flächen (je ein Blech)"], ...schleifen(finde(f.skizze) || sk.at(-1)).map((_, i) => [i, `Fläche ${i + 1}`])], wert: f.profil ?? "alle" },
+    { id: "name", label: "Name", text: true, wert: f.name },
+    { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
+    { id: "sichtseite", label: "Sichtseite (Abkantungen + gehen dorthin)", optionen: [["1", "Vorne (Richtung Ebenen-Normale)"], ["-1", "Hinten"]], wert: String(f.sichtseite ?? 1) },
+    { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
+    { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
+  ];
+  const setze = (f, w) => { Object.assign(f, { ...w, name: w.name?.trim() || f.name, sichtseite: +w.sichtseite || 1 }); };
+  const optionen = (v) => {
+    const g = [...new Set(alleBausteine().map((b) => b.gruppe || "Eigene"))];
+    return `<option value="">– keine (Schnittkante)</option>${g.map((gr) => `<optgroup label="${esc(gr)}">${alleBausteine().filter((b) => (b.gruppe || "Eigene") === gr).map((b) => `<option value="${esc(b.id)}" ${v === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</optgroup>`).join("")}
+      <option value="*" ${v && typeof v === "object" ? "selected" : ""}>Eigene Abkantfolge …</option>`;
+  };
+  const tabelle = () => `<p class="hinweis">Kante in der Ansicht anklicken (oder hier wählen) und den Baustein zuweisen. Gemeinsame Kanten zweier Bleche bekommen automatisch das Gegenstück (Unter-/Oberfalz).</p>
+    <table class="zeilen kanten"><thead><tr><th>Kante</th><th class="num">Länge</th><th>Baustein</th><th class="num">Zugabe</th></tr></thead><tbody>
+    ${(f._bleche || []).flatMap((bl) => bl.gruppen.map((g, k) => { const key = `${bl.pi}:${k}`, v = f.kanten?.[key];
+      return `<tr data-k="${key}" class="${dlg?.aktiveKante === key ? "aktiv" : ""}"><td>${f._bleche.length > 1 ? `B${bl.pi + 1} ` : ""}K${k + 1}${g.gerade ? "" : " ⌒"}</td><td class="num">${f1(g.laenge)}</td>
+        <td><select data-b="${key}" aria-label="Baustein ${key}">${optionen(v)}</select>${v && typeof v === "object" ? `<input data-eigen="${key}" class="folge" value="${esc(v.folge)}" placeholder="90 25 U+ 7" title="Ab der Kante: Winkel Schenkel Winkel Schenkel …">` : ""}</td>
+        <td class="num" data-z="${key}">${bl.profile[k] ? f1(bl.profile[k].zugabe) : "0"}</td></tr>`; })).join("")}
+    </tbody></table>
+    <div class="reihe"><select id="kAlle" aria-label="Baustein für alle Kanten ohne Baustein">${optionen("")}</select><button class="knopf" data-alle>Allen freien Kanten zuweisen</button></div>`;
+  const neu = () => { const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); };
+  const setzeKante = (key, v) => {
+    f.kanten = { ...f.kanten }; if (v) f.kanten[key] = v; else delete f.kanten[key];
+    const b = typeof v === "string" && bausteinFuer(v), p = b?.partner && partnerKante(f, key);
+    if (p) { f.kanten[p] = b.partner; status(`Gegenstück an ${p.replace(/(\d+):(\d+)/, (_, a, c) => `Blech ${+a + 1} Kante ${+c + 1}`)}: ${bausteinName(b.partner)}.`); }
+  };
+  const binden = (box) => {
+    box.addEventListener("change", (e) => {
+      const key = e.target.dataset.b, ek = e.target.dataset.eigen;
+      if (key) { const v = e.target.value; setzeKante(key, v === "*" ? { folge: "90 25", versatz: 0 } : v); dlg.aktiveKante = key; neu(); return; }
+      if (ek) { try { folge("100 " + e.target.value); setzeKante(ek, { folge: e.target.value, versatz: 0 }); e.target.classList.remove("ungueltig"); regen(); } catch (err) { e.target.classList.add("ungueltig"); status(err.message); } }
+    });
+    box.addEventListener("click", (e) => {
+      if (e.target.dataset.alle != null) { const v = $("kAlle").value; if (!v || v === "*") return; for (const bl of f._bleche || []) bl.gruppen.forEach((_, k) => { if (!f.kanten?.[`${bl.pi}:${k}`]) setzeKante(`${bl.pi}:${k}`, v); }); neu(); return; }
+      const tr = e.target.closest("tr[data-k]"); if (tr && e.target.tagName !== "SELECT" && e.target.tagName !== "INPUT") { dlg.aktiveKante = tr.dataset.k; box.querySelectorAll("tr[data-k]").forEach((r) => r.classList.toggle("aktiv", r === tr)); zeigeKanten(); }
+    });
+  };
+  featureDialog(f, istNeu, felder, setze, "Flächenblech",
+    "Grundfläche des Blechs in einer Skizze zeichnen (Masse = Achsen der Falze bzw. fertige Kanten). Dann je Kante den Spenglerbaustein wählen – Zuschnitt, Ausklinkungen, Biegelinien und Abkantliste rechnet das Programm.",
+    { zusatz: tabelle, binden, wahlNr: -1, aktiveKante: null,
+      kantenWahl: (e) => { const k = kanteUnterMaus(f, e); if (!k) return false; dlg.aktiveKante = k; const d = dlg; dialog({ ...d, felder: felder(f) }); zeigeKanten(); $("dInfo").textContent = dlg.info();
+        const sel = document.querySelector(`#dInhalt select[data-b="${k}"]`); sel?.scrollIntoView({ block: "center" }); sel?.focus(); return true; },
+      nachRegen: () => { for (const bl of f._bleche || []) bl.gruppen.forEach((_, k) => { const c = document.querySelector(`#dInhalt [data-z="${bl.pi}:${k}"]`); if (c) c.textContent = bl.profile[k] ? f1(bl.profile[k].zugabe) : "0"; }); },
+      info: () => (f._fehler ? "⚠ " + f._fehler : f._teile ? f._teile.map((t) => `${t.name}: ${f1(t._blech.abw.breite)} × ${f1(t._blech.abw.laenge)}`).join(" · ") : "") });
+  const d = dlg; dialog({ ...d, felder: felder(f) }); zeigeKanten(); $("dInfo").textContent = dlg.info(); // Kantentabelle braucht die eben berechneten Bleche
+}
+// Werkstatt und Werkstattblatt für ein Blech aus Fläche: Zuschnitt mit Biegelinien, Abkantliste je Kante
+function belegteKanten(bl) {
+  return bl.gruppen.map((g, k) => ({ k, g, p: bl.profile[k] })).filter((x) => x.p);
+}
+function zeigeFlaechenteil(w, f) {
+  const bl = f._blech, a = bl.abw, m = material(f.material), q = quelle(a.breite, einst);
+  w.innerHTML = `<div class="zahl"><b>${f1(a.breite)} × ${f1(a.laenge)}</b><span>mm Zuschnitt</span></div>
+    <div class="unter"><button class="knopf klein" id="kZumDetail">← ${esc(f.eltern.name)}</button> · ${f2(a.flaeche)} m² · ${f._res.biegungen.length} Biegungen</div>
+    ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
+    <div class="zeichnung">${zuschnittSvg(a, bl.gruppen, { breite: 276, hoehe: 220, schrift: 10 })}</div>
+    <div class="quelle">${q ? `Aus <b>${q.art} ${q.breite}${q.laenge ? " × " + q.laenge : ""} mm</b> · Rest ${f1(q.rest)} mm` : "Breiter als alle Lagerformate"}</div>
+    <table class="liste"><thead><tr><th>Kante</th><th>Baustein</th><th class="num">Anschlag</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
+    ${belegteKanten(bl).map(({ k, g, p }) => p.biegungen.map((b, i) => `<tr><td>${i ? "" : `<b>K${k + 1}</b> <small>${f1(g.laenge)}</small>`}</td><td>${i ? "" : `${esc(p.baustein.name)}<br><small>Zugabe ${f1(p.zugabe)}</small>`}</td>
+      <td class="num">${f1(b.anschlag)}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.art === "Umschlag" ? "U " : ""}${b.winkel > 0 ? "Sicht" : "hinten"}</td></tr>`).join("")).join("") || '<tr><td colspan="5" class="hinweis">Noch keine Kantenbausteine – «Bearbeiten», dann Kante anklicken.</td></tr>'}
+    </tbody></table>
+    <p class="hinweis">Anschlag ab der Schnittkante des Zuschnitts, je Kante in Reihenfolge der Abkantfolge.</p>
+    <div class="reihe"><button class="knopf haupt" id="kFlBearb">Bearbeiten</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button></div>`;
+  $("kZumDetail").onclick = () => bearbeite(f.eltern);
+  $("kFlBearb").onclick = () => bearbeite(f.eltern);
+  $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, flaecheDxf(a, f.name), "application/dxf");
+  $("kDruck").onclick = () => drucke([f]);
+  $("kKopie").onclick = () => dupliziere(f.eltern);
+}
+function flaechenblatt(f) {
+  const bl = f._blech, a = bl.abw, m = material(f.material), q = quelle(a.breite, einst);
+  return `<section class="blatt">
+    <header><div>${kopf("Werkstattblatt")}<h1>${esc(f.name)}</h1></div>
+      <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
+    <div class="eckdaten">
+      <div><small>Zuschnitt</small><b>${f1(a.breite)} × ${f1(a.laenge)} mm</b></div>
+      <div><small>Material</small><b>${esc(m.name)}</b></div>
+      <div><small>Stück</small><b>${f.stueck ?? 1}</b></div>
+      <div><small>Aus</small><b>${q ? `${q.art} ${q.breite}${q.laenge ? " × " + q.laenge : ""}` : "Sonderformat"}</b></div>
+    </div>
+    ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
+    <div class="grosszeichnung">${zuschnittSvg(a, bl.gruppen, { breite: 640, hoehe: 380, schrift: 14, rand: 40 })}</div>
+    <table class="liste"><thead><tr><th>Kante</th><th class="num">Länge</th><th>Baustein</th><th>Abkantfolge</th><th class="num">Zugabe</th><th>Biegungen: Anschlag ab Schnittkante · Winkel</th></tr></thead><tbody>
+    ${belegteKanten(bl).map(({ k, g, p }) => `<tr><td>K${k + 1}</td><td class="num">${f1(g.laenge)}</td><td>${esc(p.baustein.name)}</td><td class="folge">${esc(p.baustein.folge)}</td><td class="num">${f1(p.zugabe)}</td>
+      <td>${p.biegungen.map((b) => `${f1(b.anschlag)} · ${f1(Math.abs(b.winkel))}° ${b.winkel > 0 ? "Sichtseite" : "hinten"}`).join("<br>")}</td></tr>`).join("")}
+    </tbody></table>
+    <p class="hinweis">Masse in mm. Zuschnitt mit Eckausklinkungen; Biegelinien rot gestrichelt. Gezeichnete Grundfläche = Falzachse bzw. fertige Kante.</p>
+  </section>`;
+}
+
 // ------------------------------------------------------------ Spenglerdetail: Holz + mehrere Blechteile in einem Querschnitt
 // f.detail = Vorlage (Parameter f.params) oder "frei" (f.aufbau: holz, teile mit Abkantfolge, masse)
 const detailMaterial = (f, tl) => material(tl.material || f.materialien?.[tl.rolle] || f.material);
@@ -1043,9 +1249,15 @@ function zeigeDetail(w, f) {
     ${d.teile.map((tl, i) => `<tr class="klickbar" data-teil="${i}"><td>${i + 1}</td><td>${esc(tl.name)}<br><small>${esc(tl.m.name)}</small></td><td class="num">${f1(tl.res.zuschnitt)}</td><td class="num">${tl.res.biegungen.length}</td></tr>`).join("")}
     </tbody></table>
     <p class="hinweis">Teil anklicken (hier oder in 3D) für Abkantfolge und Werkstattblatt.</p>
-    <div class="reihe"><button class="knopf haupt" id="kDetailBearb">Bearbeiten</button><button class="knopf" id="kDetailDruck">Detailblatt drucken</button><button class="knopf" id="kDetailTeile">Werkstattblätter</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button></div>`;
+    <div class="reihe"><button class="knopf haupt" id="kDetailBearb">Bearbeiten</button><button class="knopf" id="kDetailEigen">Als eigene Detailvorlage speichern</button><button class="knopf" id="kDetailDruck">Detailblatt drucken</button><button class="knopf" id="kDetailTeile">Werkstattblätter</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button></div>`;
   w.querySelectorAll("[data-teil]").forEach((tr) => (tr.onclick = () => waehle(`${f.id}:${tr.dataset.teil}`)));
   $("kDetailBearb").onclick = () => bearbeite(f);
+  $("kDetailEigen").onclick = () => {
+    const v = { name: f.name, aufbau: JSON.parse(JSON.stringify({ holz: d.holz, teile: d.teile.map(({ name, rolle, x, y, start, zeilen, material }) => ({ name, rolle, x, y, start, zeilen, material })), masse: d.masse })), materialien: { ...f.materialien } };
+    const i = einst.eigeneDetails.findIndex((x) => x.name === v.name);
+    if (i >= 0) einst.eigeneDetails[i] = v; else einst.eigeneDetails.push(v);
+    einstSpeichern(); status(`«${v.name}» ${i >= 0 ? "aktualisiert" : "gespeichert"} – unter «Spenglerdetail» → «Eigene: …» wählbar.`);
+  };
   $("kDetailDruck").onclick = () => druckeDetails([f]);
   $("kDetailTeile").onclick = () => drucke(f._teile);
   $("kKopie").onclick = () => dupliziere(f);
@@ -1077,7 +1289,7 @@ function detailDialog(f) {
   const rollen = () => { try { return rollenVon(detailAufbau(f)); } catch { return []; } };
   const gruppen = [...new Set(DETAILS.map((d) => d.gruppe))];
   const felder = (f) => [
-    { id: "detail", label: "Detail", optionen: [["frei", "Eigenes Detail (frei)"], ...gruppen.flatMap((g) => DETAILS.filter((d) => d.gruppe === g).map((d) => [d.id, `${g}: ${d.name}`]))], wert: f.detail },
+    { id: "detail", label: "Detail", optionen: [["frei", "Eigenes Detail (frei)"], ...einst.eigeneDetails.map((d, i) => ["eigen:" + i, "Eigene: " + d.name]), ...gruppen.flatMap((g) => DETAILS.filter((d) => d.gruppe === g).map((d) => [d.id, `${g}: ${d.name}`]))], wert: f.detail },
     { id: "name", label: "Name", text: true, wert: f.name },
     ...(f.detail === "frei" ? [] : DETAIL[f.detail].params.map(([k, l, e]) => ({ id: "p_" + k, label: l, einheit: e, wert: f.params[k] ?? detailStandard(f.detail)[k] }))),
     ...rollen().map((r) => ({ id: "m_" + r, label: "Material " + ROLLEN[r], optionen: matOpt(), wert: f.materialien?.[r] || f.material })),
@@ -1090,6 +1302,11 @@ function detailDialog(f) {
     { id: "schenkelmasse", label: "Schenkelmasse zeigen", optionen: [["", "Nein"], ["1", "Ja"]], wert: f.schenkelmasse ? "1" : "" },
   ];
   const setze = (f, w) => {
+    if (w.detail?.startsWith("eigen:")) { // eigene Detailvorlage: Kopie zum freien Anpassen
+      const v = einst.eigeneDetails[+w.detail.slice(6)];
+      if (v) Object.assign(f, { detail: "frei", name: v.name, aufbau: JSON.parse(JSON.stringify(v.aufbau)), materialien: { ...v.materialien } });
+      return;
+    }
     if (w.detail !== f.detail) {
       if (w.detail === "frei") f.aufbau = JSON.parse(JSON.stringify(f._detail ? { holz: f._detail.holz, teile: f._detail.teile.map(({ name, rolle, x, y, start, zeilen, material }) => ({ name, rolle, x, y, start, zeilen, material })), masse: f._detail.masse } : { holz: [], teile: [], masse: [] }));
       else { if (!f.name || f.name === DETAIL[f.detail]?.name) f.name = DETAIL[w.detail].name; f.params = detailStandard(w.detail); delete f.aufbau; }
@@ -1168,7 +1385,7 @@ const probeWerte = { mat: 0, z: 130, a: "", b: "" };
 const meldung = (t) => { $("eMeldung").textContent = t; };
 const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
 let einstRegister = "material";
-const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["vorlagen", "Vorlagen & Sichern"]];
+const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["vorlagen", "Vorlagen & Sichern"]];
 // Feld an einen Wert der Einstellungen binden: data-e="gruppe.schluessel", data-typ zahl|text|janein|wahl
 function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
   const [g, k] = pfad.split("."), w = entwurf[g][k], id = "e_" + g + "_" + k;
@@ -1260,10 +1477,24 @@ function zeigeEinst() {
     <div class="reihe ohnerand"><button class="knopf" id="eUpdate">Jetzt nach Updates suchen</button></div>`
       : '<p class="hinweis">Updates und «Zuletzt» gibt es nur im Windows-Programm. Die Web-Version ist immer aktuell.</p>'}
     <p class="hinweis">Version ${VERSION}</p>`,
+    bausteine: `
+    <h4>Kantenbausteine für Flächenbleche</h4>
+    <p class="hinweis">Abkantfolge ab der gezeichneten Kante nach aussen: Winkel Schenkel Winkel Schenkel … – + biegt zur Sichtseite, − nach hinten, U+ / U− = Umschlag, «90r5» = Radius 5, «U-r1.4» = Umschlag um eine Lage.
+      Versatz: die Kante liegt so viel weiter aussen (z. B. Oberfalz neben dem Unterfalz = Blechdicke). Partner: Gegenstück, das eine gemeinsame Kante automatisch bekommt.</p>
+    <table class="zeilen bausteine"><thead><tr><th>Name</th><th>Gruppe</th><th>Abkantfolge</th><th>Versatz</th><th>Partner</th><th></th></tr></thead><tbody>
+    ${e.bausteine.map((b, i) => `<tr data-bi="${i}"><td><input data-bk="name" value="${esc(b.name)}" aria-label="Name"></td><td><input data-bk="gruppe" value="${esc(b.gruppe || "")}" aria-label="Gruppe"></td>
+      <td><input data-bk="folge" class="folge" value="${esc(b.folge)}" aria-label="Abkantfolge"></td><td><input data-bk="versatz" type="number" step="any" value="${b.versatz || 0}" aria-label="Versatz"></td>
+      <td><select data-bk="partner" aria-label="Partner"><option value="">–</option>${e.bausteine.filter((x) => x !== b).map((x) => `<option value="${esc(x.id)}" ${b.partner === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></td>
+      <td><button class="weg" data-bweg="${i}" aria-label="${esc(b.name)} entfernen">×</button></td></tr>`).join("")}
+    </tbody></table>
+    <div class="reihe ohnerand"><button class="knopf" id="eNeuBaustein">+ Baustein</button><button class="knopf" id="eBausteineStandard">Standard-Bausteine ergänzen</button></div>`,
     vorlagen: `
     <h4>Eigene Vorlagen</h4>
     ${e.vorlagen.length ? `<ul class="eigene">${e.vorlagen.map((v, i) => `<li>${esc(v.name)} <small class="hinweis">${v.zeilen.length} Schenkel</small><button class="weg" data-vweg="${i}" aria-label="${esc(v.name)} entfernen">×</button></li>`).join("")}</ul>`
       : '<p class="hinweis">Noch keine. Ein freies Profil wählen und in der Werkstatt «Als eigene Vorlage speichern».</p>'}
+    <h4>Eigene Spenglerdetails</h4>
+    ${e.eigeneDetails.length ? `<ul class="eigene">${e.eigeneDetails.map((v, i) => `<li>${esc(v.name)} <small class="hinweis">${v.aufbau.teile.length} Blechteile</small><button class="weg" data-dweg="${i}" aria-label="${esc(v.name)} entfernen">×</button></li>`).join("")}</ul>`
+      : '<p class="hinweis">Noch keine. Ein Spenglerdetail wählen und in der Werkstatt «Als eigene Detailvorlage speichern».</p>'}
     <h4>Sichern und übertragen</h4>
     <p class="hinweis">Einstellungen gelten pro Gerät. Zum Übertragen (z. B. PC → Handy) hier als Datei sichern und auf dem anderen Gerät laden.
       Laden übernimmt alle Einstellungen und ergänzt eigene Vorlagen.</p>
@@ -1292,7 +1523,9 @@ function probe() {
 }
 $("eInhalt").addEventListener("input", (ev) => {
   const t = ev.target;
-  if (t.dataset.k) { const m = entwurf.materialien[+t.dataset.i]; m[t.dataset.k] = t.dataset.k === "name" ? t.value : parseFloat(t.value); }
+  if (t.dataset.bk) { const b = entwurf.bausteine[+t.closest("tr").dataset.bi], k = t.dataset.bk; b[k] = k === "versatz" ? parseFloat(t.value) || 0 : t.value;
+    if (k === "folge") { try { folge("100 " + t.value); t.classList.remove("ungueltig"); } catch (err) { t.classList.add("ungueltig"); meldung(err.message); } } }
+  else if (t.dataset.k) { const m = entwurf.materialien[+t.dataset.i]; m[t.dataset.k] = t.dataset.k === "name" ? t.value : parseFloat(t.value); }
   else if (t.id === "lBand") entwurf.spaltbaender = zahlen(t.value);
   else if (t.id === "lCoil") entwurf.coil = parseFloat(t.value) || 0;
   else if (t.id === "lTafeln") entwurf.tafeln = t.value.split(/[,;]+/).map((x) => zahlen(x.replace(/[x×*]/gi, " "))).filter((x) => x.length === 2);
@@ -1307,6 +1540,7 @@ function einstWert(t) {
 $("eInhalt").addEventListener("change", (ev) => {
   if (ev.target.id === "pMat") probe();
   else if (ev.target.dataset.e && (ev.target.dataset.typ === "janein" || ev.target.dataset.typ === "wahl")) einstWert(ev.target);
+  else if (ev.target.dataset.bk === "partner") entwurf.bausteine[+ev.target.closest("tr").dataset.bi].partner = ev.target.value || undefined;
 });
 function einstLaden(text) {
   try {
@@ -1343,6 +1577,10 @@ $("eInhalt").addEventListener("click", async (ev) => {
   }
   if (ev.target.dataset.weg != null) { entwurf.materialien.splice(+ev.target.dataset.weg, 1); zeigeEinst(); }
   else if (ev.target.dataset.vweg != null) { entwurf.vorlagen.splice(+ev.target.dataset.vweg, 1); zeigeEinst(); }
+  else if (ev.target.dataset.dweg != null) { entwurf.eigeneDetails.splice(+ev.target.dataset.dweg, 1); zeigeEinst(); }
+  else if (ev.target.dataset.bweg != null) { const [b] = entwurf.bausteine.splice(+ev.target.dataset.bweg, 1); entwurf.bausteine.forEach((x) => { if (x.partner === b.id) delete x.partner; }); zeigeEinst(); }
+  else if (ev.target.id === "eNeuBaustein") { entwurf.bausteine.push({ id: "b" + Date.now().toString(36), name: "Eigener Baustein", gruppe: "Eigene", folge: "90 25", versatz: 0 }); zeigeEinst(); $("eInhalt").querySelector("table.bausteine tr:last-child input")?.focus(); }
+  else if (ev.target.id === "eBausteineStandard") { const n = BAUSTEINE_STANDARD.filter((b) => !entwurf.bausteine.some((x) => x.id === b.id)); entwurf.bausteine.push(...JSON.parse(JSON.stringify(n))); zeigeEinst(); meldung(n.length ? `${n.length} Standard-Bausteine ergänzt.` : "Alle Standard-Bausteine sind schon da."); }
   else if (ev.target.id === "eNeuMat") {
     const v = entwurf.materialien.at(-1);
     entwurf.materialien.push({ ...v, id: "eigen" + Date.now().toString(36), name: v.name + " (Kopie)" }); zeigeEinst();
@@ -1351,7 +1589,7 @@ $("eInhalt").addEventListener("click", async (ev) => {
 });
 $("wEinst").onclick = () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); meldung(""); zeigeEinst(); $("einst").hidden = false; };
 $("eAbbrechen").onclick = () => { $("einst").hidden = true; entwurf = null; };
-$("eStandard").onclick = () => { entwurf = { ...standardEinst(), vorlagen: entwurf.vorlagen }; zeigeEinst(); meldung("Alle Standardwerte geladen (eigene Vorlagen bleiben) – mit «Übernehmen» speichern."); };
+$("eStandard").onclick = () => { entwurf = { ...standardEinst(), vorlagen: entwurf.vorlagen, eigeneDetails: entwurf.eigeneDetails, bausteine: entwurf.bausteine }; zeigeEinst(); meldung("Alle Standardwerte geladen (eigene Vorlagen, Details und Bausteine bleiben) – mit «Übernehmen» speichern."); };
 $("eOk").onclick = () => {
   const falsch = entwurf.materialien.find((m) => !m.name.trim() || !(m.t > 0) || !(m.ri >= 0) || !(m.k > 0 && m.k < 1));
   if (falsch) { einstRegister = "material"; zeigeEinst(); return meldung(`Material «${falsch.name || "ohne Namen"}»: Dicke > 0, Innenradius ≥ 0 und K-Faktor zwischen 0 und 1 nötig.`); }
@@ -1365,6 +1603,8 @@ $("eOk").onclick = () => {
     : !(et.breite > 0 && et.hoehe > 0) ? ["etiketten", "Etikettgrösse muss grösser als 0 sein."]
     : ![et.oben, et.links, et.abstandX, et.abstandY].every((v) => v >= 0) ? ["etiketten", "Ränder und Abstände dürfen nicht negativ sein."]
     : !ganz(pr.zuletzt) ? ["programm", "Anzahl «Zuletzt»: ganze Zahl ab 1."] : null;
+  const bFalsch = !fehler && entwurf.bausteine.find((b) => { try { folge("100 " + b.folge); return !b.name.trim(); } catch { return true; } });
+  if (bFalsch) { einstRegister = "bausteine"; zeigeEinst(); return meldung(`Baustein «${bFalsch.name || "ohne Namen"}»: Name und gültige Abkantfolge nötig (z. B. «90 25 U+ 7»).`); }
   if (fehler) { einstRegister = fehler[0]; zeigeEinst(); return meldung(fehler[1]); }
   einst = entwurf; entwurf = null; $("einst").hidden = true;
   einstSpeichern(); darstellung();
@@ -1478,7 +1718,7 @@ function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
   $("gSkizze").hidden = false;
-  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil", "wDetail", "wEbene"].forEach((id) => ($(id).disabled = true));
+  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil", "wDetail", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = true));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
   steuerung.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
   const E = E_(f.ebene);
@@ -1504,7 +1744,7 @@ function beendeSkizze() {
   skizze = null;
   if (!f.elemente.length) doc.features.splice(doc.features.indexOf(f), 1);
   $("gSkizze").hidden = true;
-  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil", "wDetail", "wEbene"].forEach((id) => ($(id).disabled = false));
+  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil", "wDetail", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
   steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   szene.remove(skizzenRaster); skizzenRaster = null; boden.visible = true;
@@ -2347,6 +2587,7 @@ leinwand.addEventListener("pointerup", (e) => {
   runter = null;
   if (skizze?.werkzeug === "auswahl") { skizze.sel = trefferElement(smPos(e)); skizze.bsel = null; zeichneLive(); return; }
   if (skizze) { const r = ebenenPunkt(e); if (r) klick(r.uv, r.fang, smPos(e), r.ref); return; }
+  if (dlg?.kantenWahl?.(e)) return;
   if (uebernimmWahl(e)) return;
   strahl.setFromCamera(ndc(e), kamera);
   const treffer = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0]; // Körper vor Ebenen
@@ -2396,6 +2637,7 @@ $("wBlech").onclick = () => { if (dlg) $("dAbbrechen").click(); blechDialog(); }
 $("wVorlage").onclick = () => { if (dlg) $("dAbbrechen").click(); vorlageDialog(); };
 $("wProfil").onclick = () => { if (dlg) $("dAbbrechen").click(); profilDialog(); };
 $("wDetail").onclick = () => { if (dlg) $("dAbbrechen").click(); detailDialog(); };
+$("wFlaeche").onclick = () => { if (dlg) $("dAbbrechen").click(); flaecheDialog(); };
 // Konstruieren: Menü mit allen Ebenenarten
 $("wEbene").onclick = (e) => {
   e.stopPropagation();

@@ -90,6 +90,9 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 table.zeilen.teile input, table.zeilen.holz input { width: 100%; min-width: 46px; }
 table.zeilen input.folge { min-width: 150px; font-family: var(--font-num); }
 table.zeilen input.ungueltig { border-color: #c4352b; background: color-mix(in srgb, #c4352b 10%, transparent); }
+table.zeilen.kanten select { max-width: 210px; } table.zeilen.kanten tr.aktiv td { background: color-mix(in srgb, #e0782b 16%, transparent); }
+table.zeilen.bausteine input { width: 100%; min-width: 60px; } table.zeilen.bausteine select { max-width: 170px; }
+table.zeilen.kanten tr[data-k] td:first-child { cursor: pointer; white-space: nowrap; font-weight: 600; }
 tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in srgb, var(--sketch) 8%, transparent); }
 .knopf.klein { padding: 2px 8px; font-size: 11px; }
 .massfeld { position: static; transform: none; }
@@ -257,6 +260,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wExtrusion"><svg viewBox="0 0 24 24"><path d="M4 16l8 4 8-4M4 16V9l8-4 8 4v7M12 13v7M4 9l8 4 8-4"/></svg>Extrudieren</button>
       <button class="wz" id="wBlech"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg>Blechprofil</button>
       <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path d="M3 6h10l-3 12h11"/><circle cx="3" cy="6" r="1.5"/></svg>Spengler-Vorlage</button>
+      <button class="wz" id="wFlaeche" title="Blech als Grundfläche aus der Skizze; Kanten anklicken und Spenglerbaustein zuweisen (Falz, Traufe, Ortgang …)"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg>Flächenblech</button>
       <button class="wz" id="wDetail" title="Spenglerdetail: Holz und mehrere Blechteile im Querschnitt (Falze, SwissSkills-Details)"><svg viewBox="0 0 24 24"><path d="M3 17h18v4H3z"/><path d="M4 17V9h7v-3M20 17V9h-7V5"/></svg>Spenglerdetail</button>
       <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14"/></svg>Freies Profil</button>
     </div></div>
@@ -346,10 +350,17 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Freies Profil</b>: Schenkel und Winkel als Tabelle – am schnellsten für eigene Profile, auch auf dem Handy.</li>
       <li><b>Skizze → Blechprofil</b>: Linienzug zeichnen, jeder Knick wird zur Biegung. Die Linie ist die Blechmitte – oder eine Blechoberfläche, dann im Dialog wählen, ob das Blech links oder rechts davon liegt (in Zeichenrichtung ab Kante A).</li>
     </ul>
+    <h4>Flächenblech mit Kantenbausteinen</h4>
+    <ul>
+      <li>Nur die <b>Grundfläche</b> des Blechs skizzieren (Rechteck, Linienzug, auch konisch oder mit Bogen) – Masse auf der Falzachse bzw. der fertigen Kante. Mehrere Bahnen nebeneinander in einer Skizze geben je ein Blech.</li>
+      <li><b>Flächenblech</b>: Kante in der Ansicht anklicken (oder in der Liste) und den Baustein wählen: Doppelstehfalz, Stehfalz, liegender Falz, Traufe, Ortgang, Wasserfalz, Saum, Abkantung … oder «Eigene Abkantfolge». Eine gemeinsame Kante zweier Bahnen bekommt automatisch das Gegenstück (Unterfalz ↔ Oberfalz).</li>
+      <li>Das Programm rechnet Zugabe je Kante, Zuschnitt mit Eckausklinkungen, Biegelinien, Abkantliste (Anschlag ab Schnittkante), m² für die Stückliste, DXF und Werkstattblatt.</li>
+      <li><b>Einstellungen → Bausteine</b>: eigene Bausteine erfassen und alle anpassen (Name, Gruppe, Abkantfolge, Versatz, Partner). Verwendete Bausteine werden im Projekt mitgespeichert.</li>
+    </ul>
     <h4>Spenglerdetails</h4>
     <ul>
       <li><b>Spenglerdetail</b>: Querschnitt aus Holz (Unterkonstruktion) und mehreren Blechteilen – Doppelstehfalz, Winkelstehfalz und die SwissSkills-2026-Details A–K als Vorlagen mit Massen. Material je Rolle (Dach, Fassade, Wappen, Hafte).</li>
-      <li><b>Frei anpassen</b>: jedes Blechteil als Abkantfolge in Kurzschrift, z. B. «150 90 25 U+ 7» (Schenkel, Winkel, Schenkel …; + = links/oben, − = rechts/unten; U+ / U− = Umschlag; «90r5» = Radius 5). Holz als Eckpunkte «x,y x,y …». Eigene Teile und Holz hinzufügen.</li>
+      <li><b>Frei anpassen</b>: jedes Blechteil als Abkantfolge in Kurzschrift, z. B. «150 90 25 U+ 7» (Schenkel, Winkel, Schenkel …; + = links/oben, − = rechts/unten; U+ / U− = Umschlag; «90r5» = Radius 5). Holz als Eckpunkte «x,y x,y …». Eigene Teile und Holz hinzufügen. «Als eigene Detailvorlage speichern» legt das Detail in die eigene Bibliothek.</li>
       <li>Jedes Blechteil erscheint mit Zuschnitt und Abkantfolge in Werkstatt und Stückliste; <b>Detailblatt</b> druckt den Schnitt mit Schraffur, Massen und Positionsliste (A4 quer).</li>
     </ul>
     <h4>Konstruieren und Skizzieren</h4>

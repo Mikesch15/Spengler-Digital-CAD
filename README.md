@@ -26,6 +26,9 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
   bestimmte Geometrie dunkel; Ziehen hält alle Abhängigkeiten ein (eigener Gleichungslöser)
 - **Konstruieren (wie Fusion):** Konstruktionsebenen versetzt, unter Winkel, Mittelebene, durch zwei Kanten,
   durch drei Punkte, tangential, entlang Pfad; Bezüge und Skizzierebene (auch Körperflächen) in der 3D-Ansicht anklicken
+- **Flächenblech mit Kantenbausteinen:** nur die Grundfläche skizzieren, Kante anklicken und Baustein zuweisen
+  (Doppelstehfalz mit automatischem Gegenstück, Traufe, Ortgang, Wasserfalz, Saum …); Zuschnitt mit
+  Eckausklinkung, Biegelinien, Abkantliste, DXF; Bausteine in den Einstellungen selbst erfassen und anpassen
 - **Spenglerdetails:** Querschnitt aus Holz und mehreren Blechteilen (Doppelstehfalz, Winkelstehfalz,
   SwissSkills-2026-Details A–K) mit Massen, frei anpassbar über Abkantfolge in Kurzschrift («150 90 25 U+ 7»);
   Teile in Stückliste und Werkstatt, Detailblatt mit Schraffur, Massen und Positionsliste
@@ -49,6 +52,7 @@ kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Progra
   ebenen.js      Konstruktionsebenen (versetzt, Winkel, Mitte, Kanten, Punkte, tangential, Pfad)
   loeser.js      Gleichungslöser (Levenberg–Marquardt, Freiheitsgrade)
   bedingungen.js Abhängigkeiten und Masse als Gleichungen
+  flaechenblech.js Flächenblech: Kantenbausteine, Zugaben, Zuschnitt mit Ausklinkung, Biegelinien
   details.js     Spenglerdetails: Falze, SwissSkills-Details, Abkantfolge in Kurzschrift
   skizzenloeser.js Skizze ↔ Löser (Bezüge, Ziehen, Prüfen auf Widerspruch/überzählig)
 src/cad.js       Oberfläche

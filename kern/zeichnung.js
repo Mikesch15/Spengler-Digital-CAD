@@ -142,3 +142,26 @@ export function detailSvg(d, konturen, { breite = 420, hoehe = 320, rand = 30, s
 ${out.join("\n")}
 </svg>`;
 }
+
+// Zuschnitt eines Flächenblechs: Umriss (längste Kante waagrecht), Biegelinien gestrichelt mit Nummer,
+// Kantennummern K1… und Gesamtmasse. abw = abwicklung(), gruppen = kantenGruppen()
+export function zuschnittSvg(abw, gruppen, { breite = 300, hoehe = 220, rand = 28, schrift = 11, aktiv = -1 } = {}) {
+  const R = (p) => abw.dreh(p), U = abw.umriss.map(R), gr = grenzen(U), w = Math.max(gr.x1 - gr.x0, 1), h = Math.max(gr.y1 - gr.y0, 1);
+  const s = Math.min((breite - 2 * rand) / w, (hoehe - 2 * rand) / h), ox = (breite - w * s) / 2 - gr.x0 * s, oy = (hoehe + h * s) / 2 + gr.y0 * s;
+  const P = ([x, y]) => [ox + x * s, oy - y * s], pf = (pts, zu) => pts.map(P).map(([x, y], i) => `${i ? "L" : "M"}${z(x)} ${z(y)}`).join("") + (zu ? "Z" : "");
+  const out = [`<path d="${pf(U, true)}" class="umriss"/>`];
+  for (const l of abw.linien) out.push(`<path d="${pf(l.punkte.map(R))}" class="biegelinie${l.kante === aktiv ? " aktiv" : ""}"/>`);
+  const mx = (gr.x0 + gr.x1) / 2, my = (gr.y0 + gr.y1) / 2;
+  gruppen.forEach((g, k) => { // Kantennummer innen neben der Kantenmitte
+    const i = Math.floor((g.punkte.length - 1) / 2), a = R(g.punkte[i]), b = R(g.punkte[i + 1]), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const d = [mx - m[0], my - m[1]], L = Math.hypot(...d) || 1, q = P([m[0] + (d[0] / L) * (schrift * 1.6) / s, m[1] + (d[1] / L) * (schrift * 1.6) / s]);
+    out.push(`<text x="${z(q[0])}" y="${z(q[1])}" class="kante${k === aktiv ? " aktiv" : ""}">K${k + 1}</text>`);
+  });
+  const A = P([gr.x0, gr.y0]), B = P([gr.x1, gr.y0]), C = P([gr.x1, gr.y1]);
+  out.push(`<text x="${z((A[0] + B[0]) / 2)}" y="${z(A[1] + schrift + 4)}" class="mass">${abw.laenge.toFixed(1)}</text>`);
+  out.push(`<text x="${z(B[0] + 6)}" y="${z((B[1] + C[1]) / 2)}" class="mass" transform="rotate(-90 ${z(B[0] + 6)} ${z((B[1] + C[1]) / 2)})">${abw.breite.toFixed(1)}</text>`);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
+<style>.umriss{fill:color-mix(in srgb,currentColor 6%,transparent);stroke:currentColor;stroke-width:1.4;stroke-linejoin:round}.biegelinie{fill:none;stroke:#c4352b;stroke-width:1;stroke-dasharray:5 3}.biegelinie.aktiv{stroke-width:2.2}.kante{font-family:Arial,sans-serif;font-weight:600;fill:#1f5fbf}.kante.aktiv{fill:#e0782b}.mass{font-family:"JetBrains Mono",Consolas,monospace;fill:currentColor}</style>
+${out.join("\n")}
+</svg>`;
+}
