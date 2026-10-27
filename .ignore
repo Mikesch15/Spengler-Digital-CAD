@@ -1,0 +1,4 @@
+# Für Suchwerkzeuge (ripgrep): gebaute und riesige Dateien überspringen
+index.html
+dist/
+package-lock.json
