@@ -243,7 +243,7 @@ ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--be
 @page quer { size: A4 landscape; margin: 10mm; }
 @media print {
   .detailblatt { page: quer; }
-  .detailblatt .grosszeichnung svg { max-height: 120mm; }
+  .detailblatt .grosszeichnung.massstabgetreu svg { width: 275mm; height: 122mm; max-height: none; }
   .detailblatt td.folge { font-family: var(--font-num); }
 }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

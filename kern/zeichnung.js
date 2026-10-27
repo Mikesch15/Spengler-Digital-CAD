@@ -94,7 +94,14 @@ ${teile.join("\n")}
 // Spenglerdetail als Schnittzeichnung: Holz schraffiert, Bleche mit Dicke, Masse mit Hilfslinien und Pfeilen.
 // d = baueDetail(); konturen = Teile als Punktlisten (teilKontur). massstab: mm → px fest (z. B. für Druck 1:1/1:2)
 let svgNr = 0; // eindeutige IDs für Muster/Pfeile, wenn mehrere Zeichnungen auf einer Seite stehen
-export function detailSvg(d, konturen, { breite = 420, hoehe = 320, rand = 30, schrift = 11, titel = "", massstab = null, nummern = true } = {}) {
+// papier: breite/hoehe/schrift in mm auf dem Papier, massstab = Papier-mm je Modell-mm (1:2 → 0.5)
+// schenkel: Schenkelmasse jedes Blechteils (Blechmitte) an die Teile schreiben
+export const MASSSTAEBE = [1, 2, 2.5, 5, 10, 20];
+export function passenderMassstab(d, breite, hoehe) {
+  const w = d.grenzen.x1 - d.grenzen.x0, h = d.grenzen.y1 - d.grenzen.y0;
+  return MASSSTAEBE.find((M) => w / M <= breite && h / M <= hoehe) ?? Math.ceil(Math.max(w / breite, h / hoehe));
+}
+export function detailSvg(d, konturen, { breite = 420, hoehe = 320, rand = 30, schrift = 11, titel = "", massstab = null, nummern = true, papier = false, schenkel = false } = {}) {
   const g = d.grenzen, w = Math.max(g.x1 - g.x0, 1), h = Math.max(g.y1 - g.y0, 1), id = "dz" + ++svgNr;
   const kopf = titel ? schrift * 2 : 0;
   const s = massstab ?? Math.min((breite - 2 * rand) / w, (hoehe - 2 * rand - kopf) / h);
@@ -117,14 +124,21 @@ export function detailSvg(d, konturen, { breite = 420, hoehe = 320, rand = 30, s
     const t = P(v([(m.a[0] + m.b[0]) / 2, (m.a[1] + m.b[1]) / 2], m.ab + Math.sign(m.ab || 1) * (schrift * 0.7) / s));
     out.push(`<text x="${z(t[0])}" y="${z(t[1])}" transform="rotate(${z(wi)} ${z(t[0])} ${z(t[1])})" class="masstext">${esc(m.text ?? (+L.toFixed(1)))}</text>`);
   }
+  if (schenkel) for (const tl of d.teile) for (const b of tl.res.beschriftungen) { // Schenkelmass neben dem Schenkel, quer zur Richtung versetzt
+    const n = [-Math.sin(b.richtung), Math.cos(b.richtung)], q = P([tl.x + b.x + (n[0] * schrift * 0.9) / s, tl.y + b.y + (n[1] * schrift * 0.9) / s]);
+    let wi = (-b.richtung * 180) / Math.PI; while (wi > 90) wi -= 180; while (wi <= -90) wi += 180;
+    out.push(`<text x="${z(q[0])}" y="${z(q[1])}" transform="rotate(${z(wi)} ${z(q[0])} ${z(q[1])})" class="schenkeltext">${+b.mass.toFixed(1)}</text>`);
+  }
   if (nummern) d.teile.forEach((tl, i) => { // Positionsnummer am Anfang (Kante A) jedes Blechteils
     const a = P([tl.x, tl.y]);
     out.push(`<circle cx="${z(a[0])}" cy="${z(a[1])}" r="${schrift * 0.75}" class="pos"/><text x="${z(a[0])}" y="${z(a[1])}" class="postext">${i + 1}</text>`);
   });
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
-<defs><pattern id="${id}s" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" stroke-width=".6"/></pattern>
-<marker id="${id}p" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 2L10 5L0 8z" fill="currentColor"/></marker></defs>
-<style>.holz{stroke:currentColor;stroke-width:.7}.led{fill:currentColor}.blech{fill:currentColor;stroke:currentColor;stroke-width:.5;stroke-linejoin:round}.hilfslinie{stroke:currentColor;stroke-width:.4;fill:none}.masslinie{stroke:currentColor;stroke-width:.5}.masstext{font-family:Arial,Helvetica,sans-serif;fill:currentColor}.titel{font-family:Arial,Helvetica,sans-serif;font-size:${schrift * 1.4}px;fill:currentColor}.pos{fill:none;stroke:#c4352b;stroke-width:.8}.postext{font-family:Arial,sans-serif;font-size:${schrift * 0.85}px;fill:#c4352b;font-weight:600}</style>
+  const e = papier ? "mm" : "", st = papier ? 0.25 : 1, sw = (v) => +(v * st).toFixed(3); // Linienstärken auf Papier in mm
+  const ms = papier ? 2 : 6; // Schraffurabstand
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}${e}" height="${hoehe}${e}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
+<defs><pattern id="${id}s" width="${ms}" height="${ms}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="${ms}" stroke="currentColor" stroke-width="${sw(0.6)}"/></pattern>
+<marker id="${id}p" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="${papier ? 18 : 7}" markerHeight="${papier ? 18 : 7}" orient="auto-start-reverse"><path d="M0 2L10 5L0 8z" fill="currentColor"/></marker></defs>
+<style>.holz{stroke:currentColor;stroke-width:${sw(0.7)}}.led{fill:currentColor}.blech{fill:currentColor;stroke:currentColor;stroke-width:${sw(0.5)};stroke-linejoin:round}.hilfslinie{stroke:currentColor;stroke-width:${sw(0.4)};fill:none}.masslinie{stroke:currentColor;stroke-width:${sw(0.5)}}.schenkeltext{font-family:"JetBrains Mono",Consolas,monospace;font-size:${schrift * 0.8}px;fill:#1f5fbf}.masstext{font-family:Arial,Helvetica,sans-serif;fill:currentColor}.titel{font-family:Arial,Helvetica,sans-serif;font-size:${schrift * 1.4}px;fill:currentColor}.pos{fill:none;stroke:#c4352b;stroke-width:${sw(0.8)}}.postext{font-family:Arial,sans-serif;font-size:${schrift * 0.85}px;fill:#c4352b;font-weight:600}</style>
 ${out.join("\n")}
 </svg>`;
 }

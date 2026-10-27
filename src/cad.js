@@ -5,7 +5,7 @@ import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geom
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf } from "../kern/dxf.js";
-import { profilSvg, abwicklungSvg, detailSvg } from "../kern/zeichnung.js";
+import { profilSvg, abwicklungSvg, detailSvg, passenderMassstab, MASSSTAEBE } from "../kern/zeichnung.js";
 import { DETAILS, DETAIL, detailStandard, baueDetail, teilKontur, folge, folgeText, ROLLEN, rollenVon } from "../kern/details.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 import { materialbedarf } from "../kern/zuschnitt.js";
@@ -1052,11 +1052,11 @@ function zeigeDetail(w, f) {
 }
 // Detailblatt (A4 quer): Schnitt mit Schraffur und Massen, Positionsliste
 function detailblatt(f) {
-  const d = f._detail;
+  const d = f._detail, M = +f.massstab > 0 ? +f.massstab : passenderMassstab(d, 270, 118); // Zeichenfläche A4 quer in mm
   return `<section class="blatt detailblatt">
     <header><div>${kopf("Detail")}<h1>${esc(f.name)}</h1></div>
-      <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
-    <div class="grosszeichnung">${detailZeichnung(f, { breite: 980, hoehe: 520, schrift: 15, rand: 40 })}</div>
+      <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Massstab</dt><dd>1:${M}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
+    <div class="grosszeichnung massstabgetreu">${detailZeichnung(f, { breite: 275, hoehe: 122, schrift: 3, rand: 0, massstab: 1 / M, papier: true, schenkel: !!f.schenkelmasse })}</div>
     <table class="liste"><thead><tr><th>Pos.</th><th>Teil</th><th>Material</th><th>Abkantfolge (Schenkel Winkel …)</th><th class="num">Zuschnitt × Länge mm</th><th class="num">Stück</th></tr></thead><tbody>
     ${d.teile.map((tl, i) => `<tr><td>${i + 1}</td><td>${esc(tl.name)}</td><td>${esc(tl.m.name)}</td><td class="folge">${esc(folgeText(tl.zeilen))}</td><td class="num">${f1(tl.res.zuschnitt)} × ${f.laenge}</td><td class="num">${f.stueck ?? 1}</td></tr>`).join("")}
     </tbody></table>
@@ -1086,6 +1086,8 @@ function detailDialog(f) {
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
     { id: "ebene", label: "Querschnitt in", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
+    { id: "massstab", label: "Detailblatt Massstab", optionen: [["auto", "Automatisch"], ...MASSSTAEBE.map((m) => [m, "1:" + m])], wert: f.massstab ?? "auto" },
+    { id: "schenkelmasse", label: "Schenkelmasse zeigen", optionen: [["", "Nein"], ["1", "Ja"]], wert: f.schenkelmasse ? "1" : "" },
   ];
   const setze = (f, w) => {
     if (w.detail !== f.detail) {
@@ -1096,7 +1098,7 @@ function detailDialog(f) {
     f.name = w.name?.trim() || f.name;
     if (f.detail !== "frei") for (const [k] of DETAIL[f.detail].params) if (Number.isFinite(w["p_" + k])) f.params[k] = w["p_" + k];
     f.materialien = { ...f.materialien }; for (const r of Object.keys(ROLLEN)) if (w["m_" + r]) f.materialien[r] = w["m_" + r];
-    Object.assign(f, { laenge: w.laenge, stueck: w.stueck, notiz: w.notiz, richtung: w.richtung, ebene: w.ebene });
+    Object.assign(f, { laenge: w.laenge, stueck: w.stueck, notiz: w.notiz, richtung: w.richtung, ebene: w.ebene, massstab: w.massstab, schenkelmasse: !!w.schenkelmasse });
   };
   // Vorschau als Schnitt und – bei «frei» – Tabellen für Blechteile (Abkantfolge in Kurzschrift) und Holz
   const tabelle = () => `<div id="detailVorschau" class="detailvorschau"></div>${f.detail === "frei" ? `
@@ -1111,7 +1113,7 @@ function detailDialog(f) {
     ${f.aufbau.holz.map((h, i) => `<tr data-i="${i}" data-art="holz"><td><input data-k="name" value="${esc(h.name)}"></td><td><input data-k="pts" class="folge" value="${h.pts.map((p) => p.map((v) => +v.toFixed(2)).join(",")).join(" ")}"></td>
       <td><button class="weg" data-weg="holz:${i}" aria-label="Holz ${i + 1} entfernen">×</button></td></tr>`).join("")}
     </tbody></table><button class="knopf" data-neu="holz">+ Holz (Rechteck)</button>` : `<div class="reihe"><button class="knopf" data-frei>Frei anpassen (Teile und Holz bearbeiten)</button></div>`}`;
-  const zeigeVorschau = () => { const b = $("detailVorschau"); if (b) b.innerHTML = f._detail ? detailZeichnung(f, { breite: 460, hoehe: 300, schrift: 10, rand: 16 }) : ""; };
+  const zeigeVorschau = () => { const b = $("detailVorschau"); if (b) b.innerHTML = f._detail ? detailZeichnung(f, { breite: 460, hoehe: 300, schrift: 10, rand: 16, schenkel: !!f.schenkelmasse }) : ""; };
   const binden = (box) => {
     const neu = () => { const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); };
     box.addEventListener("change", (e) => {
