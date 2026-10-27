@@ -1477,10 +1477,10 @@ function bausteinKontur(b, m) {
   return null;
 }
 // Profil (x = nach aussen, y) entlang z extrudiert; Enden schräg: Anfang bei z = −x·k0, Ende bei z = L + x·k1
-function prisma(kont, L, k0, k1) {
+function prisma(kont, L, k0, k1, e0 = 0, e1 = 0) { // e0/e1: an der Ecke zurückgesetzt (wie in der Abwicklung)
   let q = kont.slice(); if (gleich(q[0], q.at(-1))) q.pop(); if (flaeche(q) < 0) q = q.reverse();
   const luft = window.__prismaLuft || 0; // nur für Tests: Gehrungsflächen minimal auseinander
-  const z0 = (x) => -x * k0 + luft, z1 = (x) => Math.max(L + x * k1 - luft, z0(x) + 0.01), pos = [];
+  const z0 = (x) => -x * k0 + e0 + luft, z1 = (x) => Math.max(L + x * k1 - e1 - luft, z0(x) + 0.01), pos = [];
   const P = (x, y, z) => pos.push(x, y, z), n = q.length;
   for (let i = 0; i < n; i++) { const [xa, ya] = q[i], [xb, yb] = q[(i + 1) % n];
     P(xa, ya, z0(xa)); P(xb, yb, z0(xb)); P(xb, yb, z1(xb)); P(xa, ya, z0(xa)); P(xb, yb, z1(xb)); P(xa, ya, z1(xa)); }
@@ -1506,9 +1506,9 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
     for (let i = 1; i < g.punkte.length; i++) {
       const a = g.punkte[i - 1], b = g.punkte[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
       const d = richt(a, b);
-      const k0 = i > 1 ? Math.tan(knick(richt(g.punkte[i - 2], a), d) / 2) : ek[k].k0;
-      const k1 = i < g.punkte.length - 1 ? Math.tan(knick(d, richt(b, g.punkte[i + 1])) / 2) : ek[k].k1;
-      const geo = prisma(k2, L, k0, k1);
+      const k0 = i > 1 ? Math.tan(knick(richt(g.punkte[i - 2], a), d) / 2) : ek[k].k0, e0 = i > 1 ? 0 : ek[k].e0 || 0;
+      const k1 = i < g.punkte.length - 1 ? Math.tan(knick(d, richt(b, g.punkte[i + 1])) / 2) : ek[k].k1, e1 = i < g.punkte.length - 1 ? 0 : ek[k].e1 || 0;
+      const geo = prisma(k2, L, k0, k1, e0, e1);
       geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
       geo.applyMatrix4(B); geos.push(nachAussen(geo)); // Basis kann gespiegelt sein: Dreiecke wieder nach aussen
     }
@@ -4124,7 +4124,8 @@ if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { abw: 
       const A = new Brush(nurPos(pr[i].geometry)), Bb = new Brush(nurPos(pr[j].geometry)); A.updateMatrixWorld(); Bb.updateMatrixWorld();
       const p = csg.evaluate(A, Bb, INTERSECTION).geometry.attributes.position?.array || []; let v = 0;
       for (let k = 0; k + 8 < p.length; k += 9) v += p[k] * (p[k + 4] * p[k + 8] - p[k + 5] * p[k + 7]) - p[k + 1] * (p[k + 3] * p[k + 8] - p[k + 5] * p[k + 6]) + p[k + 2] * (p[k + 3] * p[k + 7] - p[k + 4] * p[k + 6]);
-      out.push({ fid, i, j, v: Math.round(Math.abs(v / 6)) }); } }
+      let ymin = Infinity, ymax = -Infinity; for (let k = 1; k < p.length; k += 3) { ymin = Math.min(ymin, p[k]); ymax = Math.max(ymax, p[k]); }
+      out.push({ fid, i, j, v: Math.round(Math.abs(v / 6)), y: p.length ? [+ymin.toFixed(2), +ymax.toFixed(2)] : null }); } }
     return out; }, schirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; }, schirmUV: (e, uv) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(zu3D(e, uv).toArray()); return [r.left + s[0], r.top + s[1]]; }, koerper: () => modell.children.filter((o) => o.isMesh).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, a = g.attributes.position.array; let v = 0;
     for (let i = 0; i < a.length; i += 9) v += a[i] * (a[i + 4] * a[i + 8] - a[i + 5] * a[i + 7]) - a[i + 1] * (a[i + 3] * a[i + 8] - a[i + 5] * a[i + 6]) + a[i + 2] * (a[i + 3] * a[i + 7] - a[i + 4] * a[i + 6]);
     return { fid: o.userData.fid, dreiecke: a.length / 9, volumen: Math.round(v / 6) }; }), aufSchirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; } };

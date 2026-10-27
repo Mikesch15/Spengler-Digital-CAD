@@ -1,5 +1,5 @@
 // Prüft Flächenblech mit Kantenbausteinen (kern/flaechenblech.js)
-import { BAUSTEINE_STANDARD, bausteinProfil, kantenGruppen, flaechenblech } from "../kern/flaechenblech.js";
+import { eckFaktoren, BAUSTEINE_STANDARD, bausteinProfil, kantenGruppen, flaechenblech } from "../kern/flaechenblech.js";
 import { MATERIALIEN } from "../kern/materialien.js";
 
 let fehler = 0;
@@ -22,7 +22,7 @@ for (const b of BAUSTEINE_STANDARD) { const p = bausteinProfil(b, m); ok(p.zugab
   const zu = r.profile[3].zugabe, zo = r.profile[1].zugabe, zt = r.profile[0].zugabe, zf = r.profile[2].zugabe;
   ok(r.gruppen.length === 4, "vier Kanten");
   ok(nah(r.abw.laenge, 2000 + zt + zf, 0.01) && nah(r.abw.breite, 600 + zu + zo, 0.01), `Zuschnitt ${r.abw.breite.toFixed(1)} × ${r.abw.laenge.toFixed(1)}`);
-  ok(r.abw.umriss.length > 12, `Umriss mit Eckausbildung (${r.abw.umriss.length} Punkte)`);
+  ok(r.abw.umriss.length >= 12, `Umriss mit Eckausbildung (${r.abw.umriss.length} Punkte)`);
   ok(r.abw.linien.length === r.profile.reduce((s, p) => s + p.biegungen.length, 0), "eine Biegelinie je Biegung");
   console.log(`Bahn 600: Zuschnitt ${r.abw.breite.toFixed(1)} × ${r.abw.laenge.toFixed(1)} mm (Unterfalz ${zu.toFixed(1)}, Oberfalz ${zo.toFixed(1)}, Traufe ${zt.toFixed(1)}, First ${zf.toFixed(1)})`);
 }
@@ -32,6 +32,17 @@ for (const b of BAUSTEINE_STANDARD) { const p = bausteinProfil(b, m); ok(p.zugab
   const r = flaechenblech(pts, [B.trauf, null, null, null], m);
   const saum = r.abw.umriss.filter((p) => p[1] < -20);
   ok(saum.length >= 2 && saum.every((p) => p[0] > 0 && p[0] < 500), "Traufsaum (unter dem Blech) kürzer als die Kante – ragt nicht über die schrägen Seiten");
+}
+// Gehrung nur bei Überschneidung: Saum innen + Aufkantung aussen → gerade; zwei Säume innen → Gehrung
+{
+  const eck = (a, b) => { const r = flaechenblech([[0, 0], [1000, 0], [1000, 600], [0, 600]], [B[a], B[b], null, null], m); return eckFaktoren(r.gruppen, r.profile)[0]; };
+  const ek = (a, b) => eck(a, b).k1;
+  const sa = eck("saum-o", "ortgang");
+  ok(Math.abs(sa.k1) < 1e-9 && sa.e1 < 1.5, `Saum + Aufkantung: kein Gehrungsschnitt, Saum läuft bis auf ${sa.e1} mm durch`);
+  ok(Math.abs(ek("ortgang", "wasserfalz")) < 1e-9, "Aufkantung + Wasserfalz: gerade (nur Biegebereich)");
+  ok(Math.abs(ek("ortgang", "ortgang") - 1) < 1e-9, "zwei gleiche Aufkantungen: Gehrung");
+  ok(Math.abs(ek("saum-o", "saum-o") - 1) < 1e-9, "zwei Säume auf der Fläche: Gehrung 45°");
+  ok(Math.abs(ek("trauf", "trauf") - 1) < 1e-9, "zwei Traufsäume unter der Fläche: Gehrung 45°");
 }
 // Gehrung: zwei Aufkantungen an einer Ecke – Enden symmetrisch zur Winkelhalbierenden
 {
