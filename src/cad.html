@@ -301,6 +301,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="tRechteck"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg><span>Rechteck <span class="pfeil" title="Varianten">▾</span></span></button>
       <button class="wz" id="tKreis"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12h8"/></svg><span>Kreis <span class="pfeil" title="Varianten">▾</span></span></button>
       <button class="wz" id="tBogen"><svg viewBox="0 0 24 24"><path d="M4 18A9 9 0 0 1 20 18"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="18" r="1.6"/></svg><span>Bogen <span class="pfeil" title="Varianten">▾</span></span></button>
+      <button class="wz" id="tSpline" title="Spline durch Punkte"><svg viewBox="0 0 24 24"><path d="M3 18C7 4 11 20 15 8s5-2 6-3"/><circle cx="3" cy="18" r="1.5"/><circle cx="21" cy="5" r="1.5"/></svg>Spline</button>
+      <button class="wz" id="tEllipse" title="Ellipse"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="5.5"/></svg>Ellipse</button>
       <button class="wz" id="tPolygon"><svg viewBox="0 0 24 24"><path d="M12 3l8 5v8l-8 5-8-5V8z"/></svg>Polygon</button>
       <button class="wz" id="tLangloch"><svg viewBox="0 0 24 24"><path d="M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7z"/></svg>Langloch</button>
       <button class="wz" id="tPunkt"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4"/></svg>Punkt</button>
@@ -396,6 +398,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Frei anpassen</b>: jedes Blechteil als Abkantfolge in Kurzschrift, z. B. «150 90 25 U+ 7» (Schenkel, Winkel, Schenkel …; + = links/oben, − = rechts/unten; U+ / U− = Umschlag; «90r5» = Radius 5). Holz als Eckpunkte «x,y x,y …». Eigene Teile und Holz hinzufügen. «Als eigene Detailvorlage speichern» legt das Detail in die eigene Bibliothek.</li>
       <li>Jedes Blechteil erscheint mit Zuschnitt und Abkantfolge in Werkstatt und Stückliste; <b>Detailblatt</b> druckt den Schnitt mit Schraffur, Massen und Positionsliste (A4 quer).</li>
     </ul>
+    <h4>Modellieren wie in Fusion</h4>
+    <ul>
+      <li><b>Extrudieren</b> und <b>Drehen</b> (Profil um Skizzenachse oder gerade Hilfslinie) mit Vorgang: neuer Körper, vereinigen, ausschneiden, schneiden.</li>
+      <li><b>Parameter</b> (Ändern): benannte Werte und Formeln – in jedem Zahlenfeld und Skizzenmass nutzbar, z. B. «breite / 3». Ändert man einen Parameter, rechnet das ganze Modell nach (Masse mit «fx»).</li>
+      <li><b>Prüfen</b>: Messen (Abstand und ΔX/ΔY/ΔZ zwischen Ecken, Kantenmitten, Flächen) und Schnittanalyse an einer Ebene.</li>
+      <li><b>Konstruieren ▾</b>: Ebenen, Achsen (durch Kante, zwei Punkte, senkrecht zur Ebene, Schnitt zweier Ebenen) und Punkte (Koordinaten, Kantenmitte, zwischen zwei Punkten, Kante × Ebene).</li>
+      <li><b>Zeitleiste</b>: Rückrollmarke ziehen, Feature ziehen zum Verschieben; Rechtsklick (Handy: lange tippen) für Unterdrücken, Zurückrollen, Umbenennen, Duplizieren, Löschen.</li>
+    </ul>
     <h4>Konstruieren und Skizzieren</h4>
     <ul>
       <li><b>Skizze</b>: Grundebene, Konstruktionsebene oder ebene Körperfläche in der Ansicht anklicken – die Skizze startet sofort darauf (oder in der Liste wählen).</li>
@@ -404,7 +414,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     </ul>
     <h4>Skizzenwerkzeuge</h4>
     <ul>
-      <li><b>Erstellen</b>: Linie, Rechteck ▾ (2 Punkte, um Mittelpunkt, 3 Punkte gedreht), Kreis ▾ (Mittelpunkt, 2 Punkte, 3 Punkte), Bogen ▾ (3 Punkte, um Mittelpunkt), Polygon, Langloch, Punkt. Knopf = zuletzt benutzte Variante, ▾ = alle Varianten.</li>
+      <li><b>Erstellen</b>: Linie, Rechteck ▾ (2 Punkte, um Mittelpunkt, 3 Punkte gedreht), Kreis ▾ (Mittelpunkt, 2 Punkte, 3 Punkte), Bogen ▾ (3 Punkte, um Mittelpunkt), Spline (durch Punkte), Ellipse, Polygon, Langloch, Punkt. Knopf = zuletzt benutzte Variante, ▾ = alle Varianten.</li>
       <li><b>Ändern</b>: Abrunden (Radius eintippen, Ecken anklicken – beim Blech wird daraus der Biegeradius), Versatz, Spiegeln (an einer geraden Kante), Stutzen (Teilstück zwischen Schnittpunkten), Dehnen (Linienende bis zur nächsten Kante), Trennen (an Schnittpunkten teilen), Verschieben ▾ (Verschieben, Kopieren, Drehen: Elemente anklicken, dann Basis- und Zielpunkt oder dx/dy bzw. Winkel eintippen), Muster ▾ (rechteckig, kreisförmig), Projizieren (Körperkante, Körperfläche oder Linie einer früheren Skizze – violett und fixiert), Hilfslinie (gestrichelt, kein Profil; in «Auswahl» auch mit X).</li>
       <li><b>Abhängigkeit ▾</b> wie in Fusion: Horizontal/Vertikal, Koinzident (Punkt auf Punkt oder auf Linie/Kreis), Tangential, Gleich, Parallel, Senkrecht, Fixieren, Mittelpunkt, Konzentrisch, Kollinear, Symmetrisch. Die rote und grüne Linie sind die Achsen – auch sie lassen sich anklicken. Grüne Symbole an der Geometrie zeigen die Abhängigkeiten; in «Auswahl» Symbol anklicken und Entf löscht sie.</li>
       <li><b>Bemassung</b> (D): Linie → Länge, Kreis → Ø, Bogen → Radius, zwei Punkte → Abstand (ausgerichtet, horizontal oder vertikal), Punkt und Linie → Abstand, zwei Linien → Winkel (parallele: Abstand). Wert eintippen, Enter. Die Masse sind treibend: ändert man den Wert, passt sich die Skizze an.</li>

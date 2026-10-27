@@ -158,3 +158,29 @@ export function verbindeStuecke(stuecke, tol = 1e-6) {
   }
   return ketten;
 }
+
+// Spline durch Stützpunkte (Catmull-Rom, zentripetal) – wie die «Spline durch Punkte» in Fusion
+export function splinePunkte(pts, geschlossen = false, schritte = 16) {
+  if (pts.length < 2) return pts.map((p) => p.slice());
+  const n = pts.length, P = (i) => (geschlossen ? pts[(i + n) % n] : pts[Math.min(Math.max(i, 0), n - 1)]);
+  const out = [], seg = geschlossen ? n : n - 1;
+  for (let i = 0; i < seg; i++) {
+    const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+    const t = (a, b) => Math.max(Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])), 1e-6);
+    const t1 = t(p0, p1), t2 = t1 + t(p1, p2), t3 = t2 + t(p2, p3);
+    const L = (a, b, ta, tb, u) => [a[0] * (tb - u) / (tb - ta) + b[0] * (u - ta) / (tb - ta), a[1] * (tb - u) / (tb - ta) + b[1] * (u - ta) / (tb - ta)];
+    for (let k = 0; k < schritte; k++) {
+      const u = t1 + ((t2 - t1) * k) / schritte;
+      const A1 = L(p0, p1, 0, t1, u), A2 = L(p1, p2, t1, t2, u), A3 = L(p2, p3, t2, t3, u);
+      const B1 = L(A1, A2, 0, t2, u), B2 = L(A2, A3, t1, t3, u);
+      out.push(L(B1, B2, t1, t2, u));
+    }
+  }
+  if (!geschlossen) out.push(pts[n - 1].slice());
+  return out;
+}
+// Ellipse: Mitte c, Endpunkt der Hauptachse a, kleine Halbachse r2
+export function ellipsePunkte(c, a, r2, n = 72) {
+  const dx = a[0] - c[0], dy = a[1] - c[1], R = Math.hypot(dx, dy) || 1, w = Math.atan2(dy, dx), co = Math.cos(w), si = Math.sin(w);
+  return Array.from({ length: n }, (_, i) => { const t = (2 * Math.PI * i) / n, x = R * Math.cos(t), y = r2 * Math.sin(t); return [c[0] + x * co - y * si, c[1] + x * si + y * co]; });
+}

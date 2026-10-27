@@ -14,6 +14,7 @@ import { materialbedarf } from "../kern/zuschnitt.js";
 import { vorbereiten, loeseSkizze, analyse, fuegeHinzu, bereinige, punkte as skizzenPunkte, kantenZahl, rechteckBedingungen, neueElementId, sichereIds, IST_MASS } from "../kern/skizzenloeser.js";
 import { abstandGerade, winkelZwischen } from "../kern/bedingungen.js";
 import { rechne, parameterWerte, istZahl, namenIn, NAME as PARAMNAME } from "../kern/ausdruck.js";
+import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
 import { BASIS, ACHSEN, versetzt, unterWinkel, mittelebene, zweiKanten, dreiPunkte, tangential, entlangPfad, aufFlaeche, zuWelt, zuLokal } from "../kern/ebenen.js";
 
@@ -166,12 +167,14 @@ function elGeo(el) {
     case "kreis": { const k = kreisPunkte(el.c, el.r, 72); return { linien: [[...k, k[0]]], kontur: k }; }
     case "bogen": { const b = bogenPunkte(el); return { linien: [b], offen: b }; }
     case "langloch": { const k = langlochPunkte(el.a, el.b, el.r); return { linien: [[...k, k[0]]], kontur: k }; }
+    case "spline": { const q = splinePunkte(el.pts, !!el.geschlossen); return el.geschlossen ? { linien: [[...q, q[0]]], kontur: q } : { linien: [q], offen: q }; }
+    case "ellipse": { const k = ellipsePunkte(el.c, el.a, el.r2); return { linien: [[...k, k[0]]], kontur: k }; }
     default: return { linien: [] }; // Punkt
   }
 }
 const profilElemente = (f) => f.elemente.filter((el) => !el.hilfs && el.art !== "punkt");
 // Wie in Fusion: einzelne Linien und Bögen, die sich an den Enden berühren, bilden zusammen einen Linienzug oder ein Profil
-const verbunden = (f) => verbindeStuecke(profilElemente(f).filter((el) => elGeo(el).offen).map((el) => ({ pts: el.art === "linie" ? el.pts : [el.a, el.b], el })));
+const verbunden = (f) => verbindeStuecke(profilElemente(f).filter((el) => elGeo(el).offen).map((el) => ({ pts: el.art === "linie" ? el.pts : el.art === "spline" ? [el.pts[0], el.pts.at(-1)] : [el.a, el.b], el })));
 function zugPunkte(z) {
   const pts = [];
   for (const { stueck, umgekehrt } of z.teile) { let q = elGeo(stueck.el).offen; if (umgekehrt) q = q.slice().reverse(); pts.push(...(pts.length ? q.slice(1) : q)); }
@@ -188,8 +191,8 @@ function schleifen(f) {
 const ketten = (f) => verbunden(f).filter((z) => !z.geschlossen).map((z) => {
   const pts = [], radien = {}; let mitBogen = false;
   for (const { stueck, umgekehrt } of z.teile) {
-    const el = stueck.el; if (el.art === "bogen") mitBogen = true;
-    const roh = el.art === "linie" ? el.pts : [el.a, el.b], r = el.radien || {}, n = roh.length;
+    const el = stueck.el; if (el.art === "bogen" || el.art === "spline") mitBogen = true;
+    const roh = el.art === "linie" ? el.pts : el.art === "spline" ? [el.pts[0], el.pts.at(-1)] : [el.a, el.b], r = el.radien || {}, n = roh.length;
     const q = umgekehrt ? roh.slice().reverse() : roh, basis = pts.length ? pts.length - 1 : 0;
     q.forEach((_, i) => { const j = umgekehrt ? n - 1 - i : i; if (r[j] > 0) radien[basis + i] = r[j]; });
     pts.push(...(pts.length ? q.slice(1) : q).map((x) => x.slice()));
@@ -367,9 +370,9 @@ function ebenenGroesse() {
 //   Punkt: "O" | "P:skizze:element:punkt" | "V:p"       Zylinder: "Z:extrusion:kreis"   Pfad: "L:skizze:element" | "E:a;b"
 const zahl3 = (t) => t.split(",").map(Number);
 const fmt3 = (p) => p.map((x) => +x.toFixed(3)).join(",");
-const elementPunkte = (el) => ({ linie: () => el.pts, rechteck: () => [el.a, [el.b[0], el.a[1]], el.b, [el.a[0], el.b[1]]], kreis: () => [el.c],
+const elementPunkte = (el) => ({ linie: () => el.pts, spline: () => el.pts, ellipse: () => [el.c, el.a], rechteck: () => [el.a, [el.b[0], el.a[1]], el.b, [el.a[0], el.b[1]]], kreis: () => [el.c],
   bogen: () => [el.a, el.b, bogenDaten(el)?.c || el.m], langloch: () => [el.a, el.b], punkt: () => [el.p] })[el.art]();
-const ELEMENTNAME = { linie: "Linie", rechteck: "Rechteck", kreis: "Kreis", bogen: "Bogen", langloch: "Langloch", punkt: "Punkt" };
+const ELEMENTNAME = { spline: "Spline", ellipse: "Ellipse", linie: "Linie", rechteck: "Rechteck", kreis: "Kreis", bogen: "Bogen", langloch: "Langloch", punkt: "Punkt" };
 const elementKanten = (el) => {
   if (el.art === "langloch") { // die beiden geraden Seiten
     const L = Math.hypot(el.b[0] - el.a[0], el.b[1] - el.a[1]) || 1, n = [-(el.b[1] - el.a[1]) / L * el.r, (el.b[0] - el.a[0]) / L * el.r];
@@ -2151,6 +2154,8 @@ const WERKZEUGE = {
   bogenM: { knopf: "tBogen", ein: (n) => (n === 2 ? ["∠"] : ["R"]), text: "Bogen um Mittelpunkt: Mitte, Start (oder Radius eintippen), dann Ende (oder Winkel eintippen)." },
   polygon: { knopf: "tPolygon", ein: () => ["R", "n"], text: "Polygon: Mitte, dann eine Ecke anklicken. Umkreisradius R und Eckenzahl n lassen sich eintippen." },
   langloch: { knopf: "tLangloch", ein: (n) => (n === 2 ? ["B"] : ["L", "B"]), text: "Langloch: Mitte der ersten, dann der zweiten Rundung, dann die Breite anklicken – oder Länge und Breite eintippen." },
+  spline: { knopf: "tSpline", text: "Spline: Stützpunkte anklicken – die Kurve geht durch alle Punkte. Doppelklick, Enter oder Esc beendet, Klick auf den ersten Punkt schliesst." },
+  ellipse: { knopf: "tEllipse", ein: (n) => (n === 2 ? ["b"] : ["a"]), text: "Ellipse: Mitte, Ende der Hauptachse, dann die Breite anklicken – oder Halbachsen a/b eintippen." },
   punkt: { knopf: "tPunkt", text: "Punkt: Stelle anklicken (z. B. als Bezug für Konstruktionsebenen)." },
   abrunden: { aendern: true, knopf: "tAbrunden", ein: () => ["R"], immer: true, text: "Abrunden: Radius eintippen (Enter), dann Ecken anklicken. Beim Blechprofil wird daraus der Biegeradius." },
   versatz: { aendern: true, knopf: "tVersatz", ein: () => ["Abst."], text: "Versatz: Element anklicken, dann mit der Maus die Seite zeigen und klicken – oder Abstand eintippen und Enter." },
@@ -2334,6 +2339,16 @@ function klick(uv, fang, sm, ref) {
       else { const r = abstandZurGeraden(uv, P[0], P[1]); fertig(r > 0 ? { art: "langloch", a: P[0], b: P[1], r } : null); }
       break;
     case "punkt": fertig({ art: "punkt", p: uv }); break;
+    case "spline": {
+      const erster = P[0];
+      if (erster && P.length >= 3 && fang && uv[0] === erster[0] && uv[1] === erster[1]) fertig({ art: "spline", pts: P.slice(), geschlossen: true });
+      else if (!P.length || abst(uv, P.at(-1)) > 1e-6) P.push(uv);
+      break;
+    }
+    case "ellipse":
+      if (P.length < 2) { if (!P.length || abst(P[0], uv) > 1e-6) P.push(uv); }
+      else { const r2 = abstandZurGeraden(uv, P[0], P[1]); fertig(r2 > 0 ? { art: "ellipse", c: P[0], a: P[1], r2 } : null); }
+      break;
     case "abrunden": abrunden(sm); break;
     case "versatz": versatzKlick(uv, sm); break;
     case "spiegeln": spiegelnKlick(sm); break;
@@ -2431,7 +2446,7 @@ function spiegelnKlick(sm) {
   const sp = (p) => spiegelPunkt(p, achse[0], achse[1]), q = s.quelle;
   const neu = { linie: () => ({ art: "linie", pts: q.pts.map(sp), geschlossen: q.geschlossen, ...(q.radien ? { radien: { ...q.radien } } : {}) }),
     rechteck: () => ({ art: "linie", pts: elementPunkte(q).map(sp), geschlossen: true }), kreis: () => ({ art: "kreis", c: sp(q.c), r: q.r }),
-    bogen: () => ({ art: "bogen", a: sp(q.a), b: sp(q.b), m: sp(q.m) }), langloch: () => ({ art: "langloch", a: sp(q.a), b: sp(q.b), r: q.r }), punkt: () => ({ art: "punkt", p: sp(q.p) }) }[q.art]();
+    bogen: () => ({ art: "bogen", a: sp(q.a), b: sp(q.b), m: sp(q.m) }), spline: () => ({ art: "spline", pts: q.pts.map(sp), geschlossen: q.geschlossen }), ellipse: () => ({ art: "ellipse", c: sp(q.c), a: sp(q.a), r2: q.r2 }), langloch: () => ({ art: "langloch", a: sp(q.a), b: sp(q.b), r: q.r }), punkt: () => ({ art: "punkt", p: sp(q.p) }) }[q.art]();
   if (q.hilfs) neu.hilfs = true;
   s.f.elemente.push(neu); s.quelle = null; status("Gespiegelt. Nächstes Element anklicken.");
 }
@@ -2663,6 +2678,7 @@ function projizieren(sm) {
 }
 function abschliessenLinie() {
   if (skizze?.werkzeug === "linie" && skizze.pkt.length >= 2) erstelle([{ art: "linie", pts: skizze.pkt.slice(), geschlossen: false }], null, { hv: true });
+  if (skizze?.werkzeug === "spline" && skizze.pkt.length >= 2) erstelle([{ art: "spline", pts: skizze.pkt.slice(), geschlossen: false }]);
   if (skizze) { skizze.pkt = []; skizze.fangRefs = []; }
   zeichneLive();
 }
@@ -2698,6 +2714,10 @@ function eingabeAnwenden() {
       else if (P.length === 2 && Number.isFinite(a)) { const c = P[0], r = abst(c, P[1]), w0 = Math.atan2(P[1][1] - c[1], P[1][0] - c[0]) + (a * Math.PI) / 180; klick([c[0] + r * Math.cos(w0), c[1] + r * Math.sin(w0)]); }
       break;
     case "polygon": if (a > 0) klick(ziel(a)); break;
+    case "ellipse":
+      if (P.length === 1 && a > 0) klick(ziel(a));
+      else if (P.length === 2 && a > 0) { erstelle([{ art: "ellipse", c: P[0], a: P[1], r2: a }]); s.pkt = []; $("eingabe").hidden = true; zeichneLive(); }
+      break;
     case "langloch":
       if (P.length === 1 && a > 0) { klick(ziel(a)); if (b > 0) { erstelle([{ art: "langloch", a: s.pkt[0], b: s.pkt[1], r: b / 2 }]); s.pkt = []; $("eingabe").hidden = true; zeichneLive(); } }
       else if (P.length === 2 && a > 0) { erstelle([{ art: "langloch", a: P[0], b: P[1], r: a / 2 }]); s.pkt = []; $("eingabe").hidden = true; zeichneLive(); }
@@ -2953,6 +2973,8 @@ function zeichneLive() {
       case "kreis3": if (P.length === 1) strich(); else { const k = kreisDurch3(P[0], P[1], m); vor(k ? { art: "kreis", c: k.c, r: k.r } : { art: "linie", pts: [P[0], P[1], m] }); } break;
       case "bogen3": if (P.length === 1) strich(); else vor(bogenDaten({ a: P[0], b: P[1], m }) ? { art: "bogen", a: P[0], b: P[1], m } : null); break;
       case "bogenM": if (P.length === 1) strich(); else vor({ art: "bogen", ...bogenAusMitte(P[0], P[1], m) }); break;
+      case "spline": vor({ art: "spline", pts: [...P, m] }); break;
+      case "ellipse": if (P.length === 1) strich(); else { const r2 = abstandZurGeraden(m, P[0], P[1]); if (r2 > 0) vor({ art: "ellipse", c: P[0], a: P[1], r2 }); } break;
       case "polygon": if (abst(P[0], m) > 0) vor({ art: "linie", pts: polygonPunkte(P[0], m, s.ecken), geschlossen: true }); break;
       case "langloch": if (P.length === 1) strich(); else { const r = abstandZurGeraden(m, P[0], P[1]); if (r > 0) vor({ art: "langloch", a: P[0], b: P[1], r }); } break;
     }
@@ -2997,6 +3019,7 @@ function zeichneLive() {
       lab(el.a, [el.a[0], el.b[1]], f1(Math.abs(el.b[1] - el.a[1])), ed && { el, art: "hoehe" });
     } else if (el.art === "kreis") { if (frei("K:" + el.id)) lab(el.c, [el.c[0] + el.r * 2, el.c[1]], "Ø " + f1(el.r * 2), ed && { el, art: "durchmesser" }); }
     else if (el.art === "bogen") { const d = bogenDaten(el); if (d && frei("K:" + el.id)) lab(el.m, el.m, "R " + f1(d.r), ed && { el, art: "bogenR" }, true); }
+    else if (el.art === "ellipse") { lab(el.c, el.a, "a " + f1(abst(el.c, el.a)), false); lab(el.c, el.c, "b " + f1(el.r2), false, true); }
     else if (el.art === "langloch") { if (frei("L:" + el.id + ":a:b")) lab(el.a, el.b, f1(abst(el.a, el.b)), ed && { el, art: "langL" }); if (frei("K:" + el.id)) lab(el.b, el.b, "B " + f1(el.r * 2), ed && { el, art: "langB" }, true); }
   }
   // Treibende Masse (fett, umrandet) und Symbole der Abhängigkeiten (anklicken → Entf löscht)
@@ -3099,7 +3122,7 @@ leinwand.addEventListener("pointerup", (e) => {
   const ebenenTreffer = strahl.intersectObjects(modell.children.filter((o) => o.userData.ebene), true).find((x) => x.object.isMesh);
   waehle(treffer ? treffer.object.userData.fid : ebenenTreffer ? ebenenTreffer.object.userData.ebene : null);
 });
-leinwand.addEventListener("dblclick", () => { if (skizze?.werkzeug === "linie") abschliessenLinie(); });
+leinwand.addEventListener("dblclick", () => { if (skizze?.werkzeug === "linie" || skizze?.werkzeug === "spline") abschliessenLinie(); });
 document.addEventListener("keydown", (e) => {
   if (!skizze) return;
   const imFeld = e.target.closest?.("#eingabe");

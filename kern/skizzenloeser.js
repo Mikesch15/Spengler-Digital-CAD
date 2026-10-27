@@ -43,8 +43,9 @@ export function punkte(f) {
   const out = [{ ref: { e: "O" }, uv: [0, 0], e: "O" }];
   for (const el of f.elemente) {
     const p = (k, uv) => out.push({ ref: { e: el.id, k }, uv, e: el.id, el });
-    if (el.art === "linie") el.pts.forEach((q, i) => p("p" + i, q));
+    if (el.art === "linie" || el.art === "spline") el.pts.forEach((q, i) => p("p" + i, q));
     else if (el.art === "kreis") p("c", el.c);
+    else if (el.art === "ellipse") { p("c", el.c); p("a", el.a); }
     else if (el.art === "bogen") { p("a", el.a); p("b", el.b); const d = bogenDaten(el); if (d) p("c", d.c); }
     else if (el.art === "langloch") { p("a", el.a); p("b", el.b); }
     else if (el.art === "punkt") p("p", el.p);
@@ -64,8 +65,9 @@ export function modell(f) {
     elVars.set(el.id, []);
     const k = (n, p) => neuP(el.id + ":" + n, p, el);
     const r = (w) => { rad.set(el.id, x.length); elVars.get(el.id).push(x.length); x.push(w); };
-    if (el.art === "linie") el.pts.forEach((p, i) => k("p" + i, p));
+    if (el.art === "linie" || el.art === "spline") el.pts.forEach((p, i) => k("p" + i, p));
     else if (el.art === "kreis") { k("c", el.c); r(el.r); }
+    else if (el.art === "ellipse") { k("c", el.c); k("a", el.a); r(el.r2); }
     else if (el.art === "bogen") { const d = bogenDaten(el); if (d) { k("c", d.c); k("a", el.a); k("b", el.b); bogen.push({ el, sg: Math.sign(d.sweep) || 1 }); } }
     else if (el.art === "langloch") { k("a", el.a); k("b", el.b); r(el.r); }
     else if (el.art === "punkt") k("p", el.p);
@@ -166,7 +168,8 @@ function schreibe(f, M, x, fest) {
   const P = (key) => { const i = M.pkt.get(key); return [x[i[0]], x[i[1]]]; };
   for (const el of f.elemente) {
     const id = el.id;
-    if (el.art === "linie") el.pts = el.pts.map((_, i) => P(id + ":p" + i));
+    if (el.art === "linie" || el.art === "spline") el.pts = el.pts.map((_, i) => P(id + ":p" + i));
+    else if (el.art === "ellipse") { el.c = P(id + ":c"); el.a = P(id + ":a"); el.r2 = Math.abs(x[M.rad.get(id)]); }
     else if (el.art === "kreis") { el.c = P(id + ":c"); el.r = Math.abs(x[M.rad.get(id)]); }
     else if (el.art === "langloch") { el.a = P(id + ":a"); el.b = P(id + ":b"); el.r = Math.abs(x[M.rad.get(id)]); }
     else if (el.art === "punkt") el.p = P(id + ":p");

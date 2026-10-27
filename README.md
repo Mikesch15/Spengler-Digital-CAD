@@ -26,6 +26,9 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
   bestimmte Geometrie dunkel; Ziehen hält alle Abhängigkeiten ein (eigener Gleichungslöser)
 - **Konstruieren (wie Fusion):** Konstruktionsebenen versetzt, unter Winkel, Mittelebene, durch zwei Kanten,
   durch drei Punkte, tangential, entlang Pfad; Bezüge und Skizzierebene (auch Körperflächen) in der 3D-Ansicht anklicken
+- **Modellieren wie Fusion:** Extrudieren und Drehen mit Vereinigen/Ausschneiden/Schneiden; Parameter mit Formeln
+  in allen Massen; Messen und Schnittanalyse; Konstruktionsachsen und -punkte; Zeitleiste mit Rückrollmarke,
+  Unterdrücken und Verschieben; Spline und Ellipse in der Skizze
 - **Flächenblech mit Kantenbausteinen:** nur die Grundfläche skizzieren, Kante anklicken und Baustein zuweisen
   (Doppelstehfalz mit automatischem Gegenstück, Traufe, Ortgang, Wasserfalz, Saum …); Zuschnitt mit
   Eckausklinkung, Biegelinien, Abkantliste, DXF; Bausteine in den Einstellungen selbst erfassen und anpassen
@@ -50,6 +53,7 @@ kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Progra
   zuschnitt.js   Materialbedarf (Spaltband, Coil, Tafeln)
   skizze.js      Skizzengeometrie (Bögen, Abrunden, Versatz, Spiegeln, Schnitte, Verbinden)
   ebenen.js      Konstruktionsebenen (versetzt, Winkel, Mitte, Kanten, Punkte, tangential, Pfad)
+  ausdruck.js    Formelrechner und Parameter
   loeser.js      Gleichungslöser (Levenberg–Marquardt, Freiheitsgrade)
   bedingungen.js Abhängigkeiten und Masse als Gleichungen
   flaechenblech.js Flächenblech: Kantenbausteine, Zugaben, Zuschnitt mit Ausklinkung, Biegelinien
