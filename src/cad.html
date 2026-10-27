@@ -60,6 +60,9 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .typ.skizze { border: 1.5px solid var(--sketch); }
 .typ.koerper { background: var(--muted); }
 .typ.blech { background: var(--accent); }
+.typ.achse { height: 2px !important; margin-top: 5px; background: #c77d16; border-radius: 0; }
+.typ.konpunkt { width: 7px !important; height: 7px !important; border-radius: 50%; background: #c77d16; }
+.menue hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 .typ.ebene { border: 1.5px solid #c77d16; background: color-mix(in srgb, #e8a33d 35%, transparent); transform: skewX(-20deg); }
 /* Wahlfelder im Dialog: das aktive Feld nimmt den Klick in der Ansicht auf */
 .feld[data-wahl] label { cursor: pointer; }
@@ -146,7 +149,12 @@ table.zeilen .weg { border: 0; background: none; color: var(--bend); font-size: 
 .zeitleiste { display: flex; align-items: center; gap: 6px; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 .zeitleiste .ztitel { font: 600 11px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; white-space: nowrap; }
 .zeitleiste button { display: flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); border-radius: 5px; padding: 4px 8px; font: 12px var(--font-body); cursor: pointer; white-space: nowrap; }
-#zeit { display: flex; gap: 6px; }
+#zeit { display: flex; gap: 6px; align-items: center; }
+#zeit button.aus { opacity: .45; text-decoration: line-through; } #zeit button.aus.zurueck { text-decoration: none; font-style: italic; }
+#zeit button.fehler { border-color: #c4352b; }
+#zeit .marke { width: 6px; align-self: stretch; min-height: 24px; border-radius: 3px; background: var(--accent); cursor: ew-resize; flex: none; }
+#baum li.aus { opacity: .45; }
+#featureMenue { position: fixed; z-index: 25; min-width: 220px; }
 .zeitleiste .rechts { margin-left: auto; display: flex; gap: 6px; }
 .zeitleiste button:disabled { opacity: .4; cursor: default; }
 /* Werkstatt */
@@ -436,6 +444,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 <div class="menue" id="zuletztMenue" hidden></div>
 <div class="menue" id="ebenenMenue" hidden></div>
 <div class="menue" id="skizzenMenue" hidden></div>
+<div class="menue" id="featureMenue" hidden></div>
 <div id="druck" aria-hidden="true"></div>
 
 <script type="module">

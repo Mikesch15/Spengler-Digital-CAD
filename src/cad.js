@@ -42,6 +42,27 @@ let doc = { features: [], zaehler: 1, objekt: "Muster, Bern", nr: "2026-001" };
 try { const s = JSON.parse(localStorage.getItem(SPEICHER) || "null"); if (s?.features) doc = s; } catch {}
 const speichern = () => { try { localStorage.setItem(SPEICHER, JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))); } catch {} };
 const neueId = () => "f" + doc.zaehler++;
+// Neues Feature an der Rückrollmarke einfügen (wie in Fusion), sonst ans Ende
+function entferneFeature(f) {
+  const i = doc.features.indexOf(f); if (i < 0) return;
+  doc.features.splice(i, 1); if (doc.marke != null && i < doc.marke) doc.marke--;
+}
+function einfuegen(f) {
+  const m = doc.marke;
+  if (m != null && m < doc.features.length) { doc.features.splice(m, 0, f); doc.marke = m + 1; } else doc.features.push(f);
+}
+// IDs anderer Features, auf die f verweist (Skizze, Ebene, Ziel, Bezüge wie «K:f3:…» oder «f5:2»)
+function bezuegeVon(f) {
+  const ids = new Set(doc.features.map((x) => x.id)), out = new Set();
+  const lauf = (v, k) => {
+    if (k && k.startsWith("_")) return;
+    if (typeof v === "string") { if (ids.has(v) && v !== f.id) out.add(v); for (const t of v.split(/[:;]/)) if (ids.has(t) && t !== f.id) out.add(t); }
+    else if (Array.isArray(v)) v.forEach((x) => lauf(x));
+    else if (v && typeof v === "object") for (const [kk, x] of Object.entries(v)) if (kk !== "id") lauf(x, kk);
+  };
+  for (const [k, v] of Object.entries(f)) if (!["id", "name", "notiz", "typ"].includes(k)) lauf(v, k);
+  return [...out];
+}
 const finde = (id) => doc.features.find((f) => f.id === id);
 // Parameter (wie «Parameter ändern» in Fusion): in jedem Zahlenfeld und Skizzenmass als Formel nutzbar, z. B. «breite / 3»
 const paramWerte = () => parameterWerte(doc.parameter || []).werte;
@@ -336,7 +357,7 @@ const grundebenen = new THREE.Group(); szene.add(grundebenen); grundebenen.visib
 for (const k of Object.keys(EBENEN)) grundebenen.add(ebenenObjekt(EBENEN[k], k, true));
 function ebenenGroesse() {
   const box = new THREE.Box3();
-  modell.children.forEach((o) => { if (!o.userData.ebene) box.expandByObject(o); });
+  modell.children.forEach((o) => { if (!o.userData.ebene && !o.userData.konstruktion) box.expandByObject(o); });
   const g = box.isEmpty() ? 300 : Math.min(Math.max(box.getSize(new THREE.Vector3()).length() * 0.7, 150), 5000);
   [...modell.children, ...grundebenen.children].forEach((o) => { if (o.userData.ebene) o.scale.set(g, g, 1); });
 }
@@ -369,6 +390,7 @@ function bezugEbene(r) {
 }
 function bezugKante(r) {
   if (!r) throw new Error("Kante wählen");
+  if (r.startsWith("X:")) { const a = finde(r.slice(2))?._achse; if (!a) throw new Error("Konstruktionsachse fehlt"); return { p: a.p, d: a.d.map((v) => v * 500), ebene: EBENEN.XY }; }
   if (r.startsWith("A:")) return { ...ACHSEN[r[2]], ebene: EBENEN[ACHSEN_EBENE[r[2]]] };
   if (r.startsWith("E:")) { const [a, b] = r.slice(2).split(";").map(zahl3); return { p: a, d: [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ebene: Math.abs(b[2] - a[2]) > 0.9 * Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) ? EBENEN.XZ : EBENEN.XY }; }
   const [, sid, ei, ki] = r.split(":"), [sk, el] = skizzeElement(sid, ei), k = elementKanten(el)[+ki];
@@ -379,6 +401,7 @@ function bezugKante(r) {
 function bezugPunkt(r) {
   if (!r) throw new Error("Punkt wählen");
   if (r === "O") return [0, 0, 0];
+  if (r.startsWith("Q:")) { const q = finde(r.slice(2))?._punkt; if (!q) throw new Error("Konstruktionspunkt fehlt"); return q; }
   if (r.startsWith("V:")) return zahl3(r.slice(2));
   const [, sid, ei, pi] = r.split(":"), [sk, el] = skizzeElement(sid, ei), q = elementPunkte(el)[+pi];
   if (!q) throw new Error("Punkt in der Skizze fehlt");
@@ -418,13 +441,13 @@ const SCHNAPP = { F: "Gewählte Körperfläche", E: "Gewählte Körperkante", V:
 const mitWert = (liste, wert) => (wert && !liste.some(([w]) => w === wert) ? [...liste, [wert, SCHNAPP[wert[0]] || wert]] : liste);
 const ebenenOpt = (f, wert) => mitWert([...Object.entries(EBENEN).map(([k, e]) => [k, e.name]), ...vorher(f).filter((x) => x.typ === "ebene" && x !== f).map((x) => [x.id, x.name])], wert);
 function kantenListe(f) {
-  const l = [["A:X", "X-Achse"], ["A:Y", "Y-Achse"], ["A:Z", "Z-Achse"]];
+  const l = [["A:X", "X-Achse"], ["A:Y", "Y-Achse"], ["A:Z", "Z-Achse"], ...vorher(f).filter((x) => x.typ === "achse" && x._achse && x !== f).map((x) => [`X:${x.id}`, x.name])];
   for (const sk of vorher(f).filter((x) => x.typ === "skizze"))
     sk.elemente.forEach((el, ei) => elementKanten(el).forEach((_, ki, alle) => l.push([`K:${sk.id}:${ei}:${ki}`, `${sk.name} · ${ELEMENTNAME[el.art]} ${ei + 1}${alle.length > 1 ? ` · Kante ${ki + 1}` : ""}`])));
   return l;
 }
 function punkteListe(f) {
-  const l = [["O", "Ursprung"]];
+  const l = [["O", "Ursprung"], ...vorher(f).filter((x) => x.typ === "konpunkt" && x._punkt && x !== f).map((x) => [`Q:${x.id}`, x.name])];
   for (const sk of vorher(f).filter((x) => x.typ === "skizze"))
     sk.elemente.forEach((el, ei) => elementPunkte(el).forEach((_, pi, alle) => l.push([`P:${sk.id}:${ei}:${pi}`, `${sk.name} · ${el.art === "kreis" ? "Kreismitte" : ELEMENTNAME[el.art]} ${ei + 1}${alle.length > 1 ? ` · Punkt ${pi + 1}` : ""}`])));
   return l;
@@ -540,14 +563,28 @@ function regen() {
   let platz = 0; // Vorlagen und freie Profile haben keine Lage: nebeneinander aufreihen statt übereinander
   const daneben = (res) => { const g = grenzen(polylinie(res.pfad)), v = [platz - g.x0, 0]; platz += g.x1 - g.x0 + einst.skizze.abstand; return v; };
   const P = (() => { const r = parameterWerte(doc.parameter || []); return r.werte; })();
+  const aus = new Set();
+  doc.features.forEach((f, i) => {
+    f._aus = (doc.marke != null && i >= doc.marke) ? "zurueck" : f.unterdrueckt ? "unterdrueckt" : null;
+    if (f._aus) { aus.add(f.id); f._teile = null; f._detail = null; f._bleche = null; }
+  });
   for (const f of doc.features) {
     f._fehler = null; f._res = null;
+    if (f._aus) continue;
     try {
+      const fehlt = bezuegeVon(f).find((id) => aus.has(id));
+      if (fehlt) throw new Error(`Bezug «${finde(fehlt).name}» ist ${finde(fehlt)._aus === "zurueck" ? "zurückgerollt" : "unterdrückt"}`);
       wendeAusdrueckeAn(f, P);
       if (f.typ === "ebene") {
         f._ebene = null;
         f._ebene = baueEbene(f);
         if (!f.versteckt) modell.add(ebenenObjekt(f._ebene, f.id));
+      } else if (f.typ === "achse") {
+        f._achse = null; f._achse = baueAchse(f);
+        if (!f.versteckt) modell.add(achsenObjekt(f._achse, f.id));
+      } else if (f.typ === "konpunkt") {
+        f._punkt = null; f._punkt = bauePunkt(f);
+        if (!f.versteckt) modell.add(punktObjekt(f._punkt, f.id));
       } else if (f.typ === "skizze") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         if (skizzenAusdruecke(f, P) && !loeseSkizze(f).ok) throw new Error("Skizze lässt sich mit den Parameterwerten nicht lösen");
@@ -699,12 +736,13 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 function zeigeBrowser() {
-  const eb = doc.features.filter((f) => f.typ === "ebene"), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && f.typ !== "ebene");
-  const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}"><span class="typ ${typ}"></span>${f.name}${f._fehler ? " ⚠" : ""}
+  const KON = ["ebene", "achse", "konpunkt"];
+  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
+  const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}"><span class="typ ${typ}"></span>${f.name}${f._fehler ? " ⚠" : ""}
     <button class="auge" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}">${f.versteckt ? "○" : "●"}</button></li>`;
-  $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, "ebene")).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
+  $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, f.typ === "ebene" ? "ebene" : f.typ)).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
     <li class="kopf">Körper</li>${kp.map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech")).join("") || '<li class="hinweis">Noch keine</li>'}`;
 }
 $("baum").addEventListener("click", (e) => {
@@ -716,12 +754,66 @@ $("baum").addEventListener("click", (e) => {
 $("baum").addEventListener("dblclick", (e) => { const id = e.target.closest("li")?.dataset.id; if (id) bearbeite(finde(id)); });
 
 function zeigeZeit() {
-  $("zeit").innerHTML = doc.features.map((f) => `<button data-id="${f.id}" title="${f._fehler || "Bearbeiten"}">${f.name}${f._fehler ? " ⚠" : ""}</button>`).join("")
-    || '<span class="hinweis">Leer: mit «Skizze» oder «Spengler-Vorlage» beginnen</span>';
+  const m = doc.marke ?? doc.features.length;
+  const knopf = (f) => `<button data-id="${f.id}" draggable="true" class="${f._aus ? "aus " + f._aus : ""}${f._fehler ? " fehler" : ""}" title="${esc(f._fehler || (f._aus === "unterdrueckt" ? "Unterdrückt" : f._aus ? "Zurückgerollt" : "Bearbeiten – Rechtsklick für mehr"))}">${esc(f.name)}${f._fehler ? " ⚠" : ""}</button>`;
+  const marke = `<span class="marke" draggable="true" title="Rückrollmarke: ziehen oder Rechtsklick auf ein Feature → «Bis hier zurückrollen»"></span>`;
+  $("zeit").innerHTML = doc.features.length ? [...doc.features.slice(0, m).map(knopf), marke, ...doc.features.slice(m).map(knopf)].join("")
+    : '<span class="hinweis">Leer: mit «Skizze» oder «Spengler-Vorlage» beginnen</span>';
   $("rueckgaengig").disabled = !doc.features.length || !!skizze;
 }
-$("zeit").addEventListener("click", (e) => { const id = e.target.closest("button")?.dataset.id; if (id) bearbeite(finde(id)); });
-$("rueckgaengig").addEventListener("click", () => { doc.features.pop(); auswahl = null; regen(); });
+$("zeit").addEventListener("click", (e) => { const id = e.target.closest("button")?.dataset.id; const f = finde(id); if (!f) return; if (f._aus) return status(`«${f.name}» ist ${f._aus === "zurueck" ? "zurückgerollt – Marke dahinter ziehen" : "unterdrückt – Rechtsklick → Aktivieren"}.`); bearbeite(f); });
+// Ziehen: Feature verschieben (nur wenn Bezüge davor bleiben) oder Rückrollmarke setzen
+let gezogen = null;
+$("zeit").addEventListener("dragstart", (e) => { gezogen = e.target.closest(".marke") ? "marke" : e.target.closest("button")?.dataset.id; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", gezogen || ""); });
+$("zeit").addEventListener("dragover", (e) => { if (gezogen) { e.preventDefault(); } });
+$("zeit").addEventListener("drop", (e) => {
+  e.preventDefault(); if (!gezogen || skizze || dlg) return;
+  const knoepfe = [...$("zeit").querySelectorAll("button[data-id]")];
+  let ziel = knoepfe.findIndex((b) => { const r = b.getBoundingClientRect(); return e.clientX < r.left + r.width / 2; }); if (ziel < 0) ziel = knoepfe.length;
+  if (gezogen === "marke") { doc.marke = ziel >= doc.features.length ? null : ziel; gezogen = null; regen(); return status(doc.marke == null ? "Alle Features aktiv." : `Zurückgerollt vor «${doc.features[ziel].name}».`); }
+  verschiebeFeature(finde(gezogen), ziel); gezogen = null;
+});
+function verschiebeFeature(f, ziel) {
+  const von = doc.features.indexOf(f); if (von < 0) return;
+  const liste = doc.features.filter((x) => x !== f), pos = ziel > von ? ziel - 1 : ziel;
+  liste.splice(pos, 0, f);
+  const davor = new Set(liste.slice(0, pos).map((x) => x.id));
+  const fehlt = bezuegeVon(f).find((id) => !davor.has(id));
+  if (fehlt) return status(`«${f.name}» braucht «${finde(fehlt).name}» – kann nicht davor stehen.`);
+  const frueher = liste.slice(0, pos).find((x) => bezuegeVon(x).includes(f.id));
+  if (frueher) return status(`«${frueher.name}» verwendet «${f.name}» – es muss davor bleiben.`);
+  doc.features = liste; regen(); status(`«${f.name}» verschoben.`);
+}
+// Kontextmenü (Rechtsklick oder langes Antippen) in Zeitleiste und Browser
+function featureMenue(f, x, y) {
+  const m = $("featureMenue"), i = doc.features.indexOf(f);
+  const punkte = [["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
+    ["zurueck", "Bis hier zurückrollen (danach aus)"], ["ende", "Alle aktivieren (Marke ans Ende)"], ["links", "Nach vorne verschieben"], ["rechts", "Nach hinten verschieben"],
+    ["kopie", "Duplizieren"], ["weg", "Löschen"]];
+  m.innerHTML = punkte.map(([k, t]) => `<button data-fm="${k}" ${(k === "links" && i === 0) || (k === "rechts" && i === doc.features.length - 1) || (k === "ende" && doc.marke == null) ? "disabled" : ""}>${t}</button>`).join("");
+  m.dataset.id = f.id; m.hidden = false;
+  Object.assign(m.style, { left: Math.min(x, innerWidth - 240) + "px", top: Math.min(y, innerHeight - 330) + "px" });
+}
+for (const box of ["zeit", "baum"]) $(box).addEventListener("contextmenu", (e) => {
+  const id = e.target.closest("[data-id]")?.dataset.id, f = finde(id); if (!f || skizze) return;
+  e.preventDefault(); featureMenue(f, e.clientX, e.clientY);
+});
+document.addEventListener("click", (e) => { if (!e.target.closest?.("#featureMenue")) $("featureMenue").hidden = true; });
+$("featureMenue").onclick = (e) => {
+  const k = e.target.closest("button")?.dataset.fm; if (!k) return;
+  const f = finde($("featureMenue").dataset.id), i = doc.features.indexOf(f); $("featureMenue").hidden = true; if (!f) return;
+  if (dlg) $("dAbbrechen").click();
+  if (k === "bearb") { if (f._aus) return status("Zuerst aktivieren bzw. Marke dahinter setzen."); bearbeite(f); }
+  else if (k === "umbenennen") { const n = prompt("Neuer Name", f.name); if (n?.trim()) { f.name = n.trim(); regen(); } }
+  else if (k === "unter") { f.unterdrueckt = !f.unterdrueckt; regen(); status(f.unterdrueckt ? `«${f.name}» unterdrückt – zählt nicht mehr (auch nicht in der Stückliste).` : `«${f.name}» wieder aktiv.`); }
+  else if (k === "zurueck") { doc.marke = i + 1 >= doc.features.length ? null : i + 1; regen(); status("Zurückgerollt – neue Features kommen an die Marke."); }
+  else if (k === "ende") { doc.marke = null; regen(); status("Alle Features aktiv."); }
+  else if (k === "links") verschiebeFeature(f, i - 1);
+  else if (k === "rechts") verschiebeFeature(f, i + 2);
+  else if (k === "kopie") dupliziere(f);
+  else if (k === "weg") { entferneFeature(f); if (auswahl === f.id) auswahl = null; regen(); status(`«${f.name}» gelöscht. Strg+Z holt es zurück.`); }
+};
+$("rueckgaengig").addEventListener("click", () => { const f = doc.features[(doc.marke ?? doc.features.length) - 1]; if (f) entferneFeature(f); auswahl = null; regen(); });
 
 function waehle(id) {
   auswahl = id; markiere(); zeigeWerkstatt();
@@ -977,7 +1069,7 @@ $("dLoeschen").onclick = () => { dlg?.loeschen?.(); schliesse(); regen(); };
 // Neue oder bestehende Features mit Live-Vorschau. felder(f) liefert die Felder, setze(f, w) übernimmt Werte.
 function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
   const kopie = JSON.parse(JSON.stringify(f, (k, v) => (k.startsWith("_") ? undefined : v))), alteAuswahl = auswahl;
-  if (istNeu) doc.features.push(f);
+  if (istNeu) einfuegen(f);
   auswahl = f.id; // Werkstatt zeigt das Teil schon während der Eingabe
   dialog({
     titel, hinweis, felder: felder(f), feature: f,
@@ -989,8 +1081,8 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
       regen();
     },
     ok: (w) => { setze(f, w); merkeAusdruecke(f); auswahl = f.id; },
-    abbrechen: () => { if (istNeu) { doc.features.splice(doc.features.indexOf(f), 1); auswahl = alteAuswahl; } else Object.assign(f, kopie); },
-    loeschen: istNeu ? null : () => { doc.features.splice(doc.features.indexOf(f), 1); auswahl = null; },
+    abbrechen: () => { if (istNeu) { entferneFeature(f); auswahl = alteAuswahl; } else Object.assign(f, kopie); },
+    loeschen: istNeu ? null : () => { entferneFeature(f); auswahl = null; },
   });
   setze(f, werte()); regen();
 }
@@ -1011,6 +1103,7 @@ function bearbeite(f) {
   if (f.typ === "detailteil" || f.typ === "flaechenteil") return bearbeite(f.eltern);
   if (f.typ === "flaeche") return flaecheDialog(f);
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
+  if (f.typ === "achse" || f.typ === "konpunkt") return konstruktionDialog(f.typ, f.art, f);
 }
 
 // Konstruktionsebene erstellen oder bearbeiten (Felder je nach Art, wie in Fusion)
@@ -1459,6 +1552,74 @@ $("bOk").onclick = () => {
   $("bEditor").hidden = true; bEdit = null;
   fertig?.(b); status(`Baustein «${b.name}» gespeichert.`);
 };
+
+// ------------------------------------------------------------ Konstruieren: Achsen und Punkte (wie in Fusion)
+const ACHSEN_ARTEN = { kante: "Achse durch Kante", punkte: "Achse durch zwei Punkte", normal: "Achse senkrecht zur Ebene durch Punkt", ebenen: "Achse als Schnitt zweier Ebenen" };
+const PUNKT_ARTEN = { koordinaten: "Punkt mit Koordinaten", mitte: "Punkt in Kantenmitte", zwischen: "Punkt zwischen zwei Punkten", kanteEbene: "Punkt: Kante schneidet Ebene" };
+const v3n = (a) => { const l = Math.hypot(...a) || 1; return a.map((x) => x / l); };
+const kreuz3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const skal3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+function baueAchse(f) {
+  switch (f.art) {
+    case "kante": { const k = bezugKante(f.ref); return { p: k.p, d: v3n(k.d) }; }
+    case "punkte": { const a = bezugPunkt(f.p1), b = bezugPunkt(f.p2), d = b.map((v, i) => v - a[i]); if (Math.hypot(...d) < 1e-9) throw new Error("Die Punkte fallen zusammen"); return { p: a, d: v3n(d) }; }
+    case "normal": { const e = bezugEbene(f.ref); return { p: bezugPunkt(f.p1), d: v3n(e.n) }; }
+    case "ebenen": {
+      const a = bezugEbene(f.ref), b = bezugEbene(f.ref2), d = kreuz3(a.n, b.n);
+      if (Math.hypot(...d) < 1e-9) throw new Error("Die Ebenen sind parallel");
+      // Punkt auf beiden Ebenen: p = (d1 (n2×d) + d2 (d×n1)) / |d|²
+      const d1 = skal3(a.n, a.o), d2 = skal3(b.n, b.o), dd = skal3(d, d), x = kreuz3(b.n, d), y = kreuz3(d, a.n);
+      return { p: x.map((v, i) => (d1 * v + d2 * y[i]) / dd), d: v3n(d) };
+    }
+  }
+  throw new Error("Unbekannte Achsenart");
+}
+function bauePunkt(f) {
+  switch (f.art) {
+    case "koordinaten": return [f.x || 0, f.y || 0, f.z || 0];
+    case "mitte": { const k = bezugKante(f.ref); return k.p.map((v, i) => v + k.d[i] / 2); }
+    case "zwischen": { const a = bezugPunkt(f.p1), b = bezugPunkt(f.p2); return a.map((v, i) => (v + b[i]) / 2); }
+    case "kanteEbene": {
+      const k = bezugKante(f.ref), e = bezugEbene(f.ref2), nd = skal3(e.n, k.d);
+      if (Math.abs(nd) < 1e-12) throw new Error("Kante ist parallel zur Ebene");
+      const t = skal3(e.n, e.o.map((v, i) => v - k.p[i])) / nd; return k.p.map((v, i) => v + k.d[i] * t);
+    }
+  }
+  throw new Error("Unbekannte Punktart");
+}
+function achsenObjekt(a, id) {
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(a.p).addScaledVector(V(a.d), -1500), V(a.p).addScaledVector(V(a.d), 1500)]),
+    new THREE.LineDashedMaterial({ color: 0xc77d16, dashSize: 12, gapSize: 6 }));
+  l.computeLineDistances(); l.userData.konstruktion = id; return l;
+}
+function punktObjekt(q, id) {
+  const o = new THREE.Points(new THREE.BufferGeometry().setFromPoints([V(q)]), new THREE.PointsMaterial({ color: 0xc77d16, size: 9, sizeAttenuation: false, depthTest: false }));
+  o.renderOrder = 12; o.userData.konstruktion = id; return o;
+}
+function konstruktionDialog(typ, art, f) {
+  const istNeu = !f, ARTEN = typ === "achse" ? ACHSEN_ARTEN : PUNKT_ARTEN;
+  if (!f) {
+    const n = doc.features.filter((x) => x.typ === typ).length + 1;
+    f = { id: neueId(), typ, art, name: `${typ === "achse" ? "Achse" : "Punkt"} ${n}`,
+      ...({ kante: { ref: "A:Z" }, punkte: { p1: "O", p2: punkteListe()[1]?.[0] || "O" }, normal: { ref: "XY", p1: "O" }, ebenen: { ref: "XY", ref2: "YZ" },
+        koordinaten: { x: 0, y: 0, z: 0 }, mitte: { ref: kantenListe()[3]?.[0] || "A:X" }, zwischen: { p1: "O", p2: punkteListe()[1]?.[0] || "O" }, kanteEbene: { ref: "A:Z", ref2: "XY" } })[art] };
+  }
+  const wahl = (id, label, w, liste) => ({ id, label, wahl: w, optionen: mitWert(liste.length ? liste : [["", "– nichts vorhanden –"]], f[id]), wert: f[id] });
+  const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, ...({
+    kante: () => [wahl("ref", "Kante", "kante", kantenListe(f))],
+    punkte: () => [wahl("p1", "Punkt 1", "punkt", punkteListe(f)), wahl("p2", "Punkt 2", "punkt", punkteListe(f))],
+    normal: () => [wahl("ref", "Ebene", "ebene", ebenenOpt(f)), wahl("p1", "Durch Punkt", "punkt", punkteListe(f))],
+    ebenen: () => [wahl("ref", "Erste Ebene", "ebene", ebenenOpt(f)), wahl("ref2", "Zweite Ebene", "ebene", ebenenOpt(f))],
+    koordinaten: () => ["x", "y", "z"].map((k) => ({ id: k, label: k.toUpperCase(), einheit: "mm", wert: f[k] ?? 0 })),
+    mitte: () => [wahl("ref", "Kante", "kante", kantenListe(f))],
+    zwischen: () => [wahl("p1", "Punkt 1", "punkt", punkteListe(f)), wahl("p2", "Punkt 2", "punkt", punkteListe(f))],
+    kanteEbene: () => [wahl("ref", "Kante", "kante", kantenListe(f)), wahl("ref2", "Ebene", "ebene", ebenenOpt(f))],
+  }[f.art])()];
+  const v = (a) => a.map((x) => +x.toFixed(1)).join(" / ");
+  featureDialog(f, istNeu, felder, (f, w) => Object.assign(f, w, { name: w.name?.trim() || f.name }), ARTEN[f.art],
+    "Bezüge in der Ansicht anklicken oder in der Liste wählen. Achsen und Punkte stehen danach in allen Bezugslisten (Ebenen, weitere Achsen/Punkte).",
+    { info: () => (f._fehler ? "⚠ " + f._fehler : f._achse ? `Durch ${v(f._achse.p)} · Richtung ${v(f._achse.d.map((x) => x * 1))}` : f._punkt ? `Punkt ${v(f._punkt)}` : "") });
+}
 
 // ------------------------------------------------------------ Spenglerdetail: Holz + mehrere Blechteile in einem Querschnitt
 // f.detail = Vorlage (Parameter f.params) oder "frei" (f.aufbau: holz, teile mit Abkantfolge, masse)
@@ -1965,7 +2126,7 @@ function fitte(box) {
   steuerung.target.copy(c); kamera.position.copy(c.clone().add(dir.multiplyScalar(r * 3)));
   kamera.near = r / 100; kamera.far = r * 50; kamera.updateProjectionMatrix();
 }
-const alleBox = () => { const b = new THREE.Box3().setFromObject(modell); b.union(new THREE.Box3().setFromObject(live)); return b; };
+const alleBox = () => { const b = new THREE.Box3(); modell.children.forEach((o) => { if (!o.userData.konstruktion) b.expandByObject(o); }); b.union(new THREE.Box3().setFromObject(live)); return b; }; // Achsen sind «unendlich» lang
 function ansicht(name) {
   const d = { oben: [0, 1, 0.0001], vorne: [0, 0, 1], rechts: [1, 0, 0], iso: [0.7, 0.5, 0.8] }[name];
   kamera.position.copy(steuerung.target.clone().add(V(d).normalize()));
@@ -2077,7 +2238,7 @@ function beendeSkizze() {
   abschliessenLinie();
   const f = skizze.f;
   skizze = null;
-  if (!f.elemente.length) doc.features.splice(doc.features.indexOf(f), 1);
+  if (!f.elemente.length) entferneFeature(f);
   $("gSkizze").hidden = true;
   ["wSkizze", "wExtrusion", "wDrehung", "wBlech", "wVorlage", "wProfil", "wDetail", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
   steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
@@ -2964,10 +3125,10 @@ function neueSkizze(ebenenId) {
   let id = ebenenId;
   if (id.startsWith("F:")) { // Körperfläche: erst eine Ebene darauf anlegen, dann darauf skizzieren
     const e = { id: neueId(), typ: "ebene", art: "flaeche", name: "Ebene auf Fläche " + (doc.features.filter((x) => x.art === "flaeche").length + 1), flaeche: id };
-    doc.features.push(e); id = e.id; regen();
+    einfuegen(e); id = e.id; regen();
   }
   const f = { id: neueId(), typ: "skizze", name: "Skizze " + (doc.features.filter((x) => x.typ === "skizze").length + 1), ebene: id, elemente: [] };
-  doc.features.push(f); setTimeout(() => starteSkizze(f));
+  einfuegen(f); setTimeout(() => starteSkizze(f));
 }
 $("wSkizze").onclick = () => {
   if (dlg) $("dAbbrechen").click();
@@ -2988,12 +3149,17 @@ $("wEbene").onclick = (e) => {
   e.stopPropagation();
   const m = $("ebenenMenue");
   if (!m.hidden) { m.hidden = true; return; }
-  m.innerHTML = Object.entries(EBENEN_ARTEN).filter(([k]) => k !== "flaeche").map(([k, t]) => `<button data-art="${k}"><b>${t}</b></button>`).join("");
+  m.innerHTML = Object.entries(EBENEN_ARTEN).filter(([k]) => k !== "flaeche").map(([k, t]) => `<button data-art="${k}"><b>${t}</b></button>`).join("")
+    + '<hr>' + Object.entries(ACHSEN_ARTEN).map(([k, t]) => `<button data-achse="${k}"><b>${t}</b></button>`).join("")
+    + '<hr>' + Object.entries(PUNKT_ARTEN).map(([k, t]) => `<button data-punkt="${k}"><b>${t}</b></button>`).join("");
   const r = $("wEbene").getBoundingClientRect();
   Object.assign(m.style, { left: Math.min(r.left, innerWidth - 330) + "px", top: r.bottom + 4 + "px" });
   m.hidden = false;
 };
-$("ebenenMenue").onclick = (e) => { const art = e.target.closest("button")?.dataset.art; if (!art) return; $("ebenenMenue").hidden = true; if (dlg) $("dAbbrechen").click(); ebeneDialog(art); };
+$("ebenenMenue").onclick = (e) => {
+  const b = e.target.closest("button"); if (!b) return; $("ebenenMenue").hidden = true; if (dlg) $("dAbbrechen").click();
+  if (b.dataset.art) ebeneDialog(b.dataset.art); else if (b.dataset.achse) konstruktionDialog("achse", b.dataset.achse); else if (b.dataset.punkt) konstruktionDialog("konpunkt", b.dataset.punkt);
+};
 document.addEventListener("click", (e) => { if (!e.target.closest?.("#ebenenMenue")) $("ebenenMenue").hidden = true; });
 // Skizzenwerkzeuge: Knöpfe mit ▾ öffnen ein Menü mit den Varianten (wie in Fusion)
 for (const [w, d] of Object.entries(WERKZEUGE)) if (!KNOPF_MENUE[d.knopf] && $(d.knopf)) $(d.knopf).onclick = () => { abschliessenLinie(); setzeWerkzeug(w); };
@@ -3083,7 +3249,7 @@ document.addEventListener("keydown", (e) => {
   const f = hauptVon(auswahl); if (!f) return; // Blechteil eines Details: ganzes Detail
   e.preventDefault();
   const benutzt = doc.features.filter((x) => x.skizze === f.id || x.ebene === f.id || Object.values(x).some((v) => typeof v === "string" && v.includes(":" + f.id + ":")) || [x.ref, x.ref2].includes(f.id));
-  doc.features.splice(doc.features.indexOf(f), 1); auswahl = null; regen();
+  entferneFeature(f); auswahl = null; regen();
   status(`«${f.name}» gelöscht${benutzt.length ? ` – ${benutzt.map((x) => x.name).join(", ")} hat jetzt einen fehlenden Bezug` : ""}. Strg+Z holt es zurück.`);
 });
 let neuBestaetigt = 0;
