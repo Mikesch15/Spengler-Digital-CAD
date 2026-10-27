@@ -16,6 +16,8 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
   Lagerformate, eigene Vorlagen, Vorgaben für neue Teile, Fangraster, Druckinhalt und Kopfzeile,
   Etikettenbogen, hell/dunkel, Update-Prüfung; alles als Datei auf ein anderes Gerät übertragen
 - **Bearbeiten:** Rückgängig/Wiederholen, Duplizieren, Löschen (Entf), Teile umbenennen, Notiz pro Teil
+- **Konstruieren (wie Fusion):** Konstruktionsebenen versetzt, unter Winkel, Mittelebene, durch zwei Kanten,
+  durch drei Punkte, tangential, entlang Pfad; Bezüge und Skizzierebene (auch Körperflächen) in der 3D-Ansicht anklicken
 - **Blechprofil aus Skizze:** Blech mittig, links oder rechts der Linie, Kante A an Anfang oder Ende
 - **PC-Programm:** Speichern/Öffnen mit Windows-Dialog, zuletzt geöffnete Projekte, `.sdcad` per Doppelklick,
   automatische Updates
@@ -32,6 +34,7 @@ kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Progra
   zeichnung.js   Querschnitt als SVG (Werkstatt, Druck)
   auftrag.js     Stückliste, CSV
   zuschnitt.js   Materialbedarf (Spaltband, Coil, Tafeln)
+  ebenen.js      Konstruktionsebenen (versetzt, Winkel, Mitte, Kanten, Punkte, tangential, Pfad)
 src/cad.js       Oberfläche
 src/cad.html     Seitenvorlage
 build.mjs        baut index.html und dist/ (eine Datei inkl. three.js und Schriften)
