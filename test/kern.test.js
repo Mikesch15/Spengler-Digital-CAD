@@ -6,6 +6,7 @@ import { MATERIALIEN, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf } from "../kern/dxf.js";
 import { profilSvg, abwicklungSvg } from "../kern/zeichnung.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
+import { materialbedarf, tafelnBelegen } from "../kern/zuschnitt.js";
 
 const ref = JSON.parse(readFileSync(new URL("./referenz_python.json", import.meta.url)));
 const m = MATERIALIEN[0];
@@ -77,6 +78,29 @@ for (const k of [0.33, 0.4, 0.45]) {
 ok(quelle(210, { spaltbaender: [300, 220], coil: 0, tafeln: [] }).breite === 220, "eigene Spaltbänder");
 ok(quelle(900, { spaltbaender: [300], coil: 0, tafeln: [[1250, 2500], [1000, 2000]] }).breite === 1000, "eigene Tafeln");
 ok(quelle(2000, { spaltbaender: [], coil: 1000, tafeln: [] }) === null, "zu breit");
+
+// Materialbedarf
+{
+  const lager = { spaltbaender: [200, 250, 330], coil: 1000, tafeln: [[1000, 2000], [1250, 2500]] };
+  const zk = MATERIALIEN[0], cu = MATERIALIEN[1];
+  const mb = materialbedarf([
+    { name: "Traufe", material: zk, zuschnitt: 194.9, laenge: 3000, stueck: 4 },   // Spaltband 200: 12 lfm
+    { name: "Ort", material: zk, zuschnitt: 180, laenge: 2000, stueck: 2 },        // Spaltband 200: +4 lfm
+    { name: "Kehle", material: zk, zuschnitt: 530, laenge: 2000, stueck: 3 },      // Coil 1000: 6 lfm
+    { name: "Attika", material: cu, zuschnitt: 1100, laenge: 2000, stueck: 3 },    // Tafel 1250 × 2500
+    { name: "Zu lang", material: cu, zuschnitt: 1100, laenge: 3000, stueck: 1 },
+    { name: "Zu breit", material: cu, zuschnitt: 1400, laenge: 1000, stueck: 1 },
+  ], lager);
+  const z0 = mb.find((e) => e.material === zk.name), c0 = mb.find((e) => e.material === cu.name);
+  ok(z0.baender.length === 1 && z0.baender[0].breite === 200 && Math.abs(z0.baender[0].laufmeter - 16) < 1e-9 && z0.baender[0].stueck === 6, "Bedarf Spaltband");
+  ok(z0.coil && Math.abs(z0.coil.laufmeter - 6) < 1e-9, "Bedarf Coil");
+  ok(c0.tafeln.length === 1 && c0.tafeln[0].anzahl === 3 && c0.tafeln[0].stueck === 3, "Bedarf Tafeln");
+  ok(c0.ohne.length === 2, "Bedarf: zu lang und zu breit gemeldet");
+  // 6 Streifen 300 × 1000 auf Tafel 1000 × 2000: 3 pro Regal, 2 Regale = 1 Tafel, 90 % genutzt
+  const tb = tafelnBelegen(Array.from({ length: 6 }, () => ({ b: 300, l: 1000 })), [1000, 2000]);
+  ok(tb.anzahl === 1 && Math.abs(tb.ausnutzung - 0.9) < 1e-9, `Tafeln belegen ${JSON.stringify(tb)}`);
+  ok(tafelnBelegen(Array.from({ length: 7 }, () => ({ b: 300, l: 1000 })), [1000, 2000]).anzahl === 2, "7. Streifen braucht 2. Tafel");
+}
 
 // Fehlerfall: zu kurzer Schenkel
 let geworfen = false;
