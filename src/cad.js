@@ -576,6 +576,22 @@ function profilDialog(f) {
 
 // ------------------------------------------------------------ Einstellungen: Materialien kalibrieren, Lagerformate
 let entwurf = null; // Arbeitskopie, erst «Übernehmen» speichert
+// Skizze zur Probebiegung: Streifen vor dem Biegen, danach 90° mit den Aussenmassen a und b
+const PROBE_SKIZZE = `<svg class="probeskizze" viewBox="0 0 250 150" role="img" aria-label="Skizze: Streifen mit Zuschnitt, nach dem Biegen Schenkel a und b aussen gemessen">
+  <defs><marker id="pf" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L8 4L0 8z" fill="currentColor"/></marker></defs>
+  <g font-size="11" text-anchor="middle" fill="currentColor">
+    <text x="55" y="14" font-weight="600">1. vor dem Biegen</text>
+    <rect x="10" y="26" width="90" height="5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    <line x1="10" y1="42" x2="100" y2="42" stroke="currentColor" marker-start="url(#pf)" marker-end="url(#pf)"/>
+    <text x="55" y="56">Zuschnitt</text>
+    <text x="180" y="14" font-weight="600">2. nach 90°-Biegung</text>
+    <path d="M150 30V118a6 6 0 0 0 6 6H230" fill="none" stroke="currentColor" stroke-width="5" stroke-linejoin="round"/>
+    <line x1="137" y1="30" x2="137" y2="126.5" stroke="#c4352b" marker-start="url(#pf)" marker-end="url(#pf)"/>
+    <text x="128" y="82" fill="#c4352b" font-weight="600">a</text>
+    <line x1="147.5" y1="139" x2="230" y2="139" stroke="#c4352b" marker-start="url(#pf)" marker-end="url(#pf)"/>
+    <text x="190" y="135" fill="#c4352b" font-weight="600">b</text>
+    <text x="196" y="108" font-size="10">aussen messen</text>
+  </g></svg>`;
 const probeWerte = { mat: 0, z: 130, a: "", b: "" };
 const meldung = (t) => { $("eMeldung").textContent = t; };
 const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
@@ -589,12 +605,22 @@ function zeigeEinst() {
     </tbody></table></div>
     <button class="knopf" id="eNeuMat">+ Material</button>
     <h4>K-Faktor aus Probebiegung</h4>
-    <p class="hinweis">Streifen zuschneiden, genau eine 90°-Biegung an der eigenen Abkantbank, dann beide Schenkel aussen messen.</p>
+    <div class="anleitung">
+      ${PROBE_SKIZZE}
+      <ol>
+        <li><b>Material wählen</b> und oben in der Tabelle prüfen: Dicke stimmt, Innenradius = Radius der Biegekante (Oberwange) an deiner Abkantbank.</li>
+        <li><b>Streifen zuschneiden</b>, z. B. 100 mm breit und 150–200 mm lang. Breite mit dem Messschieber nachmessen und als <b>Zuschnitt</b> eintragen.</li>
+        <li><b>Eine Biegung, genau 90°</b>: etwa in der Mitte abkanten (Anschlag ca. 50 mm), Winkel mit dem Anschlagwinkel prüfen.</li>
+        <li><b>Beide Schenkel aussen messen</b>: von der Schnittkante bis zur <i>Aussenseite</i> des anderen Schenkels (Skizze). Am besten an 2–3 Stellen messen und den Mittelwert nehmen.</li>
+        <li><b>a und b eintragen</b>, K-Faktor mit «Übernehmen» in die Tabelle setzen, dann unten «Übernehmen» zum Speichern.</li>
+      </ol>
+    </div>
+    <p class="hinweis">Je Material und Dicke einmal machen. Zur Kontrolle danach ein Profil mit mehreren Biegungen abkanten und mit der Abkantliste vergleichen.</p>
     <div class="probe">
       <label>Material <select id="pMat">${e.materialien.map((m, i) => `<option value="${i}" ${i === probeWerte.mat ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></label>
       <label>Zuschnitt mm <input id="pZ" type="number" step="any" inputmode="decimal" value="${probeWerte.z}"></label>
-      <label>Schenkel a aussen <input id="pA" type="number" step="any" inputmode="decimal" value="${probeWerte.a}"></label>
-      <label>Schenkel b aussen <input id="pB" type="number" step="any" inputmode="decimal" value="${probeWerte.b}"></label>
+      <label>Schenkel a aussen mm <input id="pA" type="number" step="any" inputmode="decimal" placeholder="z. B. 50.7" value="${probeWerte.a}"></label>
+      <label>Schenkel b aussen mm <input id="pB" type="number" step="any" inputmode="decimal" placeholder="z. B. 50.7" value="${probeWerte.b}"></label>
     </div>
     <p id="pErgebnis" class="hinweis">a und b eingeben.</p>
     <h4>Eigene Vorlagen</h4>
@@ -612,9 +638,13 @@ function probe() {
   Object.assign(probeWerte, { mat: Math.min(+$("pMat").value, entwurf.materialien.length - 1), z: $("pZ").value, a: $("pA").value, b: $("pB").value });
   const m = entwurf.materialien[probeWerte.mat], z = parseFloat(probeWerte.z), a = parseFloat(probeWerte.a), b = parseFloat(probeWerte.b);
   if (!(z > 0 && a > 0 && b > 0)) { $("pErgebnis").textContent = "Zuschnitt, a und b eingeben."; return; }
+  // Aussenmasse sind zusammen immer etwas länger als der Streifen (Biegeverkürzung)
+  const verkuerzung = a + b - z;
+  if (verkuerzung <= 0) { $("pErgebnis").textContent = `a + b (${f1(a + b)}) ist nicht grösser als der Zuschnitt (${f1(z)}). Wurde aussen gemessen, und stimmt der Zuschnitt?`; return; }
   const k = kFaktorAusProbe({ zuschnitt: z, a, b, t: m.t, ri: m.ri });
   const plausibel = k > 0.1 && k < 0.6;
-  $("pErgebnis").innerHTML = `K-Faktor für ${esc(m.name)}: <b>${k.toFixed(3)}</b>${plausibel ? ` <button class="knopf" id="pUebernehmen">Übernehmen</button>` : " – unplausibel, Masse prüfen (üblich 0.3–0.5)."}`;
+  $("pErgebnis").innerHTML = `K-Faktor für ${esc(m.name)}: <b>${k.toFixed(3)}</b> <small>(Biegeverkürzung ${verkuerzung.toFixed(2)} mm)</small>${plausibel ? ` <button class="knopf" id="pUebernehmen">Übernehmen</button>`
+    : `<br>Unplausibel – üblich sind 0.3 bis 0.5. Prüfen: genau 90° gebogen? Aussen gemessen? Dicke und Innenradius von «${esc(m.name)}» richtig?`}`;
   if (plausibel) $("pUebernehmen").onclick = () => { m.k = +k.toFixed(3); zeigeEinst(); meldung(`K-Faktor ${m.k} bei ${m.name} eingetragen – mit «Übernehmen» speichern.`); };
 }
 $("eInhalt").addEventListener("input", (ev) => {
