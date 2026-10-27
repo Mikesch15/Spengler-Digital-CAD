@@ -448,8 +448,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <span class="trenner"></span>
     <span class="menuewrap"><button class="knopf haupt" id="plNeuAnsicht">+ Ansicht ▾</button><div class="menue" id="plAnsichtMenue" hidden>
       <button data-plansicht="vorne">Ansicht vorne</button><button data-plansicht="hinten">Ansicht hinten</button><button data-plansicht="links">Ansicht links</button><button data-plansicht="rechts">Ansicht rechts</button>
-      <button data-plansicht="oben">Draufsicht</button><button data-plansicht="unten">Untersicht</button><button data-plansicht="iso">Isometrie</button></div></span>
-    <span class="menuewrap"><button class="knopf" id="plNeuDetail" title="Querschnitt eines Kantenbausteins (Flächenblech) massstäblich aufs Blatt">+ Schnitt ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
+      <button data-plansicht="oben">Draufsicht</button><button data-plansicht="unten">Untersicht</button><button data-plansicht="iso">Isometrie</button>
+      <button data-plansicht="schnitt:vorne">Schnitt (Blick von vorne)</button><button data-plansicht="schnitt:rechts">Schnitt (Blick von rechts)</button><button data-plansicht="schnitt:oben">Schnitt (Blick von oben)</button></div></span>
+    <button class="knopf" data-modus="lupe" title="Detailansicht: Stelle in einer Ansicht anklicken – wird im Kreis vergrössert">Detail (Lupe)</button>
+    <button class="knopf" id="plAutoMass" title="Gesamt- und Kettenmasse für die gewählte Ansicht">Auto-Masse</button>
+    <span class="menuewrap"><button class="knopf" id="plNeuDetail" title="Querschnitt eines Kantenbausteins (Flächenblech) massstäblich aufs Blatt">+ Bausteinschnitt ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
     <span class="trenner"></span>
     <button class="knopf" id="plDruck" title="Alle Blätter drucken oder als PDF speichern">Drucken / PDF</button><button class="knopf" id="plSvg">SVG speichern</button><button class="knopf haupt" id="plZu">Fertig</button>
   </div>
@@ -470,6 +473,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li>Das Programm rechnet Zugabe je Kante, Zuschnitt mit Eckausklinkungen, Biegelinien, Abkantliste (Anschlag ab Schnittkante), m² für die Stückliste, DXF und Werkstattblatt.</li>
       <li><b>Kante antippen</b>: Flächenblech wählen (oder öffnen) – jede Kante trägt ein Schild (K1, K2 …; grün = belegt). Kante oder Schild antippen öffnet die Bausteinliste direkt an der Stelle; Gegenstück (Ober-/Unterfalz) kommt automatisch. Auf dem Handy klappt ▾ den Dialog ein, damit die Ansicht frei ist.</li>
       <li><b>Bausteine erstellen</b>: im Flächenblech-Dialog «+ Neuer Baustein …» (wird gleich an die gewählte Kante gesetzt) oder «✎ Baustein der gewählten Kante»; ebenso unter Einstellungen → Bausteine. Der Editor zeigt den Querschnitt live mit Zugabe und Anschlagmassen; Biegungen als Tabelle (Abkanten oder Umschlag, Winkel, Radius, Schenkel) oder als Kurzschrift. Verwendete Bausteine werden im Projekt mitgespeichert.</li>
+    </ul>
+    <h4>Pläne</h4>
+    <ul>
+      <li><b>Plan</b>: Ansichten (vorne, oben, Isometrie …) mit verdeckten Kanten; <b>Schnitt</b> (im Menü «+ Ansicht»): Körper an einer Ebene geschnitten, Schnittflächen schraffiert, Schnittlinie A–A mit Pfeilen in den anderen Ansichten; Lage der Ebene rechts einstellen.</li>
+      <li><b>Detail (Lupe)</b>: Stelle in einer Ansicht anklicken – wird im Kreis vergrössert (Faktor, Radius einstellbar), Kreis und Buchstabe erscheinen in der Ausgangsansicht.</li>
+      <li><b>Auto-Masse</b>: Gesamt- und Kettenmasse der gewählten Ansicht; danach verschieben oder einzeln löschen. «+ Bausteinschnitt» setzt den Querschnitt einer Blechkante aufs Blatt.</li>
     </ul>
     <h4>Modellieren wie in Fusion</h4>
     <ul>
