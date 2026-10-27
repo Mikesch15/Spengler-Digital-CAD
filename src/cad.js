@@ -5,7 +5,8 @@ import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geom
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf } from "../kern/dxf.js";
-import { profilSvg, abwicklungSvg } from "../kern/zeichnung.js";
+import { profilSvg, abwicklungSvg, detailSvg } from "../kern/zeichnung.js";
+import { DETAILS, DETAIL, detailStandard, baueDetail, teilKontur, folge, folgeText, ROLLEN, rollenVon } from "../kern/details.js";
 import { stueckliste, stuecklisteCsv } from "../kern/auftrag.js";
 import { materialbedarf } from "../kern/zuschnitt.js";
 import { vorbereiten, loeseSkizze, analyse, fuegeHinzu, bereinige, punkte as skizzenPunkte, kantenZahl, rechteckBedingungen, neueElementId, sichereIds, IST_MASS } from "../kern/skizzenloeser.js";
@@ -39,6 +40,10 @@ try { const s = JSON.parse(localStorage.getItem(SPEICHER) || "null"); if (s?.fea
 const speichern = () => { try { localStorage.setItem(SPEICHER, JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))); } catch {} };
 const neueId = () => "f" + doc.zaehler++;
 const finde = (id) => doc.features.find((f) => f.id === id);
+// Blechteile eines Spenglerdetails haben die ID «detail:nr»; sie sind keine eigenen Features
+const teilFinden = (id) => { const [fid, i] = String(id ?? "").split(":"); return i == null ? null : finde(fid)?._teile?.[+i] || null; };
+const waehlbar = (id) => finde(id) || teilFinden(id);
+const hauptVon = (id) => finde(String(id ?? "").split(":")[0]);
 // Werkstatt-Einstellungen (pro Gerät): kalibrierte und eigene Materialien, Lagerformate
 const EINST = "sdcad-einstellungen";
 const standardEinst = () => JSON.parse(JSON.stringify({
@@ -475,6 +480,17 @@ function regen() {
         const { start, ops } = v.bau(f.params, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, farbe(m), f.id));
+      } else if (f.typ === "detail") {
+        f._detail = null; f._teile = null;
+        if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
+        const d = baueDetail(detailAufbau(f), (tl) => detailMaterial(f, tl));
+        f._detail = d;
+        f._teile = d.teile.map((tl, i) => ({ id: `${f.id}:${i}`, typ: "detailteil", eltern: f, name: `${f.name} · ${tl.name}`, material: tl.material || f.materialien?.[tl.rolle] || f.material,
+          laenge: f.laenge, stueck: f.stueck ?? 1, notiz: f.notiz, _res: tl.res }));
+        if (!f.versteckt) {
+          d.teile.forEach((tl, i) => modell.add(koerper([konturForm(tl.res, tl.m.t, tl.versatz)], f.ebene, f.laenge, f.richtung, farbe(tl.m), `${f.id}:${i}`)));
+          for (const h of d.holz) modell.add(koerper([new THREE.Shape(h.pts.map(([x, y]) => new THREE.Vector2(x, y)))], f.ebene, f.laenge, f.richtung, h.art === "led" ? 0x2a2a2a : 0xc8a46e, f.id));
+        }
       } else if (f.typ === "profil") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         const m = material(f.material);
@@ -490,6 +506,7 @@ function regen() {
   zeigeBrowser(); zeigeZeit(); zeigeWerkstatt();
   speichern(); merke();
   if (dlg?.info) { const t = dlg.info(); $("dInfo").textContent = t; $("dInfo").className = t.startsWith("⚠") ? "fehler" : ""; }
+  dlg?.nachRegen?.();
 }
 
 // ------------------------------------------------------------ Rückgängig / Wiederholen
@@ -511,7 +528,7 @@ function springe(d) {
   const i = verlauf.pos + d;
   if (dlg || skizze || i < 0 || i >= verlauf.stapel.length) return;
   verlauf.pos = i; doc = JSON.parse(verlauf.stapel[i]);
-  if (!finde(auswahl)) auswahl = null;
+  if (!finde(auswahl) && !hauptVon(auswahl)) auswahl = null;
   $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr;
   regen(); status(d < 0 ? "Rückgängig gemacht." : "Wiederhergestellt.");
 }
@@ -531,7 +548,7 @@ document.addEventListener("keydown", (e) => {
 
 function markiere() {
   modell.children.forEach((o) => {
-    if (o.isMesh) o.material.emissive?.setHex(o.userData.fid === auswahl ? 0x1d5c4f : 0x000000);
+    if (o.isMesh) o.material.emissive?.setHex(o.userData.fid === auswahl || String(o.userData.fid).startsWith(auswahl + ":") ? 0x1d5c4f : 0x000000);
     else if (o.userData.ebene) o.children[0].material.opacity = o.userData.ebene === auswahl ? 0.42 : 0.2;
   });
   zeigeRichtung();
@@ -560,7 +577,7 @@ const richtungSkalieren = () => richtung.children.forEach((o) => {
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { skizze: "Skizze", extrusion: "Extrusion", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil" };
+const NAMEN = { skizze: "Skizze", extrusion: "Extrusion", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail" };
 function zeigeBrowser() {
   const eb = doc.features.filter((f) => f.typ === "ebene"), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && f.typ !== "ebene");
   const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}"><span class="typ ${typ}"></span>${f.name}${f._fehler ? " ⚠" : ""}
@@ -587,14 +604,14 @@ $("rueckgaengig").addEventListener("click", () => { doc.features.pop(); auswahl 
 function waehle(id) {
   auswahl = id; markiere(); zeigeWerkstatt();
   // nur die Markierung umschalten: ein Neuaufbau der Liste würde den Doppelklick zum Bearbeiten verschlucken
-  document.querySelectorAll("#baum li[data-id]").forEach((li) => li.classList.toggle("aktiv", li.dataset.id === id));
+  document.querySelectorAll("#baum li[data-id]").forEach((li) => li.classList.toggle("aktiv", li.dataset.id === id || String(id).startsWith(li.dataset.id + ":")));
 }
 
 // ------------------------------------------------------------ Werkstatt
 const f1 = (v) => v.toFixed(1);
 let register = "teil"; // Werkstatt: «teil» oder «auftrag»
 document.querySelectorAll("[data-register]").forEach((b) => (b.onclick = () => { register = b.dataset.register; zeigeWerkstatt(); }));
-const blechteile = () => doc.features.filter((f) => f._res && !f.versteckt);
+const blechteile = () => doc.features.filter((f) => !f.versteckt).flatMap((f) => f._teile || (f._res ? [f] : []));
 function auftrag() {
   return stueckliste(blechteile().map((f) => ({ name: f.name, notiz: f.notiz, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: f.laenge, stueck: f.stueck ?? 1 })));
 }
@@ -640,7 +657,7 @@ function zeigeAuftrag(w) {
   $("kCsv").onclick = () => herunterladen(`${doc.nr || "auftrag"} Stückliste.csv`, stuecklisteCsv(a, [["Objekt", doc.objekt], ["Nr.", doc.nr], []]) + bedarfCsv(), "text/csv");
 }
 function zeigeWerkstatt() {
-  const f = finde(auswahl);
+  const f = waehlbar(auswahl);
   const w = $("werkstatt");
   document.querySelectorAll("[data-register]").forEach((b) => b.setAttribute("aria-selected", b.dataset.register === register));
   if (register === "auftrag") return zeigeAuftrag(w);
@@ -651,9 +668,11 @@ function zeigeWerkstatt() {
     if ($("kSkizzeHier")) $("kSkizzeHier").onclick = () => neueSkizze(f.id);
     return;
   }
+  if (f?.typ === "detail" && f._detail) return zeigeDetail(w, f);
   if (!f || !f._res) { w.innerHTML = `<p class="leer">${f ? (f._fehler || "Volumenkörper: keine Abwicklung.") : "Blechteil anklicken, um Zuschnitt und Abkantfolge zu sehen."}</p>`; return; }
   const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst), abB = einst.anzeige.abB;
   w.innerHTML = `<div class="zahl"><b>${f1(r.zuschnitt)}</b><span>mm Zuschnitt</span></div>
+    ${f.eltern ? `<div class="unter"><button class="knopf klein" id="kZumDetail">← ${esc(f.eltern.name)}</button></div>` : ""}
     <div class="unter">${esc(f.name)} · ${r.biegungen.length} Biegungen${r.hatRundung ? "" : ` · Summe Schenkel ${r.summeSchenkel.toFixed(0)} mm`}</div>
     ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
     <div class="zeichnung">${profilSvg(r, { dicke: m.t, breite: 276, hoehe: 200, schrift: 11 })}${abwicklungSvg(r, { breite: 276, schrift: 10 })}</div>
@@ -669,7 +688,8 @@ function zeigeWerkstatt() {
     ...r.biegungen.map((b) => `B${b.nr}\t${f1(b.pos)}${abB ? `\t${f1(r.zuschnitt - b.pos)}` : ""}\t${f1(Math.abs(b.winkel))}\t${b.richtung}`)].join("\n"));
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, f.laenge, f.name), "application/dxf");
   $("kDruck").onclick = () => drucke([f]);
-  $("kKopie").onclick = () => dupliziere(f);
+  $("kKopie").onclick = () => dupliziere(f.eltern || f);
+  if ($("kZumDetail")) $("kZumDetail").onclick = () => waehle(f.eltern.id);
   if ($("kEigene")) $("kEigene").onclick = () => {
     const v = { name: f.name, start: f.start, zeilen: JSON.parse(JSON.stringify(f.zeilen)) }, i = einst.vorlagen.findIndex((x) => x.name === f.name);
     if (i >= 0) einst.vorlagen[i] = v; else einst.vorlagen.push(v);
@@ -817,7 +837,7 @@ $("dLoeschen").onclick = () => { dlg?.loeschen?.(); schliesse(); regen(); };
 
 // Neue oder bestehende Features mit Live-Vorschau. felder(f) liefert die Felder, setze(f, w) übernimmt Werte.
 function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
-  const kopie = JSON.parse(JSON.stringify(f)), alteAuswahl = auswahl;
+  const kopie = JSON.parse(JSON.stringify(f, (k, v) => (k.startsWith("_") ? undefined : v))), alteAuswahl = auswahl;
   if (istNeu) doc.features.push(f);
   auswahl = f.id; // Werkstatt zeigt das Teil schon während der Eingabe
   dialog({
@@ -826,7 +846,7 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
     ...extra,
     aendern: (w, feld) => {
       setze(f, w);
-      if (feld === "vorlage" || feld === "skizze") { const d = dlg; dialog({ ...d, felder: felder(f) }); setze(f, werte()); }
+      if (feld === "vorlage" || feld === "skizze" || feld === "detail") { const d = dlg; dialog({ ...d, felder: felder(f) }); setze(f, werte()); }
       regen();
     },
     ok: (w) => { setze(f, w); auswahl = f.id; },
@@ -847,6 +867,8 @@ function bearbeite(f) {
   if (f.typ === "blech") return blechDialog(f);
   if (f.typ === "vorlage") return vorlageDialog(f);
   if (f.typ === "profil") return profilDialog(f);
+  if (f.typ === "detail") return detailDialog(f);
+  if (f.typ === "detailteil") return bearbeite(f.eltern);
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
 }
 
@@ -1000,6 +1022,126 @@ function profilDialog(f) {
   featureDialog(f, istNeu, felder, setze, "Freies Profil",
     "Winkel nach dem Schenkel: + biegt nach oben (links), − nach unten (rechts). Umschlag = 180°, Vorzeichen gibt die Seite. Masse auf der Blechmitte.",
     { zusatz: tabelle, binden, wahlNr: -1 });
+}
+
+
+// ------------------------------------------------------------ Spenglerdetail: Holz + mehrere Blechteile in einem Querschnitt
+// f.detail = Vorlage (Parameter f.params) oder "frei" (f.aufbau: holz, teile mit Abkantfolge, masse)
+const detailMaterial = (f, tl) => material(tl.material || f.materialien?.[tl.rolle] || f.material);
+function detailAufbau(f) {
+  if (f.detail === "frei") return f.aufbau;
+  const v = DETAIL[f.detail]; if (!v) throw new Error("Detailvorlage fehlt");
+  const t = material(f.materialien?.dach || f.materialien?.fassade || f.material).t;
+  return v.bau({ ...detailStandard(f.detail), ...f.params }, t);
+}
+const detailZeichnung = (f, opt) => detailSvg(f._detail, f._detail.teile.map(teilKontur), opt);
+function zeigeDetail(w, f) {
+  const d = f._detail, n = f.stueck ?? 1;
+  w.innerHTML = `<div class="unter" style="padding-top:10px"><b>${esc(f.name)}</b> · Spenglerdetail · ${d.teile.length} Blechteile · ${f.laenge} mm · ${n} Stk.</div>
+    <div class="zeichnung detailbild">${detailZeichnung(f, { breite: 276, hoehe: 230, schrift: 9, rand: 14 })}</div>
+    <table class="liste"><thead><tr><th>Pos.</th><th>Teil</th><th class="num">Zuschnitt</th><th class="num">Biegungen</th></tr></thead><tbody>
+    ${d.teile.map((tl, i) => `<tr class="klickbar" data-teil="${i}"><td>${i + 1}</td><td>${esc(tl.name)}<br><small>${esc(tl.m.name)}</small></td><td class="num">${f1(tl.res.zuschnitt)}</td><td class="num">${tl.res.biegungen.length}</td></tr>`).join("")}
+    </tbody></table>
+    <p class="hinweis">Teil anklicken (hier oder in 3D) für Abkantfolge und Werkstattblatt.</p>
+    <div class="reihe"><button class="knopf haupt" id="kDetailBearb">Bearbeiten</button><button class="knopf" id="kDetailDruck">Detailblatt drucken</button><button class="knopf" id="kDetailTeile">Werkstattblätter</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button></div>`;
+  w.querySelectorAll("[data-teil]").forEach((tr) => (tr.onclick = () => waehle(`${f.id}:${tr.dataset.teil}`)));
+  $("kDetailBearb").onclick = () => bearbeite(f);
+  $("kDetailDruck").onclick = () => druckeDetails([f]);
+  $("kDetailTeile").onclick = () => drucke(f._teile);
+  $("kKopie").onclick = () => dupliziere(f);
+}
+// Detailblatt (A4 quer): Schnitt mit Schraffur und Massen, Positionsliste
+function detailblatt(f) {
+  const d = f._detail;
+  return `<section class="blatt detailblatt">
+    <header><div>${kopf("Detail")}<h1>${esc(f.name)}</h1></div>
+      <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
+    <div class="grosszeichnung">${detailZeichnung(f, { breite: 980, hoehe: 520, schrift: 15, rand: 40 })}</div>
+    <table class="liste"><thead><tr><th>Pos.</th><th>Teil</th><th>Material</th><th>Abkantfolge (Schenkel Winkel …)</th><th class="num">Zuschnitt × Länge mm</th><th class="num">Stück</th></tr></thead><tbody>
+    ${d.teile.map((tl, i) => `<tr><td>${i + 1}</td><td>${esc(tl.name)}</td><td>${esc(tl.m.name)}</td><td class="folge">${esc(folgeText(tl.zeilen))}</td><td class="num">${f1(tl.res.zuschnitt)} × ${f.laenge}</td><td class="num">${f.stueck ?? 1}</td></tr>`).join("")}
+    </tbody></table>
+    ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
+    <p class="hinweis">Masse in mm. Blech auf der Blechmitte gerechnet; Holz schraffiert. Kreis = Kante A des Blechteils (Positionsnummer).</p>
+  </section>`;
+}
+function druckeDetails(liste) {
+  liste = liste.filter((f) => f._detail);
+  if (!liste.length) return status("Kein Spenglerdetail zum Drucken.");
+  $("druck").innerHTML = liste.map(detailblatt).join("");
+  window.print();
+}
+function detailDialog(f) {
+  const istNeu = !f, v0 = DETAILS.find((d) => d.gruppe === "SwissSkills 2026") || DETAILS[0];
+  f ||= { id: neueId(), typ: "detail", name: v0.name, detail: v0.id, params: detailStandard(v0.id), material: neuMaterial(), materialien: {},
+    laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine", ebene: einst.neu.ebene };
+  const rollen = () => { try { return rollenVon(detailAufbau(f)); } catch { return []; } };
+  const gruppen = [...new Set(DETAILS.map((d) => d.gruppe))];
+  const felder = (f) => [
+    { id: "detail", label: "Detail", optionen: [["frei", "Eigenes Detail (frei)"], ...gruppen.flatMap((g) => DETAILS.filter((d) => d.gruppe === g).map((d) => [d.id, `${g}: ${d.name}`]))], wert: f.detail },
+    { id: "name", label: "Name", text: true, wert: f.name },
+    ...(f.detail === "frei" ? [] : DETAIL[f.detail].params.map(([k, l, e]) => ({ id: "p_" + k, label: l, einheit: e, wert: f.params[k] ?? detailStandard(f.detail)[k] }))),
+    ...rollen().map((r) => ({ id: "m_" + r, label: "Material " + ROLLEN[r], optionen: matOpt(), wert: f.materialien?.[r] || f.material })),
+    { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
+    { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
+    { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
+    { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
+    { id: "ebene", label: "Querschnitt in", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
+  ];
+  const setze = (f, w) => {
+    if (w.detail !== f.detail) {
+      if (w.detail === "frei") f.aufbau = JSON.parse(JSON.stringify(f._detail ? { holz: f._detail.holz, teile: f._detail.teile.map(({ name, rolle, x, y, start, zeilen, material }) => ({ name, rolle, x, y, start, zeilen, material })), masse: f._detail.masse } : { holz: [], teile: [], masse: [] }));
+      else { if (!f.name || f.name === DETAIL[f.detail]?.name) f.name = DETAIL[w.detail].name; f.params = detailStandard(w.detail); delete f.aufbau; }
+      f.detail = w.detail; return;
+    }
+    f.name = w.name?.trim() || f.name;
+    if (f.detail !== "frei") for (const [k] of DETAIL[f.detail].params) if (Number.isFinite(w["p_" + k])) f.params[k] = w["p_" + k];
+    f.materialien = { ...f.materialien }; for (const r of Object.keys(ROLLEN)) if (w["m_" + r]) f.materialien[r] = w["m_" + r];
+    Object.assign(f, { laenge: w.laenge, stueck: w.stueck, notiz: w.notiz, richtung: w.richtung, ebene: w.ebene });
+  };
+  // Vorschau als Schnitt und – bei «frei» – Tabellen für Blechteile (Abkantfolge in Kurzschrift) und Holz
+  const tabelle = () => `<div id="detailVorschau" class="detailvorschau"></div>${f.detail === "frei" ? `
+    <table class="zeilen teile"><thead><tr><th>#</th><th>Blechteil</th><th>Rolle</th><th>x</th><th>y</th><th>Start°</th><th>Abkantfolge</th><th></th></tr></thead><tbody>
+    ${f.aufbau.teile.map((tl, i) => `<tr data-i="${i}" data-art="teil"><td>${i + 1}</td><td><input data-k="name" value="${esc(tl.name)}"></td>
+      <td><select data-k="rolle">${Object.entries(ROLLEN).map(([k, t]) => `<option value="${k}" ${tl.rolle === k ? "selected" : ""}>${t}</option>`).join("")}</select></td>
+      <td><input data-k="x" type="number" step="any" value="${+tl.x.toFixed(2)}"></td><td><input data-k="y" type="number" step="any" value="${+tl.y.toFixed(2)}"></td>
+      <td><input data-k="start" type="number" step="any" value="${+tl.start.toFixed(2)}"></td><td><input data-k="folge" class="folge" value="${esc(folgeText(tl.zeilen))}" title="Schenkel Winkel Schenkel …  Winkel + = links/oben, − = rechts/unten; U+ / U− = Umschlag; 90r5 = Radius 5"></td>
+      <td><button class="weg" data-weg="teil:${i}" aria-label="Teil ${i + 1} entfernen">×</button></td></tr>`).join("")}
+    </tbody></table><button class="knopf" data-neu="teil">+ Blechteil</button>
+    <table class="zeilen holz"><thead><tr><th>Holz / Unterkonstruktion</th><th>Eckpunkte x,y …</th><th></th></tr></thead><tbody>
+    ${f.aufbau.holz.map((h, i) => `<tr data-i="${i}" data-art="holz"><td><input data-k="name" value="${esc(h.name)}"></td><td><input data-k="pts" class="folge" value="${h.pts.map((p) => p.map((v) => +v.toFixed(2)).join(",")).join(" ")}"></td>
+      <td><button class="weg" data-weg="holz:${i}" aria-label="Holz ${i + 1} entfernen">×</button></td></tr>`).join("")}
+    </tbody></table><button class="knopf" data-neu="holz">+ Holz (Rechteck)</button>` : `<div class="reihe"><button class="knopf" data-frei>Frei anpassen (Teile und Holz bearbeiten)</button></div>`}`;
+  const zeigeVorschau = () => { const b = $("detailVorschau"); if (b) b.innerHTML = f._detail ? detailZeichnung(f, { breite: 460, hoehe: 300, schrift: 10, rand: 16 }) : ""; };
+  const binden = (box) => {
+    const neu = () => { const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); };
+    box.addEventListener("change", (e) => {
+      const k = e.target.dataset.k, tr = e.target.closest("tr"); if (!k || !tr) return;
+      const i = +tr.dataset.i, v = e.target.value;
+      try {
+        if (tr.dataset.art === "teil") {
+          const tl = f.aufbau.teile[i];
+          if (k === "folge") tl.zeilen = folge(v); else if (k === "name" || k === "rolle") tl[k] = v; else tl[k] = parseFloat(v) || 0;
+        } else {
+          const h = f.aufbau.holz[i];
+          if (k === "pts") { const pts = v.trim().split(/\s+/).map((q) => q.split(",").map(Number)); if (pts.length < 3 || pts.some((q) => q.length !== 2 || q.some((x) => !Number.isFinite(x)))) throw new Error("Mindestens drei Punkte «x,y» mit Leerzeichen getrennt"); h.pts = pts; }
+          else h[k] = v;
+        }
+        e.target.classList.remove("ungueltig"); regen();
+      } catch (err) { e.target.classList.add("ungueltig"); status(err.message); }
+    });
+    box.addEventListener("click", (e) => {
+      if (e.target.dataset.frei != null) { const w = werte(); setze(f, { ...w, detail: "frei" }); neu(); return; }
+      const weg = e.target.dataset.weg, dazu = e.target.dataset.neu;
+      if (weg) { const [art, i] = weg.split(":"); f.aufbau[art === "teil" ? "teile" : "holz"].splice(+i, 1); neu(); }
+      else if (dazu === "teil") { f.aufbau.teile.push({ name: "Blechteil " + (f.aufbau.teile.length + 1), rolle: "fassade", x: 0, y: 0, start: 0, zeilen: folge("100 90 25") }); neu(); }
+      else if (dazu === "holz") { f.aufbau.holz.push({ name: "Holz " + (f.aufbau.holz.length + 1), pts: [[0, -27], [200, -27], [200, 0], [0, 0]], art: "holz" }); neu(); }
+    });
+    zeigeVorschau();
+  };
+  featureDialog(f, istNeu, felder, setze, "Spenglerdetail",
+    "Detail wählen und Masse anpassen – Blechteile, Holz und Schnitt passen sich an. «Frei anpassen» öffnet alle Teile als Abkantfolge (z. B. «150 90 25 U+ 7»).",
+    { zusatz: tabelle, binden, nachRegen: zeigeVorschau, wahlNr: -1,
+      info: () => (f._fehler ? "⚠ " + f._fehler : f._detail ? f._detail.teile.map((tl, i) => `${i + 1} ${tl.name} ${f1(tl.res.zuschnitt)}`).join(" · ") : "") });
 }
 
 // ------------------------------------------------------------ Einstellungen: Materialien kalibrieren, Lagerformate
@@ -1334,7 +1476,7 @@ function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
   $("gSkizze").hidden = false;
-  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil", "wEbene"].forEach((id) => ($(id).disabled = true));
+  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil", "wDetail", "wEbene"].forEach((id) => ($(id).disabled = true));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
   steuerung.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
   const E = E_(f.ebene);
@@ -1360,7 +1502,7 @@ function beendeSkizze() {
   skizze = null;
   if (!f.elemente.length) doc.features.splice(doc.features.indexOf(f), 1);
   $("gSkizze").hidden = true;
-  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil", "wEbene"].forEach((id) => ($(id).disabled = false));
+  ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil", "wDetail", "wEbene"].forEach((id) => ($(id).disabled = false));
   steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   szene.remove(skizzenRaster); skizzenRaster = null; boden.visible = true;
@@ -2251,6 +2393,7 @@ $("wExtrusion").onclick = () => { if (dlg) $("dAbbrechen").click(); extrusionDia
 $("wBlech").onclick = () => { if (dlg) $("dAbbrechen").click(); blechDialog(); };
 $("wVorlage").onclick = () => { if (dlg) $("dAbbrechen").click(); vorlageDialog(); };
 $("wProfil").onclick = () => { if (dlg) $("dAbbrechen").click(); profilDialog(); };
+$("wDetail").onclick = () => { if (dlg) $("dAbbrechen").click(); detailDialog(); };
 // Konstruieren: Menü mit allen Ebenenarten
 $("wEbene").onclick = (e) => {
   e.stopPropagation();
@@ -2342,13 +2485,13 @@ document.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   if (k === "s") { e.preventDefault(); projektSpeichern(e.shiftKey); }
   else if (k === "p") { e.preventDefault(); drucke(blechteile(), true); }
-  else if (k === "d" && !e.target.closest?.("input,select,textarea")) { e.preventDefault(); dupliziere(finde(auswahl)); }
+  else if (k === "d" && !e.target.closest?.("input,select,textarea")) { e.preventDefault(); dupliziere(hauptVon(auswahl)); }
   else if (k === "o") { e.preventDefault(); projektOeffnen(); }
 });
 // Entf: gewähltes Teil löschen (Rückgängig holt es zurück)
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Delete" || skizze || dlg || !$("einst").hidden || e.target.closest?.("input,select,textarea")) return;
-  const f = finde(auswahl); if (!f) return;
+  const f = hauptVon(auswahl); if (!f) return; // Blechteil eines Details: ganzes Detail
   e.preventDefault();
   const benutzt = doc.features.filter((x) => x.skizze === f.id || x.ebene === f.id || Object.values(x).some((v) => typeof v === "string" && v.includes(":" + f.id + ":")) || [x.ref, x.ref2].includes(f.id));
   doc.features.splice(doc.features.indexOf(f), 1); auswahl = null; regen();

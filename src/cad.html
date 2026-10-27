@@ -84,7 +84,15 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .fg.voll { background: color-mix(in srgb, #2f8a4c 18%, transparent); color: #2f8a4c; }
 .fg:empty { display: none; }
 .massbox { position: absolute; transform: translate(-50%, -50%); display: flex; gap: 4px; z-index: 5; }
-.massbox .massfeld { position: static; transform: none; }
+.massbox .detailvorschau { background: #fff; color: #111; border-radius: 6px; margin: 6px 0; overflow: hidden; }
+.detailvorschau svg, .detailbild svg { max-width: 100%; height: auto; display: block; }
+.detailbild { background: #fff; color: #111; border-radius: 6px; }
+table.zeilen.teile input, table.zeilen.holz input { width: 100%; min-width: 46px; }
+table.zeilen input.folge { min-width: 150px; font-family: var(--font-num); }
+table.zeilen input.ungueltig { border-color: #c4352b; background: color-mix(in srgb, #c4352b 10%, transparent); }
+tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in srgb, var(--sketch) 8%, transparent); }
+.knopf.klein { padding: 2px 8px; font-size: 11px; }
+.massfeld { position: static; transform: none; }
 .massbox select { font: 12px var(--font-num); border: 1.5px solid var(--sketch); border-radius: 4px; background: var(--panel); color: var(--fg); }
 .massfeld { position: absolute; transform: translate(-50%, -50%); width: 80px; font: 12px var(--font-num); border: 1.5px solid var(--sketch); border-radius: 4px; padding: 2px 4px; background: var(--panel); color: var(--fg); z-index: 5; }
 .eingabe { position: absolute; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--sketch); border-radius: 6px; padding: 4px; }
@@ -232,6 +240,12 @@ ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--be
   .etikett.klebe dd { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 }
 @page etiketten { size: A4; margin: 0; }
+@page quer { size: A4 landscape; margin: 10mm; }
+@media print {
+  .detailblatt { page: quer; }
+  .detailblatt .grosszeichnung svg { max-height: 120mm; }
+  .detailblatt td.folge { font-family: var(--font-num); }
+}
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 </style>
 
@@ -243,6 +257,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wExtrusion"><svg viewBox="0 0 24 24"><path d="M4 16l8 4 8-4M4 16V9l8-4 8 4v7M12 13v7M4 9l8 4 8-4"/></svg>Extrudieren</button>
       <button class="wz" id="wBlech"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg>Blechprofil</button>
       <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path d="M3 6h10l-3 12h11"/><circle cx="3" cy="6" r="1.5"/></svg>Spengler-Vorlage</button>
+      <button class="wz" id="wDetail" title="Spenglerdetail: Holz und mehrere Blechteile im Querschnitt (Falze, SwissSkills-Details)"><svg viewBox="0 0 24 24"><path d="M3 17h18v4H3z"/><path d="M4 17V9h7v-3M20 17V9h-7V5"/></svg>Spenglerdetail</button>
       <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14"/></svg>Freies Profil</button>
     </div></div>
     <div class="gruppe"><div class="gtitel">Konstruieren</div><div class="knoepfe">
@@ -330,6 +345,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Spengler-Vorlage</b>: Traufe, Ortgang, First, Rinnen … Masse eintippen, fertig.</li>
       <li><b>Freies Profil</b>: Schenkel und Winkel als Tabelle – am schnellsten für eigene Profile, auch auf dem Handy.</li>
       <li><b>Skizze → Blechprofil</b>: Linienzug zeichnen, jeder Knick wird zur Biegung. Die Linie ist die Blechmitte – oder eine Blechoberfläche, dann im Dialog wählen, ob das Blech links oder rechts davon liegt (in Zeichenrichtung ab Kante A).</li>
+    </ul>
+    <h4>Spenglerdetails</h4>
+    <ul>
+      <li><b>Spenglerdetail</b>: Querschnitt aus Holz (Unterkonstruktion) und mehreren Blechteilen – Doppelstehfalz, Winkelstehfalz und die SwissSkills-2026-Details A–K als Vorlagen mit Massen. Material je Rolle (Dach, Fassade, Wappen, Hafte).</li>
+      <li><b>Frei anpassen</b>: jedes Blechteil als Abkantfolge in Kurzschrift, z. B. «150 90 25 U+ 7» (Schenkel, Winkel, Schenkel …; + = links/oben, − = rechts/unten; U+ / U− = Umschlag; «90r5» = Radius 5). Holz als Eckpunkte «x,y x,y …». Eigene Teile und Holz hinzufügen.</li>
+      <li>Jedes Blechteil erscheint mit Zuschnitt und Abkantfolge in Werkstatt und Stückliste; <b>Detailblatt</b> druckt den Schnitt mit Schraffur, Massen und Positionsliste (A4 quer).</li>
     </ul>
     <h4>Konstruieren und Skizzieren</h4>
     <ul>

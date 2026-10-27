@@ -4,7 +4,7 @@
 
 const L = (x) => ({ typ: "schenkel", L: +x });
 const B = (w, ri = null) => ({ typ: "biegung", winkel: +w, ri, modus: "sharp" });
-const HEM = (vz, m) => ({ typ: "biegung", winkel: 180 * vz, ri: m.t, modus: "hem" });
+const HEM = (vz, m, ri = null) => ({ typ: "biegung", winkel: 180 * vz, ri: ri ?? m.t, modus: "hem" });
 const ARC = (w, ri) => ({ typ: "biegung", winkel: +w, ri: +ri, modus: "tangent" });
 
 function traufe(p, m) {
@@ -160,8 +160,8 @@ export function freiesProfil(startWinkel, zeilen, m) {
   zeilen.forEach((z, i) => {
     ops.push(L(z.L));
     if (i < zeilen.length - 1) {
-      if (z.art === "umschlag") ops.push(HEM(z.winkel >= 0 ? 1 : -1, m));
-      else ops.push(B(z.winkel));
+      if (z.art === "umschlag") ops.push(HEM(z.winkel >= 0 ? 1 : -1, m, z.ri > 0 ? z.ri : null)); // ri: Umschlag um weitere Lagen (Falz)
+      else ops.push(B(z.winkel, z.ri > 0 ? z.ri : null));
     }
   });
   return { start: startWinkel, ops };
