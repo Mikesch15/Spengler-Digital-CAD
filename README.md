@@ -13,7 +13,8 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
   (Spaltband/Coil in Laufmetern, Anzahl Tafeln), CSV für Excel
 - **Drucken:** Stückliste, Werkstattblatt (A4) je Teil, Etiketten (A4-Bogen 3 × 8)
 - **Einstellungen:** Materialien kalibrieren (K-Faktor aus Probebiegung), eigene Materialien,
-  Lagerformate, eigene Vorlagen; als Datei auf ein anderes Gerät übertragen
+  Lagerformate, eigene Vorlagen, Vorgaben für neue Teile, Fangraster, Druckinhalt und Kopfzeile,
+  Etikettenbogen, hell/dunkel, Update-Prüfung; alles als Datei auf ein anderes Gerät übertragen
 - **Bearbeiten:** Rückgängig/Wiederholen, Duplizieren, Teile umbenennen
 - **PC-Programm:** Speichern/Öffnen mit Windows-Dialog, zuletzt geöffnete Projekte, `.sdcad` per Doppelklick,
   automatische Updates

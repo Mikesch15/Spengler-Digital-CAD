@@ -5,10 +5,12 @@ use tauri::AppHandle;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_updater::UpdaterExt;
 
-// Sucht beim Start nach einer neuen Version (GitHub-Release) und fragt, ob sie installiert werden soll.
-async fn nach_update_suchen(app: AppHandle) -> tauri_plugin_updater::Result<()> {
+// Sucht nach einer neuen Version (GitHub-Release) und fragt, ob sie installiert werden soll.
+// Die Oberfläche ruft das beim Start auf (abschaltbar in den Einstellungen) oder auf Knopfdruck.
+// Ergebnis: "aktuell", "spaeter" oder (nach der Installation) Neustart.
+async fn update_pruefen(app: &AppHandle) -> tauri_plugin_updater::Result<&'static str> {
     let Some(update) = app.updater()?.check().await? else {
-        return Ok(());
+        return Ok("aktuell");
     };
     let frage = format!(
         "Version {} ist verfügbar (installiert: {}).\n\nJetzt herunterladen und installieren? Das Programm startet danach neu.",
@@ -21,11 +23,16 @@ async fn nach_update_suchen(app: AppHandle) -> tauri_plugin_updater::Result<()> 
         .kind(MessageDialogKind::Info)
         .buttons(MessageDialogButtons::OkCancelCustom("Installieren".into(), "Später".into()))
         .blocking_show();
-    if ja {
-        update.download_and_install(|_, _| {}, || {}).await?;
-        app.restart();
+    if !ja {
+        return Ok("spaeter");
     }
-    Ok(())
+    update.download_and_install(|_, _| {}, || {}).await?;
+    app.restart();
+}
+
+#[tauri::command]
+async fn nach_update_suchen(app: AppHandle) -> Result<String, String> {
+    update_pruefen(&app).await.map(String::from).map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]
@@ -100,16 +107,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![datei_speichern, datei_oeffnen, datei_lesen, startdatei])
-        .setup(|app| {
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(e) = nach_update_suchen(handle).await {
-                    eprintln!("Update-Prüfung fehlgeschlagen: {e}");
-                }
-            });
-            Ok(())
-        })
+        .invoke_handler(tauri::generate_handler![datei_speichern, datei_oeffnen, datei_lesen, startdatei, nach_update_suchen])
         .run(tauri::generate_context!())
         .expect("Fehler beim Starten von Spengler Digital CAD");
 }

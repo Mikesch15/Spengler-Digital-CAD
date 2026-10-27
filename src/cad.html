@@ -153,6 +153,18 @@ table.zeilen.mat td:first-child { min-width: 170px; }
 .hilfetext p { margin: 6px 0; }
 table.kuerzel td:first-child { font-family: var(--font-num); font-size: 12px; white-space: nowrap; }
 .reihe.ohnerand { padding: 0; }
+.eregister { position: sticky; top: 0; z-index: 1; background: var(--panel); margin: 0 -14px; padding: 0 8px; overflow-x: auto; }
+.eregister button { flex: 0 0 auto; padding: 9px 10px; }
+.egitter { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; }
+.efeld { display: grid; gap: 3px; font-size: 13px; }
+.efeld label { color: var(--muted); font-size: 12px; }
+.efeld input:not([type=checkbox]), .efeld select { width: 100%; font: 13px var(--font-num); border: 1px solid var(--line); border-radius: 5px; padding: 5px 6px; background: var(--panel-2); color: var(--fg); }
+.efeld select { font-family: var(--font-body); }
+.efeld.janein { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+.efeld.janein input { order: -1; width: 18px; height: 18px; accent-color: var(--accent); }
+.efeld.janein label { color: var(--fg); font-size: 13px; }
+.efeld.janein small { grid-column: 2; }
+.probe small { font-size: 11px; }
 .menue { position: fixed; z-index: 25; width: 320px; max-width: calc(100vw - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 28px rgb(0 0 0 / .2); padding: 4px; display: grid; }
 .menue button { display: grid; text-align: left; gap: 1px; border: 0; background: none; color: var(--fg); padding: 6px 8px; border-radius: 5px; cursor: pointer; font: 13px var(--font-body); }
 .menue button:hover { background: var(--panel-2); }
@@ -191,7 +203,7 @@ ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--be
   .blatt .hinweis { color: #333; margin: 0; }
   .blatt .etikett { width: 90mm; margin: 0; border-color: #000; }
   .blatt .etikett dt { color: #555; }
-  .etikettenbogen { page: etiketten; break-after: page; display: grid; grid-template-columns: repeat(3, 70mm); grid-auto-rows: 37mm; }
+  .etikettenbogen { page: etiketten; break-after: page; display: grid; box-sizing: border-box; height: 297mm; align-content: start; }
   .etikettenbogen:last-child { break-after: auto; }
   .etikett.klebe { margin: 0; border: 0; border-radius: 0; padding: 3mm 4mm; font-size: 9pt; gap: 0 3mm; align-content: center; overflow: hidden; }
   .etikett.klebe dt { color: #555; font-size: 7pt; }
@@ -279,7 +291,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Teil</b>: Zuschnitt, Querschnitt und Abwicklung, Abkantliste mit Anschlag ab Kante A (grüner Punkt) und ab Kante B, Etikett, DXF.</li>
       <li><b>Auftrag</b>: Stückliste mit m², kg und Laufmetern, Materialbedarf (Spaltband/Coil in lfm, Anzahl Tafeln), CSV für Excel, Etiketten.</li>
       <li><b>Drucken</b>: Stückliste mit Materialbedarf und ein Werkstattblatt (A4) je Teil.</li>
-      <li><b>Einstellungen</b>: Materialien kalibrieren (K-Faktor aus Probebiegung), eigene Materialien, Lagerformate, eigene Vorlagen; als Datei sichern und auf einem anderen Gerät laden.</li>
+      <li><b>Einstellungen</b> (Register): Materialien kalibrieren (K-Faktor aus Probebiegung) · Lagerformate · Vorgaben für neue Teile, Fangraster, Spalte «ab B» · Druck (Betrieb in der Kopfzeile, Abwicklung, Etikett, Materialbedarf) · Etikettenbogen · Programm (hell/dunkel, Updates) · eigene Vorlagen, alles als Datei sichern und auf einem anderen Gerät laden.</li>
       <li><b>Zuletzt</b> (PC-Programm): die letzten 8 Projekte direkt öffnen.</li>
     </ul>
     <h4>Tastenkürzel</h4>

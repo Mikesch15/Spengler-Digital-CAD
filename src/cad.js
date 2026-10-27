@@ -12,7 +12,6 @@ import { materialbedarf } from "../kern/zuschnitt.js";
 const $ = (id) => document.getElementById(id);
 const VERSION = typeof __VERSION__ === "string" ? __VERSION__ : "dev"; // beim Bauen eingesetzt
 const SPEICHER = "sdcad-doc-0.2";
-const RASTER = 5; // mm
 
 // ------------------------------------------------------------ Ebenen
 const EBENEN = {
@@ -32,9 +31,35 @@ const neueId = () => "f" + doc.zaehler++;
 const finde = (id) => doc.features.find((f) => f.id === id);
 // Werkstatt-Einstellungen (pro Gerät): kalibrierte und eigene Materialien, Lagerformate
 const EINST = "sdcad-einstellungen";
-const standardEinst = () => JSON.parse(JSON.stringify({ materialien: MATERIALIEN, ...LAGER, vorlagen: [] }));
+const standardEinst = () => JSON.parse(JSON.stringify({
+  materialien: MATERIALIEN, ...LAGER, vorlagen: [],
+  neu: { laenge: 1000, stueck: 1, material: MATERIALIEN[0].id, ebene: "XY" },         // Vorgaben für neue Teile
+  skizze: { raster: 5, abstand: 80 },                                                 // Fangraster mm, Abstand der Teile in 3D mm
+  anzeige: { abB: true },                                                             // Spalte «ab Kante B»
+  druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
+  etiketten: { spalten: 3, zeilen: 8, breite: 70, hoehe: 37, oben: 0, links: 0, abstandX: 0, abstandY: 0 }, // mm
+  programm: { darstellung: "auto", updates: true, zuletzt: 8 },
+}));
+const GRUPPEN = ["neu", "skizze", "anzeige", "druck", "etiketten", "programm"];
+// Gespeicherte oder geladene Einstellungen über die Standardwerte legen (neue Werte bekommen ihren Standard)
+function mitStandard(e) {
+  const s = standardEinst();
+  const r = { ...s, ...e };
+  for (const g of GRUPPEN) r[g] = { ...s[g], ...(e?.[g] || {}) };
+  if (!Array.isArray(r.materialien) || !r.materialien.length) r.materialien = s.materialien;
+  return r;
+}
 let einst = standardEinst();
-try { const e = JSON.parse(localStorage.getItem(EINST) || "null"); if (e?.materialien?.length) einst = { ...einst, ...e }; } catch {}
+try { const e = JSON.parse(localStorage.getItem(EINST) || "null"); if (e?.materialien?.length) einst = mitStandard(e); } catch {}
+// Darstellung hell/dunkel/automatisch
+const darstellung = () => {
+  const d = einst.programm.darstellung;
+  if (d === "hell") document.documentElement.dataset.theme = "light";
+  else if (d === "dunkel") document.documentElement.dataset.theme = "dark";
+  else delete document.documentElement.dataset.theme;
+};
+darstellung();
+const neuMaterial = () => (einst.materialien.some((m) => m.id === einst.neu.material) ? einst.neu.material : einst.materialien[0].id);
 const einstSpeichern = () => { try { localStorage.setItem(EINST, JSON.stringify(einst)); } catch {} };
 // Reihenfolge: Einstellungen, dann die im Projekt mitgespeicherten Werte (Projekt von einem anderen Gerät)
 const material = (id) => einst.materialien.find((m) => m.id === id) || doc.materialien?.find((m) => m.id === id) || einst.materialien[0];
@@ -161,7 +186,7 @@ function regen() {
   const benutzt = [...new Set(doc.features.map((f) => f.material).filter(Boolean))].map(material);
   doc.materialien = benutzt.filter((m, i) => benutzt.indexOf(m) === i);
   let platz = 0; // Vorlagen und freie Profile haben keine Lage: nebeneinander aufreihen statt übereinander
-  const daneben = (res) => { const g = grenzen(polylinie(res.pfad)), v = [platz - g.x0, 0]; platz += g.x1 - g.x0 + 80; return v; };
+  const daneben = (res) => { const g = grenzen(polylinie(res.pfad)), v = [platz - g.x0, 0]; platz += g.x1 - g.x0 + einst.skizze.abstand; return v; };
   for (const f of doc.features) {
     f._fehler = null; f._res = null;
     try {
@@ -307,7 +332,7 @@ function zeigeAuftrag(w) {
     ${a.jeMaterial.map((m) => `<tr><td>${esc(m.material)}</td><td class="num">${m.laufmeter.toFixed(1)}</td><td class="num">${f2(m.flaeche)}</td><td class="num">${m.gewicht.toFixed(1)}</td></tr>`).join("")}
     </tbody></table>
     ${bedarfHtml()}
-    <div class="reihe"><button class="knopf haupt" id="kAlleDruck">Stückliste und Werkstattblätter drucken</button><button class="knopf" id="kCsv">Stückliste als CSV</button><button class="knopf" id="kEtiketten" title="Ein Etikett pro Stück, A4-Bogen 3 × 8 (70 × 37 mm)">Etiketten drucken</button></div>`;
+    <div class="reihe"><button class="knopf haupt" id="kAlleDruck">Stückliste und Werkstattblätter drucken</button><button class="knopf" id="kCsv">Stückliste als CSV</button><button class="knopf" id="kEtiketten" title="Ein Etikett pro Stück, Bogen ${einst.etiketten.spalten} × ${einst.etiketten.zeilen} (${einst.etiketten.breite} × ${einst.etiketten.hoehe} mm)">Etiketten drucken</button></div>`;
   $("kAlleDruck").onclick = () => drucke(blechteile(), true);
   $("kEtiketten").onclick = druckeEtiketten;
   $("kCsv").onclick = () => herunterladen(`${doc.nr || "auftrag"} Stückliste.csv`, stuecklisteCsv(a, [["Objekt", doc.objekt], ["Nr.", doc.nr], []]) + bedarfCsv(), "text/csv");
@@ -318,19 +343,20 @@ function zeigeWerkstatt() {
   document.querySelectorAll("[data-register]").forEach((b) => b.setAttribute("aria-selected", b.dataset.register === register));
   if (register === "auftrag") return zeigeAuftrag(w);
   if (!f || !f._res) { w.innerHTML = `<p class="leer">${f ? (f._fehler || "Volumenkörper: keine Abwicklung.") : "Blechteil anklicken, um Zuschnitt und Abkantfolge zu sehen."}</p>`; return; }
-  const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst);
+  const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst), abB = einst.anzeige.abB;
   w.innerHTML = `<div class="zahl"><b>${f1(r.zuschnitt)}</b><span>mm Zuschnitt</span></div>
     <div class="unter">${f.name} · ${r.biegungen.length} Biegungen${r.hatRundung ? "" : ` · Summe Schenkel ${r.summeSchenkel.toFixed(0)} mm`}</div>
     <div class="zeichnung">${profilSvg(r, { dicke: m.t, breite: 276, hoehe: 200, schrift: 11 })}${abwicklungSvg(r, { breite: 276, schrift: 10 })}</div>
     <div class="quelle">${q ? `Aus <b>${q.art} ${q.breite}${q.laenge ? " × " + q.laenge : ""} mm</b> · Rest ${f1(q.rest)} mm` : "Breiter als alle Lagerformate"}</div>
-    <table class="liste"><thead><tr><th>Biegung</th><th class="num" title="Anschlag ab Kante A, darunter ab Kante B (Blech gewendet)">Anschlag A<br><span class="abb">ab B</span></th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
-    ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span> ${b.art === "Abkanten" ? "" : b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : `${f1(b.pos)}<br><span class="abb">${f1(r.zuschnitt - b.pos)}</span>`}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
+    <table class="liste"><thead><tr><th>Biegung</th><th class="num" title="Anschlag ab Kante A${abB ? ", darunter ab Kante B (Blech gewendet)" : ""}">Anschlag ${abB ? 'A<br><span class="abb">ab B</span>' : "ab A"}</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
+    ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span> ${b.art === "Abkanten" ? "" : b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : `${f1(b.pos)}${abB ? `<br><span class="abb">${f1(r.zuschnitt - b.pos)}</span>` : ""}`}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
     </tbody></table>
     <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button>${f.typ === "profil" ? '<button class="knopf" id="kEigene">Als eigene Vorlage speichern</button>' : ""}${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
     <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
     <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>`;
   $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${f.laenge} mm`, "",
-    "Biegung\tAnschlag ab A (mm)\tAnschlag ab B (mm)\tWinkel\tRichtung", ...r.biegungen.map((b) => `B${b.nr}\t${f1(b.pos)}\t${f1(r.zuschnitt - b.pos)}\t${f1(Math.abs(b.winkel))}\t${b.richtung}`)].join("\n"));
+    `Biegung\tAnschlag ab A (mm)${abB ? "\tAnschlag ab B (mm)" : ""}\tWinkel\tRichtung`,
+    ...r.biegungen.map((b) => `B${b.nr}\t${f1(b.pos)}${abB ? `\t${f1(r.zuschnitt - b.pos)}` : ""}\t${f1(Math.abs(b.winkel))}\t${b.richtung}`)].join("\n"));
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, f.laenge, f.name), "application/dxf");
   $("kDruck").onclick = () => drucke([f]);
   $("kKopie").onclick = () => dupliziere(f);
@@ -358,10 +384,11 @@ function dupliziere(f) {
 }
 
 // ------------------------------------------------------------ Druck: Werkstattblatt je Blechteil (A4)
+const kopf = (art) => `<small>${art}${einst.druck.betrieb ? " · " + esc(einst.druck.betrieb) : ""}</small>`;
 function werkstattblatt(f) {
-  const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst);
+  const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst), d = einst.druck, abB = einst.anzeige.abB;
   return `<section class="blatt">
-    <header><div><small>Werkstattblatt</small><h1>${esc(f.name)}</h1></div>
+    <header><div>${kopf("Werkstattblatt")}<h1>${esc(f.name)}</h1></div>
       <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
     <div class="eckdaten">
       <div><small>Zuschnitt</small><b>${f1(r.zuschnitt)} × ${f.laenge} mm</b></div>
@@ -370,20 +397,20 @@ function werkstattblatt(f) {
       <div><small>Aus</small><b>${q ? `${q.art} ${q.breite}${q.laenge ? " × " + q.laenge : ""}` : "Sonderformat"}</b></div>
     </div>
     <div class="grosszeichnung">${profilSvg(r, { dicke: m.t, breite: 640, hoehe: 360, schrift: 14, rand: 44 })}</div>
-    <div class="abwicklung"><small>Abwicklung · Anschlag ab Kante A (ab B: Blech gewendet)</small>${abwicklungSvg(r, { breite: 640, schrift: 12 })}</div>
-    <table class="liste"><thead><tr><th>Biegung</th><th>Art</th><th class="num">Anschlag ab A (mm)</th><th class="num">ab B (mm)</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
-      ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span></td><td>${b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : f1(b.pos)}</td><td class="num">${b.art === "Rundung" ? `${(r.zuschnitt - b.bis).toFixed(0)}–${(r.zuschnitt - b.von).toFixed(0)}` : f1(r.zuschnitt - b.pos)}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
+    ${d.abwicklung ? `<div class="abwicklung"><small>Abwicklung · Anschlag ab Kante A${abB ? " (ab B: Blech gewendet)" : ""}</small>${abwicklungSvg(r, { breite: 640, schrift: 12 })}</div>` : ""}
+    <table class="liste"><thead><tr><th>Biegung</th><th>Art</th><th class="num">Anschlag ab A (mm)</th>${abB ? '<th class="num">ab B (mm)</th>' : ""}<th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
+      ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span></td><td>${b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : f1(b.pos)}</td>${abB ? `<td class="num">${b.art === "Rundung" ? `${(r.zuschnitt - b.bis).toFixed(0)}–${(r.zuschnitt - b.von).toFixed(0)}` : f1(r.zuschnitt - b.pos)}</td>` : ""}<td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
     </tbody></table>
-    <p class="hinweis">Masse in mm auf der Blechmitte. Anschlag ab Kante A (grüner Punkt), «ab B» ab der anderen Kante für gewendetes Blech. Richtung «oben/unten» mit Kante A links.
+    <p class="hinweis">Masse in mm auf der Blechmitte. Anschlag ab Kante A (grüner Punkt)${abB ? ", «ab B» ab der anderen Kante für gewendetes Blech" : ""}. Richtung «oben/unten» mit Kante A links.
       Innenradius ${m.ri} mm, K-Faktor ${m.k}.</p>
-    <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
-      <dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>
+    ${d.etikett ? `<dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
+      <dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>` : ""}
   </section>`;
 }
 function stuecklisteBlatt() {
   const a = auftrag();
   return `<section class="blatt">
-    <header><div><small>Stückliste</small><h1>${esc(doc.objekt)}</h1></div>
+    <header><div>${kopf("Stückliste")}<h1>${esc(doc.objekt)}</h1></div>
       <dl><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
     <table class="liste"><thead><tr><th>Teil</th><th>Material</th><th class="num">Zuschnitt × Länge mm</th><th class="num">Stück</th><th class="num">m²</th><th class="num">kg</th></tr></thead><tbody>
     ${a.zeilen.map((z) => `<tr><td>${esc(z.name)}</td><td>${esc(z.material)}</td><td class="num">${f1(z.zuschnitt)} × ${z.laenge}</td><td class="num">${z.stueck}</td><td class="num">${f2(z.flaeche)}</td><td class="num">${z.gewicht.toFixed(1)}</td></tr>`).join("")}
@@ -392,11 +419,12 @@ function stuecklisteBlatt() {
     ${a.jeMaterial.map((m) => `<tr><td>${esc(m.material)}</td><td class="num">${m.stueck}</td><td class="num">${m.laufmeter.toFixed(1)}</td><td class="num">${f2(m.flaeche)}</td><td class="num">${m.gewicht.toFixed(1)}</td></tr>`).join("")}
     <tr><td><b>Total</b></td><td class="num"><b>${a.summe.stueck}</b></td><td></td><td class="num"><b>${f2(a.summe.flaeche)}</b></td><td class="num"><b>${a.summe.gewicht.toFixed(1)}</b></td></tr>
     </tbody></table>
-    ${bedarfHtml()}
+    ${einst.druck.bedarf ? bedarfHtml() : ""}
   </section>`;
 }
-// Etiketten: eins pro Stück, A4-Bogen 3 × 8 à 70 × 37 mm
+// Etiketten: eins pro Stück, Bogenformat aus den Einstellungen (Standard A4, 3 × 8 à 70 × 37 mm)
 function druckeEtiketten() {
+  const e = einst.etiketten, proBogen = e.spalten * e.zeilen;
   const etiketten = blechteile().flatMap((f) => {
     const n = Math.max(0, Math.round(f.stueck ?? 1)), m = material(f.material);
     return Array.from({ length: n }, (_, i) => `<dl class="etikett klebe"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd>
@@ -404,7 +432,8 @@ function druckeEtiketten() {
   });
   if (!etiketten.length) return status("Keine Blechteile für Etiketten.");
   const boegen = [];
-  for (let i = 0; i < etiketten.length; i += 24) boegen.push(`<section class="etikettenbogen">${etiketten.slice(i, i + 24).join("")}</section>`);
+  const stil = `grid-template-columns: repeat(${e.spalten}, ${e.breite}mm); grid-auto-rows: ${e.hoehe}mm; column-gap: ${e.abstandX}mm; row-gap: ${e.abstandY}mm; padding: ${e.oben}mm 0 0 ${e.links}mm;`;
+  for (let i = 0; i < etiketten.length; i += proBogen) boegen.push(`<section class="etikettenbogen" style="${stil}">${etiketten.slice(i, i + proBogen).join("")}</section>`);
   $("druck").innerHTML = boegen.join("");
   window.print();
 }
@@ -516,7 +545,7 @@ function blechDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
   if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: das Blechprofil auf der Blechmitte.");
-  f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: 0, material: einst.materialien[0].id, laenge: 1000, richtung: "eine" };
+  f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: 0, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: "Linienzug aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "kette", label: "Linienzug", optionen: Array.from({ length: ketten(finde(f.skizze) || sk.at(-1)).length }, (_, i) => [i, `Nr. ${i + 1}`]), wert: f.kette },
@@ -529,7 +558,7 @@ function blechDialog(f) {
 
 function vorlageDialog(f) {
   const istNeu = !f;
-  f ||= { id: neueId(), typ: "vorlage", name: VORLAGEN[0].name, vorlage: VORLAGEN[0].id, params: standardwerte(VORLAGEN[0].id), material: einst.materialien[0].id, laenge: 1000, richtung: "eine", ebene: "XY" };
+  f ||= { id: neueId(), typ: "vorlage", name: VORLAGEN[0].name, vorlage: VORLAGEN[0].id, params: standardwerte(VORLAGEN[0].id), material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine", ebene: einst.neu.ebene };
   const felder = (f) => [
     { id: "vorlage", label: "Vorlage", optionen: VORLAGEN.map((x) => [x.id, x.name]), wert: f.vorlage },
     { id: "name", label: "Name", text: true, wert: f.name },
@@ -556,7 +585,7 @@ const EBENEN_OPT = Object.entries(EBENEN).map(([k, e]) => [k, e.name]);
 function profilDialog(f) {
   const istNeu = !f;
   f ||= { id: neueId(), typ: "profil", name: "Profil " + (doc.features.filter((x) => x.typ === "profil").length + 1), start: 0,
-    zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 50, winkel: 0, art: "abkanten" }], material: einst.materialien[0].id, laenge: 1000, richtung: "eine", ebene: "XY" };
+    zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 50, winkel: 0, art: "abkanten" }], material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine", ebene: einst.neu.ebene };
   const felder = (f) => [
     ...(einst.vorlagen.length ? [{ id: "eigene", label: "Eigene Vorlage", optionen: [["", "–"], ...einst.vorlagen.map((v, i) => [i, v.name])], wert: "" }] : []),
     { id: "name", label: "Name", text: true, wert: f.name },
@@ -620,9 +649,21 @@ const PROBE_SKIZZE = `<svg class="probeskizze" viewBox="0 0 250 150" role="img" 
 const probeWerte = { mat: 0, z: 130, a: "", b: "" };
 const meldung = (t) => { $("eMeldung").textContent = t; };
 const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
+let einstRegister = "material";
+const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["vorlagen", "Vorlagen & Sichern"]];
+// Feld an einen Wert der Einstellungen binden: data-e="gruppe.schluessel", data-typ zahl|text|janein|wahl
+function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
+  const [g, k] = pfad.split("."), w = entwurf[g][k], id = "e_" + g + "_" + k;
+  const inp = typ === "janein" ? `<input id="${id}" type="checkbox" data-e="${pfad}" data-typ="janein" ${w ? "checked" : ""}>`
+    : typ === "wahl" ? `<select id="${id}" data-e="${pfad}" data-typ="wahl">${optionen.map(([v, t]) => `<option value="${esc(v)}" ${String(v) === String(w) ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`
+    : `<input id="${id}" type="${typ === "zahl" ? "number" : "text"}" step="any" ${typ === "zahl" ? 'inputmode="decimal"' : ""} data-e="${pfad}" data-typ="${typ}" value="${esc(w)}">`;
+  return `<div class="efeld ${typ === "janein" ? "janein" : ""}"><label for="${id}">${label}</label>${inp}${hinweis ? `<small class="hinweis">${hinweis}</small>` : ""}</div>`;
+}
 function zeigeEinst() {
   const e = entwurf, feld = (i, k, wert, schritt = "any") => `<input data-i="${i}" data-k="${k}" type="${k === "name" ? "text" : "number"}" step="${schritt}" inputmode="decimal" value="${esc(wert)}">`;
-  $("eInhalt").innerHTML = `
+  const reiter = `<div class="register eregister" role="tablist">${EINST_REGISTER.map(([id, t]) => `<button role="tab" data-ereg="${id}" aria-selected="${id === einstRegister}">${t}</button>`).join("")}</div>`;
+  const inhalt = {
+    material: `
     <h4>Materialien</h4>
     <div class="tabwrap"><table class="zeilen mat"><thead><tr><th>Name</th><th>Dicke mm</th><th>Innenradius mm</th><th>K-Faktor</th><th>Dichte kg/dm³</th><th></th></tr></thead><tbody>
     ${e.materialien.map((m, i) => `<tr><td>${feld(i, "name", m.name)}</td><td>${feld(i, "t", m.t)}</td><td>${feld(i, "ri", m.ri)}</td><td>${feld(i, "k", m.k)}</td><td>${feld(i, "dichte", m.dichte ?? "")}</td>
@@ -647,21 +688,75 @@ function zeigeEinst() {
       <label>Schenkel a aussen mm <input id="pA" type="number" step="any" inputmode="decimal" placeholder="z. B. 50.7" value="${probeWerte.a}"></label>
       <label>Schenkel b aussen mm <input id="pB" type="number" step="any" inputmode="decimal" placeholder="z. B. 50.7" value="${probeWerte.b}"></label>
     </div>
-    <p id="pErgebnis" class="hinweis">a und b eingeben.</p>
+    <p id="pErgebnis" class="hinweis">a und b eingeben.</p>`,
+    lager: `
+    <h4>Lagerformate</h4>
+    <p class="hinweis">Für den Vorschlag «Aus …» in der Werkstatt und den Materialbedarf: zuerst das kleinste passende Spaltband, sonst Coil, sonst Tafel.</p>
+    <div class="probe">
+      <label>Spaltbänder mm <input id="lBand" type="text" value="${e.spaltbaender.join(", ")}"><small class="hinweis">mit Komma getrennt</small></label>
+      <label>Coil-Breite mm <input id="lCoil" type="number" step="any" value="${e.coil}"><small class="hinweis">0 = kein Coil</small></label>
+      <label>Tafeln B×L mm <input id="lTafeln" type="text" value="${e.tafeln.map(([b, l]) => `${b}×${l}`).join(", ")}"><small class="hinweis">z. B. 1000×2000, 1250×2500</small></label>
+    </div>`,
+    neu: `
+    <h4>Vorgaben für neue Teile</h4>
+    <div class="egitter">
+      ${einstFeld("neu.material", "Material", "wahl", e.materialien.map((m) => [m.id, m.name]))}
+      ${einstFeld("neu.laenge", "Länge mm")}
+      ${einstFeld("neu.stueck", "Stück")}
+      ${einstFeld("neu.ebene", "Querschnitt in", "wahl", Object.entries(EBENEN).map(([k, x]) => [k, x.name]))}
+    </div>
+    <h4>Skizze und 3D-Ansicht</h4>
+    <div class="egitter">
+      ${einstFeld("skizze.raster", "Fangraster mm", "zahl", null, "Punkte rasten auf dieses Mass ein (Umschalt hält das Raster aus)")}
+      ${einstFeld("skizze.abstand", "Abstand der Teile mm", "zahl", null, "Vorlagen und freie Profile stehen in 3D nebeneinander")}
+    </div>
+    <h4>Abkantliste</h4>
+    <div class="egitter">${einstFeld("anzeige.abB", "Anschlag auch ab Kante B zeigen (Blech gewendet)", "janein")}</div>`,
+    druck: `
+    <h4>Werkstattblatt und Stückliste</h4>
+    <div class="egitter">
+      ${einstFeld("druck.betrieb", "Betrieb (Kopfzeile)", "text", null, "erscheint oben auf jedem Blatt, leer = keine")}
+      ${einstFeld("druck.abwicklung", "Abwicklung auf dem Werkstattblatt", "janein")}
+      ${einstFeld("druck.etikett", "Etikett auf dem Werkstattblatt", "janein")}
+      ${einstFeld("druck.bedarf", "Materialbedarf auf der Stückliste", "janein")}
+    </div>`,
+    etiketten: `
+    <h4>Etikettenbogen (A4)</h4>
+    <p class="hinweis">Masse vom Etikettenbogen ablesen (Packung des Herstellers). Standard: 3 × 8 Etiketten à 70 × 37 mm ohne Rand.</p>
+    <div class="egitter">
+      ${einstFeld("etiketten.spalten", "Spalten")}${einstFeld("etiketten.zeilen", "Zeilen")}
+      ${einstFeld("etiketten.breite", "Etikett breit mm")}${einstFeld("etiketten.hoehe", "Etikett hoch mm")}
+      ${einstFeld("etiketten.oben", "Rand oben mm")}${einstFeld("etiketten.links", "Rand links mm")}
+      ${einstFeld("etiketten.abstandX", "Abstand waagrecht mm")}${einstFeld("etiketten.abstandY", "Abstand senkrecht mm")}
+    </div>
+    <p class="hinweis" id="eEtikPruef"></p>`,
+    programm: `
+    <h4>Darstellung</h4>
+    <div class="egitter">${einstFeld("programm.darstellung", "Farben", "wahl", [["auto", "Wie das Gerät"], ["hell", "Hell"], ["dunkel", "Dunkel"]])}</div>
+    <h4>PC-Programm</h4>
+    ${pc ? `<div class="egitter">
+      ${einstFeld("programm.updates", "Beim Start nach Updates suchen", "janein")}
+      ${einstFeld("programm.zuletzt", "Anzahl «Zuletzt»-Projekte")}
+    </div>
+    <div class="reihe ohnerand"><button class="knopf" id="eUpdate">Jetzt nach Updates suchen</button></div>`
+      : '<p class="hinweis">Updates und «Zuletzt» gibt es nur im Windows-Programm. Die Web-Version ist immer aktuell.</p>'}
+    <p class="hinweis">Version ${VERSION}</p>`,
+    vorlagen: `
     <h4>Eigene Vorlagen</h4>
     ${e.vorlagen.length ? `<ul class="eigene">${e.vorlagen.map((v, i) => `<li>${esc(v.name)} <small class="hinweis">${v.zeilen.length} Schenkel</small><button class="weg" data-vweg="${i}" aria-label="${esc(v.name)} entfernen">×</button></li>`).join("")}</ul>`
       : '<p class="hinweis">Noch keine. Ein freies Profil wählen und in der Werkstatt «Als eigene Vorlage speichern».</p>'}
     <h4>Sichern und übertragen</h4>
     <p class="hinweis">Einstellungen gelten pro Gerät. Zum Übertragen (z. B. PC → Handy) hier als Datei sichern und auf dem anderen Gerät laden.
-      Laden ersetzt Materialien und Lagerformate und ergänzt eigene Vorlagen.</p>
-    <div class="reihe ohnerand"><button class="knopf" id="eExport">Als Datei sichern</button><button class="knopf" id="eImport">Aus Datei laden</button></div>
-    <h4>Lagerformate</h4>
-    <div class="probe">
-      <label>Spaltbänder mm <input id="lBand" type="text" value="${e.spaltbaender.join(", ")}"></label>
-      <label>Coil-Breite mm <input id="lCoil" type="number" step="any" value="${e.coil}"></label>
-      <label>Tafeln B×L mm <input id="lTafeln" type="text" value="${e.tafeln.map(([b, l]) => `${b}×${l}`).join(", ")}"></label>
-    </div>`;
-  probe();
+      Laden übernimmt alle Einstellungen und ergänzt eigene Vorlagen.</p>
+    <div class="reihe ohnerand"><button class="knopf" id="eExport">Als Datei sichern</button><button class="knopf" id="eImport">Aus Datei laden</button></div>`,
+  };
+  $("eInhalt").innerHTML = reiter + inhalt[einstRegister];
+  if (einstRegister === "material") probe();
+  if (einstRegister === "etiketten") etikettenPruefen();
+}
+function etikettenPruefen() {
+  const e = entwurf.etiketten, b = e.links + e.spalten * e.breite + (e.spalten - 1) * e.abstandX, h = e.oben + e.zeilen * e.hoehe + (e.zeilen - 1) * e.abstandY;
+  $("eEtikPruef").textContent = `Belegt ${f1(b)} × ${f1(h)} mm von 210 × 297 mm, ${e.spalten * e.zeilen} Etiketten pro Bogen.` + (b > 210.5 || h > 297.5 ? " ⚠ Passt nicht auf A4." : "");
 }
 function probe() {
   Object.assign(probeWerte, { mat: Math.min(+$("pMat").value, entwurf.materialien.length - 1), z: $("pZ").value, a: $("pA").value, b: $("pB").value });
@@ -682,16 +777,26 @@ $("eInhalt").addEventListener("input", (ev) => {
   else if (t.id === "lBand") entwurf.spaltbaender = zahlen(t.value);
   else if (t.id === "lCoil") entwurf.coil = parseFloat(t.value) || 0;
   else if (t.id === "lTafeln") entwurf.tafeln = t.value.split(/[,;]+/).map((x) => zahlen(x.replace(/[x×*]/gi, " "))).filter((x) => x.length === 2);
+  else if (t.dataset.e) einstWert(t);
   if (["pMat", "pZ", "pA", "pB"].includes(t.id)) probe();
 });
-$("eInhalt").addEventListener("change", (ev) => { if (ev.target.id === "pMat") probe(); });
+function einstWert(t) {
+  const [g, k] = t.dataset.e.split("."), typ = t.dataset.typ;
+  entwurf[g][k] = typ === "janein" ? t.checked : typ === "zahl" ? parseFloat(t.value) : t.value;
+  if (g === "etiketten" && $("eEtikPruef")) etikettenPruefen();
+}
+$("eInhalt").addEventListener("change", (ev) => {
+  if (ev.target.id === "pMat") probe();
+  else if (ev.target.dataset.e && (ev.target.dataset.typ === "janein" || ev.target.dataset.typ === "wahl")) einstWert(ev.target);
+});
 function einstLaden(text) {
   try {
     const e = JSON.parse(text);
     if (e.art !== "sdcad-einstellungen" || !Array.isArray(e.materialien) || !e.materialien.length) throw 0;
     const vorlagen = [...entwurf.vorlagen];
     for (const v of e.vorlagen || []) { const i = vorlagen.findIndex((x) => x.name === v.name); if (i >= 0) vorlagen[i] = v; else vorlagen.push(v); }
-    entwurf = { ...standardEinst(), materialien: e.materialien, spaltbaender: e.spaltbaender ?? LAGER.spaltbaender, coil: e.coil ?? LAGER.coil, tafeln: e.tafeln ?? LAGER.tafeln, vorlagen };
+    const { art, version, ...rest } = e;
+    entwurf = { ...mitStandard(rest), vorlagen };
     zeigeEinst(); meldung(`Geladen: ${e.materialien.length} Materialien, ${(e.vorlagen || []).length} Vorlagen – mit «Übernehmen» speichern.`);
   } catch { meldung("Diese Datei enthält keine Spengler-Digital-CAD-Einstellungen."); }
 }
@@ -707,7 +812,16 @@ $("eInhalt").addEventListener("click", async (ev) => {
   }
 });
 $("einstDatei").onchange = async (e) => { if (e.target.files[0]) einstLaden(await e.target.files[0].text()); e.target.value = ""; };
-$("eInhalt").addEventListener("click", (ev) => {
+$("eInhalt").addEventListener("click", async (ev) => {
+  if (ev.target.dataset.ereg) { einstRegister = ev.target.dataset.ereg; zeigeEinst(); return; }
+  if (ev.target.id === "eUpdate") {
+    meldung("Suche nach Updates …");
+    try {
+      const r = await pc.invoke("nach_update_suchen");
+      meldung(r === "aktuell" ? `Programm ist aktuell (Version ${VERSION}).` : "Update später installieren – beim nächsten Start wird wieder gefragt.");
+    } catch (e) { meldung("Keine Update-Information erreichbar (Internet? Noch kein Release auf main?): " + e); }
+    return;
+  }
   if (ev.target.dataset.weg != null) { entwurf.materialien.splice(+ev.target.dataset.weg, 1); zeigeEinst(); }
   else if (ev.target.dataset.vweg != null) { entwurf.vorlagen.splice(+ev.target.dataset.vweg, 1); zeigeEinst(); }
   else if (ev.target.id === "eNeuMat") {
@@ -718,12 +832,23 @@ $("eInhalt").addEventListener("click", (ev) => {
 });
 $("wEinst").onclick = () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); meldung(""); zeigeEinst(); $("einst").hidden = false; };
 $("eAbbrechen").onclick = () => { $("einst").hidden = true; entwurf = null; };
-$("eStandard").onclick = () => { entwurf = { ...standardEinst(), vorlagen: entwurf.vorlagen }; zeigeEinst(); meldung("Standardwerte geladen – mit «Übernehmen» speichern."); };
+$("eStandard").onclick = () => { entwurf = { ...standardEinst(), vorlagen: entwurf.vorlagen }; zeigeEinst(); meldung("Alle Standardwerte geladen (eigene Vorlagen bleiben) – mit «Übernehmen» speichern."); };
 $("eOk").onclick = () => {
   const falsch = entwurf.materialien.find((m) => !m.name.trim() || !(m.t > 0) || !(m.ri >= 0) || !(m.k > 0 && m.k < 1));
-  if (falsch) return meldung(`Material «${falsch.name || "ohne Namen"}»: Dicke > 0, Innenradius ≥ 0 und K-Faktor zwischen 0 und 1 nötig.`);
+  if (falsch) { einstRegister = "material"; zeigeEinst(); return meldung(`Material «${falsch.name || "ohne Namen"}»: Dicke > 0, Innenradius ≥ 0 und K-Faktor zwischen 0 und 1 nötig.`); }
+  const { neu: n, skizze: sk, etiketten: et, programm: pr } = entwurf;
+  const ganz = (v) => Number.isInteger(v) && v >= 1;
+  const fehler = !(n.laenge > 0) ? ["neu", "Länge für neue Teile muss grösser als 0 sein."]
+    : !ganz(n.stueck) ? ["neu", "Stück für neue Teile: ganze Zahl ab 1."]
+    : !(sk.raster > 0) ? ["neu", "Fangraster muss grösser als 0 sein."]
+    : !(sk.abstand >= 0) ? ["neu", "Abstand der Teile darf nicht negativ sein."]
+    : !(ganz(et.spalten) && ganz(et.zeilen)) ? ["etiketten", "Spalten und Zeilen: ganze Zahlen ab 1."]
+    : !(et.breite > 0 && et.hoehe > 0) ? ["etiketten", "Etikettgrösse muss grösser als 0 sein."]
+    : ![et.oben, et.links, et.abstandX, et.abstandY].every((v) => v >= 0) ? ["etiketten", "Ränder und Abstände dürfen nicht negativ sein."]
+    : !ganz(pr.zuletzt) ? ["programm", "Anzahl «Zuletzt»: ganze Zahl ab 1."] : null;
+  if (fehler) { einstRegister = fehler[0]; zeigeEinst(); return meldung(fehler[1]); }
   einst = entwurf; entwurf = null; $("einst").hidden = true;
-  einstSpeichern();
+  einstSpeichern(); darstellung();
   regen(); status("Einstellungen gespeichert. Alle Teile neu berechnet.");
 };
 
@@ -818,7 +943,7 @@ function ebenenPunkt(e) {
   let uv = [p.dot(V(E.u)), p.dot(V(E.v))];
   const r = leinwand.getBoundingClientRect(), sm = [e.clientX - r.left, e.clientY - r.top];
   for (const q of fangPunkte()) { const s = bildschirm(q); if (Math.hypot(s[0] - sm[0], s[1] - sm[1]) < 10) return { uv: q.slice(), fang: true }; }
-  if (!e.shiftKey) uv = uv.map((x) => Math.round(x / RASTER) * RASTER);
+  if (!e.shiftKey) uv = uv.map((x) => Math.round(x / einst.skizze.raster) * einst.skizze.raster);
   const letzt = skizze.pkt.at(-1);
   if (letzt) { // waagrecht / senkrecht ausrichten
     const sl = bildschirm(letzt);
@@ -1006,7 +1131,7 @@ leinwand.addEventListener("pointermove", (e) => {
     const E = EBENEN[skizze.f.ebene]; strahl.setFromCamera(ndc(e), kamera);
     const p = strahl.ray.intersectPlane(new THREE.Plane(V(E.n), 0), new THREE.Vector3()); if (!p) return;
     let uv = [p.dot(V(E.u)), p.dot(V(E.v))];
-    if (!e.shiftKey) uv = uv.map((x) => Math.round(x / RASTER) * RASTER);
+    if (!e.shiftKey) uv = uv.map((x) => Math.round(x / einst.skizze.raster) * einst.skizze.raster);
     if (!gleich(uv, skizze.zug.q)) { verschiebePunkt(skizze.zug.q, uv); skizze.zug.q = uv; zeichneLive(); }
     return;
   }
@@ -1049,7 +1174,7 @@ document.addEventListener("keydown", (e) => {
 // ------------------------------------------------------------ Werkzeugleiste
 $("wSkizze").onclick = () => {
   if (dlg) $("dAbbrechen").click();
-  dialog({ titel: "Skizze erstellen", felder: [{ id: "ebene", label: "Ebene", optionen: Object.entries(EBENEN).map(([k, e]) => [k, e.name]), wert: "XY" }],
+  dialog({ titel: "Skizze erstellen", felder: [{ id: "ebene", label: "Ebene", optionen: Object.entries(EBENEN).map(([k, e]) => [k, e.name]), wert: einst.neu.ebene }],
     hinweis: "Für Blechprofile den Querschnitt zeichnen, meist auf Vorne (XY).",
     ok: (w) => { const f = { id: neueId(), typ: "skizze", name: "Skizze " + (doc.features.filter((x) => x.typ === "skizze").length + 1), ebene: w.ebene, elemente: [] }; doc.features.push(f); setTimeout(() => starteSkizze(f)); } });
 };
@@ -1068,7 +1193,7 @@ const ZULETZT = "sdcad-zuletzt";
 const zuletzt = () => { try { return JSON.parse(localStorage.getItem(ZULETZT) || "[]"); } catch { return []; } };
 function merkeDatei(pfad) {
   if (!pfad) return;
-  const liste = [pfad, ...zuletzt().filter((p) => p !== pfad)].slice(0, 8);
+  const liste = [pfad, ...zuletzt().filter((p) => p !== pfad)].slice(0, Math.max(1, einst.programm.zuletzt));
   try { localStorage.setItem(ZULETZT, JSON.stringify(liste)); } catch {}
 }
 function titel() {
@@ -1142,6 +1267,8 @@ regen();
 auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser(); zeigeWerkstatt();
 ansicht("iso");
 (function schleife() { steuerung.update(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
+// PC-Programm: Update-Prüfung beim Start (abschaltbar in den Einstellungen)
+if (pc && einst.programm.updates) pc.invoke("nach_update_suchen").catch(() => {}); // ohne Netz still weiter
 // PC-Programm: per Doppelklick geöffnete .sdcad-Datei laden
 pc?.invoke("startdatei").then((d) => d && ladeProjekt(d.inhalt, d.pfad)).catch((e) => status("Datei konnte nicht geöffnet werden: " + e));
 // Web-Version: offline nutzbar machen (nicht im PC-Programm und nicht per Doppelklick)
