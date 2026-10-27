@@ -16,6 +16,9 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
   Lagerformate, eigene Vorlagen, Vorgaben für neue Teile, Fangraster, Druckinhalt und Kopfzeile,
   Etikettenbogen, hell/dunkel, Update-Prüfung; alles als Datei auf ein anderes Gerät übertragen
 - **Bearbeiten:** Rückgängig/Wiederholen, Duplizieren, Löschen (Entf), Teile umbenennen, Notiz pro Teil
+- **Skizzieren (wie Fusion):** Linie, Rechteck (2 Punkte, Mittelpunkt, 3 Punkte), Kreis (Mittelpunkt, 2, 3 Punkte),
+  Bogen (3 Punkte, Mittelpunkt), Polygon, Langloch, Punkt; Abrunden (= Biegeradius beim Blech), Versatz, Spiegeln,
+  Stutzen, Hilfslinien; berührende Linien/Bögen bilden Linienzüge und Profile
 - **Konstruieren (wie Fusion):** Konstruktionsebenen versetzt, unter Winkel, Mittelebene, durch zwei Kanten,
   durch drei Punkte, tangential, entlang Pfad; Bezüge und Skizzierebene (auch Körperflächen) in der 3D-Ansicht anklicken
 - **Blechprofil aus Skizze:** Blech mittig, links oder rechts der Linie, Kante A an Anfang oder Ende
@@ -34,6 +37,7 @@ kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Progra
   zeichnung.js   Querschnitt als SVG (Werkstatt, Druck)
   auftrag.js     Stückliste, CSV
   zuschnitt.js   Materialbedarf (Spaltband, Coil, Tafeln)
+  skizze.js      Skizzengeometrie (Bögen, Abrunden, Versatz, Spiegeln, Schnitte, Verbinden)
   ebenen.js      Konstruktionsebenen (versetzt, Winkel, Mitte, Kanten, Punkte, tangential, Pfad)
 src/cad.js       Oberfläche
 src/cad.html     Seitenvorlage

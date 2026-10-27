@@ -45,6 +45,10 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .wz:hover:not(:disabled) { background: var(--panel-2); border-color: var(--line); }
 .wz[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .wz:disabled { opacity: .35; cursor: default; }
+.skizzengruppe .trenner { width: 1px; background: color-mix(in srgb, var(--sketch) 30%, transparent); margin: 4px 3px; flex: none; }
+.menue button[aria-pressed="true"] { background: var(--accent-soft); }
+.wz .pfeil { display: inline-block; padding: 0 3px; border-radius: 3px; }
+.wz .pfeil:hover { background: color-mix(in srgb, var(--sketch) 18%, transparent); }
 .skizzengruppe { background: color-mix(in srgb, var(--sketch) 10%, transparent); border-radius: 6px; }
 /* Browser */
 .baum { list-style: none; margin: 0; padding: 6px 0; }
@@ -237,8 +241,19 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <div class="gruppe skizzengruppe" id="gSkizze" hidden><div class="gtitel">Skizze</div><div class="knoepfe">
       <button class="wz" id="tAuswahl"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-2 6z"/></svg>Auswahl</button>
       <button class="wz" id="tLinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><circle cx="4" cy="20" r="1.8"/><circle cx="20" cy="4" r="1.8"/></svg>Linie</button>
-      <button class="wz" id="tRechteck"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg>Rechteck</button>
-      <button class="wz" id="tKreis"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12h8"/></svg>Kreis</button>
+      <button class="wz" id="tRechteck"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg><span>Rechteck <span class="pfeil" title="Varianten">▾</span></span></button>
+      <button class="wz" id="tKreis"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12h8"/></svg><span>Kreis <span class="pfeil" title="Varianten">▾</span></span></button>
+      <button class="wz" id="tBogen"><svg viewBox="0 0 24 24"><path d="M4 18A9 9 0 0 1 20 18"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="18" r="1.6"/></svg><span>Bogen <span class="pfeil" title="Varianten">▾</span></span></button>
+      <button class="wz" id="tPolygon"><svg viewBox="0 0 24 24"><path d="M12 3l8 5v8l-8 5-8-5V8z"/></svg>Polygon</button>
+      <button class="wz" id="tLangloch"><svg viewBox="0 0 24 24"><path d="M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7z"/></svg>Langloch</button>
+      <button class="wz" id="tPunkt"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4"/></svg>Punkt</button>
+      <span class="trenner" aria-hidden="true"></span>
+      <button class="wz" id="tAbrunden"><svg viewBox="0 0 24 24"><path d="M4 20V12a8 8 0 0 1 8-8h8"/></svg>Abrunden</button>
+      <button class="wz" id="tVersatz"><svg viewBox="0 0 24 24"><path d="M4 20V8h12"/><path d="M8 20v-8h12" opacity=".6"/></svg>Versatz</button>
+      <button class="wz" id="tSpiegeln"><svg viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L4 17h5zM15 7l5 10h-5z"/></svg>Spiegeln</button>
+      <button class="wz" id="tStutzen"><svg viewBox="0 0 24 24"><path d="M3 12h7M14 12h7" /><path d="M12 4v16"/><path d="M9 9l6 6M15 9l-6 6" opacity=".6"/></svg>Stutzen</button>
+      <button class="wz" id="tHilfslinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4" stroke-dasharray="3 2.5"/></svg>Hilfslinie</button>
+      <span class="trenner" aria-hidden="true"></span>
       <button class="wz" id="tFertig"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Skizze beenden</button>
     </div></div>
     <div class="gruppe"><div class="gtitel">Datei</div><div class="knoepfe">
@@ -303,6 +318,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Ebene ▾</b>: versetzt, unter Winkel (um Kante/Achse), Mittelebene, durch zwei Kanten, durch drei Punkte, tangential an Zylinder, entlang Pfad. Bezüge mit ⊕ in der Ansicht anklicken – das orange umrandete Feld nimmt den Klick auf, danach geht es zum nächsten Feld.</li>
       <li>Ebenen sind parametrisch: ändert man eine Ebene, wandern Skizzen, Vorlagen und Körper darauf mit. Eine Ebene anklicken → «Skizze auf dieser Ebene».</li>
     </ul>
+    <h4>Skizzenwerkzeuge</h4>
+    <ul>
+      <li><b>Erstellen</b>: Linie, Rechteck ▾ (2 Punkte, um Mittelpunkt, 3 Punkte gedreht), Kreis ▾ (Mittelpunkt, 2 Punkte, 3 Punkte), Bogen ▾ (3 Punkte, um Mittelpunkt), Polygon, Langloch, Punkt. Knopf = zuletzt benutzte Variante, ▾ = alle Varianten.</li>
+      <li><b>Ändern</b>: Abrunden (Radius eintippen, Ecken anklicken – beim Blech wird daraus der Biegeradius), Versatz, Spiegeln (an einer geraden Kante), Stutzen (Teilstück zwischen Schnittpunkten), Hilfslinie (gestrichelt, kein Profil; in «Auswahl» auch mit X).</li>
+      <li>Masse eintippen, solange ein Werkzeug Punkte setzt (Felder neben dem Mauszeiger); Masse ändern: Esc → «Auswahl» → Mass anklicken.</li>
+      <li>Einzelne Linien und Bögen, die sich an den Enden berühren, gelten zusammen als ein Linienzug bzw. ein geschlossenes Profil.</li>
+    </ul>
     <h4>Werkstatt</h4>
     <ul>
       <li><b>Teil</b>: Zuschnitt, Querschnitt und Abwicklung, Abkantliste mit Anschlag ab Kante A (grüner Punkt) und ab Kante B, Etikett, DXF.</li>
@@ -320,7 +342,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <tr><td>Strg+D</td><td>Gewähltes Teil duplizieren</td></tr>
       <tr><td>Entf</td><td>Gewähltes Teil löschen (Strg+Z holt es zurück)</td></tr>
       <tr><td>Skizze: Zahl tippen, Enter</td><td>Genaue Länge (und Winkel) der nächsten Linie</td></tr>
-      <tr><td>Skizze: Esc / Entf</td><td>Linie beenden / gewähltes Element löschen</td></tr>
+      <tr><td>Skizze: Esc / Entf / X</td><td>Linie beenden bzw. zur Auswahl / gewähltes Element löschen / zur Hilfslinie machen</td></tr>
       <tr><td>F1</td><td>Diese Hilfe</td></tr>
     </tbody></table>
     <h4>Konventionen</h4>
@@ -331,6 +353,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 </div></div>
 <div class="menue" id="zuletztMenue" hidden></div>
 <div class="menue" id="ebenenMenue" hidden></div>
+<div class="menue" id="skizzenMenue" hidden></div>
 <div id="druck" aria-hidden="true"></div>
 
 <script type="module">
