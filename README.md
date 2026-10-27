@@ -28,7 +28,8 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
   durch drei Punkte, tangential, entlang Pfad; Bezüge und Skizzierebene (auch Körperflächen) in der 3D-Ansicht anklicken
 - **Modellieren wie Fusion:** Extrudieren und Drehen mit Vereinigen/Ausschneiden/Schneiden; Parameter mit Formeln
   in allen Massen; Messen und Schnittanalyse; Konstruktionsachsen und -punkte; Zeitleiste mit Rückrollmarke,
-  Unterdrücken und Verschieben; Spline und Ellipse in der Skizze
+  Unterdrücken und Verschieben; Spline und Ellipse in der Skizze; Sweep und Übergang; Abrunden/Fasen, Schale,
+  Körpermuster, Spiegeln, Verschieben/Kopieren; Komponenten (Baugruppen) im Browser; Planblatt A3/A4 mit Ansichten
 - **Flächenblech mit Kantenbausteinen:** nur die Grundfläche skizzieren, Kante anklicken und Baustein zuweisen
   (Doppelstehfalz mit automatischem Gegenstück, Traufe, Ortgang, Wasserfalz, Saum …); Zuschnitt mit
   Eckausklinkung, Biegelinien, Abkantliste, DXF; Bausteine in den Einstellungen selbst erfassen und anpassen

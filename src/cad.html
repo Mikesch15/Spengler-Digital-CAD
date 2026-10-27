@@ -166,6 +166,9 @@ table.zeilen .weg { border: 0; background: none; color: var(--bend); font-size: 
 #zeit button.fehler { border-color: #c4352b; }
 #zeit .marke { width: 6px; align-self: stretch; min-height: 24px; border-radius: 3px; background: var(--accent); cursor: ew-resize; flex: none; }
 #baum li.aus { opacity: .45; }
+#baum li.komp { font-weight: 600; cursor: default; }
+#baum li.komp small { color: var(--muted); font-weight: 400; }
+.typ.komponente { border-radius: 2px; background: none !important; border: 2px solid var(--accent); }
 #featureMenue { position: fixed; z-index: 25; min-width: 220px; }
 .zeitleiste .rechts { margin-left: auto; display: flex; gap: 6px; }
 .zeitleiste button:disabled { opacity: .4; cursor: default; }
@@ -309,6 +312,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wEbene" title="Konstruktionsebene: versetzt, unter Winkel, Mitte, zwei Kanten, drei Punkte, tangential, entlang Pfad"><svg viewBox="0 0 24 24"><path d="M3 15l6-6h12l-6 6z"/><path d="M12 9V3M12 3l-2 2M12 3l2 2" /></svg>Ebene ▾</button>
     </div></div>
     <div class="gruppe"><div class="gtitel">Ändern</div><div class="knoepfe">
+      <button class="wz" id="wKoerper" title="Körper ändern: Abrunden/Fasen, Schale, Muster, Spiegeln, Verschieben/Kopieren"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg>Körper ▾</button>
       <button class="wz" id="wParameter" title="Parameter ändern: benannte Werte und Formeln für alle Masse"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 17h5M17 7h3M13 17h7"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="17" r="2"/></svg>Parameter</button>
     </div></div>
     <div class="gruppe"><div class="gtitel">Prüfen</div><div class="knoepfe">
@@ -444,6 +448,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Parameter</b> (Ändern): benannte Werte und Formeln – in jedem Zahlenfeld und Skizzenmass nutzbar, z. B. «breite / 3». Ändert man einen Parameter, rechnet das ganze Modell nach (Masse mit «fx»).</li>
       <li><b>Prüfen</b>: Messen (Abstand und ΔX/ΔY/ΔZ zwischen Ecken, Kantenmitten, Flächen) und Schnittanalyse an einer Ebene.</li>
       <li><b>Konstruieren ▾</b>: Ebenen, Achsen (durch Kante, zwei Punkte, senkrecht zur Ebene, Schnitt zweier Ebenen) und Punkte (Koordinaten, Kantenmitte, zwischen zwei Punkten, Kante × Ebene).</li>
+      <li><b>Sweep</b> (Profil entlang Pfad) und <b>Übergang</b> (Loft zwischen zwei Profilen).</li>
+      <li><b>Körper ▾</b> (Ändern): Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile und Details – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
+      <li><b>Komponenten</b>: Rechtsklick auf einen Körper → «In Komponente …» fasst Teile zu Baugruppen zusammen (z. B. «Dach», «Fassade»); im Browser gemeinsam ein-/ausblenden, Doppelklick benennt um.</li>
       <li><b>Zeitleiste</b>: Rückrollmarke ziehen, Feature ziehen zum Verschieben; Rechtsklick (Handy: lange tippen) für Unterdrücken, Zurückrollen, Umbenennen, Duplizieren, Löschen.</li>
     </ul>
     <h4>Konstruieren und Skizzieren</h4>
