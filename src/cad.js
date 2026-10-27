@@ -209,9 +209,10 @@ function skizzenObjekt(f, farbe = 0x1f5fbf, bestimmt = null) {
   const g = new THREE.Group();
   const normal = new THREE.LineBasicMaterial({ color: farbe, depthTest: false });
   const fertigMat = bestimmt && new THREE.LineBasicMaterial({ color: dunkelModus() ? 0xf2f5f8 : 0x10161d, depthTest: false });
+  const projMat = new THREE.LineBasicMaterial({ color: 0x9b59b6, depthTest: false });
   const hilfsMat = new THREE.LineDashedMaterial({ color: 0xd08a2c, dashSize: 4, gapSize: 3, depthTest: false });
   for (const el of f.elemente) {
-    const mat = bestimmt?.has(el.id) ? fertigMat : normal;
+    const mat = el.projiziert ? projMat : bestimmt?.has(el.id) ? fertigMat : normal;
     for (const pts of elGeo(el).linien) {
       const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map((p) => zu3D(f.ebene, p))), el.hilfs ? hilfsMat : mat);
       if (el.hilfs) l.computeLineDistances();
@@ -1276,6 +1277,14 @@ const WERKZEUGE = {
   spiegeln: { aendern: true, knopf: "tSpiegeln", text: "Spiegeln: zu spiegelndes Element anklicken, dann die Spiegellinie (gerade Kante) anklicken." },
   stutzen: { aendern: true, knopf: "tStutzen", text: "Stutzen: Teilstück zwischen Schnittpunkten anklicken – es wird entfernt." },
   hilfslinie: { aendern: true, knopf: "tHilfslinie", text: "Hilfslinie: Element anklicken, um es zur Hilfslinie (gestrichelt, zählt nicht als Profil) zu machen oder zurück." },
+  dehnen: { aendern: true, knopf: "tDehnen", text: "Dehnen: Linie nahe dem Ende anklicken, das bis zur nächsten Kante verlängert werden soll." },
+  trennen: { aendern: true, knopf: "tTrennen", text: "Trennen: Linie, Kreis oder Bogen anklicken – wird an den Schnittpunkten (sonst an der Klickstelle) in Stücke geteilt." },
+  verschieben: { aendern: true, knopf: "tVerschieben", ein: () => ["dx", "dy"], immer: true, text: "Verschieben: Elemente anklicken, dann Basispunkt und Zielpunkt – oder dx/dy eintippen und Enter." },
+  kopieren: { aendern: true, knopf: "tVerschieben", ein: () => ["dx", "dy"], immer: true, text: "Kopieren: Elemente anklicken, dann Basispunkt und Zielpunkt – oder dx/dy eintippen und Enter." },
+  drehen: { aendern: true, knopf: "tVerschieben", ein: () => ["∠"], immer: true, text: "Drehen: Elemente anklicken, dann Drehpunkt; Winkel eintippen und Enter – oder Bezugs- und Zielrichtung anklicken." },
+  musterR: { aendern: true, knopf: "tMuster", text: "Rechteckiges Muster: Elemente anklicken, dann auf eine freie Stelle klicken (oder Enter) – Anzahl und Abstände eingeben." },
+  musterK: { aendern: true, knopf: "tMuster", text: "Kreisförmiges Muster: Elemente anklicken, dann den Mittelpunkt anklicken – Anzahl und Winkel eingeben." },
+  projizieren: { aendern: true, knopf: "tProjizieren", text: "Projizieren: Körperkante oder Linie einer anderen Skizze anklicken – oder eine Körperfläche (ihr Umriss). Projizierte Linien sind fixiert (violett)." },
   // Abhängigkeiten und Bemassung: Auswahlmuster P = Punkt, L = Linie (Kante, Achse), K = Kreis/Bogen/Langloch
   abhHV: { knopf: "tAbh", muster: ["L", "PP"], text: "Horizontal/Vertikal: Linie anklicken – oder zwei Punkte. Die Richtung ergibt sich aus der Lage." },
   abhKoinzident: { knopf: "tAbh", muster: ["PP", "PL", "PK"], text: "Koinzident: Punkt anklicken, dann zweiten Punkt – oder Linie/Kreis/Bogen (Punkt liegt darauf)." },
@@ -1298,6 +1307,8 @@ const KNOPF_MENUE = {
   tRechteck: [["rechteck", "2-Punkt-Rechteck"], ["rechteckM", "Rechteck um Mittelpunkt"], ["rechteck3", "3-Punkt-Rechteck (gedreht)"]],
   tKreis: [["kreis", "Kreis um Mittelpunkt"], ["kreis2", "2-Punkt-Kreis"], ["kreis3", "3-Punkt-Kreis"]],
   tBogen: [["bogen3", "3-Punkt-Bogen"], ["bogenM", "Bogen um Mittelpunkt"]],
+  tVerschieben: [["verschieben", "Verschieben"], ["kopieren", "Kopieren"], ["drehen", "Drehen"]],
+  tMuster: [["musterR", "Rechteckiges Muster"], ["musterK", "Kreisförmiges Muster"]],
   tAbh: [["abhHV", "H/V  Horizontal/Vertikal"], ["abhKoinzident", "●  Koinzident"], ["abhTangential", "T  Tangential"], ["abhGleich", "=  Gleich"], ["abhParallel", "∥  Parallel"],
     ["abhSenkrecht", "⊥  Senkrecht"], ["abhFix", "🔒  Fixieren"], ["abhMitte", "△  Mittelpunkt"], ["abhKonzentrisch", "◎  Konzentrisch"], ["abhKollinear", "≡  Kollinear"], ["abhSymmetrisch", "⇋  Symmetrisch"]],
 };
@@ -1308,7 +1319,7 @@ function eingabeBeschriften() {
 }
 function setzeWerkzeug(w) {
   if (!skizze) return;
-  skizze.werkzeug = w; skizze.pkt = []; skizze.quelle = null; skizze.picks = []; skizze.fangRefs = [];
+  skizze.werkzeug = w; skizze.pkt = []; skizze.quelle = null; skizze.picks = []; skizze.fangRefs = []; skizze.mehr = new Set(); skizze.basis = null; skizze.basis2 = null;
   document.querySelectorAll(".massbox").forEach((b) => b.remove());
   const knopf = WERKZEUGE[w].knopf;
   document.querySelectorAll("#gSkizze .wz[id^='t']").forEach((b) => b.setAttribute("aria-pressed", b.id === knopf));
@@ -1321,7 +1332,7 @@ function setzeWerkzeug(w) {
 }
 function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
-  skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [] };
+  skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
   $("gSkizze").hidden = false;
   ["wSkizze", "wExtrusion", "wBlech", "wVorlage", "wProfil", "wEbene"].forEach((id) => ($(id).disabled = true));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
@@ -1331,6 +1342,11 @@ function starteSkizze(f) {
   skizzenRaster.material.transparent = true; skizzenRaster.material.opacity = 0.25; skizzenRaster.material.depthWrite = false;
   skizzenRaster.applyMatrix4(new THREE.Matrix4().makeBasis(V(E.u), V(E.n), V(E.v).negate()).setPosition(V(E.o)));
   szene.add(skizzenRaster); boden.visible = false;
+  for (const [q, farbe] of [[[1000, 0], 0xc0392b], [[0, 1000], 0x2e8b57]]) { // Achsen durch den Ursprung (zum Anklicken für Abhängigkeiten)
+    const lokal = (u, v) => new THREE.Vector3(u, 0, -v); // Raster liegt lokal in x/z (u → x, v → −z)
+    const ax = new THREE.Line(new THREE.BufferGeometry().setFromPoints([lokal(-q[0], -q[1]), lokal(q[0], q[1])]), new THREE.LineBasicMaterial({ color: farbe, transparent: true, opacity: 0.45, depthTest: false }));
+    ax.renderOrder = 9; skizzenRaster.add(ax);
+  }
   // Blick senkrecht auf die Skizzenebene (bei waagrechten Ebenen leicht gekippt, sonst ist «oben» nicht bestimmt)
   steuerung.target.copy(V(E.o));
   kamera.position.copy(V(E.o).add(V(E.n).multiplyScalar(500)).add(new THREE.Vector3(0, 0, Math.abs(E.n[1]) > 0.999 ? 0.5 : 0)));
@@ -1443,6 +1459,10 @@ function klick(uv, fang, sm, ref) {
     case "spiegeln": spiegelnKlick(sm); break;
     case "stutzen": stutzen(uv, sm); break;
     case "hilfslinie": { const t = trefferElement(sm); if (t) { t.hilfs = !t.hilfs; status(t.hilfs ? "Hilfslinie: zählt nicht als Profil." : "Wieder normale Linie."); } break; }
+    case "dehnen": dehnen(uv, sm); break;
+    case "trennen": trennen(uv, sm); break;
+    case "verschieben": case "kopieren": case "drehen": case "musterR": case "musterK": mehrfachKlick(uv, sm, fang); break;
+    case "projizieren": projizieren(sm); break;
     default: if (WERKZEUGE[w].muster) wahlKlick(sm);
   }
   sichereIds(s.f); bereinige(s.f); // neue Elemente der Ändern-Werkzeuge bekommen IDs, Abhängigkeiten zu entfernten Elementen fallen weg
@@ -1590,6 +1610,177 @@ function stutzeBogen(el, uv) {
   }
   status("Teilstück entfernt.");
 }
+// ------------------------------------------------------------ Dehnen, Trennen, Verschieben/Kopieren/Drehen, Muster, Projizieren
+const REF_FELDER = ["a", "b", "p", "n", "l", "l1", "l2", "k", "k1", "k2"];
+const refsVon = (b) => [...REF_FELDER.filter((k) => b[k]).map((k) => b[k]), ...(b.typ === "fix" && b.e != null ? [{ e: b.e }] : [])];
+// Nach Verschieben ungültig: Bezug auf Ursprung oder Lage zu den Achsen; nach Drehen auch Richtungen (H/V, Achsen)
+const lageGebunden = (b, drehen) => (drehen && ["horizontal", "vertikal", "abstandH", "abstandV"].includes(b.typ))
+  || refsVon(b).some((r) => r.e === "O" || ((r.e === "X" || r.e === "Y") && (drehen || !["parallel", "senkrecht", "winkel"].includes(b.typ))));
+function transformiere(el, fn) {
+  if (el.pts) el.pts = el.pts.map(fn);
+  for (const k of ["c", "a", "b", "m", "p"]) if (el[k]) el[k] = fn(el[k]);
+}
+// Elemente bewegen (kopie: neue Elemente samt ihren inneren Abhängigkeiten); Abhängigkeiten nach aussen fallen weg
+function bewege(els, fn, { kopie = false, drehen = false } = {}) {
+  const f = skizze.f, ids = new Set(els.map((el) => el.id));
+  const innen = (b) => refsVon(b).every((r) => ids.has(r.e) || ["X", "Y", "O"].includes(r.e)) && !lageGebunden(b, drehen);
+  if (!kopie) {
+    f.bedingungen = f.bedingungen.filter((b) => !refsVon(b).some((r) => ids.has(r.e)) || innen(b));
+    els.forEach((el) => transformiere(el, fn)); loeseSkizze(f);
+    return els;
+  }
+  const neu = els.map((el) => { const c = JSON.parse(JSON.stringify(el)); transformiere(c, fn); c.id = neueElementId(f); delete c.projiziert; return c; });
+  const map = new Map(els.map((el, i) => [el.id, neu[i].id]));
+  for (const b of f.bedingungen.filter((b) => refsVon(b).some((r) => ids.has(r.e)) && innen(b))) {
+    const c = JSON.parse(JSON.stringify(b));
+    for (const k of REF_FELDER) if (c[k] && map.has(c[k].e)) c[k].e = map.get(c[k].e);
+    if (c.typ === "fix" && map.has(c.e)) c.e = map.get(c.e);
+    f.bedingungen.push(c);
+  }
+  f.elemente.push(...neu);
+  return neu;
+}
+const dreher = (c, w) => (p) => { const dx = p[0] - c[0], dy = p[1] - c[1], co = Math.cos(w), si = Math.sin(w); return [c[0] + dx * co - dy * si, c[1] + dx * si + dy * co]; };
+const fertigMehr = (t) => { const s = skizze; if (s.werkzeug !== "kopieren") s.mehr = new Set(); s.basis = s.basis2 = null; status(t); zeichneLive(); };
+function verschiebeUm(d) {
+  const s = skizze, kopie = s.werkzeug === "kopieren";
+  const neu = bewege([...s.mehr], (p) => [p[0] + d[0], p[1] + d[1]], { kopie });
+  if (kopie) s.mehr = new Set(neu);
+  fertigMehr(`${kopie ? "Kopiert" : "Verschoben"} um ${f1(d[0])} / ${f1(d[1])} mm.`);
+}
+function dreheUm(w) { bewege([...skizze.mehr], dreher(skizze.basis, w), { drehen: true }); fertigMehr(`Gedreht um ${grad(w)}.`); }
+// Mehrfachauswahl: Elemente anklicken; Klick auf Punkt oder freie Stelle setzt Basis-/Drehpunkt bzw. Mittelpunkt
+function mehrfachKlick(uv, sm, fang) {
+  const s = skizze, w = s.werkzeug, el = !s.basis && (!fang || !s.mehr.size) && trefferElement(sm); // ohne Auswahl wählt auch ein Klick auf einen Punkt das Element
+  if (el) { if (s.mehr.has(el)) s.mehr.delete(el); else s.mehr.add(el); return status(`${s.mehr.size} Element${s.mehr.size === 1 ? "" : "e"} gewählt. ` + WERKZEUGE[w].text.split(": ")[1]); }
+  if (!s.mehr.size) return status("Zuerst die Elemente anklicken.");
+  if (w === "musterR") return musterDialog();
+  if (!s.basis) { s.basis = uv.slice(); return status({ verschieben: "Zielpunkt anklicken – oder dx/dy eintippen.", kopieren: "Zielpunkt anklicken – oder dx/dy eintippen.", drehen: "Winkel eintippen und Enter – oder Bezugsrichtung anklicken.", musterK: "" }[w] || ""), w === "musterK" && musterDialog(); }
+  if (w === "verschieben" || w === "kopieren") return verschiebeUm([uv[0] - s.basis[0], uv[1] - s.basis[1]]);
+  if (w === "drehen") {
+    if (!s.basis2) { s.basis2 = uv.slice(); return status("Zielrichtung anklicken."); }
+    const wi = (q) => Math.atan2(q[1] - s.basis[1], q[0] - s.basis[0]);
+    return dreheUm(wi(uv) - wi(s.basis2));
+  }
+}
+function musterDialog() {
+  const s = skizze, rund = s.werkzeug === "musterR", els = [...s.mehr];
+  if (!rund && !s.basis) return status("Mittelpunkt des Musters anklicken.");
+  if (dlg) $("dAbbrechen").click();
+  dialog({ titel: rund ? "Rechteckiges Muster" : "Kreisförmiges Muster",
+    felder: rund ? [{ id: "nx", label: "Anzahl in X", wert: 3 }, { id: "dx", label: "Abstand X", einheit: "mm", wert: 50 }, { id: "ny", label: "Anzahl in Y", wert: 1 }, { id: "dy", label: "Abstand Y", einheit: "mm", wert: 50 }]
+      : [{ id: "n", label: "Anzahl", wert: 6 }, { id: "w", label: "Gesamtwinkel", einheit: "°", wert: 360 }],
+    hinweis: rund ? "Abstände von Element zu Element, negativ = in Gegenrichtung (Skizzenachsen)." : "360° verteilt gleichmässig rundum; sonst vom ersten bis zum letzten Element.",
+    ok: (v) => {
+      let n = 0;
+      if (rund) {
+        for (let i = 0; i < Math.max(1, Math.round(v.nx)); i++) for (let j = 0; j < Math.max(1, Math.round(v.ny)); j++) if (i || j) { bewege(els, (p) => [p[0] + i * (v.dx || 0), p[1] + j * (v.dy || 0)], { kopie: true }); n++; }
+      } else {
+        const k = Math.max(2, Math.round(v.n)), voll = Math.abs(Math.abs(v.w) - 360) < 1e-6, schritt = (v.w * RAD) / (voll ? k : k - 1);
+        for (let i = 1; i < k; i++) { bewege(els, dreher(s.basis, schritt * i), { kopie: true, drehen: true }); n++; }
+      }
+      fertigMehr(`Muster: ${n} Kopie${n === 1 ? "" : "n"} erstellt.`);
+    },
+    abbrechen: () => { s.basis = null; zeichneLive(); } });
+}
+// Dehnen: Endkante einer Linie bis zur nächsten Kante in Verlängerung
+function aufBogen(bd, p) { const z = 2 * Math.PI, u = (((Math.atan2(p[1] - bd.c[1], p[0] - bd.c[0]) - bd.start) * Math.sign(bd.sweep)) % z + z) % z; return u <= Math.abs(bd.sweep) + 1e-9; }
+function dehnen(uv, sm) {
+  const t = waehleGeo(sm, new Set(["L"])), f = skizze.f;
+  const el = t && f.elemente.find((x) => x.id === t.ref.e);
+  if (!el) return status("Linie nahe dem Ende anklicken.");
+  if (el.geschlossen) return status("Ein geschlossener Linienzug hat kein Ende zum Dehnen.");
+  const n = el.pts.length, k = t.ref.s, amEnde = k === n - 2 && (k !== 0 || abst(uv, el.pts[n - 1]) < abst(uv, el.pts[0]));
+  if (k !== 0 && !amEnde) return status("Nur die erste oder letzte Kante eines Linienzugs lässt sich dehnen.");
+  const i = amEnde ? n - 1 : 0, E = el.pts[i], Q = el.pts[amEnde ? n - 2 : 1], L = abst(Q, E) || 1, d = [(E[0] - Q[0]) / L, (E[1] - Q[1]) / L], W = 1e5;
+  const weit = [E[0] + d[0] * W, E[1] + d[1] * W];
+  let best = Infinity;
+  const nimm = (tt) => { if (tt != null && tt * W > 1e-6 && tt * W < best) best = tt * W; };
+  for (const x of f.elemente) {
+    if (x.art === "kreis") { schnittStreckeKreis(E, weit, x.c, x.r).forEach(nimm); continue; }
+    if (x.art === "bogen") { const bd = bogenDaten(x); if (bd) schnittStreckeKreis(E, weit, bd.c, bd.r).filter((tt) => aufBogen(bd, [E[0] + d[0] * W * tt, E[1] + d[1] * W * tt])).forEach(nimm); continue; }
+    for (const pts of elGeo(x).linien) for (let j = 1; j < pts.length; j++) if (x !== el || (j - 1 !== k)) nimm(schnittStrecken(E, weit, pts[j - 1], pts[j]));
+  }
+  if (!Number.isFinite(best)) return status("In Verlängerung liegt keine Kante.");
+  f.bedingungen = f.bedingungen.filter((b) => !refsVon(b).some((r) => r.e === el.id && r.k === "p" + i)); // Ende wird frei
+  el.pts[i] = [E[0] + d[0] * best, E[1] + d[1] * best];
+  loeseSkizze(f); status(`Gedehnt um ${f1(best)} mm.`);
+}
+// Trennen: an allen Schnittpunkten der angeklickten Kante bzw. des Kreises/Bogens; Stücke bleiben koinzident
+function trennen(uv, sm) {
+  const t = trefferElement(sm); if (!t) return status("Linie, Kreis oder Bogen anklicken.");
+  const f = skizze.f, idx = f.elemente.indexOf(t), mit = (x) => ({ ...x, ...(t.hilfs ? { hilfs: true } : {}) });
+  let teile, fuge; // fuge: Paare [i, "b"|"pN", j, "a"|"p0"] koinzident
+  if (t.art === "linie") {
+    const pts = t.pts, n = pts.length, zu = !!t.geschlossen, kanten = zu ? n : n - 1;
+    let j = -1, tc = 0, bd = 12;
+    for (let i = 0; i < kanten; i++) {
+      const A = bildschirm(pts[i]), B = bildschirm(pts[(i + 1) % n]), d = abstandStrecke(sm, A, B);
+      if (d < bd) { bd = d; j = i; const dx = B[0] - A[0], dy = B[1] - A[1]; tc = Math.max(0, Math.min(1, ((sm[0] - A[0]) * dx + (sm[1] - A[1]) * dy) / (dx * dx + dy * dy || 1))); }
+    }
+    if (j < 0) return;
+    const p = pts[j], q = pts[(j + 1) % n], ts = [];
+    for (const [a, b] of schneidKanten(t)) { const x = schnittStrecken(p, q, a, b); if (x != null && x > 1e-6 && x < 1 - 1e-6) ts.push(x); }
+    if (!ts.length) ts.push(tc);
+    ts.sort((a, b) => a - b);
+    const P = (x) => [p[0] + (q[0] - p[0]) * x, p[1] + (q[1] - p[1]) * x], kn = pts.map((x, i) => ({ p: x, r: t.radien?.[i] }));
+    const zuege = ts.slice(1).map((x, i) => [{ p: P(ts[i]) }, { p: P(x) }]);
+    if (zu) zuege.unshift([{ p: P(ts.at(-1)) }, ...kn.slice(j + 1), ...kn.slice(0, j + 1), { p: P(ts[0]) }]);
+    else { zuege.unshift([...kn.slice(0, j + 1), { p: P(ts[0]) }]); zuege.push([{ p: P(ts.at(-1)) }, ...kn.slice(j + 1)]); }
+    teile = zuege.map((k) => { const radien = {}; k.forEach((x, i) => { if (x.r > 0 && i > 0 && i < k.length - 1) radien[i] = x.r; }); return mit({ art: "linie", pts: k.map((x) => x.p), geschlossen: false, ...(Object.keys(radien).length ? { radien } : {}) }); });
+    if (zu) teile.push(teile.shift()); // Reihenfolge entlang der Kante: … letztes Stück schliesst an das erste an
+    fuge = teile.slice(0, -1).map((x, i) => [i, "p" + (x.pts.length - 1), i + 1, "p0"]);
+    if (zu) fuge.push([teile.length - 1, "p" + (teile.at(-1).pts.length - 1), 0, "p0"]);
+  } else if (t.art === "kreis" || t.art === "bogen") {
+    const kreis = t.art === "kreis", bd = kreis ? { c: t.c, r: t.r, start: 0, sweep: 2 * Math.PI } : bogenDaten(t); if (!bd) return;
+    const sg = Math.sign(bd.sweep), voll = Math.abs(bd.sweep), z = 2 * Math.PI;
+    const lage = (q) => (((Math.atan2(q[1] - bd.c[1], q[0] - bd.c[0]) - bd.start) * sg) % z + z) % z, bei = (u) => [bd.c[0] + bd.r * Math.cos(bd.start + sg * u), bd.c[1] + bd.r * Math.sin(bd.start + sg * u)];
+    let us = [];
+    for (const [a, b] of schneidKanten(t)) for (const x of schnittStreckeKreis(a, b, bd.c, bd.r)) { const u = lage([a[0] + (b[0] - a[0]) * x, a[1] + (b[1] - a[1]) * x]); if (u > 1e-6 && u < voll - 1e-6) us.push(u); }
+    us = [...new Set(us.map((u) => +u.toFixed(9)))].sort((a, b) => a - b);
+    if (kreis && us.length < 2) return status("Ein Kreis braucht zwei Schnittpunkte zum Trennen.");
+    if (!us.length) us = [lage(uv)];
+    const grenzen = kreis ? [...us, us[0] + z] : [0, ...us, voll];
+    teile = grenzen.slice(1).map((y, i) => { const x = grenzen[i]; return mit({ art: "bogen", a: bei(x), b: bei(y), m: bei((x + y) / 2) }); });
+    fuge = teile.slice(0, -1).map((_, i) => [i, "b", i + 1, "a"]);
+    if (kreis) fuge.push([teile.length - 1, "b", 0, "a"]);
+  } else return status("Dieses Element lässt sich nicht trennen.");
+  teile.forEach((x) => (x.id = neueElementId(f)));
+  f.elemente.splice(idx, 1, ...teile);
+  for (const [i, ka, j, kb] of fuge) f.bedingungen.push({ typ: "koinzident", a: { e: teile[i].id, k: ka }, b: { e: teile[j].id, k: kb } });
+  status(`In ${teile.length} Stücke getrennt.`);
+}
+// Projizieren: Körperkanten, Körperflächen (Umriss) oder Linien früherer Skizzen auf die Skizzenebene – fixiert
+function projizieren(sm) {
+  const f = skizze.f, E = E_(f.ebene), auf = (w) => zuLokal(E, w), kand = [];
+  for (const [a, b] of koerperKanten()) kand.push({ a, b, zug: [a, b], name: "Körperkante" });
+  for (const sk of vorher(f).filter((x) => x.typ === "skizze" && ebene(x.ebene))) for (const el of sk.elemente) for (const pts of elGeo(el).linien) {
+    const w = pts.map((q) => zuWelt(E_(sk.ebene), q));
+    for (let i = 1; i < w.length; i++) kand.push({ a: w[i - 1], b: w[i], zug: w, zu: !!elGeo(el).kontur, name: sk.name });
+  }
+  let best = null, bd = 12;
+  for (const k of kand) { const A = aufSchirm(k.a), B = aufSchirm(k.b); if (A[2] < 1 && B[2] < 1) { const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = k; } } }
+  let zuege = [];
+  if (best) zuege = [{ pts: best.zug.map(auf), zu: best.zu }];
+  else { // Fläche angeklickt: alle Körperkanten in ihrer Ebene
+    const r = leinwand.getBoundingClientRect();
+    strahl.setFromCamera(new THREE.Vector2((sm[0] / r.width) * 2 - 1, -(sm[1] / r.height) * 2 + 1), kamera);
+    const hit = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
+    if (!hit) return status("Körperkante, Körperfläche oder Linie einer anderen Skizze anklicken.");
+    const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld), o = hit.point, inEbene = (w) => Math.abs(V(w).sub(o).dot(n)) < 0.01;
+    const stuecke = koerperKanten().filter(([a, b]) => inEbene(a) && inEbene(b)).map(([a, b]) => ({ pts: [auf(a), auf(b)] }));
+    zuege = verbindeStuecke(stuecke).map((z) => ({ pts: z.pts, zu: z.geschlossen }));
+  }
+  const neu = [];
+  for (const z of zuege) {
+    const pts = z.pts.filter((q, i) => !i || abst(q, z.pts[i - 1]) > 1e-6);
+    if (z.zu && pts.length > 2 && gleich(pts[0], pts.at(-1))) pts.pop();
+    if (pts.length < 2 || pts.every((q) => abst(q, pts[0]) < 1e-6)) continue;
+    const el = { art: "linie", pts, geschlossen: !!z.zu && pts.length > 2, projiziert: true, id: neueElementId(f) };
+    f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); neu.push(el);
+  }
+  status(neu.length ? `Projiziert: ${neu.length} Linienzug${neu.length === 1 ? "" : "züge"} (fixiert).` : "Die Kante steht senkrecht zur Skizzenebene – nichts zu projizieren.");
+}
 function abschliessenLinie() {
   if (skizze?.werkzeug === "linie" && skizze.pkt.length >= 2) erstelle([{ art: "linie", pts: skizze.pkt.slice(), geschlossen: false }], null, { hv: true });
   if (skizze) { skizze.pkt = []; skizze.fangRefs = []; }
@@ -1601,6 +1792,9 @@ function eingabeAnwenden() {
   const a = parseFloat($("eLaenge").value), b = parseFloat($("eWinkel").value), p = P.at(-1), m = s.maus || p;
   if (w === "abrunden") { if (a >= 0) { s.radius = a; status(a ? `Radius ${f1(a)} mm – jetzt Ecken anklicken.` : "Radius 0: angeklickte Ecken werden wieder scharf."); } return; }
   if (w === "versatz") { if (s.quelle && a > 0) { const v = versatzVorschau(m, a); if (v) s.f.elemente.push(v); s.quelle = null; status("Versetzt. Nächstes Element anklicken."); zeichneLive(); } return; }
+  if ((w === "verschieben" || w === "kopieren") && s.mehr.size && (Number.isFinite(a) || Number.isFinite(b))) return verschiebeUm([a || 0, b || 0]);
+  if (w === "drehen" && s.mehr.size && s.basis && Number.isFinite(a)) return dreheUm(a * RAD);
+  if ((w === "musterR" || w === "musterK") && s.mehr.size) return musterDialog();
   if (w === "polygon" && b >= 3) s.ecken = Math.round(b);
   if (!P.length || !m) return zeichneLive();
   const richtung = Number.isFinite(b) && w === "linie" || (w === "rechteck3" && P.length === 1 && Number.isFinite(b)) ? (b * Math.PI) / 180 : Math.atan2(m[1] - p[1], m[0] - p[0]);
@@ -1856,10 +2050,7 @@ function zeichneLive() {
   live.add(skizzenObjekt(f, 0x1f5fbf, A?.bestimmt));
   const fg = $("fgAnzeige"); fg.textContent = A ? (A.dof ? A.dof + " FG" : "bestimmt") : ""; fg.classList.toggle("voll", A?.dof === 0);
   fg.title = A ? fgText(A.dof) + " (Freiheitsgrade: so viele Masse/Abhängigkeiten fehlen noch)" : "";
-  for (const [q, farbe] of [[[1000, 0], 0xc0392b], [[0, 1000], 0x2e8b57]]) { // Achsen durch den Ursprung
-    const ax = new THREE.Line(new THREE.BufferGeometry().setFromPoints([zu3D(f.ebene, [-q[0], -q[1]]), zu3D(f.ebene, q)]), new THREE.LineBasicMaterial({ color: farbe, transparent: true, opacity: 0.45, depthTest: false }));
-    ax.renderOrder = 9; live.add(ax);
-  }
+
   const temp = { ebene: f.ebene, elemente: [] };
   const m = s.maus;
   const P = s.pkt, vor = (x) => x && temp.elemente.push(x), strich = () => vor({ art: "linie", pts: [P[0], m] });
@@ -1885,7 +2076,7 @@ function zeichneLive() {
   const pg = new THREE.BufferGeometry().setFromPoints(pts.map((p) => zu3D(f.ebene, p)));
   const pk = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0x1f5fbf, size: 6, sizeAttenuation: false, depthTest: false })); pk.renderOrder = 11; live.add(pk);
   // Auswahl hervorheben
-  const hl = [s.sel, s.quelle].filter((h) => h && f.elemente.includes(h)), hp = [];
+  const hl = [s.sel, s.quelle, ...(s.mehr || [])].filter((h) => h && f.elemente.includes(h)), hp = [s.basis, s.basis2].filter(Boolean);
   for (const pk of s.picks || []) {
     if (pk.art === "P") hp.push(pk.uv);
     else if (pk.art === "K") hl.push(B.els.get(pk.ref.e));

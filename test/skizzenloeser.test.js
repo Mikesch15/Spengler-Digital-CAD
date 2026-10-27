@@ -74,5 +74,12 @@ const np = (p, q, tol) => nah(p[0], q[0], tol) && nah(p[1], q[1], tol);
   ok(fuegeHinzu(f, { typ: "parallel", l1: { e: 3, s: 0 }, l2: { e: "X" } }).ok, "parallel zur X-Achse");
 }
 
+// 5. Wie in Fusion: beim Tangential-Setzen wandert der Kreis, der Radius bleibt fast gleich
+{
+  const f = { elemente: [{ art: "linie", pts: [[0, 60], [120, 60]] }, { art: "kreis", c: [0, 150], r: 20 }] };
+  vorbereiten(f);
+  ok(fuegeHinzu(f, { typ: "tangential", l: { e: 1, s: 0 }, k: { e: 2 } }).ok && f.elemente[1].r < 25, `Radius bleibt (${f.elemente[1].r.toFixed(2)})`);
+}
+
 console.log(fehler ? `${fehler} Fehler im Skizzenlöser` : "Skizzenlöser: alle Tests bestanden");
 process.exit(fehler ? 1 : 0);

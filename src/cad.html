@@ -262,6 +262,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="tVersatz"><svg viewBox="0 0 24 24"><path d="M4 20V8h12"/><path d="M8 20v-8h12" opacity=".6"/></svg>Versatz</button>
       <button class="wz" id="tSpiegeln"><svg viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L4 17h5zM15 7l5 10h-5z"/></svg>Spiegeln</button>
       <button class="wz" id="tStutzen"><svg viewBox="0 0 24 24"><path d="M3 12h7M14 12h7" /><path d="M12 4v16"/><path d="M9 9l6 6M15 9l-6 6" opacity=".6"/></svg>Stutzen</button>
+      <button class="wz" id="tDehnen" title="Linie bis zur nächsten Kante verlängern"><svg viewBox="0 0 24 24"><path d="M4 12h10"/><path d="M14 12h5" stroke-dasharray="2 2"/><path d="M20 5v14"/></svg>Dehnen</button>
+      <button class="wz" id="tTrennen" title="An Schnittpunkten teilen"><svg viewBox="0 0 24 24"><path d="M3 12h7M14 12h7"/><path d="M12 5v14" opacity=".6"/><circle cx="10" cy="12" r="1.5"/><circle cx="14" cy="12" r="1.5"/></svg>Trennen</button>
+      <button class="wz" id="tVerschieben" title="Verschieben, Kopieren, Drehen"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><span>Verschieben <span class="pfeil" title="Varianten">▾</span></span></button>
+      <button class="wz" id="tMuster" title="Rechteckiges oder kreisförmiges Muster"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><rect x="15" y="15" width="6" height="6"/></svg><span>Muster <span class="pfeil" title="Varianten">▾</span></span></button>
+      <button class="wz" id="tProjizieren" title="Körperkanten und andere Skizzen projizieren"><svg viewBox="0 0 24 24"><path d="M4 18l8 3 8-3"/><path d="M8 4h8v6H8z"/><path d="M8 10l-4 8M16 10l4 8" stroke-dasharray="2 2"/></svg>Projizieren</button>
       <button class="wz" id="tHilfslinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4" stroke-dasharray="3 2.5"/></svg>Hilfslinie</button>
       <span class="trenner" aria-hidden="true"></span>
       <button class="wz" id="tAbh" title="Abhängigkeiten wie in Fusion"><svg viewBox="0 0 24 24"><path d="M4 20L14 6"/><path d="M15 15h6M18 12v6"/><circle cx="14" cy="6" r="1.8"/></svg><span>Abhängigkeit <span class="pfeil" title="Alle Abhängigkeiten">▾</span></span></button>
@@ -335,8 +340,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <h4>Skizzenwerkzeuge</h4>
     <ul>
       <li><b>Erstellen</b>: Linie, Rechteck ▾ (2 Punkte, um Mittelpunkt, 3 Punkte gedreht), Kreis ▾ (Mittelpunkt, 2 Punkte, 3 Punkte), Bogen ▾ (3 Punkte, um Mittelpunkt), Polygon, Langloch, Punkt. Knopf = zuletzt benutzte Variante, ▾ = alle Varianten.</li>
-      <li><b>Ändern</b>: Abrunden (Radius eintippen, Ecken anklicken – beim Blech wird daraus der Biegeradius), Versatz, Spiegeln (an einer geraden Kante), Stutzen (Teilstück zwischen Schnittpunkten), Hilfslinie (gestrichelt, kein Profil; in «Auswahl» auch mit X).</li>
-      <li>Masse eintippen, solange ein Werkzeug Punkte setzt (Felder neben dem Mauszeiger); Masse ändern: Esc → «Auswahl» → Mass anklicken.</li>
+      <li><b>Ändern</b>: Abrunden (Radius eintippen, Ecken anklicken – beim Blech wird daraus der Biegeradius), Versatz, Spiegeln (an einer geraden Kante), Stutzen (Teilstück zwischen Schnittpunkten), Dehnen (Linienende bis zur nächsten Kante), Trennen (an Schnittpunkten teilen), Verschieben ▾ (Verschieben, Kopieren, Drehen: Elemente anklicken, dann Basis- und Zielpunkt oder dx/dy bzw. Winkel eintippen), Muster ▾ (rechteckig, kreisförmig), Projizieren (Körperkante, Körperfläche oder Linie einer früheren Skizze – violett und fixiert), Hilfslinie (gestrichelt, kein Profil; in «Auswahl» auch mit X).</li>
+      <li><b>Abhängigkeit ▾</b> wie in Fusion: Horizontal/Vertikal, Koinzident (Punkt auf Punkt oder auf Linie/Kreis), Tangential, Gleich, Parallel, Senkrecht, Fixieren, Mittelpunkt, Konzentrisch, Kollinear, Symmetrisch. Die rote und grüne Linie sind die Achsen – auch sie lassen sich anklicken. Grüne Symbole an der Geometrie zeigen die Abhängigkeiten; in «Auswahl» Symbol anklicken und Entf löscht sie.</li>
+      <li><b>Bemassung</b> (D): Linie → Länge, Kreis → Ø, Bogen → Radius, zwei Punkte → Abstand (ausgerichtet, horizontal oder vertikal), Punkt und Linie → Abstand, zwei Linien → Winkel (parallele: Abstand). Wert eintippen, Enter. Die Masse sind treibend: ändert man den Wert, passt sich die Skizze an.</li>
+      <li>Beim Zeichnen setzt das Programm Abhängigkeiten selbst: Fang auf einen Punkt → koinzident, waagrecht/senkrecht gezeichnet → H/V, Rechtecke mit H/V, Polygone mit gleichen Seiten.</li>
+      <li><b>Freiheitsgrade</b>: Die Anzeige neben «Skizze beenden» zählt, wie viele Masse oder Abhängigkeiten noch fehlen. Vollständig bestimmte Elemente werden dunkel (wie in Fusion schwarz). Widersprüchliche oder überzählige Masse lehnt das Programm ab.</li>
+      <li>Ziehen in «Auswahl»: Punkte, Linien und Kreise (am Rand: Radius) – alle Abhängigkeiten bleiben erhalten. Graue Masse sind Referenzmasse: anklicken und Wert eintippen macht daraus ein treibendes Mass; ein treibendes Mass anklicken, Feld leeren und Enter löscht es.</li>
+      <li>Masse eintippen, solange ein Werkzeug Punkte setzt (Felder neben dem Mauszeiger).</li>
       <li>Einzelne Linien und Bögen, die sich an den Enden berühren, gelten zusammen als ein Linienzug bzw. ein geschlossenes Profil.</li>
     </ul>
     <h4>Werkstatt</h4>
@@ -356,7 +366,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <tr><td>Strg+D</td><td>Gewähltes Teil duplizieren</td></tr>
       <tr><td>Entf</td><td>Gewähltes Teil löschen (Strg+Z holt es zurück)</td></tr>
       <tr><td>Skizze: Zahl tippen, Enter</td><td>Genaue Länge (und Winkel) der nächsten Linie</td></tr>
-      <tr><td>Skizze: Esc / Entf / X</td><td>Linie beenden bzw. zur Auswahl / gewähltes Element löschen / zur Hilfslinie machen</td></tr>
+      <tr><td>Skizze: Esc / Entf / X</td><td>Linie beenden bzw. zur Auswahl / gewähltes Element oder Abhängigkeit löschen / zur Hilfslinie machen</td></tr>
+      <tr><td>Skizze: L / R / C / D</td><td>Linie / Rechteck / Kreis / Bemassung</td></tr>
       <tr><td>F1</td><td>Diese Hilfe</td></tr>
     </tbody></table>
     <h4>Konventionen</h4>

@@ -18,7 +18,12 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
 - **Bearbeiten:** Rückgängig/Wiederholen, Duplizieren, Löschen (Entf), Teile umbenennen, Notiz pro Teil
 - **Skizzieren (wie Fusion):** Linie, Rechteck (2 Punkte, Mittelpunkt, 3 Punkte), Kreis (Mittelpunkt, 2, 3 Punkte),
   Bogen (3 Punkte, Mittelpunkt), Polygon, Langloch, Punkt; Abrunden (= Biegeradius beim Blech), Versatz, Spiegeln,
-  Stutzen, Hilfslinien; berührende Linien/Bögen bilden Linienzüge und Profile
+  Stutzen, Dehnen, Trennen, Verschieben/Kopieren/Drehen, Muster (rechteckig, kreisförmig), Projizieren, Hilfslinien;
+  berührende Linien/Bögen bilden Linienzüge und Profile
+- **Abhängigkeiten und Masse (wie Fusion):** Horizontal/Vertikal, Koinzident, Tangential, Gleich, Parallel,
+  Senkrecht, Fixieren, Mittelpunkt, Konzentrisch, Kollinear, Symmetrisch; treibende Masse (Länge, Abstand,
+  Winkel, Radius, Durchmesser); automatische Abhängigkeiten beim Zeichnen; Freiheitsgrade-Anzeige,
+  bestimmte Geometrie dunkel; Ziehen hält alle Abhängigkeiten ein (eigener Gleichungslöser)
 - **Konstruieren (wie Fusion):** Konstruktionsebenen versetzt, unter Winkel, Mittelebene, durch zwei Kanten,
   durch drei Punkte, tangential, entlang Pfad; Bezüge und Skizzierebene (auch Körperflächen) in der 3D-Ansicht anklicken
 - **Blechprofil aus Skizze:** Blech mittig, links oder rechts der Linie, Kante A an Anfang oder Ende
@@ -39,6 +44,9 @@ kern/            Spengler-Kern, ohne Abhängigkeiten (wird später ins PC-Progra
   zuschnitt.js   Materialbedarf (Spaltband, Coil, Tafeln)
   skizze.js      Skizzengeometrie (Bögen, Abrunden, Versatz, Spiegeln, Schnitte, Verbinden)
   ebenen.js      Konstruktionsebenen (versetzt, Winkel, Mitte, Kanten, Punkte, tangential, Pfad)
+  loeser.js      Gleichungslöser (Levenberg–Marquardt, Freiheitsgrade)
+  bedingungen.js Abhängigkeiten und Masse als Gleichungen
+  skizzenloeser.js Skizze ↔ Löser (Bezüge, Ziehen, Prüfen auf Widerspruch/überzählig)
 src/cad.js       Oberfläche
 src/cad.html     Seitenvorlage
 build.mjs        baut index.html und dist/ (eine Datei inkl. three.js und Schriften)
