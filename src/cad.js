@@ -252,7 +252,7 @@ const farbe = (m) => FARBE[m.id] ?? (/kupfer/i.test(m.name) ? 0xb8734a : /alu/i.
 const csg = new Evaluator(); csg.attributes = ["position", "normal"]; csg.useGroups = false;
 function koerperMesh(geo, farbe, fid) {
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: farbe, metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }));
-  mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 28), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.6 })));
+  mesh.add(new THREE.LineSegments(kantenGeometrie(geo), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.6 })));
   mesh.userData.fid = fid; return mesh;
 }
 // Vereinigen, Ausschneiden, Schneiden (wie in Fusion) – Geometrie des Zielkörpers wird ersetzt
@@ -603,6 +603,13 @@ function regen() {
         const loops = schleifen(s); if (!loops.length) throw new Error("Skizze hat kein geschlossenes Profil");
         const [a, d] = drehAchse(s, f.achse); if (!a) throw new Error("Drehachse fehlt");
         volumenKoerper(f, drehGeometrie(loops, s.ebene, a, d, f.winkel ?? 360));
+      } else if (f.typ === "sweep") {
+        const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
+        volumenKoerper(f, sweepGeometrie(s, bezugPfad(f.pfad)));
+      } else if (f.typ === "loft") {
+        const sks = [f.profil1, f.profil2, f.profil3].filter(Boolean).map((id) => finde(id) || (() => { throw new Error("Profilskizze fehlt"); })());
+        if (sks.length < 2 || new Set(sks).size !== sks.length) throw new Error("Zwei verschiedene Profilskizzen wählen");
+        volumenKoerper(f, loftGeometrie(sks));
       } else if (f.typ === "blech") {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
         const kette = ketten(s)[f.kette || 0]; if (!kette) throw new Error("Skizze hat keinen offenen Linienzug");
@@ -741,7 +748,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
@@ -1101,6 +1108,8 @@ function bearbeite(f) {
   if (f.typ === "skizze") return starteSkizze(f);
   if (f.typ === "extrusion") return extrusionDialog(f);
   if (f.typ === "drehung") return drehungDialog(f);
+  if (f.typ === "sweep") return sweepDialog(f);
+  if (f.typ === "loft") return loftDialog(f);
   if (f.typ === "blech") return blechDialog(f);
   if (f.typ === "vorlage") return vorlageDialog(f);
   if (f.typ === "profil") return profilDialog(f);
@@ -1175,7 +1184,7 @@ function extrusionDialog(f) {
 const VORGAENGE = [["neu", "Neuer Körper"], ["verbinden", "Vereinigen"], ["ausschneiden", "Ausschneiden"], ["schneiden", "Schneiden (Schnittmenge)"]];
 const vorgangFelder = (f) => [
   { id: "vorgang", label: "Vorgang", optionen: VORGAENGE, wert: f.vorgang || "neu" },
-  ...((f.vorgang || "neu") === "neu" ? [] : [{ id: "ziel", label: "Körper", optionen: [["alle", f.vorgang === "verbinden" ? "Erster Körper" : "Alle Körper"], ...vorher(f).filter((x) => (x.typ === "extrusion" || x.typ === "drehung") && (x.vorgang || "neu") === "neu").map((x) => [x.id, x.name])], wert: f.ziel || "alle" }]),
+  ...((f.vorgang || "neu") === "neu" ? [] : [{ id: "ziel", label: "Körper", optionen: [["alle", f.vorgang === "verbinden" ? "Erster Körper" : "Alle Körper"], ...vorher(f).filter((x) => ["extrusion", "drehung", "sweep", "loft"].includes(x.typ) && (x.vorgang || "neu") === "neu").map((x) => [x.id, x.name])], wert: f.ziel || "alle" }]),
 ];
 // Drehachse: «U»/«V» (Skizzenachsen durch den Ursprung) oder «Element-ID:Kante» einer geraden Linie der Skizze
 function drehAchse(sk, achse) {
@@ -1624,6 +1633,99 @@ function konstruktionDialog(typ, art, f) {
   featureDialog(f, istNeu, felder, (f, w) => Object.assign(f, w, { name: w.name?.trim() || f.name }), ARTEN[f.art],
     "Bezüge in der Ansicht anklicken oder in der Liste wählen. Achsen und Punkte stehen danach in allen Bezugslisten (Ebenen, weitere Achsen/Punkte).",
     { info: () => (f._fehler ? "⚠ " + f._fehler : f._achse ? `Durch ${v(f._achse.p)} · Richtung ${v(f._achse.d.map((x) => x * 1))}` : f._punkt ? `Punkt ${v(f._punkt)}` : "") });
+}
+
+// ------------------------------------------------------------ Sweep und Loft (wie in Fusion)
+const v3 = (a) => new THREE.Vector3(...a);
+// Ring-Netz: ringe[k][j] (gleich viele Punkte, Schleifen gegen den Uhrzeiger um die Laufrichtung), Deckel an beiden Enden
+function ringNetz(ringe, deckelAnfang, deckelEnde) {
+  const pos = [], dreieck = (a, b, c) => pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  for (let k = 0; k < ringe.length - 1; k++) {
+    const A = ringe[k], B = ringe[k + 1], n = A.length;
+    for (let j = 0; j < n; j++) { const j2 = (j + 1) % n; dreieck(A[j], A[j2], B[j2]); dreieck(A[j], B[j2], B[j]); }
+  }
+  for (const [d, umdrehen] of [[deckelAnfang, true], [deckelEnde, false]]) for (const [a, b, c] of d) umdrehen ? dreieck(a, c, b) : dreieck(a, b, c);
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  return nachAussen(g);
+}
+// Deckel: Profil (Aussenkontur + Löcher in 2D) dreieckig zerlegen, Punkte über abbild(x, y) in 3D
+function deckel(aussen, loecher, abbild) {
+  const alle = [aussen, ...loecher].flat(), tri = THREE.ShapeUtils.triangulateShape(aussen.map((p) => new THREE.Vector2(...p)), loecher.map((h) => h.map((p) => new THREE.Vector2(...p))));
+  return tri.map((t) => t.map((i) => abbild(...alle[i])));
+}
+const flaeche2 = (p) => p.reduce((s, a, i) => { const b = p[(i + 1) % p.length]; return s + a[0] * b[1] - b[0] * a[1]; }, 0) / 2;
+function sweepGeometrie(sk, pfad) {
+  if (pfad.length < 2) throw new Error("Pfad zu kurz");
+  const E = E_(sk.ebene), P = pfad.map(v3).filter((p, i, a) => !i || p.distanceTo(a[i - 1]) > 1e-6);
+  // Rahmen entlang des Pfads (Doppelspiegelung: verdreht sich nicht)
+  const T = P.map((p, i) => (i < P.length - 1 ? P[i + 1].clone().sub(p) : p.clone().sub(P[i - 1])).normalize());
+  let N0 = v3(E.u).sub(T[0].clone().multiplyScalar(v3(E.u).dot(T[0]))); if (N0.lengthSq() < 1e-9) N0 = v3(E.v).sub(T[0].clone().multiplyScalar(v3(E.v).dot(T[0])));
+  const N = [N0.normalize()];
+  for (let i = 0; i < P.length - 1; i++) {
+    const v1 = P[i + 1].clone().sub(P[i]), c1 = v1.dot(v1) || 1, rL = N[i].clone().sub(v1.clone().multiplyScalar((2 / c1) * v1.dot(N[i]))), tL = T[i].clone().sub(v1.clone().multiplyScalar((2 / c1) * v1.dot(T[i])));
+    const v2 = T[i + 1].clone().sub(tL), c2 = v2.dot(v2) || 1; N.push(rL.sub(v2.multiplyScalar((2 / c2) * v2.dot(rL))).normalize());
+  }
+  const B = N.map((n, i) => new THREE.Vector3().crossVectors(T[i], n));
+  // Profilpunkte relativ zum Pfadanfang in (N0, B0)
+  const ab = (uv) => { const w = v3(zuWelt(E, uv)).sub(P[0]); return [w.dot(N[0]), w.dot(B[0])]; };
+  const geos = [];
+  for (const s of formen(sk)) {
+    const aussen0 = s.getPoints().map((q) => ab([q.x, q.y])), loecher0 = s.holes.map((h) => h.getPoints().map((q) => ab([q.x, q.y])));
+    const ccw = (p, soll) => (Math.sign(flaeche2(p)) === soll ? p : p.slice().reverse());
+    const aussen = ccw(aussen0.filter((p, i, a) => i < a.length - 1 || Math.hypot(p[0] - a[0][0], p[1] - a[0][1]) > 1e-6), 1);
+    const loecher = loecher0.map((h) => ccw(h.filter((p, i, a) => i < a.length - 1 || Math.hypot(p[0] - a[0][0], p[1] - a[0][1]) > 1e-6), -1));
+    const bei = (i) => (a, b) => P[i].clone().addScaledVector(N[i], a).addScaledVector(B[i], b);
+    const ringe = (schleife) => P.map((_, i) => schleife.map(([a, b]) => bei(i)(a, b)));
+    const teile = [ringNetz(ringe(aussen), deckel(aussen, loecher, bei(0)), deckel(aussen, loecher, bei(P.length - 1)))];
+    for (const h of loecher) teile.push(ringNetz(ringe(h), [], []));
+    geos.push(...teile);
+  }
+  return zusammen(geos.map((g) => g));
+}
+// Loft: je Skizze die grösste geschlossene Kontur, gleich viele Punkte, gleiche Umlaufrichtung und Anfang
+function loftGeometrie(skizzen, n = 96) {
+  const konturen = skizzen.map((sk) => {
+    const l = schleifen(sk).sort((a, b) => Math.abs(flaeche2(b)) - Math.abs(flaeche2(a)))[0]; if (!l) throw new Error(`«${sk.name}» hat kein geschlossenes Profil`);
+    return l.map((uv) => v3(zuWelt(E_(sk.ebene), uv)));
+  });
+  const mitte = (k) => k.reduce((s, p) => s.add(p), new THREE.Vector3()).divideScalar(k.length);
+  const achse = mitte(konturen.at(-1)).sub(mitte(konturen[0])).normalize();
+  if (achse.lengthSq() < 1e-9) throw new Error("Profile liegen aufeinander");
+  const ref = Math.abs(achse.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0), X = ref.sub(achse.clone().multiplyScalar(ref.dot(achse))).normalize(), Y = new THREE.Vector3().crossVectors(achse, X);
+  const ringe = konturen.map((k) => {
+    const c = mitte(k), w = (p) => Math.atan2(p.clone().sub(c).dot(Y), p.clone().sub(c).dot(X));
+    let q = k.slice(); const fl = q.reduce((s, p, i) => { const a = p.clone().sub(c), b = q[(i + 1) % q.length].clone().sub(c); return s + a.cross(b).dot(achse); }, 0);
+    if (fl < 0) q.reverse();
+    const s0 = q.reduce((bi, p, i) => (Math.abs(w(p)) < Math.abs(w(q[bi])) ? i : bi), 0); q = [...q.slice(s0), ...q.slice(0, s0)];
+    const L = q.map((p, i) => p.distanceTo(q[(i + 1) % q.length])), gesamt = L.reduce((a, b) => a + b, 0), out = [];
+    for (let j = 0, i = 0, lauf = 0; j < n; j++) { const ziel = (gesamt * j) / n; while (lauf + L[i] < ziel) { lauf += L[i]; i++; } const t = (ziel - lauf) / (L[i] || 1); out.push(q[i].clone().lerp(q[(i + 1) % q.length], t)); }
+    return out;
+  });
+  // Deckel liegen in ihrer eigenen Ebene: Punkte direkt verwenden
+  const deckelEcht = (ring) => THREE.ShapeUtils.triangulateShape(ring.map((p) => new THREE.Vector2(p.clone().dot(X), p.clone().dot(Y))), []).map((t) => t.map((i) => ring[i]));
+  return ringNetz(ringe, deckelEcht(ringe[0]), deckelEcht(ringe.at(-1)));
+}
+function sweepDialog(f) {
+  const istNeu = !f, sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
+  if (!sk.length) return status("Zuerst ein geschlossenes Profil skizzieren – und einen Pfad (Linie, Bogen, Linienzug oder Körperkante).");
+  f ||= { id: neueId(), typ: "sweep", name: "Sweep " + (doc.features.filter((x) => x.typ === "sweep").length + 1), skizze: sk.at(-1).id, pfad: "", vorgang: "neu" };
+  if (!f.pfad) f.pfad = pfadListe().find(([w]) => !w.startsWith(`L:${f.skizze}:`))?.[0] || ""; // Pfad nicht aus der Profilskizze
+  featureDialog(f, istNeu, (f) => [
+    { id: "skizze", label: "Profil aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
+    { id: "pfad", label: "Pfad", wahl: "pfad", optionen: mitWert(pfadListe(f).length ? pfadListe(f) : [["", "– nichts vorhanden –"]], f.pfad), wert: f.pfad },
+    ...vorgangFelder(f),
+  ], (f, w) => Object.assign(f, w), "Sweep", "Geschlossenes Profil entlang eines Pfads ziehen. Das Profil wird am Pfadanfang angesetzt – am besten auf einer Ebene senkrecht zum Pfad skizzieren (Konstruieren → Ebene entlang Pfad).");
+}
+function loftDialog(f) {
+  const istNeu = !f, sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
+  if (sk.length < 2) return status("Für einen Übergang zwei Skizzen mit geschlossenem Profil auf verschiedenen Ebenen zeichnen.");
+  f ||= { id: neueId(), typ: "loft", name: "Übergang " + (doc.features.filter((x) => x.typ === "loft").length + 1), profil1: sk.at(-2).id, profil2: sk.at(-1).id, profil3: "", vorgang: "neu" };
+  featureDialog(f, istNeu, (f) => [
+    { id: "profil1", label: "Profil 1", optionen: sk.map((s) => [s.id, s.name]), wert: f.profil1 },
+    { id: "profil2", label: "Profil 2", optionen: sk.map((s) => [s.id, s.name]), wert: f.profil2 },
+    { id: "profil3", label: "Profil 3 (optional)", optionen: [["", "–"], ...sk.map((s) => [s.id, s.name])], wert: f.profil3 || "" },
+    ...vorgangFelder(f),
+  ], (f, w) => Object.assign(f, w), "Übergang (Loft)", "Verbindet die grösste geschlossene Kontur jeder Skizze – z. B. Rechteck unten, Kreis oben (Ablauf, Rohrübergang, Kaminhut).");
 }
 
 // ------------------------------------------------------------ Spenglerdetail: Holz + mehrere Blechteile in einem Querschnitt
@@ -2240,7 +2342,7 @@ function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
   $("gSkizze").hidden = false;
-  ["wSkizze", "wExtrusion", "wDrehung", "wBlech", "wVorlage", "wProfil", "wDetail", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = true));
+  ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wDetail", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = true));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
   steuerung.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
   const E = E_(f.ebene);
@@ -2266,7 +2368,7 @@ function beendeSkizze() {
   skizze = null;
   if (!f.elemente.length) entferneFeature(f);
   $("gSkizze").hidden = true;
-  ["wSkizze", "wExtrusion", "wDrehung", "wBlech", "wVorlage", "wProfil", "wDetail", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
+  ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wDetail", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
   steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   szene.remove(skizzenRaster); skizzenRaster = null; boden.visible = true;
@@ -3183,6 +3285,8 @@ $("wSkizze").onclick = () => {
 };
 $("wExtrusion").onclick = () => { if (dlg) $("dAbbrechen").click(); extrusionDialog(); };
 $("wDrehung").onclick = () => { if (dlg) $("dAbbrechen").click(); drehungDialog(); };
+$("wSweep").onclick = () => { if (dlg) $("dAbbrechen").click(); sweepDialog(); };
+$("wLoft").onclick = () => { if (dlg) $("dAbbrechen").click(); loftDialog(); };
 $("wBlech").onclick = () => { if (dlg) $("dAbbrechen").click(); blechDialog(); };
 $("wVorlage").onclick = () => { if (dlg) $("dAbbrechen").click(); vorlageDialog(); };
 $("wProfil").onclick = () => { if (dlg) $("dAbbrechen").click(); profilDialog(); };
