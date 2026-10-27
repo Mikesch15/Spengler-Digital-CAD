@@ -1475,19 +1475,40 @@ function bausteinKontur(b, m) {
   }
   return null;
 }
+// Profil (x = nach aussen, y) entlang z extrudiert; Enden schräg: Anfang bei z = −x·k0, Ende bei z = L + x·k1
+function prisma(kont, L, k0, k1) {
+  let q = kont.slice(); if (gleich(q[0], q.at(-1))) q.pop(); if (flaeche(q) < 0) q = q.reverse();
+  const luft = window.__prismaLuft || 0; // nur für Tests: Gehrungsflächen minimal auseinander
+  const z0 = (x) => -x * k0 + luft, z1 = (x) => Math.max(L + x * k1 - luft, z0(x) + 0.01), pos = [];
+  const P = (x, y, z) => pos.push(x, y, z), n = q.length;
+  for (let i = 0; i < n; i++) { const [xa, ya] = q[i], [xb, yb] = q[(i + 1) % n];
+    P(xa, ya, z0(xa)); P(xb, yb, z0(xb)); P(xb, yb, z1(xb)); P(xa, ya, z0(xa)); P(xb, yb, z1(xb)); P(xa, ya, z1(xa)); }
+  for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(q.map(([x, y]) => new THREE.Vector2(x, y)), [])) {
+    P(q[i][0], q[i][1], z0(q[i][0])); P(q[k][0], q[k][1], z0(q[k][0])); P(q[j][0], q[j][1], z0(q[j][0]));
+    P(q[i][0], q[i][1], z1(q[i][0])); P(q[j][0], q[j][1], z1(q[j][0])); P(q[k][0], q[k][1], z1(q[k][0])); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  return nachAussen(g);
+}
 function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   const B = basis(ebene), teile = [];
   const flaeche = new THREE.ExtrudeGeometry(new THREE.Shape(bl.pts.map(([u, v]) => new THREE.Vector2(u, v))), { depth: m.t, bevelEnabled: false });
   flaeche.translate(0, 0, -m.t / 2); flaeche.applyMatrix4(B);
   const geos = [flaeche];
+  // Ecken: Profile auf Gehrung (Nachbarkante mit Baustein) bzw. bündig zur Nachbarkante (ohne) – keine Überschneidungen
+  const richt = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
+  const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]); // + = links (konvexe Ecke)
+  const ende = (beta, gehrung) => Math.max(-4, Math.min(4, gehrung || Math.abs(Math.sin(beta)) < 0.2 ? Math.tan(beta / 2) : -1 / Math.tan(beta)));
+  const n = bl.gruppen.length, letzte = (g) => richt(g.punkte.at(-2), g.punkte.at(-1)), erste = (g) => richt(g.punkte[0], g.punkte[1]);
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p) return;
     const k2 = bausteinKontur(p.baustein, m); if (!k2) return;
-    const form = new THREE.Shape(k2.map(([x, y]) => new THREE.Vector2(x, y)));
+    const vor = (k - 1 + n) % n, nach = (k + 1) % n;
     for (let i = 1; i < g.punkte.length; i++) {
       const a = g.punkte[i - 1], b = g.punkte[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
-      const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L];
-      const geo = new THREE.ExtrudeGeometry(form, { depth: L, bevelEnabled: false });
+      const d = richt(a, b);
+      const k0 = i > 1 ? Math.tan(knick(richt(g.punkte[i - 2], a), d) / 2) : ende(knick(letzte(bl.gruppen[vor]), d), !!bl.profile[vor]);
+      const k1 = i < g.punkte.length - 1 ? Math.tan(knick(d, richt(b, g.punkte[i + 1])) / 2) : ende(knick(d, erste(bl.gruppen[nach])), !!bl.profile[nach]);
+      const geo = prisma(k2, L, k0, k1);
       geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
       geo.applyMatrix4(B); geos.push(geo);
     }
@@ -4085,7 +4106,15 @@ auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser
 ansicht("iso");
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { schirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; }, schirmUV: (e, uv) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(zu3D(e, uv).toArray()); return [r.left + s[0], r.top + s[1]]; }, koerper: () => modell.children.filter((o) => o.isMesh).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, a = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
+    const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
+    const je = new Map(); ms.forEach((m) => { const k = m.userData.fid; if (!je.has(k)) je.set(k, []); je.get(k).push(m); });
+    for (const [fid, l] of je) { const pr = l.slice(1); for (let i = 0; i < pr.length; i++) for (let j = i + 1; j < pr.length; j++) {
+      const A = new Brush(nurPos(pr[i].geometry)), Bb = new Brush(nurPos(pr[j].geometry)); A.updateMatrixWorld(); Bb.updateMatrixWorld();
+      const p = csg.evaluate(A, Bb, INTERSECTION).geometry.attributes.position?.array || []; let v = 0;
+      for (let k = 0; k + 8 < p.length; k += 9) v += p[k] * (p[k + 4] * p[k + 8] - p[k + 5] * p[k + 7]) - p[k + 1] * (p[k + 3] * p[k + 8] - p[k + 5] * p[k + 6]) + p[k + 2] * (p[k + 3] * p[k + 7] - p[k + 4] * p[k + 6]);
+      out.push({ fid, i, j, v: Math.round(Math.abs(v / 6)) }); } }
+    return out; }, schirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; }, schirmUV: (e, uv) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(zu3D(e, uv).toArray()); return [r.left + s[0], r.top + s[1]]; }, koerper: () => modell.children.filter((o) => o.isMesh).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, a = g.attributes.position.array; let v = 0;
     for (let i = 0; i < a.length; i += 9) v += a[i] * (a[i + 4] * a[i + 8] - a[i + 5] * a[i + 7]) - a[i + 1] * (a[i + 3] * a[i + 8] - a[i + 5] * a[i + 6]) + a[i + 2] * (a[i + 3] * a[i + 7] - a[i + 4] * a[i + 6]);
     return { fid: o.userData.fid, dreiecke: a.length / 9, volumen: Math.round(v / 6) }; }), aufSchirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; } };
 // PC-Programm: Update-Prüfung beim Start (abschaltbar in den Einstellungen)
