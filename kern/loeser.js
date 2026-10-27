@@ -7,8 +7,8 @@ const rest = (x, gl) => { const r = []; for (const g of gl) r.push(...g.f(g.v.ma
 const quadsumme = (r) => r.reduce((s, z) => s + z * z, 0);
 const groesster = (r) => r.reduce((s, z) => Math.max(s, Math.abs(z)), 0);
 
-// Jacobi-Matrix als Zeilen { spalte: wert } nur für freie Variablen (zentrale Differenzen)
-function jacobi(x, gl, spalte) {
+// Jacobi-Matrix als Zeilen { spalte: wert } nur für freie Variablen (zentrale Differenzen); skala[spalte] = 1/√Gewicht
+function jacobi(x, gl, spalte, skala = null) {
   const zeilen = [];
   for (const g of gl) {
     const w = g.v.map((i) => x[i]), n = g.f(w).length;
@@ -17,7 +17,8 @@ function jacobi(x, gl, spalte) {
       const s = spalte.get(vi); if (s == null) return;
       const h = 1e-6 * (1 + Math.abs(w[k])), alt = w[k];
       w[k] = alt + h; const a = g.f(w); w[k] = alt - h; const b = g.f(w); w[k] = alt;
-      for (let r = 0; r < n; r++) { const d = (a[r] - b[r]) / (2 * h); if (d) z[r].set(s, (z[r].get(s) || 0) + d); }
+      const sk = skala ? skala[s] : 1;
+      for (let r = 0; r < n; r++) { const d = ((a[r] - b[r]) / (2 * h)) * sk; if (d) z[r].set(s, (z[r].get(s) || 0) + d); }
     });
     zeilen.push(...z);
   }
@@ -37,14 +38,15 @@ function lgs(A, b) {
   return y;
 }
 
-// Löst die Gleichungen; fest = Set fester Variablen. Ergebnis { x, ok, rest }
-export function loese(x0, gl, fest = new Set(), { iter = 100, tol = 1e-9 } = {}) {
+// Löst die Gleichungen; fest = Set fester Variablen; gewicht[i] > 1: Variable i ändert sich weniger (z. B. Radien). Ergebnis { x, ok, rest }
+export function loese(x0, gl, fest = new Set(), { iter = 100, tol = 1e-9, gewicht = null } = {}) {
   let x = x0.slice();
   if (!gl.length) return { x, ok: true, rest: 0 };
   const frei = [...x.keys()].filter((i) => !fest.has(i)), spalte = new Map(frei.map((v, j) => [v, j]));
+  const skala = gewicht ? frei.map((v) => 1 / Math.sqrt(gewicht[v] || 1)) : null;
   let F = rest(x, gl), q = quadsumme(F), lambda = 1e-6;
   for (let it = 0; it < iter && groesster(F) > tol; it++) {
-    const J = jacobi(x, gl, spalte), m = J.length;
+    const J = jacobi(x, gl, spalte, skala), m = J.length;
     const A = Array.from({ length: m }, () => new Float64Array(m));
     for (let r = 0; r < m; r++) for (let s = r; s < m; s++) {
       let d = 0; const [klein, gross] = J[r].size < J[s].size ? [J[r], J[s]] : [J[s], J[r]];
@@ -56,7 +58,7 @@ export function loese(x0, gl, fest = new Set(), { iter = 100, tol = 1e-9 } = {})
       const B = A.map((zeile, r) => { const z = Array.from(zeile); z[r] += lambda * (1 + zeile[r]); return z; });
       const y = lgs(B, F), d = new Float64Array(frei.length);
       J.forEach((zeile, r) => { for (const [c, w] of zeile) d[c] -= w * y[r]; });
-      const xn = x.slice(); frei.forEach((v, j) => (xn[v] += d[j]));
+      const xn = x.slice(); frei.forEach((v, j) => (xn[v] += skala ? d[j] * skala[j] : d[j]));
       const Fn = rest(xn, gl), qn = quadsumme(Fn);
       if (qn < q || qn < tol * tol) { x = xn; F = Fn; q = qn; lambda = Math.max(lambda * 0.2, 1e-12); angenommen = true; }
       else lambda *= 10;

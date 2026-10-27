@@ -76,6 +76,16 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 #labels div.mass { pointer-events: auto; cursor: pointer; border: 1px solid transparent; }
 #labels div.mass:hover { border-color: var(--sketch); }
 #labels div.winkel { color: #c25e14; transform: translate(8px, -130%); }
+#labels div.treibend { color: var(--fg); font-weight: 700; border: 1px solid color-mix(in srgb, var(--sketch) 55%, transparent); }
+#labels div.glyph { font: 700 10px var(--font-num); color: #fff; background: #2f8a4c; border-radius: 3px; padding: 0 3px; min-width: 10px; text-align: center; line-height: 14px; }
+#labels div.glyph.klickbar { pointer-events: auto; cursor: pointer; }
+#labels div.gewaehlt { background: #e0782b; color: #fff; }
+.fg { align-self: center; font: 600 11px var(--font-num); padding: 3px 8px; border-radius: 10px; background: color-mix(in srgb, var(--sketch) 15%, transparent); color: var(--sketch); white-space: nowrap; }
+.fg.voll { background: color-mix(in srgb, #2f8a4c 18%, transparent); color: #2f8a4c; }
+.fg:empty { display: none; }
+.massbox { position: absolute; transform: translate(-50%, -50%); display: flex; gap: 4px; z-index: 5; }
+.massbox .massfeld { position: static; transform: none; }
+.massbox select { font: 12px var(--font-num); border: 1.5px solid var(--sketch); border-radius: 4px; background: var(--panel); color: var(--fg); }
 .massfeld { position: absolute; transform: translate(-50%, -50%); width: 80px; font: 12px var(--font-num); border: 1.5px solid var(--sketch); border-radius: 4px; padding: 2px 4px; background: var(--panel); color: var(--fg); z-index: 5; }
 .eingabe { position: absolute; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--sketch); border-radius: 6px; padding: 4px; }
 .eingabe label { display: flex; align-items: center; gap: 3px; font: 600 11px var(--font-label); color: var(--muted); text-transform: uppercase; }
@@ -253,6 +263,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="tSpiegeln"><svg viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L4 17h5zM15 7l5 10h-5z"/></svg>Spiegeln</button>
       <button class="wz" id="tStutzen"><svg viewBox="0 0 24 24"><path d="M3 12h7M14 12h7" /><path d="M12 4v16"/><path d="M9 9l6 6M15 9l-6 6" opacity=".6"/></svg>Stutzen</button>
       <button class="wz" id="tHilfslinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4" stroke-dasharray="3 2.5"/></svg>Hilfslinie</button>
+      <span class="trenner" aria-hidden="true"></span>
+      <button class="wz" id="tAbh" title="Abhängigkeiten wie in Fusion"><svg viewBox="0 0 24 24"><path d="M4 20L14 6"/><path d="M15 15h6M18 12v6"/><circle cx="14" cy="6" r="1.8"/></svg><span>Abhängigkeit <span class="pfeil" title="Alle Abhängigkeiten">▾</span></span></button>
+      <button class="wz" id="tMass" title="Bemassung (D)"><svg viewBox="0 0 24 24"><path d="M4 8v12M20 8v12M4 14h16"/><path d="M7 11l-3 3 3 3M17 11l3 3-3 3"/></svg>Bemassung</button>
+      <span class="fg" id="fgAnzeige" aria-live="polite"></span>
       <span class="trenner" aria-hidden="true"></span>
       <button class="wz" id="tFertig"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Skizze beenden</button>
     </div></div>
