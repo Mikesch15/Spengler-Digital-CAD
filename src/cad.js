@@ -399,7 +399,7 @@ async function kopiere(text) {
 // ------------------------------------------------------------ Dateien
 // Im PC-Programm (Tauri) mit echtem Speichern-/Öffnen-Dialog, im Browser als Download bzw. Dateiauswahl.
 const pc = window.__TAURI__?.core;
-const DATEITYPEN = { sdcad: "Spengler-Digital-CAD-Projekt", dxf: "DXF-Zeichnung", csv: "CSV-Tabelle" };
+const DATEITYPEN = { sdcad: "Spengler-Digital-CAD-Projekt", dxf: "DXF-Zeichnung", csv: "CSV-Tabelle", json: "Einstellungen" };
 const dateiname = (pfad) => pfad.split(/[\\/]/).pop();
 async function herunterladen(name, inhalt, typ, pfad = null) {
   const endung = name.split(".").pop();
@@ -626,6 +626,10 @@ function zeigeEinst() {
     <h4>Eigene Vorlagen</h4>
     ${e.vorlagen.length ? `<ul class="eigene">${e.vorlagen.map((v, i) => `<li>${esc(v.name)} <small class="hinweis">${v.zeilen.length} Schenkel</small><button class="weg" data-vweg="${i}" aria-label="${esc(v.name)} entfernen">×</button></li>`).join("")}</ul>`
       : '<p class="hinweis">Noch keine. Ein freies Profil wählen und in der Werkstatt «Als eigene Vorlage speichern».</p>'}
+    <h4>Sichern und übertragen</h4>
+    <p class="hinweis">Einstellungen gelten pro Gerät. Zum Übertragen (z. B. PC → Handy) hier als Datei sichern und auf dem anderen Gerät laden.
+      Laden ersetzt Materialien und Lagerformate und ergänzt eigene Vorlagen.</p>
+    <div class="reihe ohnerand"><button class="knopf" id="eExport">Als Datei sichern</button><button class="knopf" id="eImport">Aus Datei laden</button></div>
     <h4>Lagerformate</h4>
     <div class="probe">
       <label>Spaltbänder mm <input id="lBand" type="text" value="${e.spaltbaender.join(", ")}"></label>
@@ -656,6 +660,28 @@ $("eInhalt").addEventListener("input", (ev) => {
   if (["pMat", "pZ", "pA", "pB"].includes(t.id)) probe();
 });
 $("eInhalt").addEventListener("change", (ev) => { if (ev.target.id === "pMat") probe(); });
+function einstLaden(text) {
+  try {
+    const e = JSON.parse(text);
+    if (e.art !== "sdcad-einstellungen" || !Array.isArray(e.materialien) || !e.materialien.length) throw 0;
+    const vorlagen = [...entwurf.vorlagen];
+    for (const v of e.vorlagen || []) { const i = vorlagen.findIndex((x) => x.name === v.name); if (i >= 0) vorlagen[i] = v; else vorlagen.push(v); }
+    entwurf = { ...standardEinst(), materialien: e.materialien, spaltbaender: e.spaltbaender ?? LAGER.spaltbaender, coil: e.coil ?? LAGER.coil, tafeln: e.tafeln ?? LAGER.tafeln, vorlagen };
+    zeigeEinst(); meldung(`Geladen: ${e.materialien.length} Materialien, ${(e.vorlagen || []).length} Vorlagen – mit «Übernehmen» speichern.`);
+  } catch { meldung("Diese Datei enthält keine Spengler-Digital-CAD-Einstellungen."); }
+}
+$("eInhalt").addEventListener("click", async (ev) => {
+  if (ev.target.id === "eExport") {
+    const inhalt = JSON.stringify({ art: "sdcad-einstellungen", version: VERSION, ...entwurf }, null, 1);
+    await herunterladen("Spengler-CAD Einstellungen.json", inhalt, "application/json");
+    meldung("Einstellungen gesichert (so wie hier angezeigt).");
+  } else if (ev.target.id === "eImport") {
+    if (!pc) return $("einstDatei").click();
+    try { const d = await pc.invoke("datei_oeffnen", { filter: DATEITYPEN.json, endungen: ["json"] }); if (d) einstLaden(d.inhalt); }
+    catch (e) { meldung("Laden fehlgeschlagen: " + e); }
+  }
+});
+$("einstDatei").onchange = async (e) => { if (e.target.files[0]) einstLaden(await e.target.files[0].text()); e.target.value = ""; };
 $("eInhalt").addEventListener("click", (ev) => {
   if (ev.target.dataset.weg != null) { entwurf.materialien.splice(+ev.target.dataset.weg, 1); zeigeEinst(); }
   else if (ev.target.dataset.vweg != null) { entwurf.vorlagen.splice(+ev.target.dataset.vweg, 1); zeigeEinst(); }
