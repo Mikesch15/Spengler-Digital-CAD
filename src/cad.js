@@ -480,9 +480,28 @@ function koerperKanten() { // Kanten aller sichtbaren Körper in Weltkoordinaten
   }
   return l;
 }
-function waehleImRaum(art, e, f) {
+function waehleImRaum(art, e, f, feld) {
   const sm = smPos(e);
   strahl.setFromCamera(ndc(e), kamera);
+  if (art === "profil" || art === "kette") {
+    // Skizzenprofil (Fläche innen anklicken oder Linie) bzw. offener Linienzug – wie in Fusion
+    const erlaubt = new Set((feld?.optionen || []).map(([w]) => String(w)));
+    let best = null, bd = 12, tiefe = Infinity;
+    for (const sk of doc.features.filter((x) => x.typ === "skizze" && erlaubt.has(x.id) && !x._aus)) {
+      const linie = (pts, zu, geschlossen, w) => { for (let i = 0; i < pts.length - (geschlossen ? 0 : 1); i++) {
+        const A = aufSchirm(zu3D(sk.ebene, pts[i]).toArray()), B = aufSchirm(zu3D(sk.ebene, pts[(i + 1) % pts.length]).toArray());
+        if (A[2] < 1 && B[2] < 1) { const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = w; tiefe = -1; } } } };
+      if (art === "kette") { ketten(sk).forEach((k, i) => linie(k.pts, null, false, [sk.id, `${sk.name} · Linienzug ${i + 1}`, { kette: i }])); continue; }
+      const ls = schleifen(sk);
+      ls.forEach((l, i) => linie(l, null, true, [sk.id, `${sk.name} · Profil ${i + 1}`, { profil: i }]));
+      if (best && tiefe < 0) continue;
+      const t = strahl.ray.intersectPlane(ebenenEbene(sk.ebene), new THREE.Vector3()); if (!t) continue;
+      const d = t.distanceTo(strahl.ray.origin), uv = aufEbene(sk.ebene, t);
+      const treffer = ls.map((l, i) => ({ i, a: Math.abs(flaeche(l)) })).filter(({ i }) => innen(uv, ls[i])).sort((x, y) => x.a - y.a)[0];
+      if (treffer && d < tiefe - 1e-6) { tiefe = d; best = [sk.id, `${sk.name} · Profil ${treffer.i + 1}`, { profil: treffer.i }]; }
+    }
+    return best;
+  }
   const koerper_ = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
   if (art === "ebene") {
     const ziele = [...modell.children.filter((o) => o.userData.ebene && o.userData.ebene !== f?.id && vorher(f).some((x) => x.id === o.userData.ebene)), ...(grundebenen.visible ? grundebenen.children : [])];
@@ -531,22 +550,26 @@ function zeigeWahl() {
   document.querySelectorAll("#dInhalt .feld[data-wahl]").forEach((el) => el.classList.toggle("waehlt", el.dataset.feld === a?.id));
   grundebenen.visible = a?.wahl === "ebene";
   if (a) status({ ebene: "Ebene, Konstruktionsebene oder ebene Körperfläche in der Ansicht anklicken – oder in der Liste wählen.", kante: "Kante anklicken: Skizzenlinie, Körperkante oder Achse.",
-    punkt: "Punkt anklicken: Skizzenpunkt, Körperecke oder Ursprung.", zylinder: "Zylindrische Fläche anklicken (extrudierter Kreis).", pfad: "Linie, Kreis oder Körperkante als Pfad anklicken." }[a.wahl] + ` (Feld «${a.label}»)`);
+    punkt: "Punkt anklicken: Skizzenpunkt, Körperecke oder Ursprung.", zylinder: "Zylindrische Fläche anklicken (extrudierter Kreis).", pfad: "Linie, Kreis oder Körperkante als Pfad anklicken.",
+    profil: "Skizzenprofil anklicken – in die geschlossene Fläche oder auf ihre Linie.", kette: "Offenen Linienzug einer Skizze anklicken." }[a.wahl] + ` (Feld «${a.label}»)`);
 }
 function uebernimmWahl(e) {
   const a = aktiveWahl(); if (!a) return false;
   let w = null;
-  try { w = waehleImRaum(a.wahl, e, dlg.feature); } catch { w = null; }
-  if (!w) { status("Hier ist nichts Passendes – " + ({ ebene: "eine Ebene oder Fläche", kante: "eine Kante", punkt: "einen Punkt", zylinder: "eine Zylinderfläche", pfad: "eine Linie" }[a.wahl]) + " anklicken."); return true; }
+  try { w = waehleImRaum(a.wahl, e, dlg.feature, a); } catch { w = null; }
+  if (!w) { status("Hier ist nichts Passendes – " + ({ profil: "ein geschlossenes Skizzenprofil (innen) oder seine Linie", kette: "einen offenen Linienzug einer Skizze", ebene: "eine Ebene oder Fläche", kante: "eine Kante", punkt: "einen Punkt", zylinder: "eine Zylinderfläche", pfad: "eine Linie" }[a.wahl]) + " anklicken."); return true; }
   const sel = $("d_" + a.id);
   if (![...sel.options].some((o) => o.value === w[0])) sel.add(new Option(w[1], w[0]));
   sel.value = w[0];
   for (const [k, v] of Object.entries(w[2] || {})) if ($("d_" + k)) $("d_" + k).value = v; // z. B. Winkel der angeklickten Stelle
   sel.dispatchEvent(new Event("change"));
+  // Nach einem Wechsel der Skizze baut sich der Dialog neu auf: Zusatzwerte (Linienzug, Fläche) nochmals setzen
+  for (const [k, v] of Object.entries(w[2] || {})) { const el = $("d_" + k); if (el && el.value !== String(v) && [...(el.options || [])].some((o) => o.value === String(v))) { el.value = v; el.dispatchEvent(new Event("change")); } }
   if (dlg?.sofort) { $("dOk").click(); return true; }
   const pf = dlg.felder.filter((fd) => fd.wahl), i = pf.indexOf(a);
   if (i < pf.length - 1) dlg.wahlNr = i + 1; // wie in Fusion: weiter zum nächsten Bezug
   zeigeWahl();
+  if (a.wahl === "profil" || a.wahl === "kette") status(`Gewählt: ${w[1]} – OK oder weitere Werte eingeben.`);
   return true;
 }
 
@@ -1203,7 +1226,7 @@ function extrusionDialog(f) {
   if (!sk.length) return status("Zuerst eine Skizze mit geschlossenem Profil zeichnen (Rechteck, Kreis oder geschlossener Linienzug).");
   f ||= { id: neueId(), typ: "extrusion", name: "Extrusion " + (doc.features.filter((x) => x.typ === "extrusion").length + 1), skizze: sk.at(-1).id, abstand: 100, richtung: "eine", vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
-    { id: "skizze", label: "Profil aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
+    { id: "skizze", label: "Profil aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "abstand", label: "Abstand", einheit: "mm", wert: f.abstand },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
     ...vorgangFelder(f),
@@ -1231,7 +1254,7 @@ function drehungDialog(f) {
   if (!sk.length) return status("Zuerst eine Skizze mit geschlossenem Profil und einer Achse (z. B. Hilfslinie) zeichnen.");
   f ||= { id: neueId(), typ: "drehung", name: "Drehung " + (doc.features.filter((x) => x.typ === "drehung").length + 1), skizze: sk.at(-1).id, achse: "V", winkel: 360, vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
-    { id: "skizze", label: "Profil aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
+    { id: "skizze", label: "Profil aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "achse", label: "Achse", optionen: achsenOpt(finde(f.skizze)), wert: f.achse },
     { id: "winkel", label: "Winkel", einheit: "°", wert: f.winkel ?? 360 },
     ...vorgangFelder(f),
@@ -1244,7 +1267,7 @@ function blechDialog(f) {
   if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: Blechmitte oder eine Blechoberfläche.");
   f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: Math.max(0, ketten(sk.at(-1)).findIndex((k) => !k.mitBogen)), lage: einst.neu.lage, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
   featureDialog(f, istNeu, (f) => [
-    { id: "skizze", label: "Linienzug aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
+    { id: "skizze", label: "Linienzug aus", wahl: "kette", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "kette", label: "Linienzug", optionen: ketten(finde(f.skizze) || sk.at(-1)).map((k, i) => [i, `Nr. ${i + 1}${k.mitBogen ? " (mit Bogen)" : ""}`]), wert: f.kette },
     { id: "lage", label: "Blech zur Linie", optionen: LAGEN, wert: f.lage ?? "mitte" },
     { id: "umkehren", label: "Kante A", optionen: [["", "Am Anfang der Linie"], ["1", "Am Ende der Linie"]], wert: f.umkehren ? "1" : "" },
@@ -1418,7 +1441,7 @@ function flaecheDialog(f) {
   f ||= { id: neueId(), typ: "flaeche", name: "Flächenblech " + (doc.features.filter((x) => x.typ === "flaeche").length + 1), skizze: sk.at(-1).id, profil: "alle",
     kanten: {}, material: neuMaterial(), stueck: einst.neu.stueck, sichtseite: 1 };
   const felder = (f) => [
-    { id: "skizze", label: "Grundfläche aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
+    { id: "skizze", label: "Grundfläche aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "profil", label: "Flächen", optionen: [["alle", "Alle Flächen (je ein Blech)"], ...schleifen(finde(f.skizze) || sk.at(-1)).map((_, i) => [i, `Fläche ${i + 1}`])], wert: f.profil ?? "alle" },
     { id: "name", label: "Name", text: true, wert: f.name },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
@@ -1479,7 +1502,7 @@ function belegteKanten(bl) {
 }
 function zeigeFlaechenteil(w, f) {
   const bl = f._blech, a = bl.abw, m = material(f.material), q = quelle(a.breite, einst);
-  w.innerHTML = `<div class="zahl"><b>${f1(a.breite)} × ${f1(a.laenge)}</b><span>mm Zuschnitt</span></div>
+  w.innerHTML = `<div class="zahl zwei"><b>${f1(a.breite)} × ${f1(a.laenge)}</b><span>mm Zuschnitt</span></div>
     <div class="unter"><button class="knopf klein" id="kZumDetail">← ${esc(f.eltern.name)}</button> · ${f2(a.flaeche)} m² · ${f._res.biegungen.length} Biegungen</div>
     ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
     <div class="zeichnung">${zuschnittSvg(a, bl.gruppen, { breite: 276, hoehe: 220, schrift: 10 })}</div>
@@ -1488,7 +1511,7 @@ function zeigeFlaechenteil(w, f) {
     ${belegteKanten(bl).map(({ k, g, p }) => p.biegungen.map((b, i) => `<tr><td>${i ? "" : `<b>K${k + 1}</b> <small>${f1(g.laenge)}</small>`}</td><td>${i ? "" : `${esc(p.baustein.name)}<br><small>Zugabe ${f1(p.zugabe)}</small>`}</td>
       <td class="num">${f1(b.anschlag)}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.art === "Umschlag" ? "U " : ""}${b.winkel > 0 ? "Sicht" : "hinten"}</td></tr>`).join("")).join("") || '<tr><td colspan="5" class="hinweis">Noch keine Kantenbausteine – «Bearbeiten», dann Kante anklicken.</td></tr>'}
     </tbody></table>
-    <p class="hinweis">Anschlag ab der Schnittkante des Zuschnitts, je Kante in Reihenfolge der Abkantfolge.</p>
+    <p class="hinweis unter">Anschlag ab der Schnittkante des Zuschnitts, je Kante in Reihenfolge der Abkantfolge.</p>
     <div class="reihe"><button class="knopf haupt" id="kFlBearb">Bearbeiten</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button></div>`;
   $("kZumDetail").onclick = () => bearbeite(f.eltern);
   $("kFlBearb").onclick = () => bearbeite(f.eltern);
@@ -1555,7 +1578,7 @@ function zeigeBEditor() {
     ${zeilen.map((r, i) => { const u = typeof r.winkel === "string"; return `<tr data-i="${i}"><td>B${i + 1}</td>
       <td><select data-z="art"><option value="ab" ${u ? "" : "selected"}>Abkanten</option><option value="U+" ${r.winkel === "U+" ? "selected" : ""}>Umschlag zur Sichtseite</option><option value="U-" ${r.winkel === "U-" ? "selected" : ""}>Umschlag nach hinten</option></select></td>
       <td>${u ? "180" : `<input data-z="winkel" type="number" step="any" inputmode="decimal" value="${r.winkel}" aria-label="Winkel B${i + 1}">`}</td>
-      <td><input data-z="ri" type="number" step="any" inputmode="decimal" value="${r.ri}" placeholder="Material" aria-label="Radius B${i + 1}"></td>
+      <td><input data-z="ri" type="number" step="any" inputmode="decimal" value="${r.ri}" placeholder="auto" title="leer = Innenradius des Materials" aria-label="Radius B${i + 1}"></td>
       <td><input data-z="L" type="number" step="any" inputmode="decimal" value="${r.L}" aria-label="Schenkel nach B${i + 1}"></td>
       <td>${zeilen.length > 1 ? `<button class="weg" data-zweg="${i}" aria-label="B${i + 1} entfernen">×</button>` : ""}</td></tr>`; }).join("")}
     </tbody></table>
@@ -1854,7 +1877,7 @@ function sweepDialog(f) {
   f ||= { id: neueId(), typ: "sweep", name: "Sweep " + (doc.features.filter((x) => x.typ === "sweep").length + 1), skizze: sk.at(-1).id, pfad: "", vorgang: "neu" };
   if (!f.pfad) f.pfad = pfadListe().find(([w]) => !w.startsWith(`L:${f.skizze}:`))?.[0] || ""; // Pfad nicht aus der Profilskizze
   featureDialog(f, istNeu, (f) => [
-    { id: "skizze", label: "Profil aus", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
+    { id: "skizze", label: "Profil aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "pfad", label: "Pfad", wahl: "pfad", optionen: mitWert(pfadListe(f).length ? pfadListe(f) : [["", "– nichts vorhanden –"]], f.pfad), wert: f.pfad },
     ...vorgangFelder(f),
   ], (f, w) => Object.assign(f, w), "Sweep", "Geschlossenes Profil entlang eines Pfads ziehen. Das Profil wird am Pfadanfang angesetzt – am besten auf einer Ebene senkrecht zum Pfad skizzieren (Konstruieren → Ebene entlang Pfad).");
@@ -1864,9 +1887,9 @@ function loftDialog(f) {
   if (sk.length < 2) return status("Für einen Übergang zwei Skizzen mit geschlossenem Profil auf verschiedenen Ebenen zeichnen.");
   f ||= { id: neueId(), typ: "loft", name: "Übergang " + (doc.features.filter((x) => x.typ === "loft").length + 1), profil1: sk.at(-2).id, profil2: sk.at(-1).id, profil3: "", vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
-    { id: "profil1", label: "Profil 1", optionen: sk.map((s) => [s.id, s.name]), wert: f.profil1 },
-    { id: "profil2", label: "Profil 2", optionen: sk.map((s) => [s.id, s.name]), wert: f.profil2 },
-    { id: "profil3", label: "Profil 3 (optional)", optionen: [["", "–"], ...sk.map((s) => [s.id, s.name])], wert: f.profil3 || "" },
+    { id: "profil1", wahl: "profil", label: "Profil 1", optionen: sk.map((s) => [s.id, s.name]), wert: f.profil1 },
+    { id: "profil2", wahl: "profil", label: "Profil 2", optionen: sk.map((s) => [s.id, s.name]), wert: f.profil2 },
+    { id: "profil3", wahl: "profil", label: "Profil 3 (optional)", optionen: [["", "–"], ...sk.map((s) => [s.id, s.name])], wert: f.profil3 || "" },
     ...vorgangFelder(f),
   ], (f, w) => Object.assign(f, w), "Übergang (Loft)", "Verbindet die grösste geschlossene Kontur jeder Skizze – z. B. Rechteck unten, Kreis oben (Ablauf, Rohrübergang, Kaminhut).");
 }
@@ -1959,13 +1982,13 @@ function detailDialog(f) {
   };
   // Vorschau als Schnitt und – bei «frei» – Tabellen für Blechteile (Abkantfolge in Kurzschrift) und Holz
   const tabelle = () => `<div id="detailVorschau" class="detailvorschau"></div>${f.detail === "frei" ? `
-    <table class="zeilen teile"><thead><tr><th>#</th><th>Blechteil</th><th>Rolle</th><th>x</th><th>y</th><th>Start°</th><th>Abkantfolge</th><th></th></tr></thead><tbody>
+    <div class="tabwrap"><table class="zeilen teile"><thead><tr><th>#</th><th>Blechteil</th><th>Rolle</th><th>x</th><th>y</th><th>Start°</th><th>Abkantfolge</th><th></th></tr></thead><tbody>
     ${f.aufbau.teile.map((tl, i) => `<tr data-i="${i}" data-art="teil"><td>${i + 1}</td><td><input data-k="name" value="${esc(tl.name)}"></td>
       <td><select data-k="rolle">${Object.entries(ROLLEN).map(([k, t]) => `<option value="${k}" ${tl.rolle === k ? "selected" : ""}>${t}</option>`).join("")}</select></td>
       <td><input data-k="x" type="number" step="any" value="${+tl.x.toFixed(2)}"></td><td><input data-k="y" type="number" step="any" value="${+tl.y.toFixed(2)}"></td>
       <td><input data-k="start" type="number" step="any" value="${+tl.start.toFixed(2)}"></td><td><input data-k="folge" class="folge" value="${esc(folgeText(tl.zeilen))}" title="Schenkel Winkel Schenkel …  Winkel + = links/oben, − = rechts/unten; U+ / U− = Umschlag; 90r5 = Radius 5"></td>
       <td><button class="weg" data-weg="teil:${i}" aria-label="Teil ${i + 1} entfernen">×</button></td></tr>`).join("")}
-    </tbody></table><button class="knopf" data-neu="teil">+ Blechteil</button>
+    </tbody></table></div><button class="knopf" data-neu="teil">+ Blechteil</button>
     <table class="zeilen holz"><thead><tr><th>Holz / Unterkonstruktion</th><th>Eckpunkte x,y …</th><th></th></tr></thead><tbody>
     ${f.aufbau.holz.map((h, i) => `<tr data-i="${i}" data-art="holz"><td><input data-k="name" value="${esc(h.name)}"></td><td><input data-k="pts" class="folge" value="${h.pts.map((p) => p.map((v) => +v.toFixed(2)).join(",")).join(" ")}"></td>
       <td><button class="weg" data-weg="holz:${i}" aria-label="Holz ${i + 1} entfernen">×</button></td></tr>`).join("")}
@@ -2014,12 +2037,12 @@ function parameterDialog() {
   };
   const tabelle = () => {
     const r = parameterWerte(liste);
-    return `<table class="zeilen parameter"><thead><tr><th>Name</th><th>Ausdruck</th><th class="num">Wert</th><th>Kommentar</th><th class="num">verw.</th><th></th></tr></thead><tbody>
+    return `<div class="tabwrap"><table class="zeilen parameter"><thead><tr><th>Name</th><th>Ausdruck</th><th class="num">Wert</th><th>Kommentar</th><th class="num">verw.</th><th></th></tr></thead><tbody>
       ${liste.map((q, i) => `<tr data-i="${i}"><td><input data-p="name" value="${esc(q.name)}" class="${r.fehler[q.name]?.startsWith("Name") ? "ungueltig" : ""}" aria-label="Name"></td>
         <td><input data-p="ausdruck" value="${esc(q.ausdruck)}" class="folge ${r.fehler[q.name] && !r.fehler[q.name].startsWith("Name") ? "ungueltig" : ""}" title="${esc(r.fehler[q.name] || "")}" aria-label="Ausdruck"></td>
         <td class="num" data-wert="${i}">${q.name in r.werte ? +r.werte[q.name].toFixed(4) : "⚠"}</td><td><input data-p="kommentar" value="${esc(q.kommentar || "")}" aria-label="Kommentar"></td>
         <td class="num">${verwendet(q.name)}</td><td><button class="weg" data-pweg="${i}" aria-label="${esc(q.name)} entfernen">×</button></td></tr>`).join("") || '<tr><td colspan="6" class="hinweis">Noch keine Parameter.</td></tr>'}
-      </tbody></table><div class="reihe ohnerand"><button class="knopf" data-pneu>+ Parameter</button></div>
+      </tbody></table></div><div class="reihe ohnerand"><button class="knopf" data-pneu>+ Parameter</button></div>
       <p class="hinweis">Parameter in jedem Zahlenfeld und in Skizzenmassen verwenden, z. B. «breite / 3» oder «falz + 2 * t». Erlaubt: + − * / ^, Klammern, mm/cm/m, sqrt, sin/cos/tan (Grad), min, max, round, pi.
         Ändert man hier einen Wert, rechnet das ganze Modell nach.</p>`;
   };
@@ -2245,12 +2268,12 @@ function zeigeEinst() {
     <h4>Kantenbausteine für Flächenbleche</h4>
     <p class="hinweis">Abkantfolge ab der gezeichneten Kante nach aussen: Winkel Schenkel Winkel Schenkel … – + biegt zur Sichtseite, − nach hinten, U+ / U− = Umschlag, «90r5» = Radius 5, «U-r1.4» = Umschlag um eine Lage.
       Versatz: die Kante liegt so viel weiter aussen (z. B. Oberfalz neben dem Unterfalz = Blechdicke). Partner: Gegenstück, das eine gemeinsame Kante automatisch bekommt.</p>
-    <table class="zeilen bausteine"><thead><tr><th>Name</th><th>Gruppe</th><th>Abkantfolge</th><th>Versatz</th><th>Partner</th><th></th></tr></thead><tbody>
-    ${e.bausteine.map((b, i) => `<tr data-bi="${i}"><td><input data-bk="name" value="${esc(b.name)}" aria-label="Name"></td><td><input data-bk="gruppe" value="${esc(b.gruppe || "")}" aria-label="Gruppe"></td>
+    <div class="tabwrap"><table class="zeilen bausteine"><thead><tr><th></th><th>Name</th><th>Gruppe</th><th>Abkantfolge</th><th>Versatz</th><th>Partner</th><th></th></tr></thead><tbody>
+    ${e.bausteine.map((b, i) => `<tr data-bi="${i}"><td><button class="knopf klein" data-bedit="${i}" aria-label="${esc(b.name)} bearbeiten">✎</button></td><td><input data-bk="name" value="${esc(b.name)}" aria-label="Name"></td><td><input data-bk="gruppe" value="${esc(b.gruppe || "")}" aria-label="Gruppe"></td>
       <td><input data-bk="folge" class="folge" value="${esc(b.folge)}" aria-label="Abkantfolge"></td><td><input data-bk="versatz" type="number" step="any" value="${b.versatz || 0}" aria-label="Versatz"></td>
       <td><select data-bk="partner" aria-label="Partner"><option value="">–</option>${e.bausteine.filter((x) => x !== b).map((x) => `<option value="${esc(x.id)}" ${b.partner === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></td>
-      <td class="nowrap"><button class="knopf klein" data-bedit="${i}" aria-label="${esc(b.name)} bearbeiten">✎</button><button class="weg" data-bweg="${i}" aria-label="${esc(b.name)} entfernen">×</button></td></tr>`).join("")}
-    </tbody></table>
+      <td class="nowrap"><button class="weg" data-bweg="${i}" aria-label="${esc(b.name)} entfernen">×</button></td></tr>`).join("")}
+    </tbody></table></div>
     <div class="reihe ohnerand"><button class="knopf" id="eNeuBaustein">+ Baustein</button><button class="knopf" id="eBausteineStandard">Standard-Bausteine ergänzen</button></div>`,
     vorlagen: `
     <h4>Eigene Vorlagen</h4>
@@ -3568,7 +3591,7 @@ auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser
 ansicht("iso");
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { koerper: () => modell.children.filter((o) => o.isMesh).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, a = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { schirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; }, koerper: () => modell.children.filter((o) => o.isMesh).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, a = g.attributes.position.array; let v = 0;
     for (let i = 0; i < a.length; i += 9) v += a[i] * (a[i + 4] * a[i + 8] - a[i + 5] * a[i + 7]) - a[i + 1] * (a[i + 3] * a[i + 8] - a[i + 5] * a[i + 6]) + a[i + 2] * (a[i + 3] * a[i + 7] - a[i + 4] * a[i + 6]);
     return { fid: o.userData.fid, dreiecke: a.length / 9, volumen: Math.round(v / 6) }; }), aufSchirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; } };
 // PC-Programm: Update-Prüfung beim Start (abschaltbar in den Einstellungen)

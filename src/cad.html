@@ -110,7 +110,7 @@ table.zeilen.kanten select { max-width: 210px; } table.zeilen.kanten tr.aktiv td
 .bvorschau { background: #fff; color: #111; border-radius: 6px; margin: 8px 0 4px; display: flex; justify-content: center; }
 .bvorschau svg { max-width: 100%; height: auto; }
 .bzugabe { font-size: 13px; margin-bottom: 6px; } .bzugabe b { font-family: var(--font-num); }
-table.zeilen.bfolge input { width: 80px; } .feld.breit { display: grid; gap: 2px; margin-top: 8px; } .feld.breit input { width: 100%; }
+table.zeilen.bfolge input { width: 100%; } .feld.breit { display: grid; gap: 2px; margin-top: 8px; } .feld.breit input { width: 100%; }
 #bInhalt .egitter label.feld { display: grid; grid-template-columns: 1fr; gap: 2px; font-size: 12px; align-items: end; } #bInhalt .egitter input, #bInhalt .egitter select { width: 100%; }
 td.nowrap { white-space: nowrap; }
 table.zeilen.bausteine input { width: 100%; min-width: 60px; } table.zeilen.bausteine select { max-width: 170px; }
@@ -149,7 +149,15 @@ tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in
 .knopf.weg { color: var(--bend); margin-right: auto; }
 .hinweis { font-size: 12px; color: var(--muted); }
 table.zeilen { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
-table.zeilen th:nth-child(1) { width: 18px; } table.zeilen th:nth-child(2) { width: 30%; } table.zeilen th:nth-child(3) { width: 24%; } table.zeilen th:nth-child(5) { width: 24px; }
+/* Spaltenbreiten je Tabelle (feste Tabellen: Felder dürfen nie in die Nachbarspalte ragen) */
+table.zeilen td > input, table.zeilen td > select { min-width: 0; max-width: 100%; box-sizing: border-box; }
+table[class="zeilen"] th:nth-child(1) { width: 22px; } table[class="zeilen"] th:nth-child(2) { width: 30%; } table[class="zeilen"] th:nth-child(3) { width: 24%; } table[class="zeilen"] th:nth-child(5) { width: 28px; }
+table.zeilen.bfolge th:nth-child(1) { width: 28px; } table.zeilen.bfolge th:nth-child(3) { width: 17%; } table.zeilen.bfolge th:nth-child(4) { width: 19%; } table.zeilen.bfolge th:nth-child(5) { width: 19%; } table.zeilen.bfolge th:nth-child(6) { width: 26px; }
+table.zeilen.kanten th:nth-child(1) { width: 64px; } table.zeilen.kanten th:nth-child(2) { width: 58px; } table.zeilen.kanten th:nth-child(4) { width: 58px; }
+table.zeilen.bausteine { min-width: 620px; } table.zeilen.bausteine th:nth-child(1) { width: 40px; } table.zeilen.bausteine th:nth-child(2) { width: 30%; } table.zeilen.bausteine th:nth-child(3) { width: 15%; } table.zeilen.bausteine th:nth-child(4) { width: 21%; } table.zeilen.bausteine th:nth-child(5) { width: 9%; } table.zeilen.bausteine th:nth-child(7) { width: 28px; }
+table.zeilen.parameter { min-width: 520px; } table.zeilen.parameter th:nth-child(3) { width: 70px; } table.zeilen.parameter th:nth-child(5) { width: 44px; } table.zeilen.parameter th:nth-child(6) { width: 28px; }
+table.zeilen.teile { min-width: 560px; } table.zeilen.teile th:nth-child(1) { width: 22px; } table.zeilen.teile th:nth-child(4), table.zeilen.teile th:nth-child(5), table.zeilen.teile th:nth-child(6) { width: 54px; } table.zeilen.teile th:nth-child(7) { width: 26%; } table.zeilen.teile th:nth-child(8) { width: 28px; }
+table.zeilen.holz th:nth-child(3) { width: 28px; }
 table.zeilen th { font: 600 10px var(--font-label); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 2px; }
 table.zeilen td { padding: 2px; }
 table.zeilen input, table.zeilen select { width: 100%; font: 13px var(--font-num); border: 1px solid var(--line); border-radius: 5px; padding: 4px 5px; background: var(--panel-2); color: var(--fg); }
@@ -179,6 +187,8 @@ table.zeilen .weg { border: 0; background: none; color: var(--bend); font-size: 
 table.liste.summen { margin-top: 10px; }
 .zahl { display: flex; align-items: baseline; gap: 6px; padding: 10px 12px 0; }
 .zahl b { font: 600 32px var(--font-num); }
+.zahl.zwei { flex-wrap: wrap; } .zahl.zwei b { font-size: 24px; white-space: nowrap; }
+p.hinweis.unter { padding: 6px 12px 0; margin: 0; }
 .zahl span, .unter { color: var(--muted); font-size: 13px; }
 .unter { padding: 0 12px 8px; }
 .notiz { margin: 0 12px 10px; padding: 6px 8px; border-left: 3px solid var(--sketch); background: var(--panel-2); border-radius: 4px; font-size: 13px; white-space: pre-wrap; }
@@ -220,6 +230,7 @@ table.zeilen.mat td:first-child { min-width: 170px; }
 .hilfetext p { margin: 6px 0; }
 table.kuerzel td:first-child { font-family: var(--font-num); font-size: 12px; white-space: nowrap; }
 .reihe.ohnerand { padding: 0; }
+.reihe select { flex: 1 1 180px; min-width: 0; font: 13px var(--font-body); border: 1px solid var(--line); border-radius: 5px; padding: 5px 6px; background: var(--panel-2); color: var(--fg); }
 .eregister { position: sticky; top: 0; z-index: 1; background: var(--panel); margin: 0 -14px; padding: 0 8px; overflow-x: auto; }
 .eregister button { flex: 0 0 auto; padding: 9px 10px; }
 .egitter { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 14px; }
@@ -448,6 +459,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Parameter</b> (Ändern): benannte Werte und Formeln – in jedem Zahlenfeld und Skizzenmass nutzbar, z. B. «breite / 3». Ändert man einen Parameter, rechnet das ganze Modell nach (Masse mit «fx»).</li>
       <li><b>Prüfen</b>: Messen (Abstand und ΔX/ΔY/ΔZ zwischen Ecken, Kantenmitten, Flächen) und Schnittanalyse an einer Ebene.</li>
       <li><b>Konstruieren ▾</b>: Ebenen, Achsen (durch Kante, zwei Punkte, senkrecht zur Ebene, Schnitt zweier Ebenen) und Punkte (Koordinaten, Kantenmitte, zwischen zwei Punkten, Kante × Ebene).</li>
+      <li><b>Profil anklicken</b>: Bei Extrudieren, Drehen, Sweep, Übergang und Flächenblech einfach in die geschlossene Skizzenfläche (oder auf ihre Linie) tippen, beim Blechprofil auf den Linienzug – wie in Fusion.</li>
       <li><b>Sweep</b> (Profil entlang Pfad) und <b>Übergang</b> (Loft zwischen zwei Profilen).</li>
       <li><b>Körper ▾</b> (Ändern): Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile und Details – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
       <li><b>Komponenten</b>: Rechtsklick auf einen Körper → «In Komponente …» fasst Teile zu Baugruppen zusammen (z. B. «Dach», «Fassade»); im Browser gemeinsam ein-/ausblenden, Doppelklick benennt um.</li>
