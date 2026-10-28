@@ -86,16 +86,10 @@ def umschlag(feats, kante, s):
     if hf is None or not hasattr(hf, "createHemFeatureInput"):
         raise RuntimeError("Diese Fusion-Version hat kein Saum-Werkzeug in der Schnittstelle (hemFeatures).")
     laenge = adsk.core.ValueInput.createByString(f"{s['laenge']} mm")
-    inp, fehler = None, []
-    for args in (([kante],), ([kante], laenge), (kante,), (kante, laenge)):
-        try:
-            inp = hf.createHemFeatureInput(*args)
-            protokoll(f"  createHemFeatureInput mit {len(args)} Argument(en), Liste={isinstance(args[0], list)}: ok")
-            break
-        except Exception as e:
-            fehler.append(str(e).strip().replace("\n", " | "))
-    if inp is None:
-        raise RuntimeError("Saum-Eingabe ging nicht: " + " // ".join(fehler))
+    try:
+        inp = hf.createHemFeatureInput()
+    except Exception as e:
+        raise RuntimeError(f"Saum-Eingabe ging nicht: {e}")
     protokoll(f"  HemFeatureInput hat {alle_namen(inp)}")
     for n in alle_namen(inp):  # aktuelle Werte zeigen
         try:
@@ -104,6 +98,14 @@ def umschlag(feats, kante, s):
                 protokoll(f"    {n} = {v!r}")
         except Exception:
             pass
+    gesetzt = None
+    for wert in ([kante], kante, adsk.core.ObjectCollection.createWithArray([kante])):
+        gesetzt = setze(inp, ["edges", "setEdges", "inputEdges", "edge", "setEdge", "inputEntities", "entities"], wert)
+        if gesetzt:
+            break
+    protokoll(f"  Kante gesetzt über: {gesetzt}")
+    if not gesetzt:
+        raise RuntimeError(f"Saum: Kante lässt sich nicht setzen. HemFeatureInput hat {alle_namen(inp)}")
     setze(inp, ["length", "distance", "hemLength", "flangeLength", "setLength", "setDistance"], laenge)
     setze(inp, ["gap", "hemGap", "setGap"], adsk.core.ValueInput.createByString("0 mm"))
     if s["winkel"] < 0:
