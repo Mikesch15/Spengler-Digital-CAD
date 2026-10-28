@@ -1,0 +1,11 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "addin",
+  "id": "7c1f0b6e-5a52-4d2e-9a4f-5f3c2b7e8d10",
+  "author": "Spengler Digital",
+  "description": { "": "Kantenbausteine für Spengler: Kante anklicken, Baustein wählen (Kurzschrift wie «90 25 U+ 7») – Laschen und Umschläge werden erzeugt." },
+  "version": "0.1.0",
+  "runOnStartup": true,
+  "supportedOS": "windows|mac",
+  "editEnabled": true
+}
