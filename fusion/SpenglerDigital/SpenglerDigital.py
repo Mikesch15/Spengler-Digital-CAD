@@ -76,6 +76,41 @@ def aussenkante(feature, vorher):
     return beste
 
 
+def alle_namen(obj):
+    return sorted(n for n in dir(obj) if not n.startswith("_") and n not in ("this", "thisown", "cast", "classType", "objectType", "isValid"))
+
+
+def umschlag(feats, kante, s):
+    """Umschlag (Saum) mit dem Saum-Werkzeug von Fusion; die Aufrufform wird probiert und protokolliert."""
+    hf = getattr(feats, "hemFeatures", None)
+    if hf is None or not hasattr(hf, "createHemFeatureInput"):
+        raise RuntimeError("Diese Fusion-Version hat kein Saum-Werkzeug in der Schnittstelle (hemFeatures).")
+    laenge = adsk.core.ValueInput.createByString(f"{s['laenge']} mm")
+    inp, fehler = None, []
+    for args in (([kante],), ([kante], laenge), (kante,), (kante, laenge)):
+        try:
+            inp = hf.createHemFeatureInput(*args)
+            protokoll(f"  createHemFeatureInput mit {len(args)} Argument(en), Liste={isinstance(args[0], list)}: ok")
+            break
+        except Exception as e:
+            fehler.append(str(e).strip().replace("\n", " | "))
+    if inp is None:
+        raise RuntimeError("Saum-Eingabe ging nicht: " + " // ".join(fehler))
+    protokoll(f"  HemFeatureInput hat {alle_namen(inp)}")
+    for n in alle_namen(inp):  # aktuelle Werte zeigen
+        try:
+            v = getattr(inp, n)
+            if not callable(v):
+                protokoll(f"    {n} = {v!r}")
+        except Exception:
+            pass
+    setze(inp, ["length", "distance", "hemLength", "flangeLength", "setLength", "setDistance"], laenge)
+    setze(inp, ["gap", "hemGap", "setGap"], adsk.core.ValueInput.createByString("0 mm"))
+    if s["winkel"] < 0:
+        setze(inp, ["isFlipped", "isDirectionFlipped", "isHemFlipped", "flip"], True)
+    return hf.add(inp)
+
+
 def baustein_anbringen(kante, folge):
     comp = kante.body.parentComponent
     feats = comp.features
@@ -96,10 +131,11 @@ def baustein_anbringen(kante, folge):
     for i, s in enumerate(schritte(folge), 1):
         hoehe = adsk.core.ValueInput.createByString(f"{s['laenge']} mm")
         if s["art"] == "umschlag":
-            hf = getattr(feats, "hemFeatures", None)
-            if hf is not None:
-                protokoll(f"hemFeatures: {api_namen(hf)}")
-            # Umschlag: Lasche 180° (falls Fusion das zulässt) – Saumwerkzeug folgt, sobald die API bekannt ist
+            feat = umschlag(feats, aktuell, s)
+            protokoll(f"Schritt {i}: Umschlag erzeugt ({getattr(feat, 'name', feat)})")
+            if i < len(schritte(folge)):
+                aktuell = aussenkante(feat, aktuell) or aktuell
+            continue
         inp = ff.createEdgeFlangeInput([aktuell], hoehe)
         protokoll(f"Schritt {i} {s}: EdgeFlangeInput hat {api_namen(inp)}")
         w = abs(s["winkel"])
@@ -107,7 +143,7 @@ def baustein_anbringen(kante, folge):
         if s["winkel"] < 0:  # nach hinten
             setze(inp, ["isFlipped", "isDirectionFlipped", "flipDirection", "isFlangeFlipped"], True)
         if s["ri"]:
-            setze(inp, ["bendRadius", "setBendRadius"], adsk.core.ValueInput.createByString(f"{s['ri']} mm"))
+            setze(inp, ["bendRadiusOverride", "bendRadius", "setBendRadius"], adsk.core.ValueInput.createByString(f"{s['ri']} mm"))
         feat = ff.add(inp)
         protokoll(f"Schritt {i}: Lasche erzeugt ({feat.name if hasattr(feat, 'name') else feat})")
         naechste = aussenkante(feat, aktuell)
