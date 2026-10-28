@@ -83,7 +83,13 @@ def baustein_anbringen(kante, folge):
     if ff is None:
         raise RuntimeError("Diese Fusion-Version hat keine Laschen-API (features.flangeFeatures). Bitte Fusion aktualisieren.")
     protokoll(f"features: {api_namen(feats)}")
-    protokoll(f"flangeFeatures: {api_namen(ff)}")
+    alle = sorted(n for n in dir(ff) if not n.startswith("_"))
+    protokoll(f"flangeFeatures: {alle}")
+    if not hasattr(ff, "createEdgeFlangeInput"):
+        raise RuntimeError("Diese Fusion-Version kann Laschen noch nicht per Add-in erzeugen (seit Update Oktober 2026).\n"
+                           "Bitte Fusion aktualisieren: Fusion schliessen und neu starten (Update wird angeboten)\n"
+                           "oder Konto-Menü oben rechts → «Nach Updates suchen».\n\n"
+                           f"Fusion {app.version}, vorhanden: {', '.join(n for n in alle if 'create' in n.lower()) or '–'}")
     aktuell = kante
     for i, s in enumerate(schritte(folge), 1):
         hoehe = adsk.core.ValueInput.createByString(f"{s['laenge']} mm")
@@ -151,7 +157,7 @@ class Ausfuehren(adsk.core.CommandEventHandler):
                 baustein_anbringen(k, folge)
             except Exception:
                 protokoll(traceback.format_exc())
-                ui.messageBox("Spengler Digital – das ging nicht:\n\n" + traceback.format_exc().splitlines()[-1]
+                ui.messageBox("Spengler Digital – das ging nicht:\n\n" + (str(sys.exc_info()[1]) if isinstance(sys.exc_info()[1], RuntimeError) else traceback.format_exc().splitlines()[-1])
                               + f"\n\nDetails in:\n{os.path.join(ORDNER, 'spengler_protokoll.txt')}")
                 return
 
