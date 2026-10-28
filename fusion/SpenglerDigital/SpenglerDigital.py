@@ -83,6 +83,8 @@ def baustein_anbringen(kante, folge):
     if ff is None:
         raise RuntimeError("Diese Fusion-Version hat keine Laschen-API (features.flangeFeatures). Bitte Fusion aktualisieren.")
     protokoll(f"features: {api_namen(feats)}")
+    for n in ("hemFeatures", "joinByBendFeatures", "loftedFlangeFeatures"):
+        protokoll(f"{n}: {sorted(x for x in dir(getattr(feats, n, None)) if not x.startswith('_'))}")
     alle = sorted(n for n in dir(ff) if not n.startswith("_"))
     protokoll(f"flangeFeatures: {alle}")
     if not hasattr(ff, "createEdgeFlangeInput"):
