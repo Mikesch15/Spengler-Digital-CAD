@@ -38,7 +38,8 @@ for (const b of BAUSTEINE_STANDARD) { const p = bausteinProfil(b, m); ok(p.zugab
   const eck = (a, b) => { const r = flaechenblech([[0, 0], [1000, 0], [1000, 600], [0, 600]], [B[a], B[b], null, null], m); return eckFaktoren(r.gruppen, r.profile)[0]; };
   const ek = (a, b) => eck(a, b).k1;
   const sa = eck("saum-o", "ortgang");
-  ok(Math.abs(sa.k1) < 1e-9 && sa.e1 < 1.5, `Saum + Aufkantung: kein Gehrungsschnitt, Saum läuft bis auf ${sa.e1} mm durch`);
+  const ende = (x) => sa.e1 - sa.k1 * x; // Rücksetzung des Saums je nach Lage x (innen negativ)
+  ok(Math.abs(sa.k1) < 0.2 && ende(0) < 1.5 && ende(-10) < 0.5, `Saum + Aufkantung: keine Gehrung, Saum schräg angeschnitten (${ende(0).toFixed(2)} → ${ende(-10).toFixed(2)} mm)`);
   ok(Math.abs(ek("ortgang", "wasserfalz")) < 1e-9, "Aufkantung + Wasserfalz: gerade (nur Biegebereich)");
   ok(Math.abs(ek("ortgang", "ortgang") - 1) < 1e-9, "zwei gleiche Aufkantungen: Gehrung");
   ok(Math.abs(ek("saum-o", "saum-o") - 1) < 1e-9, "zwei Säume auf der Fläche: Gehrung 45°");

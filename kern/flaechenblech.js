@@ -88,7 +88,7 @@ function streifenSchnitt(dA, nA, a, eA, dB, nB, b, eB) {
 }
 // Durchdringen sich A (endet bei sA ≤ −eA) und B (beginnt bei sB ≥ eB)? Je Höhe y: x-Intervalle der Querschnitte → Halbstreifen.
 // nurAusserhalb: nur ausserhalb des Biegebereichs (|x| > Biegeradius + 1.5·t) zählen. Die Grundplatte zählt nie.
-function treffer(pA, pB, dA, dB, eA, eB, nurAusserhalb) {
+function treffer(pA, pB, dA, dB, eA, eB, nurAusserhalb, bandA = null, bandB = null) {
   const t = Math.max(pA.t, pB.t), zone = Math.max(pA.ri || 1, pB.ri || 1) + 1.5 * t, nA = [dA[1], -dA[0]], nB = [dB[1], -dB[0]];
   const ys = [...new Set([...pA.quer, ...pB.quer].map(([, y]) => +y.toFixed(3)))].sort((a, b) => a - b), levels = [];
   for (let k = 0; k + 1 < ys.length; k++) { const n = Math.max(1, Math.min(10, Math.floor((ys[k + 1] - ys[k]) / 0.5))); for (let i = 0; i < n; i++) levels.push(ys[k] + ((ys[k + 1] - ys[k]) * (i + 0.5)) / n); }
@@ -98,9 +98,33 @@ function treffer(pA, pB, dA, dB, eA, eB, nurAusserhalb) {
     let IA = intervalle(pA.quer, y), IB = intervalle(pB.quer, y);
     if (Math.abs(y) <= t / 2 + 0.02) { IA = ohnePlatte(IA); IB = ohnePlatte(IB); }
     if (nurAusserhalb) { IA = ohneZone(IA); IB = ohneZone(IB); }
+    const band = (I, b) => (b ? I.map(([u, v]) => [Math.max(u, b[0]), Math.min(v, b[1])]).filter(([u, v]) => v - u > 1e-6) : I);
+    IA = band(IA, bandA); IB = band(IB, bandB);
     for (const a of IA) for (const b of IB) if (streifenSchnitt(dA, nA, a, eA, dB, nB, b, eB)) return true;
   }
   return false;
+}
+// Kürzeste schräge Schnittlinie e(x) = a + b·x (Rücksetzung längs der Kante je nach Lage x im Profil), so dass das
+// gekürzte Profil den Nachbarn nicht mehr trifft. Je x-Streifen das nötige Mass (Halbierung), darüber die obere Hülle.
+function schraegSchnitt(pA, pB, dA, dB, beiA) {
+  const P = beiA ? pA : pB, t = P.t, xs = P.quer.filter(([x, y]) => !(x < 0 && Math.abs(y) <= t / 2 + 0.01)).map(([x]) => x);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), Z = Math.max(Math.abs(x0), Math.abs(x1), 1) + 5, n = Math.min(80, Math.max(8, Math.ceil((x1 - x0) / 0.25)));
+  const noetig = [];
+  for (let i = 0; i < n; i++) {
+    const b = [x0 + ((x1 - x0) * i) / n, x0 + ((x1 - x0) * (i + 1)) / n], hit = (e) => treffer(pA, pB, dA, dB, beiA ? e : 0, beiA ? 0 : e, false, beiA ? b : null, beiA ? null : b);
+    if (!hit(0)) { noetig.push([b[0], 0], [b[1], 0]); continue; }
+    if (hit(Z)) return null;
+    let lo = 0, hi = Z; while (hi - lo > 0.02) { const mi = (lo + hi) / 2; if (hit(mi)) lo = mi; else hi = mi; }
+    noetig.push([b[0], hi], [b[1], hi]);
+  }
+  // obere konvexe Hülle; die Gerade der Hülle über der Mitte ist die kürzeste Schräge, die alles abdeckt
+  const pts = noetig.sort((p, q) => p[0] - q[0] || q[1] - p[1]), H = [];
+  for (const p of pts) { while (H.length >= 2) { const [o, a] = [H.at(-2), H.at(-1)]; if ((a[0] - o[0]) * (p[1] - o[1]) - (a[1] - o[1]) * (p[0] - o[0]) >= 0) H.pop(); else break; } H.push(p); }
+  const xm = (x0 + x1) / 2; let best = null;
+  for (let i = 0; i + 1 < H.length; i++) { const [p, q] = [H[i], H[i + 1]]; if (q[0] - p[0] < 1e-9) continue; if (xm >= p[0] - 1e-9 && xm <= q[0] + 1e-9) { const b = (q[1] - p[1]) / (q[0] - p[0]); best = { a: p[1] - b * p[0], b }; } }
+  if (!best) best = { a: Math.max(...noetig.map(([, e]) => e)), b: 0 };
+  const verlust = ((best.a + best.b * x0) + (best.a + best.b * x1)) / 2 * (x1 - x0);
+  return { ...best, verlust };
 }
 const UEB = new Map();
 export function eckSchnitt(pA, pB, dA, dB) {
@@ -109,11 +133,11 @@ export function eckSchnitt(pA, pB, dA, dB) {
   const gleich = JSON.stringify(pA.zeilen) === JSON.stringify(pB.zeilen) && pA.versatz === pB.versatz;
   let r;
   if (gleich || treffer(pA, pB, dA, dB, 0, 0, true)) r = { gehrung: true, eA: 0, eB: 0 }; // gleiche oder deutlich überschneidende Bausteine
+  else if (!treffer(pA, pB, dA, dB, 0, 0, false)) r = { gehrung: false, eA: 0, kA: 0, eB: 0, kB: 0 }; // berühren sich nicht
   else {
-    // nur im Biegebereich: einen der beiden minimal zurücksetzen (den, der dafür am wenigsten verliert), der andere läuft durch
-    const Z = 4, mass = (beiA) => { let e = 0; while (e <= Z && treffer(pA, pB, dA, dB, beiA ? e : 0, beiA ? 0 : e, false)) e = +(e + 0.05).toFixed(2); return e; };
-    const eA = mass(true), eB = mass(false);
-    r = Math.min(eA, eB) > Z ? { gehrung: true, eA: 0, eB: 0 } : eA <= eB ? { gehrung: false, eA, eB: 0 } : { gehrung: false, eA: 0, eB };
+    // nur im Biegebereich: einer läuft bis ans Blechende und wird nur dort schräg angeschnitten, wo er in den Nachbarn ragen würde
+    const A = schraegSchnitt(pA, pB, dA, dB, true), B = schraegSchnitt(pA, pB, dA, dB, false);
+    r = !A && !B ? { gehrung: true, eA: 0, eB: 0 } : !B || (A && A.verlust <= B.verlust) ? { gehrung: false, eA: A.a, kA: A.b, eB: 0, kB: 0 } : { gehrung: false, eA: 0, kA: 0, eB: B.a, kB: B.b };
   }
   if (UEB.size > 500) UEB.clear();
   UEB.set(key, r); return r;
@@ -128,7 +152,7 @@ export function eckFaktoren(gruppen, profile) {
     const pV = profile[(k - 1 + n) % n], p = profile[k], pN = profile[(k + 1) % n];
     // Gehrung nur bei gleichen oder sich überschneidenden Bausteinen; sonst gerade (evtl. minimal zurückgesetzt)
     const a = pV?.quer && p?.quer ? eckSchnitt(pV, p, dV, d0) : null, b = p?.quer && pN?.quer ? eckSchnitt(p, pN, d1, dN) : null;
-    return { k0: eckFaktor(knick(dV, d0), !!pV?.lage, !!a?.gehrung), e0: a?.eB || 0, k1: eckFaktor(knick(d1, dN), !!pN?.lage, !!b?.gehrung), e1: b?.eA || 0 };
+    return { k0: eckFaktor(knick(dV, d0), !!pV?.lage, !!a?.gehrung) - (a?.kB || 0), e0: a?.eB || 0, k1: eckFaktor(knick(d1, dN), !!pN?.lage, !!b?.gehrung) - (b?.kA || 0), e1: b?.eA || 0 };
   });
 }
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
