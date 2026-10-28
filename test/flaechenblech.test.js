@@ -40,9 +40,9 @@ for (const b of BAUSTEINE_STANDARD) { const p = bausteinProfil(b, m); ok(p.zugab
   const sa = eck("saum-o", "ortgang");
   ok(Math.abs(sa.k1) < 1e-9 && sa.e1 < 1.5, `Saum + Aufkantung: kein Gehrungsschnitt, Saum läuft bis auf ${sa.e1} mm durch`);
   ok(Math.abs(ek("ortgang", "wasserfalz")) < 1e-9, "Aufkantung + Wasserfalz: gerade (nur Biegebereich)");
-  const ss = eck("saum-o", "saum-o");
-  ok(Math.abs(ek("ortgang", "ortgang")) < 1e-9 && Math.abs(ek("saum-o", "saum-o")) < 1e-9 && Math.abs(ek("trauf", "trauf")) < 1e-9, "nie Gehrung, auch bei gleichen Bausteinen");
-  ok(ss.e1 + ss.e0 > 9 && ss.e1 + ss.e0 < 13, `zwei Säume: einer läuft durch, der andere stumpf davor (${(ss.e0 + ss.e1).toFixed(2)} mm)`);
+  ok(Math.abs(ek("ortgang", "ortgang") - 1) < 1e-9, "zwei gleiche Aufkantungen: Gehrung");
+  ok(Math.abs(ek("saum-o", "saum-o") - 1) < 1e-9, "zwei Säume auf der Fläche: Gehrung 45°");
+  ok(Math.abs(ek("trauf", "trauf") - 1) < 1e-9, "zwei Traufsäume unter der Fläche: Gehrung 45°");
 }
 // Gehrung: zwei Aufkantungen an einer Ecke – Enden symmetrisch zur Winkelhalbierenden
 {

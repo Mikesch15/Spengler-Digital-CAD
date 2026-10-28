@@ -106,16 +106,14 @@ const UEB = new Map();
 export function eckSchnitt(pA, pB, dA, dB) {
   const key = `${pA.zeilen?.map((z) => z.L + "/" + z.winkel + z.art).join()}|${pB.zeilen?.map((z) => z.L + "/" + z.winkel + z.art).join()}|${pA.versatz}|${pB.versatz}|${pA.t}|${dA.map((v) => v.toFixed(4))}|${dB.map((v) => v.toFixed(4))}`;
   if (UEB.has(key)) return UEB.get(key);
-  // Keine Gehrung: treffen sich die Bausteine, läuft einer durch und der andere wird stumpf davor gekürzt –
-  // gekürzt wird der, der dafür am wenigsten verliert (kleinstes Rücksetzmass, per Halbierung auf 0.05 mm)
-  let r = { gehrung: false, eA: 0, eB: 0 };
-  if (treffer(pA, pB, dA, dB, 0, 0, false)) {
-    const xs = [...pA.quer, ...pB.quer].map(([x]) => Math.abs(x)).filter((x) => x < 90), Z = Math.max(...xs, 1) + 5;
-    const mass = (beiA) => { let lo = 0, hi = Z; if (treffer(pA, pB, dA, dB, beiA ? hi : 0, beiA ? 0 : hi, false)) return Infinity;
-      while (hi - lo > 0.05) { const mi = (lo + hi) / 2; if (treffer(pA, pB, dA, dB, beiA ? mi : 0, beiA ? 0 : mi, false)) lo = mi; else hi = mi; }
-      return Math.ceil(hi * 100) / 100; };
+  const gleich = JSON.stringify(pA.zeilen) === JSON.stringify(pB.zeilen) && pA.versatz === pB.versatz;
+  let r;
+  if (gleich || treffer(pA, pB, dA, dB, 0, 0, true)) r = { gehrung: true, eA: 0, eB: 0 }; // gleiche oder deutlich überschneidende Bausteine
+  else {
+    // nur im Biegebereich: einen der beiden minimal zurücksetzen (den, der dafür am wenigsten verliert), der andere läuft durch
+    const Z = 4, mass = (beiA) => { let e = 0; while (e <= Z && treffer(pA, pB, dA, dB, beiA ? e : 0, beiA ? 0 : e, false)) e = +(e + 0.05).toFixed(2); return e; };
     const eA = mass(true), eB = mass(false);
-    r = eA <= eB ? { gehrung: false, eA: Number.isFinite(eA) ? eA : 0, eB: 0 } : { gehrung: false, eA: 0, eB: Number.isFinite(eB) ? eB : 0 };
+    r = Math.min(eA, eB) > Z ? { gehrung: true, eA: 0, eB: 0 } : eA <= eB ? { gehrung: false, eA, eB: 0 } : { gehrung: false, eA: 0, eB };
   }
   if (UEB.size > 500) UEB.clear();
   UEB.set(key, r); return r;
@@ -128,7 +126,7 @@ export function eckFaktoren(gruppen, profile) {
     const vor = gruppen[(k - 1 + n) % n], nach = gruppen[(k + 1) % n];
     const dV = richtung(vor.punkte.at(-2), vor.punkte.at(-1)), d0 = richtung(g.punkte[0], g.punkte[1]), d1 = richtung(g.punkte.at(-2), g.punkte.at(-1)), dN = richtung(nach.punkte[0], nach.punkte[1]);
     const pV = profile[(k - 1 + n) % n], p = profile[k], pN = profile[(k + 1) % n];
-    // stumpfer Stoss: gerade Enden, einer der beiden so weit gekürzt, dass sie sich nicht durchdringen
+    // Gehrung nur bei gleichen oder sich überschneidenden Bausteinen; sonst gerade (evtl. minimal zurückgesetzt)
     const a = pV?.quer && p?.quer ? eckSchnitt(pV, p, dV, d0) : null, b = p?.quer && pN?.quer ? eckSchnitt(p, pN, d1, dN) : null;
     return { k0: eckFaktor(knick(dV, d0), !!pV?.lage, !!a?.gehrung), e0: a?.eB || 0, k1: eckFaktor(knick(d1, dN), !!pN?.lage, !!b?.gehrung), e1: b?.eA || 0 };
   });
