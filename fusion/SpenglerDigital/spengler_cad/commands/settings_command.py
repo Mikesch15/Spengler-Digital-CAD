@@ -105,7 +105,7 @@ def hilfe_erstellt(args):
             return
         if getattr(a, "input", None) is not None and a.input.id == "faehig":
             f = fusion_capabilities.pruefen(adsk.core.Application.get())
-            base.melden("Fusion-Fähigkeiten", "Add-in %s, Fusion %s\n\n%s" % (VERSION, adsk.core.Application.get().version, fusion_capabilities.text(f)))
+            base.melden("Fusion-Fähigkeiten", "Add-in %s, Fusion %s\nGeladen aus: %s\n\n%s" % (VERSION, adsk.core.Application.get().version, paths.ADDIN_ORDNER, fusion_capabilities.text(f)))
             return
         if getattr(a, "input", None) is not None and a.input.id == "selbsttest":
             from ..diagnostics import selftest

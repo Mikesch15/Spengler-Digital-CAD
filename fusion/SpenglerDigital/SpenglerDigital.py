@@ -12,6 +12,13 @@ if ORDNER not in sys.path:
     sys.path.insert(0, ORDNER)
 
 
+def _alte_module_entfernen():
+    """Fusion behält geladene Python-Module über Stoppen/Ausführen hinweg im Speicher. Ohne das hier liefe nach einem
+    Update bis zum Neustart von Fusion weiter der ALTE Code (Live-Test 29.10.2026). Daten sind davon nicht betroffen."""
+    for name in [m for m in sys.modules if m == "spengler_cad" or m.startswith("spengler_cad.")]:
+        del sys.modules[name]
+
+
 def _ui():
     return adsk.core.Application.get().userInterface
 
@@ -38,6 +45,7 @@ def _migration():
 
 def run(context):
     try:
+        _alte_module_entfernen()
         from spengler_cad import VERSION
         from spengler_cad.diagnostics import logger
         from spengler_cad.commands import command_registry

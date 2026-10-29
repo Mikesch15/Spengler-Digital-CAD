@@ -1,4 +1,4 @@
-# Spengler Digital CAD – Add-in für Autodesk Fusion (Version 0.3.1)
+# Spengler Digital CAD – Add-in für Autodesk Fusion (Version 0.3.2)
 
 Eigene Kantenvorlagen (Flansch-/Umschlagfolgen) und eigene 3D-Detailvorlagen auf Blechkanten anwenden,
 Rundbleche ohne Einschnitte beurteilen und modellieren, Abwicklung/DXF, Werkstattblatt,
@@ -9,7 +9,7 @@ Bitte zuerst die Testanleitung `docs/Testanleitung.pdf` durchgehen.
 
 ## Installation (Windows und macOS)
 
-1. ZIP `SpenglerDigitalCAD_0.3.1.zip` entpacken. Es entsteht der Ordner `SpenglerDigital`.
+1. ZIP `SpenglerDigitalCAD_0.3.2.zip` entpacken. Es entsteht der Ordner `SpenglerDigital`.
 2. Den Ordner an einen festen Ort kopieren, z. B.
    - Windows: `%APPDATA%\Autodesk\Autodesk Fusion 360\API\AddIns\SpenglerDigital`
    - macOS: `~/Library/Application Support/Autodesk/Autodesk Fusion 360/API/AddIns/SpenglerDigital`
@@ -39,6 +39,8 @@ Add-in-Ordner, sondern hier:
 - macOS: `~/Library/Application Support/SpenglerDigitalCAD`
 
 **Update:** Add-in stoppen, Ordner `SpenglerDigital` durch die neue Version ersetzen, Add-in starten.
+Wichtig: Danach muss `SpenglerDigital.py` direkt im Ordner liegen, den Fusion verwendet (kein Ordner im Ordner, nicht in einen
+neuen Ordner entpacken). Kontrolle: **Hilfe → Fusion-Fähigkeiten prüfen** zeigt Versionsnummer und Ladeordner.
 Beim Start prüft das Add-in das Datenformat; vor jeder Umstellung entsteht automatisch eine Sicherung in
 `…\SpenglerDigitalCAD\sicherungen`. Schlägt eine Umstellung fehl, bleiben die Daten unverändert.
 

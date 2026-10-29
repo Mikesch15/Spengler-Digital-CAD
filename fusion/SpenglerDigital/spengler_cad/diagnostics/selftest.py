@@ -36,6 +36,8 @@ def ausfuehren():
     design = adsk.fusion.Design.cast(app.activeProduct)
     design.designType = adsk.fusion.DesignTypes.ParametricDesignType
     root = design.rootComponent
+    from .. import VERSION
+    erg.append("Add-in %s, Fusion %s, geladen aus:\n%s" % (VERSION, app.version, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
     f = fusion_capabilities.pruefen(app)
     erg.append("Fähigkeiten:\n" + fusion_capabilities.text(f))
 

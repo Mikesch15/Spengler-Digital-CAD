@@ -1,6 +1,6 @@
 # Spengler Digital CAD – Testanleitung
 
-Live-Test in Fusion · Version 0.3.1 · zum Ausdrucken und Abhaken
+Live-Test in Fusion · Version 0.3.2 · zum Ausdrucken und Abhaken
 
 > **So vorgehen:** Blöcke der Reihe nach, je Zeile ☐ abhaken. Wenn etwas nicht wie erwartet ist: **Meldungstext notieren oder Bildschirmfoto**, weitertesten (ausser ein Block sagt «sonst abbrechen»). Am Ende das **Protokoll** und die Notizen schicken. Dauer gesamt ca. 60–75 Minuten; die Blöcke lassen sich auf mehrere Tage verteilen.
 
@@ -10,7 +10,7 @@ Live-Test in Fusion · Version 0.3.1 · zum Ausdrucken und Abhaken
 |---|---|---|
 | ☐ | Fusion aktualisieren (Konto-Menü oben rechts → Nach Updates suchen). Fusion-Version notieren (Hilfe → Info): ________ | – |
 | ☐ | Alten Prototyp stoppen: Shift+S → Add-Ins → «SpenglerDigital» → Stoppen | – |
-| ☐ | ZIP `SpenglerDigitalCAD_0.3.1.zip` entpacken, Ordner `SpenglerDigital` an seinen Platz kopieren (siehe README) | – |
+| ☐ | ZIP `SpenglerDigitalCAD_0.3.2.zip` entpacken, Ordner `SpenglerDigital` an seinen Platz kopieren (siehe README) | – |
 | ☐ | Ein Lineal/Massband und einen Probestreifen Blech mit bekannter Dicke bereitlegen (für den K-Faktor in Block 3) | – |
 
 ## 1. Installation und Start (5 Min.) – sonst abbrechen
@@ -27,7 +27,7 @@ Live-Test in Fusion · Version 0.3.1 · zum Ausdrucken und Abhaken
 
 | ☐ | Schritt | Erwartet |
 |---|---|---|
-| ☐ | SPENGLER → Hilfe → **Fusion-Fähigkeiten prüfen** | Liste mit ✓/✗ – **Bildschirmfoto** |
+| ☐ | SPENGLER → Hilfe → **Fusion-Fähigkeiten prüfen** | **Versionsnummer = 0.3.2** und richtiger Ladeordner; Liste mit ✓/✗ – **Bildschirmfoto** |
 | ☐ | Hilfe → **Selbsttest in neuem Dokument** | neues Dokument; ✓ Einheiten, ✓ Rundblech (Ø ca. 200.7 mm), ✓ 3D-Detail (Ursprung ca. (0, 100, 0) mm, «neu beim Import: SD_H_1», «Original SD_H unverändert») – **Bildschirmfoto** |
 | ☐ | Testdokument ohne Speichern schliessen | – |
 | ☐ | Hilfe: Themen durchklicken, «Bedienungsanleitung (PDF) öffnen» | Texte erscheinen, PDF öffnet |

@@ -135,3 +135,9 @@ Korrigiert:
 - 3D-Detail: Fusion benennt importierte Benutzerparameter bei Namensgleichheit um (SD_H → SD_H_1). Bisher wäre der VORHANDENE
   Parameter verändert worden (falsches Detail). Jetzt werden nur die beim Import neu entstandenen Parameter gesetzt
   (`parameter_zuordnen`), Umbenennungen werden gemeldet, Mehrdeutiges bleibt offen statt geraten.
+
+## Nachtrag 0.3.2 – Update wurde nicht geladen
+
+Zweiter Live-Test: Selbsttest und Palette zeigten noch den Stand 0.3.0. Ursache: Fusion hält geladene Python-Module über
+Stoppen/Ausführen im Speicher. `run()` entfernt jetzt alle `spengler_cad`-Module vor dem Laden; Fähigkeiten-Dialog und Selbsttest
+zeigen Versionsnummer und Ladeordner (Kontrolle, ob die richtigen Dateien geladen sind).

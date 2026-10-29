@@ -44,6 +44,13 @@ class ImportTest(DatenTest):
         namen = [n for n, _ in adsk.AUFRUFE]
         self.assertGreaterEqual(namen.count("addButtonDefinition"), 8)
         SpenglerDigital.stop({})
+        # Erneutes Ausführen lädt den Programmcode NEU (Fusion hält Module sonst bis zum Neustart im Speicher)
+        import spengler_cad
+        spengler_cad._alter_stand = True
+        SpenglerDigital.run({})
+        import spengler_cad as neu
+        self.assertFalse(hasattr(neu, "_alter_stand"))
+        SpenglerDigital.stop({})
 
     def test_dialoge_aufbauen(self):
         """Jeder Befehlsdialog lässt sich mit der Attrappe aufbauen (keine Python-Fehler in den Abläufen)."""
