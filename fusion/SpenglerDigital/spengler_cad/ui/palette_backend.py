@@ -9,6 +9,7 @@ import os
 from .. import VERSION
 from ..core import models, operation_plan, short_syntax, template_engine
 from ..core.bend_geometry import ProfilFehler, zugabe_abwicklung
+from ..manufacturing import drawing
 from ..storage import backup_service, paths
 from ..storage.material_library import MaterialBibliothek
 from ..storage.settings_service import Einstellungen
@@ -29,11 +30,21 @@ class Backend(object):
         e = Einstellungen(self.wurzel).laden()
         return VorlagenRepository(self.wurzel, projekt_ordner=e.get("projectLibraryFolder") or None)
 
+    def _standardmaterial(self, e, mid=None):
+        mats = MaterialBibliothek(self.wurzel).liste()
+        return next((m for m in mats if m["id"] == (mid or e.get("defaultMaterialId"))), None)
+
+    def _mit_vorschau(self, v, material):
+        v = _ohne_intern(v)
+        v["_vorschau"], v["_vorschauGrund"] = drawing.vorlagen_vorschau(v, material, 150, 100, 9)
+        return v
+
     def zustand(self):
         e = Einstellungen(self.wurzel).laden()
         r = self.repo
+        m = self._standardmaterial(e)
         return {"version": VERSION, "datenordner": self.wurzel or paths.daten_ordner(),
-                "vorlagen": [_ohne_intern(v) for v in r.liste("kantenvorlage")],
+                "vorlagen": [self._mit_vorschau(v, m) for v in r.liste("kantenvorlage")],
                 "details": [_ohne_intern(v) for v in r.liste("detailvorlage")],
                 "kategorien": r.kategorien("kantenvorlage"),
                 "materialien": MaterialBibliothek(self.wurzel).liste(),
@@ -55,6 +66,13 @@ class Backend(object):
         """Kurzschrift → Operationen (für Expertenmodus) inkl. neu erkannter Parameter."""
         v = template_engine.vorlage_aus_kurzschrift("x", d["text"])
         return {"operations": v["operations"], "parameter": [p["name"] for p in v["parameters"]], "text": short_syntax.als_text(v["operations"])}
+
+    def a_vorschau(self, d):
+        """Querschnitt der Vorlage mit Standardwerten – mit gewähltem oder Standardmaterial, sonst als Skizze."""
+        e = Einstellungen(self.wurzel).laden()
+        m = self._standardmaterial(e, d.get("materialId"))
+        svg, grund = drawing.vorlagen_vorschau(d["vorlage"], m)
+        return {"svg": svg, "grund": grund, "material": m["name"] if m else None}
 
     def a_pruefen(self, d):
         from ..core.validation import pruefe_kantenvorlage
@@ -118,6 +136,11 @@ class Backend(object):
 
     def a_material_loeschen(self, d):
         return MaterialBibliothek(self.wurzel).loeschen(d["id"], bestaetigt=d.get("bestaetigt") is True)
+
+    def a_etiketten_pruefen(self, d):
+        from ..manufacturing.parts_list import etiketten_pruefen
+        f, text = etiketten_pruefen(d["labels"])
+        return {"fehler": f, "text": text}
 
     def a_einstellungen_speichern(self, d):
         return Einstellungen(self.wurzel).speichern(d["einstellungen"])

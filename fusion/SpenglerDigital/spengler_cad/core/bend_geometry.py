@@ -46,7 +46,7 @@ def berechne(start_winkel, ops, t, ri_std, k):
 
     x = y = 0.0
     th = math.radians(start_winkel)
-    pfad, biegungen, schenkel = [], [], []
+    pfad, biegungen, schenkel, beschriftungen = [], [], [], []
     pos = 0.0
     for i, op in enumerate(ops):
         if op["typ"] == "schenkel":
@@ -55,6 +55,7 @@ def berechne(start_winkel, ops, t, ri_std, k):
             if s > 1e-6:
                 x2, y2 = x + s * math.cos(th), y + s * math.sin(th)
                 pfad.append({"typ": "linie", "p1": (x, y), "p2": (x2, y2)})
+                beschriftungen.append({"x": (x + x2) / 2, "y": (y + y2) / 2, "richtung": th, "mass": op["L"], "nr": len(schenkel)})
                 x, y = x2, y2
             pos += s
         elif op["typ"] == "biegung":
@@ -78,7 +79,8 @@ def berechne(start_winkel, ops, t, ri_std, k):
             th += a
         else:
             raise ProfilFehler("Unbekannte Operation %r" % (op,))
-    return {"pfad": pfad, "zuschnitt": pos, "summe_schenkel": sum(schenkel), "biegungen": biegungen, "schenkel": schenkel}
+    return {"pfad": pfad, "zuschnitt": pos, "summe_schenkel": sum(schenkel), "biegungen": biegungen, "schenkel": schenkel,
+            "beschriftungen": beschriftungen}
 
 
 def polylinie(pfad, schritt_grad=4):
@@ -131,6 +133,11 @@ def kontur(pfad, t, schritt_grad=4):
 
     links, rechts = seite(1), seite(-1)
     return links + list(reversed(rechts))
+
+
+def rueckversatz(op, t, ri_std):
+    """Öffentlich für Zeichnungen: Abstand Tangentenpunkt ↔ virtuelle Kante einer Biegung."""
+    return _rueckversatz(op, t, ri_std)
 
 
 def profil_aus_operationen(basis_mm, ops, t):

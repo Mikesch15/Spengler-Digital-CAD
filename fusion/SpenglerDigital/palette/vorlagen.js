@@ -48,9 +48,12 @@ function zeigeVorlagen() {
   $("vListe").querySelector("tbody").innerHTML = liste.map((v) => `<tr data-id="${esc(v.id)}" class="${V && V.id === v.id ? "gewaehlt" : ""}">
     <td><input type="checkbox" class="vWahl" value="${esc(v.id)}"></td><td>${v.favorite ? "★" : ""}</td>
     <td>${esc(v.name)}${v._nurLesen ? ' <span class="klein">(schreibgeschützt)</span>' : ""}${v._ebene !== "benutzer" ? ` <span class="klein">[${esc(v._ebene)}]</span>` : ""}</td>
-    <td>${esc(v.category)}</td><td>${esc(v.version)}</td><td class="klein">${esc(kurzText(v.operations))}</td></tr>`).join("");
+    <td>${esc(v.category)}</td><td>${esc(v.version)}</td><td class="klein">${esc(kurzText(v.operations))}</td>
+    <td class="mini" title="${esc(v._vorschauGrund || "")}">${v._vorschau || '<span class="klein">–</span>'}</td></tr>`).join("");
   const mats = Z.materialien.map((m) => `<option value="${esc(m.id)}">${esc(m.name)} (${m.thickness} mm)</option>`).join("");
+  const alt = $("eMat").value;
   $("eMat").innerHTML = '<option value="">– ohne –</option>' + mats;
+  $("eMat").value = Z.materialien.some((m) => m.id === alt) ? alt : (Z.einstellungen.defaultMaterialId || "");
 }
 function kurzText(ops) {
   return (ops || []).map((o) => {
@@ -71,7 +74,19 @@ function oeffneEditor(v) {
   $("eKurz").value = kurzText(V.operations);
   $("ePruefErg").innerHTML = "";
   for (const id of ["eSpeichern", "eUmben", "eLoeschen"]) $(id).disabled = !!V._nurLesen;
-  zeigeParameter(); zeigeOps(); zeigeVorlagen();
+  zeigeParameter(); zeigeOps(); zeigeVorlagen(); vorschau();
+}
+let vorschauUhr = null;
+function vorschau() {   // Querschnitt mit Standardwerten, leicht verzögert beim Tippen
+  clearTimeout(vorschauUhr);
+  vorschauUhr = setTimeout(async () => {
+    if (!V) return;
+    try {
+      const r = await senden("vorschau", { vorlage: editorLesen(), materialId: $("eMat").value || null });
+      $("eVorschau").innerHTML = r.svg ? r.svg + `<div class="klein">${r.material ? "Material " + esc(r.material) : "Skizze (ohne Materialprofil: t = 1 mm, Ri = t)"} · Standardwerte</div>`
+        : `<span class="klein">Keine Vorschau: ${esc(r.grund)}</span>`;
+    } catch (e) { $("eVorschau").innerHTML = `<span class="klein">Keine Vorschau: ${esc(e.message)}</span>`; }
+  }, 250);
 }
 function zeigeParameter() {
   $("pTab").querySelector("tbody").innerHTML = V.parameters.map((p, i) => `<tr>
@@ -104,6 +119,7 @@ function editorLesen() {
 }
 document.addEventListener("input", (e) => {
   const t = e.target;
+  if (V && t.closest && t.closest("#editor")) vorschau();
   if (t.dataset.p !== undefined) {
     const p = V.parameters[+t.dataset.p], f = t.dataset.f;
     p[f] = t.type === "checkbox" ? t.checked : ["default", "min", "max"].includes(f) ? zahlOderNull(t.value) : t.value;
@@ -143,6 +159,7 @@ document.addEventListener("click", async (e) => {
   if (t.dataset.wieder && await frage("Sicherung «" + t.dataset.wieder + "» wiederherstellen? Der aktuelle Stand wird vorher automatisch gesichert.")) {
     await tun(async () => { await senden("wiederherstellen", { datei: t.dataset.wieder, bestaetigt: true }); await laden(); }, "Wiederhergestellt. Der vorherige Stand wurde gesichert.");
   }
+  if (V && t.closest && t.closest("#editor") && (t.dataset.odel !== undefined || t.dataset.oauf !== undefined || t.dataset.oab !== undefined || t.dataset.pdel !== undefined)) vorschau();
   if (t.dataset.pk) await tun(async () => { await senden("papierkorb_zurueck", { datei: t.dataset.pk }); await laden(); }, "Wiederhergestellt.");
 });
 $("experte").addEventListener("change", async () => {
@@ -159,7 +176,7 @@ $("eKurzUeb").onclick = async () => {
   if (!r) return;
   V.operations = r.operations;
   for (const n of r.parameter) if (!V.parameters.some((p) => p.name === n)) V.parameters.push({ name: n, label: n, unit: "mm", default: null, min: null, max: null, description: "", variable: true });
-  zeigeParameter(); zeigeOps();
+  zeigeParameter(); zeigeOps(); vorschau();
   meldung(r.parameter.length ? "Übernommen. Neue Parameter bitte mit Wert/Bereich ergänzen: " + r.parameter.join(", ") : "Übernommen.", "ok");
 };
 $("ePruef").onclick = async () => {
@@ -260,13 +277,26 @@ function zeigeEinstellungen() {
   $("sFuge").value = e.nesting.kerf; $("sRand").value = e.nesting.margin; $("sDreh").checked = !!e.nesting.rotationAllowed;
   $("sLK").value = e.export.layerContour; $("sLT").value = e.export.layerText; $("sDN").value = e.export.fileNamePattern; $("sOrd").value = e.export.folder || "";
   $("sVerf").value = e.forming.defaultProcess;
+  const l = e.labels;
+  [["sEsp", "spalten"], ["sEze", "zeilen"], ["sEbr", "breite"], ["sEho", "hoehe"], ["sEob", "oben"], ["sEli", "links"], ["sEax", "abstandX"], ["sEay", "abstandY"]].forEach(([id, k]) => { $(id).value = l[k]; });
+  etikettenPruefen();
 }
+function etikettenLesen() {
+  const z = (id, ganz) => { const v = zahlOderNull($(id).value); return v === null ? null : (ganz && Number.isInteger(v) ? v : v); };
+  return { spalten: z("sEsp", true), zeilen: z("sEze", true), breite: z("sEbr"), hoehe: z("sEho"), oben: z("sEob") ?? 0, links: z("sEli") ?? 0, abstandX: z("sEax") ?? 0, abstandY: z("sEay") ?? 0 };
+}
+async function etikettenPruefen() {
+  try { const r = await senden("etiketten_pruefen", { labels: etikettenLesen() }); $("sEpruef").textContent = r.fehler.length ? "⚠ " + r.fehler.join(" ") : r.text; }
+  catch (e) { $("sEpruef").textContent = "⚠ " + e.message; }
+}
+document.addEventListener("input", (e) => { if (e.target.id && e.target.id.startsWith("sE")) etikettenPruefen(); });
 $("sSpeichern").onclick = async () => {
   const e = Z.einstellungen;
   e.defaultMaterialId = $("sMat").value || null; e.projectLibraryFolder = $("sProj").value.trim();
   e.nesting.kerf = zahlOderNull($("sFuge").value) ?? 0; e.nesting.margin = zahlOderNull($("sRand").value) ?? 0; e.nesting.rotationAllowed = $("sDreh").checked;
   e.export.layerContour = $("sLK").value || "ZUSCHNITT"; e.export.layerText = $("sLT").value || "TEXT"; e.export.fileNamePattern = $("sDN").value || "{bauteil}"; e.export.folder = $("sOrd").value.trim();
   e.forming.defaultProcess = $("sVerf").value;
+  e.labels = etikettenLesen();
   if (await tun(() => senden("einstellungen_speichern", { einstellungen: e }), "Einstellungen gespeichert.")) await laden();
 };
 

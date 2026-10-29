@@ -32,6 +32,7 @@ th{color:var(--grau);font-weight:600}
 .hilfe{border:1px solid var(--rand);border-radius:50%;width:20px;height:20px;padding:0;font-weight:700;color:var(--akzent)}
 .klein{font-size:11px;color:var(--grau)}
 main .experte{display:none}body.experte main .experte{display:block}
+.vorschau{color:#1b1f24;min-height:40px}.vorschau svg{max-width:100%;height:auto;border:1px solid #e3e6ea;background:#fff}.mini svg{width:90px;height:auto}
 fieldset{border:1px solid var(--rand);margin:8px 0;padding:6px 8px}legend{color:var(--akzent);font-weight:600}
 </style>
 </head>
@@ -55,7 +56,7 @@ fieldset{border:1px solid var(--rand);margin:8px 0;padding:6px 8px}legend{color:
     <button id="vImport">Importieren…</button><button id="vExport">Gewählte exportieren…</button>
     <button class="hilfe" data-hilfe="vorlagen">?</button></div>
   <div id="vLeer" class="leer">Die Vorlagenbibliothek ist leer. Es gibt bewusst keine mitgelieferten Profile –<br>legen Sie mit «Neue Vorlage erstellen» Ihre eigenen Vorlagen an.</div>
-  <table class="liste" id="vListe"><thead><tr><th></th><th>★</th><th>Name</th><th>Kategorie</th><th>Version</th><th>Folge</th></tr></thead><tbody></tbody></table>
+  <table class="liste" id="vListe"><thead><tr><th></th><th>★</th><th>Name</th><th>Kategorie</th><th>Version</th><th>Folge</th><th>Vorschau</th></tr></thead><tbody></tbody></table>
   <div id="editor" style="display:none">
     <fieldset><legend>Vorlage</legend>
       <div class="zeile"><label>Name</label><input id="eName" size="34"></div>
@@ -71,6 +72,7 @@ fieldset{border:1px solid var(--rand);margin:8px 0;padding:6px 8px}legend{color:
     </fieldset>
     <fieldset><legend>Operationen</legend>
       <div class="zeile"><label>Kurzschrift</label><input id="eKurz" size="40" placeholder="z. B. 90 H U+ u"><button id="eKurzUeb">übernehmen</button></div>
+      <div class="zeile"><label>Vorschau</label><div id="eVorschau" class="vorschau"></div></div>
       <div class="experte">
         <table id="oTab"><thead><tr><th>#</th><th>Art</th><th>Winkel °</th><th>Länge mm</th><th>Radius mm</th><th></th></tr></thead><tbody></tbody></table>
         <button id="oNeu">Operation hinzufügen</button>
@@ -132,6 +134,14 @@ fieldset{border:1px solid var(--rand);margin:8px 0;padding:6px 8px}legend{color:
   <fieldset><legend>Zuschnitt <button class="hilfe" data-hilfe="zuschnitt">?</button></legend>
     <div class="zeile"><label>Schnittfuge</label><input type="number" step="0.1" id="sFuge"> mm <label style="min-width:0">Randabstand</label><input type="number" step="0.1" id="sRand"> mm</div>
     <div class="zeile"><label>Drehen</label><label style="min-width:0"><input type="checkbox" id="sDreh"> Teile dürfen gedreht werden (Walzrichtung egal)</label></div>
+  </fieldset>
+  <fieldset><legend>Etikettenbogen (A4) <button class="hilfe" data-hilfe="stueckliste">?</button></legend>
+    <div class="klein">Masse vom Etikettenbogen ablesen (Packung des Herstellers).</div>
+    <div class="zeile"><label>Spalten × Zeilen</label><input type="number" step="1" min="1" id="sEsp"> × <input type="number" step="1" min="1" id="sEze"></div>
+    <div class="zeile"><label>Etikett</label><input type="number" step="0.1" id="sEbr"> × <input type="number" step="0.1" id="sEho"> mm (breit × hoch)</div>
+    <div class="zeile"><label>Rand oben/links</label><input type="number" step="0.1" id="sEob"> / <input type="number" step="0.1" id="sEli"> mm</div>
+    <div class="zeile"><label>Abstand waagr./senkr.</label><input type="number" step="0.1" id="sEax"> / <input type="number" step="0.1" id="sEay"> mm</div>
+    <div class="klein" id="sEpruef"></div>
   </fieldset>
   <fieldset><legend>Export</legend>
     <div class="zeile"><label>Layer Kontur</label><input id="sLK"> <label style="min-width:0">Layer Text</label><input id="sLT"></div>

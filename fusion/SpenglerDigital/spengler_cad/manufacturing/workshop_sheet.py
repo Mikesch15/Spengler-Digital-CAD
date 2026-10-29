@@ -8,23 +8,12 @@ sind als «theoretisch» markiert.
 """
 import html
 
-from ..core.bend_geometry import berechne, grenzen_von, kontur, profil_aus_operationen
-
-
-def _svg_querschnitt(ops, t, ri, k, basis=40.0, breite=360, hoehe=220):
-    res = berechne(0.0, profil_aus_operationen(basis, ops, t), t, ri, k)
-    pts = kontur(res["pfad"], t, 4)
-    g = grenzen_von(pts)
-    w, h = (g[2] - g[0]) or 1, (g[3] - g[1]) or 1
-    s = min((breite - 40) / w, (hoehe - 40) / h)
-    P = lambda p: (20 + (p[0] - g[0]) * s, hoehe - 20 - (p[1] - g[1]) * s)
-    poly = " ".join("%.2f,%.2f" % P(p) for p in pts)
-    return res, '<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d"><polygon points="%s" fill="#9fb4c7" stroke="#1d3557" stroke-width="1"/></svg>' % (breite, hoehe, poly)
+from .drawing import abwicklung_svg, kanten_profil, profil_svg
 
 
 def erstelle(daten):
     """daten: {'bauteil','material','dicke','vorlage','vorlagenVersion','operationen' (Zahlen),
-    'ri','k' (optional), 'abwicklung': {'breite','laenge','quelle'} (optional), 'datum','addinVersion','hinweise'}"""
+    'ri','k' (optional), 'teilnummer', 'objekt', 'auftrag' (optional), 'abwicklung': {'breite','laenge','quelle'} (optional), 'datum','addinVersion','hinweise'}"""
     e = lambda s: html.escape(str(s if s is not None else "–"))
     z = ['<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Werkstattblatt %s</title>' % e(daten.get("bauteil")),
          "<style>body{font-family:Segoe UI,Arial,sans-serif;margin:16mm;color:#111}table{border-collapse:collapse}"
@@ -33,7 +22,10 @@ def erstelle(daten):
     logo = daten.get("logo")
     if logo:
         z.append('<img src="%s" alt="" style="height:48px;float:right">' % e(logo))
-    z.append("<h1>Werkstattblatt – %s</h1>" % e(daten.get("bauteil")))
+    nr = daten.get("teilnummer")
+    z.append("<h1>Werkstattblatt – %s%s</h1>" % ("Teil %s: " % e(nr) if nr else "", e(daten.get("bauteil"))))
+    if daten.get("objekt") or daten.get("auftrag"):
+        z.append("<p>Objekt: <b>%s</b> · Auftrag: <b>%s</b></p>" % (e(daten.get("objekt") or "–"), e(daten.get("auftrag") or "–")))
     z.append('<table class="kopf"><tr><td>Material</td><td><b>%s</b></td><td>Dicke</td><td><b>%s mm</b></td></tr>'
              '<tr><td>Vorlage</td><td>%s (Version %s)</td><td>Datum</td><td>%s</td></tr></table>'
              % (e(daten.get("material")), e(daten.get("dicke")), e(daten.get("vorlage")), e(daten.get("vorlagenVersion")), e(daten.get("datum"))))
@@ -42,8 +34,12 @@ def erstelle(daten):
         z.append("<h2>Abwicklung</h2><p>Umschliessendes Rechteck: <b>%.1f × %.1f mm</b> (Quelle: %s)</p>" % (ab["breite"], ab["laenge"], e(ab.get("quelle"))))
     ops = daten.get("operationen") or []
     if ops and daten.get("ri") is not None and daten.get("k") is not None:
-        res, svg = _svg_querschnitt(ops, float(daten["dicke"]), float(daten["ri"]), float(daten["k"]))
-        z.append("<h2>Querschnitt ab Kante</h2>" + svg)
+        res, ab_kante = kanten_profil(ops, float(daten["dicke"]), float(daten["ri"]), float(daten["k"]))
+        z.append('<h2>Querschnitt ab Kante <span class="theo">(Masse Blechmitte bis virtuelle Kante)</span></h2>'
+                 + profil_svg(res, 420, 260, dicke=float(daten["dicke"]), basis_segment=True, kante_a="Kante"))
+        z.append('<h2>Abwicklung der Kante mit Biegelinien <span class="theo">(theoretisch, Masse ab Biegebeginn)</span></h2>'
+                 + abwicklung_svg(res, 520, ab=ab_kante))
+        res["biegungen"] = res["biegungen"][:len(ops)]
         z.append('<h2>Biegeliste <span class="theo">(theoretisch, K-Faktor %s)</span></h2>' % e(daten["k"]))
         z.append("<table><tr><th>Nr</th><th>Art</th><th>Winkel</th><th>Innenradius</th><th>Schenkel danach</th></tr>")
         for i, (op, b) in enumerate(zip(ops, res["biegungen"]), 1):

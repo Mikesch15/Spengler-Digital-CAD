@@ -60,7 +60,9 @@ class WerkstattblattTest(unittest.TestCase):
                                                      {"typ": "umschlag", "winkel": 180, "laenge": 7, "radius": None}],
                                      "ri": 1.0, "k": 0.4, "abwicklung": {"breite": 120.5, "laenge": 1000, "quelle": "Fusion"}, "datum": "heute"})
         self.assertIn("Teil &lt;1&gt;", h)
-        self.assertIn("<polygon", h)
+        self.assertIn('class="biegelinie"', h)
+        self.assertEqual(h.count('class="biegung">B'), 4, "B1/B2 im Querschnitt und in der Abwicklung")
+        self.assertIn(">25<", h, "Schenkelmass 25 im Querschnitt")
         self.assertIn("theoretisch", h)
         self.assertEqual(h.count("<tr><td>"), 2 + 2)
 

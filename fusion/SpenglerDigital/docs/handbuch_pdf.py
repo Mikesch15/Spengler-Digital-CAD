@@ -41,12 +41,12 @@ def inline(t):
     return t
 
 
-def bauen(md_pfad, pdf_pfad, logo):
+def bauen(md_pfad, pdf_pfad, logo, fusszeile="Bedienungsanleitung", deckblatt=True):
     schriften()
     S = {
         "titel": ParagraphStyle("titel", fontName="SB", fontSize=22, leading=27, alignment=TA_CENTER, spaceAfter=6),
         "unter": ParagraphStyle("unter", fontName="S", fontSize=11, leading=15, alignment=TA_CENTER, textColor=colors.HexColor("#444")),
-        "h2": ParagraphStyle("h2", fontName="SB", fontSize=14, leading=18, spaceBefore=12, spaceAfter=6, textColor=colors.HexColor("#1d4f7a")),
+        "h2": ParagraphStyle("h2", fontName="SB", fontSize=14, leading=18, spaceBefore=12, spaceAfter=6, keepWithNext=1, textColor=colors.HexColor("#1d4f7a")),
         "p": ParagraphStyle("p", fontName="S", fontSize=9.5, leading=13.5, spaceAfter=5),
         "zelle": ParagraphStyle("zelle", fontName="S", fontSize=8.5, leading=11),
         "hinweis": ParagraphStyle("hinweis", fontName="S", fontSize=9.5, leading=13.5, backColor=colors.HexColor("#fff6e0"),
@@ -55,7 +55,7 @@ def bauen(md_pfad, pdf_pfad, logo):
     }
     zeilen = open(md_pfad, encoding="utf-8").read().splitlines()
     story, i = [], 0
-    if os.path.exists(logo):
+    if deckblatt and os.path.exists(logo):
         story += [Spacer(1, 30 * mm), Image(logo, 60 * mm, 60 * mm), Spacer(1, 10 * mm)]
     while i < len(zeilen):
         z = zeilen[i]
@@ -69,7 +69,7 @@ def bauen(md_pfad, pdf_pfad, logo):
                 i += 1
             continue
         if z.startswith("## "):
-            if z.startswith("## 1."):
+            if deckblatt and z.startswith("## 1."):
                 story.append(PageBreak())
             story.append(Paragraph(inline(z[3:]), S["h2"]))
         elif z.startswith("> "):
@@ -82,13 +82,18 @@ def bauen(md_pfad, pdf_pfad, logo):
                 i += 1
             story.append(Preformatted("\n".join(block), S["code"]))
         elif z.startswith("|"):
-            tab = []
+            tab, zeilen_roh = [], []
             while i < len(zeilen) and zeilen[i].startswith("|"):
+                zeilen_roh.append(zeilen[i])
                 if not re.match(r"^\|[\s\-|:]+\|$", zeilen[i]):
                     tab.append([Paragraph(inline(c.strip()), S["zelle"]) for c in zeilen[i].strip("|").split("|")])
                 i += 1
             n = len(tab[0])
-            t = Table(tab, colWidths=[170 * mm / n] * n, repeatRows=1)
+            if zeilen_roh[0].strip("| ").startswith("☐"):   # Abhak-Spalte schmal, Rest 40/60
+                breiten = [8 * mm] + ([162 * mm] if n == 2 else [64 * mm, 98 * mm] if n == 3 else [162 * mm / (n - 1)] * (n - 1))
+            else:
+                breiten = [170 * mm / n] * n
+            t = Table(tab, colWidths=breiten, repeatRows=1)
             t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#b8c0c8")),
                                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e6eef6")),
                                    ("VALIGN", (0, 0), (-1, -1), "TOP")]))
@@ -118,16 +123,17 @@ def bauen(md_pfad, pdf_pfad, logo):
         c.saveState()
         c.setFont("S", 7.5)
         c.setFillColor(colors.HexColor("#666"))
-        c.drawString(20 * mm, 10 * mm, "Spengler Digital CAD 0.2.1 – Bedienungsanleitung")
+        c.drawString(20 * mm, 10 * mm, "Spengler Digital CAD 0.3.0 – " + fusszeile)
         c.drawRightString(190 * mm, 10 * mm, "Seite %d" % d.page)
         c.restoreState()
 
     doc = SimpleDocTemplate(pdf_pfad, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm, bottomMargin=18 * mm,
-                            title="Spengler Digital CAD – Bedienungsanleitung", author="Spengler Digital", lang="de")
+                            title="Spengler Digital CAD – " + fusszeile, author="Spengler Digital", lang="de")
     doc.build(story, onFirstPage=fuss, onLaterPages=fuss)
 
 
 if __name__ == "__main__":
-    bauen(os.path.join(HIER, "Benutzerhandbuch.md"), os.path.join(HIER, "Benutzerhandbuch.pdf"),
-          os.path.join(HIER, "..", "assets", "logo", "logo_256.png"))
-    print("PDF erstellt:", os.path.join(HIER, "Benutzerhandbuch.pdf"))
+    logo = os.path.join(HIER, "..", "assets", "logo", "logo_256.png")
+    for name, fuss in (("Benutzerhandbuch", "Bedienungsanleitung"), ("Testanleitung", "Testanleitung")):
+        bauen(os.path.join(HIER, name + ".md"), os.path.join(HIER, name + ".pdf"), logo, fuss, deckblatt=name == "Benutzerhandbuch")
+        print("PDF erstellt:", os.path.join(HIER, name + ".pdf"))

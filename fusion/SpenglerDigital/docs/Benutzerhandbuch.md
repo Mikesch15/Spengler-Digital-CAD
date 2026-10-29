@@ -1,6 +1,6 @@
 # Spengler Digital CAD – Bedienungsanleitung
 
-Add-in für Autodesk Fusion · Version 0.2.1 · Stand 29.10.2026
+Add-in für Autodesk Fusion · Version 0.3.0 · Stand 29.10.2026
 
 > **Prüfstand dieser Version:** Die Rechenteile (Kurzschrift, Vorlagen, Bauplan, Zuschnitt, Material, Umformung, Sicherung, Migration) sind automatisch getestet. Die Bedienung in Fusion selbst ist **noch nicht in Fusion getestet**. Funktionen, die davon abhängen, sind mit **[nicht in Fusion geprüft]** markiert.
 
@@ -25,7 +25,7 @@ Register **SPENGLER**, drei Gruppen:
 | | 3D-Detail anwenden | Gespeichertes Detail an eine Kante bzw. ein Falzende ansetzen |
 | | Rundblech / Umformung | Rundbleche, Kragen, Kegel: Beurteilung und Drehkörper |
 | Fertigung | Abwicklung & DXF | Fusion-Abwicklung, DXF-Export, Werkstattblatt |
-| | Material & Zuschnitt | Materialbedarf, Gewicht (Schätzung), Zuschnittplan |
+| | Stückliste & Zuschnitt | Teilenummern, Stückliste, Etiketten, Materialbedarf, Gewicht (Schätzung), Zuschnittplan |
 | Verwaltung | Vorlagen & Einstellungen | Palette: Vorlagen, 3D-Details, Materialien, Einstellungen, Sicherung |
 | | Hilfe | Hilfethemen, diese Anleitung, Fähigkeitsprüfung, Selbsttest |
 
@@ -63,7 +63,7 @@ Die schnellste Eingabe ist die **Kurzschrift**:
 | `90 H U+ u+4*t` | Parameter `H`, `u`; `t` = Blechdicke, `ri` = Innenradius, `k` = K-Faktor aus dem Materialprofil |
 | `{w} 20` | Winkel als Ausdruck |
 
-Nach «übernehmen» werden neue Parameternamen automatisch als Parameter angelegt; Werte und Bereiche tragen Sie selbst ein. **Prüfen & Trockenlauf** zeigt Fehler, die Folge mit den Standardwerten und – wenn Innenradius und K-Faktor im Material stehen – die theoretische Abwicklungszugabe.
+Nach «übernehmen» werden neue Parameternamen automatisch als Parameter angelegt; Werte und Bereiche tragen Sie selbst ein. Unter der Kurzschrift zeigt die **Vorschau** den Querschnitt mit den Standardwerten: das bestehende Blech gestrichelt, die Kante grün, Schenkelmasse und Biegungen B1, B2 … Sie aktualisiert sich beim Tippen. Ist unter «Prüfen» ein Testmaterial gewählt (sonst das Standardmaterial), zeichnet sie mit dessen Dicke und Innenradius; ohne Material als Skizze mit 1 mm Dicke. Fehlt einem Parameter der Standardwert, steht statt des Bildes der Grund. Dasselbe Bild erscheint verkleinert in der Vorlagenliste. **Prüfen & Trockenlauf** zeigt Fehler, die Folge mit den Standardwerten und – wenn Innenradius und K-Faktor im Material stehen – die theoretische Abwicklungszugabe.
 
 Speichern: Jede inhaltliche Änderung erhöht die **Vorlagenversion**; frühere Versionen bleiben erhalten (*Versionen*). **Duplizieren** erzeugt eine unabhängige Kopie, **Umbenennen** ändert nur den Namen, **Löschen** verschiebt die Vorlage nach Bestätigung in den Papierkorb (wiederherstellbar unter *Sicherung*).
 
@@ -124,13 +124,20 @@ Die angegebene Dehnung ist die reine Umfangsänderung (Geometrie) – keine Gara
 
 ## 11. Fertigungszeichnungen
 
-Fusion bietet per API keine zuverlässige automatische Zeichnungserstellung mit Ansichten. Das Add-in erstellt deshalb ein **Werkstattblatt** (HTML, druckbar) mit Logo, Bauteilkennung, Material, Dicke, Vorlage und Version, Abwicklungsmassen aus Fusion sowie – für Bauteile aus «Kanten bearbeiten» mit Innenradius/K-Faktor im Material – Querschnitt und Biegeliste (als *theoretisch* gekennzeichnet). Normgerechte Fusion-Zeichnungen erstellen Sie weiterhin im Arbeitsbereich Zeichnung.
+Fusion bietet per API keine zuverlässige automatische Zeichnungserstellung mit Ansichten. Das Add-in erstellt deshalb ein **Werkstattblatt** (HTML, druckbar) mit Logo, Bauteilkennung, Material, Dicke, Vorlage und Version, Abwicklungsmassen aus Fusion sowie – für Bauteile aus «Kanten bearbeiten» mit Innenradius/K-Faktor im Material – Teilenummer, Objekt/Auftrag sowie – für Bauteile aus «Kanten bearbeiten» mit Innenradius/K-Faktor im Material – **Querschnitt mit Schenkelmassen und Biegungen**, **Abwicklung der Kante mit Biegelinien** (Masse ab Biegebeginn) und **Biegeliste**. Alles daraus ist als *theoretisch* gekennzeichnet (Blechmitte, K-Faktor des Materialprofils); die Zeichenlogik stammt aus dem CAD-Programm. Normgerechte Fusion-Zeichnungen erstellen Sie weiterhin im Arbeitsbereich Zeichnung.
 
 ## 12. Materialberechnung
 
 **K-Faktor aus Probebiegung** (Palette → Materialien → Materialprofil öffnen): Streifen genau zuschneiden, **eine** 90°-Biegung mit dem Innenradius des Profils biegen, beide Schenkel **aussen** messen. Zuschnitt, a und b eintragen → «K-Faktor berechnen». Dicke und Innenradius kommen aus den Feldern des Profils. Ist das Ergebnis plausibel (0.1–0.6), lässt es sich mit einem Klick übernehmen; danach «Speichern». Die Rechnung ist dieselbe wie im CAD-Programm. Der K-Faktor gilt für die theoretische Abwicklung des Add-ins; für die Fusion-Abwicklung denselben Wert in der Fusion-Blechregel eintragen.
 
-**Material & Zuschnitt** berechnet je Material: Anzahl Teile, Abwicklungsfläche (aus Fusion, sonst Rechteck – dann als obere Schätzung markiert), Gewicht (nur mit Dichte; Fläche × Dicke × Dichte, **Schätzwert**), Materialverbrauch und Ausnutzung des besten Lagerformats. Ergebnis: `bericht.txt` im Exportordner.
+**Stückliste & Zuschnitt**: Blechkörper mit Fusion-Abwicklung wählen, Material, Stück je Teil, Objekt und Auftrag eingeben (werden für das nächste Mal gemerkt) und die gewünschten Ausgaben ankreuzen:
+
+- **Teilenummern**: Jeder Körper bekommt eine Nummer, die als Attribut am Körper im Fusion-Dokument gespeichert wird. Vorhandene Nummern bleiben; ein neuer Körper erhält die nächste freie Nummer im Dokument. Dieselbe Nummer steht auf Stückliste, Etikett, Werkstattblatt und im DXF-Dateinamen.
+- **Stückliste** als `stueckliste.csv` (Excel: Semikolon, Umlaute korrekt) und `stueckliste.html` (drucken): Nr, Teil, Material, Dicke, Zuschnitt × Länge, Stück, Laufmeter, Fläche, Gewicht, Summe je Material. Fläche aus der Fusion-Abwicklung; fehlt sie, das umschliessende Rechteck (mit * markiert). Ohne Dichte im Materialprofil kein Gewicht.
+- **Etiketten** als `etiketten.html`: eins pro Stück (Objekt, Auftrag, Teil mit Nummer und i/n, Blech, Mass) im A4-Bogenformat aus *Einstellungen → Etikettenbogen* (Spalten, Zeilen, Etikettgrösse, Ränder, Abstände – vom Bogen des Herstellers ablesen; die Palette zeigt, ob der Bogen auf A4 passt). Im Browser drucken mit **Seitenränder: keine** und **Skalierung 100 %**.
+- **Materialbedarf & Zuschnittplan** wie unten.
+
+Die Materialberechnung ermittelt je Material: Anzahl Teile, Abwicklungsfläche (aus Fusion, sonst Rechteck – dann als obere Schätzung markiert), Gewicht (nur mit Dichte; Fläche × Dicke × Dichte, **Schätzwert**), Materialverbrauch und Ausnutzung des besten Lagerformats. Ergebnis: `bericht.txt` im Exportordner (wird nach dem Befehl geöffnet).
 
 ## 13. Zuschnittoptimierung
 

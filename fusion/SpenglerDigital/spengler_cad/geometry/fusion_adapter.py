@@ -475,3 +475,23 @@ def kollision(occ, andere_koerper):
         return out
     except Exception:
         return []
+
+
+# ------------------------------------------------------------------ Teilenummern
+def teilnummer(body, vergeben=True):
+    """Teilenummer eines Körpers (Attribut am nativen Körper). Fehlt sie und vergeben=True: nächste freie Nummer im Dokument."""
+    body = body.nativeObject or body
+    a = body.attributes.itemByName(ATTR_GRUPPE, "teilnummer")
+    if a:
+        return int(a.value)
+    if not vergeben:
+        return None
+    vorhanden = []
+    for x in design().findAttributes(ATTR_GRUPPE, "teilnummer"):
+        try:
+            vorhanden.append(int(x.value))
+        except (TypeError, ValueError):
+            pass
+    nr = max(vorhanden or [0]) + 1
+    body.attributes.add(ATTR_GRUPPE, "teilnummer", str(nr))
+    return nr

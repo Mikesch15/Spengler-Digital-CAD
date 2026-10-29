@@ -68,6 +68,13 @@ HILFE = {
         "Randabstand, Drehen nur wenn erlaubt, Überlappungsprüfung, SVG/CSV/DXF-Ausgabe.\n"
         "Nicht übernommen: Rollenmischung, Mischen verschiedener Breiten im selben Abschnitt, automatisches Teilen zu langer Stücke, Restelager. "
         "Teile werden als Rechtecke (umschliessendes Rechteck der Abwicklung) verschachtelt, keine freien Konturen."),
+    "stueckliste": (
+        "Stückliste, Teilenummern und Etiketten",
+        "Befehl «Stückliste & Zuschnitt»: gewählte Blechkörper mit Fusion-Abwicklung. Jeder Körper bekommt eine Teilenummer (als Attribut am "
+        "Körper gespeichert; vorhandene Nummern bleiben, neue Körper erhalten die nächste freie Nummer im Dokument). Ausgabe: Stückliste als "
+        "CSV (Excel) und HTML (drucken), Etiketten als HTML-Seite im A4-Bogenformat aus den Einstellungen – eins pro Stück, im Browser drucken "
+        "(Seitenränder 0, Skalierung 100 %). Fläche aus der Fusion-Abwicklung; fehlt sie, das umschliessende Rechteck (mit * markiert). "
+        "Gewicht nur mit Dichte im Materialprofil und als Schätzwert."),
     "einstellungen": (
         "Einstellungen und Sicherung",
         "Benutzerdaten liegen ausserhalb des Add-in-Ordners und überleben Updates. Vor jeder Datenmigration wird automatisch gesichert. "

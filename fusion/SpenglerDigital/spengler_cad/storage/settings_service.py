@@ -39,6 +39,10 @@ class Einstellungen(object):
         for k in ("kerf", "margin"):
             if not isinstance(n.get(k), (int, float)) or n.get(k) < 0:
                 raise EinstellungsFehler("Zuschnitt: %s muss eine Zahl ≥ 0 sein." % k)
+        from ..manufacturing.parts_list import etiketten_pruefen
+        f, _ = etiketten_pruefen(d.get("labels") or {})
+        if f:
+            raise EinstellungsFehler(" ".join(f))
         if d.get("ui", {}).get("mode") not in ("standard", "experte"):
             raise EinstellungsFehler("Modus muss «standard» oder «experte» sein.")
         d = kopie(d)

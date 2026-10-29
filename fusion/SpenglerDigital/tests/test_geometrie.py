@@ -27,6 +27,10 @@ class GeometrieTest(unittest.TestCase):
                     self.assertAlmostEqual(b[k], rb[k], places=9)
             self.assertAlmostEqual(r["pfad"][-1]["p2"][0], e["endpunkt"][0], places=9)
             self.assertAlmostEqual(r["pfad"][-1]["p2"][1], e["endpunkt"][1], places=9)
+            self.assertEqual(len(r["beschriftungen"]), len(e["beschriftungen"]))
+            for a, b in zip(r["beschriftungen"], e["beschriftungen"]):
+                for k in ("x", "y", "richtung", "mass", "nr"):
+                    self.assertAlmostEqual(a[k], b[k], places=9)
             ko = bg.kontur(r["pfad"], fall["t"], 4)
             self.assertEqual(len(ko), e["konturPunkte"])
             for a, b in zip(ko[0] + ko[-1], e["konturErster"] + e["konturLetzter"]):

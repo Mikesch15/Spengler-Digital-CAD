@@ -111,3 +111,15 @@ Siehe `tests/fusion/LIVE_TESTS.md` – Blöcke A–E, ca. 20 Minuten; danach Pro
 Port von `kFaktorAusProbe` (kern/materialien.js) als `core/bend_geometry.k_faktor_aus_probe`; Palette → Materialprofil: Zuschnitt, a, b →
 «K-Faktor berechnen» → «In K-Faktor übernehmen» (nur bei 0.1–0.6). Tests: Rückrechnung wie test/kern.test.js (k = 0.33/0.4/0.45),
 Fehlerfälle, Backend, Browserablauf. 71 Tests bestanden. In Fusion nicht geprüft (reine Palette/Rechnung, keine Fusion-Geometrie).
+
+## Nachtrag 0.3.0 – Vorschau, Werkstattblatt, Stückliste, Etiketten, Testanleitung
+
+- Vorlagen-Vorschau (Palette, Liste + Editor, live): Querschnitt mit Standardwerten; `manufacturing/drawing.py` = Port von
+  profilSvg/abwicklungSvg (kern/zeichnung.js); Biegerechnung liefert jetzt auch die Schenkelbeschriftungen (gegen JS-Referenz geprüft).
+- Werkstattblatt: Querschnitt mit Massen, Abwicklung der Kante mit Biegelinien, Teilenummer, Objekt/Auftrag.
+- Befehl «Stückliste & Zuschnitt» (vorher «Material & Zuschnitt»): Teilenummern als Körper-Attribut (nächste freie Nummer im Dokument),
+  Stückliste CSV/HTML (Port kern/auftrag.js; echte Abwicklungsfläche bevorzugt), Etiketten-HTML im A4-Bogenformat (Einstellungen,
+  Prüfung «passt auf A4» wie im CAD-Programm).
+- `docs/Testanleitung.md/.pdf`: Live-Test zum Abhaken (Blöcke 0–11), ersetzt die kurze Liste.
+- Tests: 79 automatische Tests bestanden (neu: test_parts_list, erweiterter Palette-/Browsertest). In Fusion nicht geprüft:
+  Teilenummern-Attribute, Befehl «Stückliste & Zuschnitt», Werkstattblatt aus echten Bauteilen.

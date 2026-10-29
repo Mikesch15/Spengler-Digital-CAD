@@ -164,6 +164,9 @@ def standard_einstellungen():
         "nesting": {"kerf": 0.0, "margin": 0.0, "rotationAllowed": False},
         "forming": {"cutsAllowed": False, "defaultProcess": "manuell"},
         "backup": {"autoBeforeMigration": True, "keepAutomatic": 20},
+        # Etikettenbogen A4 – Druckformat (wie im CAD-Programm), kein Fertigungswert; vom Bogen des Herstellers ablesen
+        "labels": {"spalten": 3, "zeilen": 8, "breite": 70.0, "hoehe": 37.0, "oben": 0.0, "links": 0.0, "abstandX": 0.0, "abstandY": 0.0},
+        "order": {"objekt": "", "auftrag": ""},   # zuletzt verwendete Angaben für Stückliste/Etiketten
         "projectLibraryFolder": "",
     }
 

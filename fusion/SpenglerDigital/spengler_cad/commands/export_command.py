@@ -1,11 +1,11 @@
-"""Befehle «Abwicklung & DXF» und «Material & Zuschnitt».
+"""Befehle «Abwicklung & DXF» und «Stückliste & Zuschnitt».
 
 Abwicklung & DXF: je gewähltem Blechkörper die Fusion-Abwicklung verwenden (oder mit der gewählten
 feststehenden Fläche erzeugen), Masse lesen, DXF mit dem Fusion-Exporter schreiben (Einzel- und
 Sammelexport in einen Ordner) und optional ein Werkstattblatt (HTML) erstellen. Erfolg wird nur
 gemeldet, wenn die Datei tatsächlich existiert.
 
-Material & Zuschnitt: Abwicklungsmasse der gewählten Körper → Materialberechnung und Zuschnittplan
+Stückliste & Zuschnitt: Teilenummern, Stückliste, Etiketten; Abwicklungsmasse der gewählten Körper → Materialberechnung und Zuschnittplan
 (Rechnung aus der App, siehe manufacturing/nesting.py) → Bericht, SVG, CSV, DXF.
 """
 import datetime
@@ -19,7 +19,7 @@ import adsk.fusion
 from .. import VERSION
 from ..diagnostics import logger
 from ..geometry import fusion_adapter as fa
-from ..manufacturing import dxf_writer, material_calculator, nesting, workshop_sheet
+from ..manufacturing import dxf_writer, material_calculator, nesting, parts_list, workshop_sheet
 from ..storage import json_store, paths
 from ..storage.material_library import MaterialBibliothek
 from ..storage.settings_service import Einstellungen
@@ -108,8 +108,9 @@ def _abw(self, args):
             t = fa.blechdicke_mm(body)
             q = _quelle(body) or {}
             mat = (q.get("material") or {}).get("name") or next((m["name"] for m in mats if t and abs(m["thickness"] - t) < 0.005), "")
-            zeile = "%s: Abwicklung %.1f × %.1f mm%s" % (name, masse["breite"], masse["laenge"], " (neu erzeugt)" if neu else "")
-            basis = _dateiname(e, name, mat, t)
+            nr = fa.teilnummer(body, True)
+            zeile = "Teil %s %s: Abwicklung %.1f × %.1f mm%s" % (nr, name, masse["breite"], masse["laenge"], " (neu erzeugt)" if neu else "")
+            basis = "%s_%s" % (nr, _dateiname(e, name, mat, t))
             if inp.itemById("dxf").value:
                 p = fa.dxf_abwicklung(fp, os.path.join(ordner, basis + ".dxf"))
                 zeile += ", DXF ✓"
@@ -118,7 +119,8 @@ def _abw(self, args):
                 m = next((x for x in mats if x["id"] == (q.get("material") or {}).get("id")), None)
                 logo = os.path.join(paths.ADDIN_ORDNER, "assets", "logo", "logo_256.png")
                 html = workshop_sheet.erstelle({
-                    "bauteil": name, "material": mat or "nicht zugeordnet", "dicke": t, "vorlage": q.get("vorlageName") or "–",
+                    "bauteil": name, "teilnummer": nr, "objekt": e["order"].get("objekt"), "auftrag": e["order"].get("auftrag"),
+                    "material": mat or "nicht zugeordnet", "dicke": t, "vorlage": q.get("vorlageName") or "–",
                     "vorlagenVersion": q.get("vorlageVersion") or "–", "abwicklung": masse,
                     "operationen": q.get("operationen"), "ri": (m or {}).get("innerRadius"), "k": (m or {}).get("kFactor"), "datum": datetime.date.today().isoformat(),
                     "addinVersion": VERSION, "logo": pathlib.Path(logo).as_uri() if os.path.exists(logo) else None,
@@ -146,7 +148,7 @@ def abw_ausfuehren(args):
     _abw(None, args)
 
 
-# ====================================================================== Material & Zuschnitt
+# ====================================================================== Stückliste & Zuschnitt
 def zus_erstellt(args):
     cmd = args.command
     inp = cmd.commandInputs
@@ -164,16 +166,23 @@ def zus_erstellt(args):
     inp.addValueInput("fuge", "Schnittfuge", "mm", adsk.core.ValueInput.createByString("%s mm" % e["nesting"]["kerf"]))
     inp.addValueInput("rand", "Randabstand", "mm", adsk.core.ValueInput.createByString("%s mm" % e["nesting"]["margin"]))
     inp.addBoolValueInput("drehen", "Drehen erlaubt", True, "", bool(e["nesting"]["rotationAllowed"]))
+    inp.addStringValueInput("objekt", "Objekt", e["order"].get("objekt", ""))
+    inp.addStringValueInput("auftrag", "Auftrag Nr.", e["order"].get("auftrag", ""))
+    inp.addBoolValueInput("nummern", "Teilenummern vergeben (fehlende)", True, "", True)
+    inp.addBoolValueInput("liste", "Stückliste (CSV + HTML)", True, "", True)
+    inp.addBoolValueInput("etiketten", "Etiketten (A4-Bogen, HTML)", True, "", True)
+    inp.addBoolValueInput("zuschnitt", "Materialbedarf & Zuschnittplan", True, "", True)
     inp.addBoolValueInput("hilfe", "Hilfe", False, "", False)
     base.handler(adsk.core.InputChangedEventHandler, cmd.inputChanged,
-                 lambda a: a.input.id == "hilfe" and base.melden("Hilfe", help_content.text("zuschnitt") + "\n\n" + help_content.text("material")))
+                 lambda a: a.input.id == "hilfe" and base.melden("Hilfe", help_content.text("stueckliste") + "\n\n" + help_content.text("zuschnitt")))
     base.handler(adsk.core.CommandEventHandler, cmd.execute, zus_ausfuehren)
 
 
-@base.sicher("Material & Zuschnitt")
+@base.sicher("Stückliste & Zuschnitt")
 def _zus(self, args):
     from ..core import units
     inp = args.command.commandInputs
+    objekt, auftrag = inp.itemById("objekt").value.strip(), inp.itemById("auftrag").value.strip()
     if not Z["mat"]:
         raise fa.AdapterFehler("Kein Materialprofil vorhanden. Bitte unter «Vorlagen & Einstellungen → Materialien» anlegen.")
     m = Z["mat"][inp.itemById("material").selectedItem.index]
@@ -185,17 +194,42 @@ def _zus(self, args):
             fehlt.append(body.name)
             continue
         masse = fa.abwicklung_masse(fp)
-        teile.append({"name": body.name, "materialId": m["id"], "flaeche": masse["flaeche"], "breite": masse["breite"],
-                      "laenge": masse["laenge"], "stueck": stueck})
+        nr = fa.teilnummer(body, inp.itemById("nummern").value)
+        teile.append({"nr": nr if nr is not None else "", "name": body.name, "materialId": m["id"], "material": m, "flaeche": masse["flaeche"],
+                      "breite": masse["breite"], "laenge": masse["laenge"], "stueck": stueck})
     if not teile:
         raise fa.AdapterFehler("Keiner der gewählten Körper hat eine Abwicklung. Zuerst «Abwicklung & DXF» ausführen.")
+    teile.sort(key=lambda t: (t["nr"] == "", t["nr"] if t["nr"] != "" else 0, t["name"]))
     e = Einstellungen().laden()
+    try:   # Objekt/Auftrag für das nächste Mal merken – Fehler hier verhindern die Ausgabe nicht
+        e["order"] = {"objekt": objekt, "auftrag": auftrag}
+        Einstellungen().speichern(e)
+    except Exception:
+        logger.ausnahme("Auftragsangaben nicht gespeichert")
     e["nesting"].update({"kerf": units.cm_zu_mm(inp.itemById("fuge").value), "margin": units.cm_zu_mm(inp.itemById("rand").value),
                          "rotationAllowed": inp.itemById("drehen").value})
-    erg = material_calculator.berechne(teile, [m], e)
-    text = material_calculator.bericht_text(erg)
     ordner = _exportordner(e)
-    x = erg["materialien"][0]
+    text, dateien = "", []
+    logo = os.path.join(paths.ADDIN_ORDNER, "assets", "logo", "logo_256.png")
+    logo = pathlib.Path(logo).as_uri() if os.path.exists(logo) else None
+    liste = parts_list.stueckliste(teile)
+    if inp.itemById("liste").value:
+        kopf = [["Objekt", objekt], ["Auftrag", auftrag], ["Datum", datetime.date.today().isoformat()], []]
+        with open(os.path.join(ordner, "stueckliste.csv"), "w", encoding="utf-8", newline="") as f:
+            f.write(parts_list.stueckliste_csv(liste, kopf))
+        with open(os.path.join(ordner, "stueckliste.html"), "w", encoding="utf-8") as f:
+            f.write(parts_list.stueckliste_html(liste, objekt, auftrag, datetime.date.today().isoformat(), logo, VERSION))
+        dateien += ["stueckliste.csv", "stueckliste.html"]
+    if inp.itemById("etiketten").value:
+        seite, n = parts_list.etiketten_html(liste, e["labels"], objekt, auftrag)
+        with open(os.path.join(ordner, "etiketten.html"), "w", encoding="utf-8") as f:
+            f.write(seite)
+        dateien.append("etiketten.html (%d Etiketten)" % n)
+    text += "Teile: " + ", ".join("%s %s" % (t["nr"], t["name"]) for t in teile) + "\n"
+    erg = material_calculator.berechne(teile, [m], e) if inp.itemById("zuschnitt").value else {"materialien": []}
+    if erg["materialien"]:
+        text += material_calculator.bericht_text(erg)
+    x = erg["materialien"][0] if erg["materialien"] else {}
     if x.get("zuschnitt") and x["zuschnitt"]["bestes"]:
         best = x["zuschnitt"]["bestes"]
         blaetter = nesting.lage(best, e["nesting"]["kerf"], e["nesting"]["margin"])
@@ -207,12 +241,13 @@ def _zus(self, args):
         with open(os.path.join(ordner, "zuschnittplan.csv"), "w", encoding="utf-8") as f:
             f.write(nesting.als_csv(best))
         dxf_writer.zuschnittplan_dxf(blaetter, m["name"], e["export"]["layerContour"], e["export"]["layerText"]).speichern(os.path.join(ordner, "zuschnittplan.dxf"))
+        dateien += ["zuschnittplan.svg/.csv/.dxf"]
     if fehlt:
         text += "\nOhne Abwicklung (nicht berechnet): " + ", ".join(fehlt)
     text += "\n\nAnnahme: Teile als umschliessendes Rechteck der Abwicklung; Rechnung der Spengler-Digital-App (ohne Rollenmischung)."
     with open(os.path.join(ordner, "bericht.txt"), "w", encoding="utf-8") as f:
         f.write(text)
-    base.melden("Material & Zuschnitt", text + "\n\nDateien: " + ordner)
+    base.melden("Stückliste & Zuschnitt", text + "\n\nErstellt: " + (", ".join(dateien) or "–") + ", bericht.txt\nOrdner: " + ordner)
     try:
         base.oeffnen(ordner)
     except Exception:
@@ -225,4 +260,4 @@ def zus_ausfuehren(args):
 
 def registrieren():
     return [base.befehl_definieren(BID_ABW, "Abwicklung & DXF", "Fusion-Abwicklung, DXF-Export (einzeln/gesammelt) und Werkstattblatt.", abw_erstellt),
-            base.befehl_definieren(BID_ZUS, "Material & Zuschnitt", "Materialbedarf, Gewicht (Schätzung) und Zuschnittplan aus den Abwicklungen.", zus_erstellt)]
+            base.befehl_definieren(BID_ZUS, "Stückliste & Zuschnitt", "Teilenummern, Stückliste, Etiketten, Materialbedarf, Gewicht (Schätzung) und Zuschnittplan aus den Abwicklungen.", zus_erstellt)]

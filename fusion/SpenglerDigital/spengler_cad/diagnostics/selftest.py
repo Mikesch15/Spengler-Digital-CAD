@@ -83,7 +83,7 @@ def ausfuehren():
             pos, ", ".join(namen), gesetzt, fehlend, neu.component.bRepBodies.count)
     schritt("3D-Detail Export/Import/Ausrichtung/Parameter", detail)
 
-    erg.append("\nNicht geprüft (braucht Ihr Blechmodell): Flansch/Umschlag, Abwicklung, DXF – siehe LIVE_TESTS.md.")
+    erg.append("\nNicht geprüft (braucht Ihr Blechmodell): Flansch/Umschlag, Abwicklung, DXF – siehe Testanleitung (docs/Testanleitung.pdf).")
     erg.append("Das Testdokument «%s» kann ohne Speichern geschlossen werden." % doc.name)
     text = "\n".join(erg)
     logger.info("Selbsttest", ergebnis=text)
