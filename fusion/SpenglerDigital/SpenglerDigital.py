@@ -1,235 +1,62 @@
-# Spengler Digital – Add-in für Autodesk Fusion (Probe 0.1)
-# Befehl «Kantenbaustein»: gerade Kante(n) eines Blechkörpers anklicken, Baustein wählen → je Schritt der Kurzschrift
-# eine Lasche (Abkanten) bzw. ein Umschlag an der jeweils neuen Aussenkante. Abwicklung macht Fusion selbst.
-# Die Blech-API von Fusion ist noch «Preview»: dieses Add-in probiert die Aufrufe vorsichtig und schreibt alles
-# in spengler_protokoll.txt (neben dieser Datei) – bei Fehlern bitte diese Datei schicken.
-import adsk.core, adsk.fusion, traceback, os, sys, datetime
+# Spengler Digital CAD – Add-in für Autodesk Fusion
+# Einstiegspunkt: Fusion ruft run() beim Start und stop() beim Beenden auf.
+# Programmcode liegt im Paket spengler_cad/, Benutzerdaten IMMER ausserhalb dieses Ordners (siehe README.md).
+import os
+import sys
+import traceback
+
+import adsk.core
 
 ORDNER = os.path.dirname(os.path.abspath(__file__))
 if ORDNER not in sys.path:
     sys.path.insert(0, ORDNER)
-from kurzschrift import BAUSTEINE, schritte  # noqa: E402
-
-BEFEHL_ID = "spenglerKantenbaustein"
-handler = []  # Ereignis-Handler müssen am Leben bleiben
-app = adsk.core.Application.get()
-ui = app.userInterface
 
 
-def protokoll(text):
-    try:
-        with open(os.path.join(ORDNER, "spengler_protokoll.txt"), "a", encoding="utf-8") as f:
-            f.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S}  {text}\n")
-    except Exception:
-        pass
+def _ui():
+    return adsk.core.Application.get().userInterface
 
 
-def api_namen(obj, muster=("flange", "hem", "bend", "angle", "height", "position", "flip", "radius", "extent", "distance")):
-    try:
-        return sorted(n for n in dir(obj) if not n.startswith("_") and any(m in n.lower() for m in muster))
-    except Exception:
-        return []
-
-
-def setze(obj, namen, wert):
-    """Erstes vorhandene Attribut bzw. Methode setzen – die Preview-API kann Namen noch ändern."""
-    for n in namen:
-        if not hasattr(obj, n):
-            continue
-        try:
-            a = getattr(obj, n)
-            if callable(a):
-                a(wert)
-            else:
-                setattr(obj, n, wert)
-            return n
-        except Exception as e:
-            protokoll(f"  {n} = {wert!r} ging nicht: {e}")
-    return None
-
-
-def gerade(kante):
-    return kante.geometry.curveType == adsk.core.Curve3DTypes.Line3DCurveType
-
-
-def aussenkante(feature, vorher):
-    """Neue freie Kante der eben erzeugten Lasche: parallel zur vorigen Kante und am weitesten von ihr entfernt."""
-    g = vorher.geometry
-    p0, d0 = g.startPoint, g.startPoint.vectorTo(g.endPoint)
-    d0.normalize()
-    beste, abst = None, -1
-    for f in feature.faces:
-        for k in f.edges:
-            if not gerade(k):
-                continue
-            q = k.geometry
-            d = q.startPoint.vectorTo(q.endPoint)
-            if d.length < 1e-6:
-                continue
-            d.normalize()
-            if abs(abs(d.dotProduct(d0)) - 1) > 1e-4:
-                continue
-            v = p0.vectorTo(q.startPoint)
-            quer = v.crossProduct(d0).length  # Abstand der Geraden
-            if quer > abst:
-                beste, abst = k, quer
-    return beste
-
-
-def alle_namen(obj):
-    return sorted(n for n in dir(obj) if not n.startswith("_") and n not in ("this", "thisown", "cast", "classType", "objectType", "isValid"))
-
-
-def umschlag(feats, kante, s):
-    """Umschlag (Saum) mit dem Saum-Werkzeug von Fusion; die Aufrufform wird probiert und protokolliert."""
-    hf = getattr(feats, "hemFeatures", None)
-    if hf is None or not hasattr(hf, "createHemFeatureInput"):
-        raise RuntimeError("Diese Fusion-Version hat kein Saum-Werkzeug in der Schnittstelle (hemFeatures).")
-    laenge = adsk.core.ValueInput.createByString(f"{s['laenge']} mm")
-    try:
-        inp = hf.createHemFeatureInput()
-    except Exception as e:
-        raise RuntimeError(f"Saum-Eingabe ging nicht: {e}")
-    protokoll(f"  HemFeatureInput hat {alle_namen(inp)}")
-    for n in alle_namen(inp):  # aktuelle Werte zeigen
-        try:
-            v = getattr(inp, n)
-            if not callable(v):
-                protokoll(f"    {n} = {v!r}")
-        except Exception:
-            pass
-    gesetzt = None
-    for wert in ([kante], kante, adsk.core.ObjectCollection.createWithArray([kante])):
-        gesetzt = setze(inp, ["edges", "setEdges", "inputEdges", "edge", "setEdge", "inputEntities", "entities"], wert)
-        if gesetzt:
-            break
-    protokoll(f"  Kante gesetzt über: {gesetzt}")
-    if not gesetzt:
-        raise RuntimeError(f"Saum: Kante lässt sich nicht setzen. HemFeatureInput hat {alle_namen(inp)}")
-    setze(inp, ["length", "distance", "hemLength", "flangeLength", "setLength", "setDistance"], laenge)
-    setze(inp, ["gap", "hemGap", "setGap"], adsk.core.ValueInput.createByString("0 mm"))
-    if s["winkel"] < 0:
-        setze(inp, ["isFlipped", "isDirectionFlipped", "isHemFlipped", "flip"], True)
-    return hf.add(inp)
-
-
-def baustein_anbringen(kante, folge):
-    comp = kante.body.parentComponent
-    feats = comp.features
-    ff = getattr(feats, "flangeFeatures", None)
-    if ff is None:
-        raise RuntimeError("Diese Fusion-Version hat keine Laschen-API (features.flangeFeatures). Bitte Fusion aktualisieren.")
-    protokoll(f"features: {api_namen(feats)}")
-    for n in ("hemFeatures", "joinByBendFeatures", "loftedFlangeFeatures"):
-        protokoll(f"{n}: {sorted(x for x in dir(getattr(feats, n, None)) if not x.startswith('_'))}")
-    alle = sorted(n for n in dir(ff) if not n.startswith("_"))
-    protokoll(f"flangeFeatures: {alle}")
-    if not hasattr(ff, "createEdgeFlangeInput"):
-        raise RuntimeError("Diese Fusion-Version kann Laschen noch nicht per Add-in erzeugen (seit Update Oktober 2026).\n"
-                           "Bitte Fusion aktualisieren: Fusion schliessen und neu starten (Update wird angeboten)\n"
-                           "oder Konto-Menü oben rechts → «Nach Updates suchen».\n\n"
-                           f"Fusion {app.version}, vorhanden: {', '.join(n for n in alle if 'create' in n.lower()) or '–'}")
-    aktuell = kante
-    for i, s in enumerate(schritte(folge), 1):
-        hoehe = adsk.core.ValueInput.createByString(f"{s['laenge']} mm")
-        if s["art"] == "umschlag":
-            feat = umschlag(feats, aktuell, s)
-            protokoll(f"Schritt {i}: Umschlag erzeugt ({getattr(feat, 'name', feat)})")
-            if i < len(schritte(folge)):
-                aktuell = aussenkante(feat, aktuell) or aktuell
-            continue
-        inp = ff.createEdgeFlangeInput([aktuell], hoehe)
-        protokoll(f"Schritt {i} {s}: EdgeFlangeInput hat {api_namen(inp)}")
-        w = abs(s["winkel"])
-        setze(inp, ["flangeAngle", "angle", "setAngle", "setFlangeAngle"], adsk.core.ValueInput.createByString(f"{w} deg"))
-        if s["winkel"] < 0:  # nach hinten
-            setze(inp, ["isFlipped", "isDirectionFlipped", "flipDirection", "isFlangeFlipped"], True)
-        if s["ri"]:
-            setze(inp, ["bendRadiusOverride", "bendRadius", "setBendRadius"], adsk.core.ValueInput.createByString(f"{s['ri']} mm"))
-        feat = ff.add(inp)
-        protokoll(f"Schritt {i}: Lasche erzeugt ({feat.name if hasattr(feat, 'name') else feat})")
-        naechste = aussenkante(feat, aktuell)
-        if naechste is None:
-            raise RuntimeError(f"Schritt {i}: neue Aussenkante nicht gefunden")
-        aktuell = naechste
-
-
-class Erstellt(adsk.core.CommandCreatedEventHandler):
-    def notify(self, args):
-        try:
-            cmd = args.command
-            inputs = cmd.commandInputs
-            sel = inputs.addSelectionInput("kanten", "Kanten", "Gerade Kanten des Blechs anklicken")
-            sel.addSelectionFilter("LinearEdges")
-            sel.setSelectionLimits(1, 0)
-            dd = inputs.addDropDownCommandInput("baustein", "Baustein", adsk.core.DropDownStyles.TextListDropDownStyle)
-            for i, (_, name, f) in enumerate(BAUSTEINE):
-                dd.listItems.add(f"{name}  ({f})", i == 0)
-            inputs.addStringValueInput("folge", "Kurzschrift", BAUSTEINE[0][2])
-            inputs.addTextBoxCommandInput("hilfe", "", "Winkel Schenkel Winkel Schenkel … ab der Kante. + = zur Sichtseite, − = nach hinten, U+/U− = Umschlag, 90r5 = Radius 5.", 3, True)
-            for h in (Geaendert(), Ausfuehren()):
-                (cmd.inputChanged if isinstance(h, Geaendert) else cmd.execute).add(h)
-                handler.append(h)
-        except Exception:
-            ui.messageBox("Spengler Digital:\n" + traceback.format_exc())
-
-
-class Geaendert(adsk.core.InputChangedEventHandler):
-    def notify(self, args):
-        if args.input.id == "baustein":
-            i = args.input.selectedItem.index
-            args.inputs.itemById("folge").value = BAUSTEINE[i][2]
-
-
-class Ausfuehren(adsk.core.CommandEventHandler):
-    def notify(self, args):
-        inputs = args.command.commandInputs
-        sel, folge = inputs.itemById("kanten"), inputs.itemById("folge").value
-        try:
-            schritte(folge)
-        except ValueError as e:
-            ui.messageBox(f"Kurzschrift: {e}")
-            return
-        kanten = [adsk.fusion.BRepEdge.cast(sel.selection(i).entity) for i in range(sel.selectionCount)]
-        protokoll(f"--- Kantenbaustein «{folge}» an {len(kanten)} Kante(n), Fusion {app.version}")
-        for k in kanten:
-            try:
-                baustein_anbringen(k, folge)
-            except Exception:
-                protokoll(traceback.format_exc())
-                ui.messageBox("Spengler Digital – das ging nicht:\n\n" + (str(sys.exc_info()[1]) if isinstance(sys.exc_info()[1], RuntimeError) else traceback.format_exc().splitlines()[-1])
-                              + f"\n\nDetails in:\n{os.path.join(ORDNER, 'spengler_protokoll.txt')}")
-                return
+def _migration():
+    """Benutzerdaten beim Start prüfen und bei Bedarf migrieren (mit automatischer Sicherung)."""
+    from spengler_cad import VERSION
+    from spengler_cad.storage import migration_service
+    b = migration_service.ausfuehren(addin_version=VERSION)
+    if b["status"] == "bestaetigung_noetig":
+        r = _ui().messageBox("Die gespeicherten Vorlagen/Einstellungen müssen auf ein neues Datenformat umgestellt werden.\n"
+                             "Vorher wird automatisch eine Sicherung erstellt. Jetzt umstellen?",
+                             "Spengler Digital CAD – Datenumstellung", adsk.core.MessageBoxButtonTypes.YesNoButtonType)
+        if r == adsk.core.DialogResults.DialogYes:
+            b = migration_service.ausfuehren(bestaetigt=True, addin_version=VERSION)
+    if b["status"] == "fehlgeschlagen":
+        _ui().messageBox("Die Datenumstellung ist fehlgeschlagen. Ihre Daten wurden NICHT verändert.\n\n%s\n\nSicherung: %s"
+                         % ("\n".join(b["fehler"]), b["sicherung"]), "Spengler Digital CAD")
+    if b["neuer"]:
+        _ui().messageBox("%d Datei(en) stammen aus einer neueren Add-in-Version und werden nur gelesen, nicht verändert.\n"
+                         "Bitte das Add-in aktualisieren." % len(b["neuer"]), "Spengler Digital CAD")
+    return b
 
 
 def run(context):
     try:
-        alt = ui.commandDefinitions.itemById(BEFEHL_ID)
-        if alt:
-            alt.deleteMe()
-        cdef = ui.commandDefinitions.addButtonDefinition(BEFEHL_ID, "Kantenbaustein", "Spengler-Baustein an Blechkante (Falz, Saum, Aufkantung …)")
-        h = Erstellt()
-        cdef.commandCreated.add(h)
-        handler.append(h)
-        # in die Blech-Werkzeugleiste, sonst unter Volumenkörper → Erstellen
-        for panel_id in ("SheetMetalCreatePanel", "SolidCreatePanel"):
-            panel = ui.allToolbarPanels.itemById(panel_id)
-            if panel and not panel.controls.itemById(BEFEHL_ID):
-                panel.controls.addCommand(cdef)
-        protokoll(f"Add-in gestartet (Fusion {app.version})")
+        from spengler_cad import VERSION
+        from spengler_cad.diagnostics import logger
+        from spengler_cad.commands import command_registry
+        logger.setze_fusion_version(adsk.core.Application.get().version)
+        try:
+            m = _migration()
+            logger.info("Start", migration=m["status"], migriert=m["migriert"])
+        except Exception:
+            logger.ausnahme("Migration beim Start")
+            _ui().messageBox("Benutzerdaten konnten nicht geprüft werden – sie wurden nicht verändert.\nDetails: %s" % logger.pfad(), "Spengler Digital CAD")
+        ort = command_registry.registrieren()
+        logger.info("Add-in gestartet", version=VERSION, werkzeugleiste=ort)
     except Exception:
-        ui.messageBox("Spengler Digital startet nicht:\n" + traceback.format_exc())
+        _ui().messageBox("Spengler Digital CAD startet nicht:\n" + traceback.format_exc())
 
 
 def stop(context):
     try:
-        for panel_id in ("SheetMetalCreatePanel", "SolidCreatePanel"):
-            panel = ui.allToolbarPanels.itemById(panel_id)
-            c = panel.controls.itemById(BEFEHL_ID) if panel else None
-            if c:
-                c.deleteMe()
-        cdef = ui.commandDefinitions.itemById(BEFEHL_ID)
-        if cdef:
-            cdef.deleteMe()
+        from spengler_cad.commands import command_registry
+        command_registry.entfernen()
     except Exception:
         pass

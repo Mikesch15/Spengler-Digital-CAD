@@ -1,0 +1,91 @@
+"""Palette «Vorlagen & Einstellungen»: Backend-Aktionen und – falls Node/Playwright vorhanden – die echte HTML-Seite im Browser."""
+import json
+import os
+import shutil
+import subprocess
+import threading
+import unittest
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+from _basis import ADDIN, DatenTest
+from spengler_cad.ui.palette_backend import Backend
+
+
+def rufe(b, aktion, daten=None):
+    a = json.loads(b.behandle(aktion, json.dumps(daten or {})))
+    if not a["ok"]:
+        raise AssertionError(a["fehler"])
+    return a["daten"]
+
+
+class BackendTest(DatenTest):
+    def test_ablauf(self):
+        b = Backend()
+        z = rufe(b, "init")
+        self.assertEqual((z["vorlagen"], z["materialien"], z["details"]), ([], [], []))
+        m = rufe(b, "material_neu", {"name": "TEST", "dicke": 0.7})
+        m.update({"innerRadius": 1.0, "kFactor": 0.4})
+        m = rufe(b, "material_speichern", {"material": m})
+        v = rufe(b, "neue_vorlage", {"name": "TEST V"})
+        k = rufe(b, "kurzschrift", {"text": "90 H U+ 7"})
+        v["operations"] = k["operations"]
+        v["parameters"] = [{"name": "H", "label": "Höhe", "unit": "mm", "default": 25, "min": None, "max": None, "variable": True}]
+        p = rufe(b, "pruefen", {"vorlage": v, "materialId": m["id"]})
+        self.assertEqual(p["fehler"], [])
+        self.assertIsNotNone(p["zugabe"])
+        self.assertIn("Kanten: 1 gewählt, 1 geeignet", rufe(b, "bauplan_test", {"vorlage": v, "materialId": m["id"]}))
+        g = rufe(b, "speichern", {"vorlage": v})
+        self.assertEqual(len(rufe(b, "init")["vorlagen"]), 1)
+        a = json.loads(b.behandle("loeschen", json.dumps({"id": g["id"]})))
+        self.assertFalse(a["ok"], "ohne Bestätigung darf nicht gelöscht werden")
+        rufe(b, "loeschen", {"id": g["id"], "bestaetigt": True})
+        z = rufe(b, "init")
+        self.assertEqual(len(z["papierkorb"]), 1)
+        rufe(b, "papierkorb_zurueck", {"datei": z["papierkorb"][0]})
+        s = rufe(b, "sicherung")
+        self.assertTrue(os.path.exists(s))
+        self.assertFalse(json.loads(b.behandle("unbekannt", "{}"))["ok"])
+        self.assertIn("leer", rufe(b, "hilfe", {"thema": "vorlagen"}))
+
+
+class _Brueckenserver(SimpleHTTPRequestHandler):
+    backend = None
+
+    def log_message(self, *a):
+        pass
+
+    def do_POST(self):
+        n = int(self.headers["Content-Length"])
+        d = json.loads(self.rfile.read(n))
+        if d["aktion"] == "frage":
+            antwort = json.dumps({"ok": True, "daten": True})
+        else:
+            antwort = self.backend.behandle(d["aktion"], d["daten"])
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(antwort.encode("utf-8"))
+
+
+@unittest.skipUnless(shutil.which("node"), "Node/Playwright nicht vorhanden")
+class BrowserTest(DatenTest):
+    def test_palette_im_browser(self):
+        _Brueckenserver.backend = Backend()
+        os.chdir(ADDIN)
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), _Brueckenserver)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            skript = os.path.join(os.path.dirname(os.path.abspath(__file__)), "palette_browser_test.cjs")
+            r = subprocess.run(["node", skript, "http://127.0.0.1:%d/palette/vorlagen.html" % srv.server_address[1]],
+                               capture_output=True, text=True, timeout=120)
+            if "Cannot find module 'playwright'" in r.stderr:
+                self.skipTest("Playwright nicht installiert")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn("BROWSERTEST OK", r.stdout)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+
+if __name__ == "__main__":
+    unittest.main()

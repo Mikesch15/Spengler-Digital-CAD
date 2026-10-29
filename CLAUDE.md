@@ -14,6 +14,12 @@ Antworten kurz und auf Deutsch. Keine langen Zusammenfassungen, keine Wiederholu
   `src/ansicht.js` Ansichten/Kanten; `src/cad.html` Markup, CSS, Hilfe
 - Feature-Dialoge: `featureDialog(f, istNeu, felder, setze, titel, hinweis, extra)`; Bearbeiten: `bearbeite(f)`
 
+## Fusion-Add-in (`fusion/SpenglerDigital`, Python)
+- Paket `spengler_cad/` (core, storage, manufacturing, forming, details, geometry, commands, ui); Fusion-Aufrufe NUR in `geometry/fusion_adapter.py`
+- Keine mitgelieferten Vorlagen/Materialien (Test `test_keine_vorlagen_im_programmcode`); Benutzerdaten ausserhalb des Add-in-Ordners
+- Prüfen: `python3 fusion/SpenglerDigital/tests/run_all.py`; PDF: `python3 fusion/SpenglerDigital/docs/handbuch_pdf.py`
+- Zuschnitt = Port von Spengler-Digital-V1 `js/29` (Referenzfälle in `tests/fixtures`)
+
 ## Prüfen
 - `npm test` (Kern) und `node build.mjs`; Oberfläche nur gezielt mit einem kurzen Playwright-Skript testen
 - Keine Screenshots/Bilder lesen, ausser bei Darstellungsproblemen

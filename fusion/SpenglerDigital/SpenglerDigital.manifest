@@ -3,8 +3,8 @@
   "type": "addin",
   "id": "7c1f0b6e-5a52-4d2e-9a4f-5f3c2b7e8d10",
   "author": "Spengler Digital",
-  "description": { "": "Kantenbausteine für Spengler: Kante anklicken, Baustein wählen (Kurzschrift wie «90 25 U+ 7») – Laschen und Umschläge werden erzeugt." },
-  "version": "0.1.3",
+  "description": { "": "Spengler Digital CAD: eigene Kanten- und 3D-Detailvorlagen, Rundbleche ohne Einschnitte, Abwicklung/DXF, Werkstattblatt, Material- und Zuschnittberechnung." },
+  "version": "0.2.0",
   "runOnStartup": true,
   "supportedOS": "windows|mac",
   "editEnabled": true

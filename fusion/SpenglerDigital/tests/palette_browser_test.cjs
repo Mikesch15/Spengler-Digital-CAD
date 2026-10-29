@@ -1,0 +1,78 @@
+// Bedient die echte Palette (palette/vorlagen.html) im Browser. Fusion wird durch window.__testSenden ersetzt,
+// das an das Python-Backend (test_palette.py) weiterleitet. Aufruf: node palette_browser_test.cjs <url>
+const { chromium } = require("playwright");
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  const fehler = [];
+  page.on("pageerror", (e) => fehler.push(e.message));
+  await page.addInitScript(() => {
+    window.__testSenden = async (aktion, daten) => {
+      const r = await fetch("/senden", { method: "POST", body: JSON.stringify({ aktion, daten }) });
+      return r.text();
+    };
+  });
+  await page.goto(process.argv[2]);
+  const pruefe = (b, t) => { if (!b) throw new Error("FEHLGESCHLAGEN: " + t); };
+  await page.waitForFunction(() => document.getElementById("version").textContent.includes("Version"));
+  pruefe(await page.isVisible("#vLeer"), "leere Bibliothek wird angezeigt");
+  // Material anlegen
+  await page.click("nav button[data-tab=materialien]");
+  pruefe(await page.isVisible("#mLeer"), "leere Materialbibliothek");
+  await page.click("#mNeu");
+  await page.fill("#mName", "TEST Blech");
+  await page.fill("#mT", "0.7"); await page.fill("#mRi", "1"); await page.fill("#mK", "0.4");
+  await page.fill("#mTafeln", "1000x2000; 1250x2500");
+  await page.click("#mSpeichern");
+  await page.waitForSelector("#mListe tbody tr");
+  pruefe((await page.textContent("#mListe")).includes("1000×2000"), "Tafelformat gespeichert");
+  // Vorlage im Standardmodus per Kurzschrift
+  await page.click("nav button[data-tab=vorlagen]");
+  await page.click("#vNeu");
+  await page.fill("#eName", "TEST Falz");
+  await page.fill("#eKurz", "90 H U+ u+4*t");
+  await page.click("#eKurzUeb");
+  await page.waitForFunction(() => document.querySelectorAll("#pTab tbody tr").length === 2);
+  pruefe(!(await page.isVisible("#oTab")), "Operationstabelle nur im Expertenmodus");
+  await page.fill('#pTab input[data-p="0"][data-f="default"]', "25");
+  await page.fill('#pTab input[data-p="1"][data-f="default"]', "7");
+  await page.selectOption("#eMat", { label: "TEST Blech (0.7 mm)" });
+  await page.click("#ePruef");
+  await page.waitForSelector("#ePruefErg .meldung");
+  pruefe((await page.textContent("#ePruefErg")).includes("Vorlage ist gültig"), "Prüfung gültig: " + await page.textContent("#ePruefErg"));
+  pruefe((await page.textContent("#ePruefErg")).includes("Abwicklungszugabe"), "Theorie angezeigt");
+  await page.click("#eSpeichern");
+  await page.waitForFunction(() => document.getElementById("meldung").textContent.includes("Version 1"));
+  // Expertenmodus: Operation ergänzen, umordnen, speichern → Version 2
+  await page.check("#experte");
+  pruefe(await page.isVisible("#oTab"), "Operationstabelle im Expertenmodus");
+  await page.click("#oNeu");
+  await page.click('button[data-oauf="2"]');
+  pruefe((await page.inputValue("#eKurz")) === "90 H 90 10 U+ u+4*t", "Kurzschrift folgt Tabelle: " + await page.inputValue("#eKurz"));
+  await page.click("#eSpeichern");
+  await page.waitForFunction(() => document.getElementById("meldung").textContent.includes("Version 2"));
+  // Duplizieren, Löschen (Bestätigung), Papierkorb
+  await page.click("#eKopie");
+  await page.waitForFunction(() => document.querySelectorAll("#vListe tbody tr").length === 2);
+  await page.click("#eLoeschen");
+  await page.waitForFunction(() => document.querySelectorAll("#vListe tbody tr").length === 1);
+  // ungültige Vorlage wird abgelehnt
+  await page.click("#vNeu");
+  await page.fill("#eName", "");
+  await page.click("#eSpeichern");
+  await page.waitForSelector("#meldung .fehler");
+  // Einstellungen + Sicherung
+  await page.click("nav button[data-tab=einstellungen]");
+  await page.fill("#sFuge", "2");
+  await page.click("#sSpeichern");
+  await page.waitForFunction(() => document.getElementById("meldung").textContent.includes("gespeichert"));
+  await page.click("nav button[data-tab=sicherung]");
+  await page.click("#bSichern");
+  await page.waitForFunction(() => document.querySelectorAll("#bListe button").length === 1);
+  pruefe((await page.textContent("#pkListe")).includes("kv-"), "gelöschte Vorlage im Papierkorb");
+  await page.click("#sicherung [data-hilfe=einstellungen]");
+  await page.waitForFunction(() => document.getElementById("meldung").textContent.includes("Updates"));
+  pruefe(fehler.length === 0, "JS-Fehler: " + fehler.join("; "));
+  await browser.close();
+  console.log("BROWSERTEST OK");
+})().catch((e) => { console.error(e.message); process.exit(1); });
