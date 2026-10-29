@@ -73,6 +73,24 @@ class DetailTest(unittest.TestCase):
             kk = dict(k, **aenderung)
             self.assertFalse(dv.passung(v, kk)[0], aenderung)
 
+    def test_parameter_zuordnen(self):
+        """Live-Test 29.10.2026: Fusion benennt importierte Parameter um (SD_H → SD_H_1); nur NEUE dürfen gesetzt werden."""
+        self.assertEqual(dv.parameter_zuordnen(["SD_H"], ["SD_H_1"]), ({"SD_H": "SD_H_1"}, []))
+        self.assertEqual(dv.parameter_zuordnen(["SD_H"], ["SD_H"]), ({"SD_H": "SD_H"}, []))
+        self.assertEqual(dv.parameter_zuordnen(["SD_H", "B"], ["SD_H_1", "SD_H_2"]), ({}, ["SD_H", "B"]), "mehrdeutig/fehlend → nicht raten")
+        self.assertEqual(dv.parameter_zuordnen(["SD_H"], ["SD_HX_1"]), ({}, ["SD_H"]))
+
+    def test_palette_url(self):
+        """Live-Test 29.10.2026: Windows-Pfad mit Backslashes ergab file:///C:/%5CUsers… – als URI übergeben."""
+        import pathlib
+        u = pathlib.PureWindowsPath(r"C:\Users\Mike\Downloads\SpenglerDigital\palette\vorlagen.html").as_uri()
+        self.assertEqual(u, "file:///C:/Users/Mike/Downloads/SpenglerDigital/palette/vorlagen.html")
+        import os, sys
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "fusion_stub"))
+        from spengler_cad.commands import settings_command
+        self.assertTrue(settings_command.html_url().startswith("file:///"))
+        self.assertNotIn("\\", settings_command.html_url())
+
     def test_ausrichtung(self):
         anker = frames.rahmen_aus_kante([10, 0, 0], [10, 50, 0], [0, 0, 1])
         ziel = frames.rahmen_aus_kante([0, 0, 100], [0, 0, 300], [1, 0, 0])

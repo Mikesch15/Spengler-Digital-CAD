@@ -71,16 +71,22 @@ def ausfuehren():
                                                       adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
         tmp = os.path.join(tempfile.mkdtemp(prefix="spengler_selbsttest_"), "detail.f3d")
         fa.komponente_exportieren(comp, tmp)
-        neu = fa.detail_importieren(tmp, root)
+        from ..details.detail_validation import parameter_zuordnen
+        neu, neue_param = fa.detail_importieren(tmp, root)
         anker = frames.rahmen_aus_kante([0, 0, 0], [50, 0, 0], [0, 0, 1])
         ziel = frames.rahmen_aus_kante([0, 100, 0], [0, 150, 0], [0, 0, 1])
         neu.transform = fa.matrix_fusion(frames.ausrichtung(anker, ziel))
         t = neu.transform.translation
         pos = "Ursprung nach Ausrichtung (%.1f, %.1f, %.1f) mm" % (t.x * 10, t.y * 10, t.z * 10)
         namen = [p.name for p in design.userParameters]
-        gesetzt, fehlend = fa.parameter_setzen({"SD_H": "30 mm"})
-        return "%s; Benutzerparameter nach Import: %s; gesetzt %s, fehlend %s; Körper importiert: %d" % (
-            pos, ", ".join(namen), gesetzt, fehlend, neu.component.bRepBodies.count)
+        zuordnung, offen = parameter_zuordnen(["SD_H"], neue_param)
+        if "SD_H" not in zuordnung:
+            raise RuntimeError("importierter Parameter nicht eindeutig gefunden (neu: %s)" % neue_param)
+        gesetzt, fehlend = fa.parameter_setzen({zuordnung["SD_H"]: "30 mm"})
+        if design.userParameters.itemByName("SD_H").expression != "20 mm":
+            raise RuntimeError("der VORHANDENE Parameter SD_H wurde verändert")
+        return "%s; Benutzerparameter nach Import: %s; neu beim Import: %s; gesetzt %s (Original SD_H unverändert), fehlend %s; Körper importiert: %d" % (
+            pos, ", ".join(namen), ", ".join(neue_param) or "–", gesetzt, fehlend + offen, neu.component.bRepBodies.count)
     schritt("3D-Detail Export/Import/Ausrichtung/Parameter", detail)
 
     erg.append("\nNicht geprüft (braucht Ihr Blechmodell): Flansch/Umschlag, Abwicklung, DXF – siehe Testanleitung (docs/Testanleitung.pdf).")

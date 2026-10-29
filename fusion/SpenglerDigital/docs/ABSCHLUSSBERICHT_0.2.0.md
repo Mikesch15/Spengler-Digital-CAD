@@ -123,3 +123,15 @@ Fehlerfälle, Backend, Browserablauf. 71 Tests bestanden. In Fusion nicht geprü
 - `docs/Testanleitung.md/.pdf`: Live-Test zum Abhaken (Blöcke 0–11), ersetzt die kurze Liste.
 - Tests: 79 automatische Tests bestanden (neu: test_parts_list, erweiterter Palette-/Browsertest). In Fusion nicht geprüft:
   Teilenummern-Attribute, Befehl «Stückliste & Zuschnitt», Werkstattblatt aus echten Bauteilen.
+
+## Nachtrag 0.3.1 – Korrekturen aus dem ersten Live-Test (29.10.2026, Fusion 2706.1.17)
+
+Ergebnis Live-Test Schritte 1–3: Start ✓, alle 9 API-Fähigkeiten ✓, Selbsttest ✓ (Einheiten, Drehkörper Ø 200.70 mm,
+3D-Detail Export/Import/Ausrichtung (0, 100, 0) mm). Damit erstmals IN FUSION bestätigt: Drehkörper, .f3d-Export/-Import,
+Ausrichtung per Matrix, Benutzerparameter setzen, Attribute, Fähigkeitsprüfung, Werkzeugleiste.
+
+Korrigiert:
+- Palette öffnete nicht («ERR_INVALID_URL», file:///C:/%5CUsers…): HTML-Pfad wird jetzt als file:-URI übergeben.
+- 3D-Detail: Fusion benennt importierte Benutzerparameter bei Namensgleichheit um (SD_H → SD_H_1). Bisher wäre der VORHANDENE
+  Parameter verändert worden (falsches Detail). Jetzt werden nur die beim Import neu entstandenen Parameter gesetzt
+  (`parameter_zuordnen`), Umbenennungen werden gemeldet, Mehrdeutiges bleibt offen statt geraten.

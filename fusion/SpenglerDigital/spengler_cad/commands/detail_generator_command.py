@@ -220,7 +220,7 @@ def _einsetzen(inp):
     if not os.path.exists(f3d):
         raise fa.AdapterFehler("Quellgeometrie fehlt: %s" % f3d)
     root = fa.design().rootComponent
-    occ = fa.detail_importieren(f3d, root)
+    occ, neue_param = fa.detail_importieren(f3d, root)
     occ.transform = fa.matrix_fusion(T)
     werte = _werte(inp, d)
     nach_fusion = {}
@@ -228,7 +228,11 @@ def _einsetzen(inp):
         e = p.get("unit")
         nach_fusion[p["fusionName"]] = units.fusion_ausdruck_mm(werte[p["name"]]) if e == "mm" else (
             units.fusion_ausdruck_grad(werte[p["name"]]) if e == "deg" else str(werte[p["name"]]))
-    gesetzt, fehlend = fa.parameter_setzen(nach_fusion)
+    zuordnung, offen = detail_validation.parameter_zuordnen(list(nach_fusion), neue_param)
+    gesetzt, fehlend = fa.parameter_setzen({zuordnung[n]: a for n, a in nach_fusion.items() if n in zuordnung})
+    fehlend += offen
+    if any(zuordnung[n] != n for n in zuordnung):
+        hinweise = hinweise + ["Parameter beim Import umbenannt: " + ", ".join("%s → %s" % (n, zuordnung[n]) for n in zuordnung if zuordnung[n] != n)]
     fa.markieren(occ, {"detailId": d["id"], "detailVersion": d.get("version"), "werte": werte, "addin": VERSION})
     andere = [b for b in root.bRepBodies if b != kante.body]
     return d, occ, gesetzt, fehlend, hinweise, fa.kollision(occ, andere)

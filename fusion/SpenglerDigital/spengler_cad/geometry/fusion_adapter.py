@@ -423,9 +423,13 @@ def benutzerparameter():
 
 
 def detail_importieren(f3d, ziel_comp):
-    """Fusion-Archiv in die Zielkomponente importieren → neue Occurrence."""
+    """Fusion-Archiv in die Zielkomponente importieren → (neue Occurrence, Namen der beim Import neu entstandenen Benutzerparameter).
+
+    Live-Test 29.10.2026 (Fusion 2706.1.17): Gibt es den Parameternamen im Dokument schon, legt Fusion beim Import eine Kopie
+    mit Zusatz an (SD_H → SD_H_1). Deshalb werden nur die NEU entstandenen Parameter verändert, nie die vorhandenen."""
     im = app().importManager
     vorher = {o.entityToken for o in ziel_comp.occurrences}
+    param_vorher = {p.name for p in design().userParameters}
     opt = im.createFusionArchiveImportOptions(f3d)
     if hasattr(im, "importToTarget2"):
         im.importToTarget2(opt, ziel_comp)
@@ -434,7 +438,7 @@ def detail_importieren(f3d, ziel_comp):
     neu = [o for o in ziel_comp.occurrences if o.entityToken not in vorher]
     if len(neu) != 1:
         raise AdapterFehler("Import lieferte %d neue Komponenten (erwartet 1)." % len(neu))
-    return neu[0]
+    return neu[0], [p.name for p in design().userParameters if p.name not in param_vorher]
 
 
 def matrix_fusion(m_mm):
@@ -450,7 +454,8 @@ def matrix_fusion(m_mm):
 
 
 def parameter_setzen(werte_nach_fusionname):
-    """Benutzerparameter des (importierten) Details setzen → (gesetzt, nicht_gefunden)."""
+    """Benutzerparameter setzen: {tatsächlicher Name: Ausdruck} → (gesetzt, nicht_gefunden).
+    Für importierte Details vorher details.detail_validation.parameter_zuordnen() verwenden."""
     up = design().userParameters
     gesetzt, fehlend = [], []
     for name, ausdruck in werte_nach_fusionname.items():

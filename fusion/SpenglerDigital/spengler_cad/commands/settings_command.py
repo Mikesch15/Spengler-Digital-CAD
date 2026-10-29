@@ -63,13 +63,25 @@ def html_ereignis(args):
         args.returnData = json.dumps({"ok": False, "fehler": base.fehlertext(e)}, ensure_ascii=False)
 
 
+def html_url(pfad=HTML):
+    import pathlib
+    return pathlib.Path(pfad).resolve().as_uri()
+
+
 def palette_erstellt(args):
     ui = base.ui()
     pal = ui.palettes.itemById(PALETTE_ID)
     if pal is None:
-        pal = ui.palettes.add(PALETTE_ID, "Spengler Digital CAD – Vorlagen & Einstellungen", HTML, True, True, True, 760, 640, True)
+        # Als file:-URL übergeben: mit einem Windows-Pfad (Backslashes) machte Fusion daraus file:///C:/%5CUsers… (Live-Test 29.10.2026)
+        pal = ui.palettes.add(PALETTE_ID, "Spengler Digital CAD – Vorlagen & Einstellungen", html_url(), True, True, True, 760, 640, True)
         pal.dockingState = adsk.core.PaletteDockingStates.PaletteDockStateRight
         base.handler(adsk.core.HTMLEventHandler, pal.incomingFromHTML, html_ereignis)
+    else:
+        try:
+            if pal.htmlFileURL != html_url():
+                pal.htmlFileURL = html_url()
+        except Exception:
+            logger.ausnahme("Palette-URL")
     pal.isVisible = True
 
 

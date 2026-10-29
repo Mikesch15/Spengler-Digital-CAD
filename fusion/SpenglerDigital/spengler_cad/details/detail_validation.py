@@ -74,3 +74,23 @@ def passung(vorlage, kante, dicke=None):
     if a_len and L and abs(a_len - L) > 0.05:
         hinweise.append("Anschlusskante der Vorlage %.1f mm, Zielkante %.1f mm – nur variable Masse passen sich an." % (a_len, L))
     return (not gruende), gruende, hinweise
+
+
+def parameter_zuordnen(fusion_namen, neue_namen):
+    """Vorlagenparameter (Name im Quellmodell) → Name des beim Import NEU entstandenen Parameters.
+
+    Fusion benennt beim Import um, wenn der Name im Dokument schon existiert (SD_H → SD_H_1).
+    Zugeordnet wird nur eindeutig: gleicher Name oder Name_<Zahl> unter den NEUEN Parametern. → (zuordnung, offen)"""
+    import re
+    zuordnung, offen = {}, []
+    neue = list(neue_namen)
+    for n in fusion_namen:
+        if n in neue:
+            zuordnung[n] = n
+            continue
+        kandidaten = [x for x in neue if re.match(r"^%s_\d+$" % re.escape(n), x)]
+        if len(kandidaten) == 1:
+            zuordnung[n] = kandidaten[0]
+        else:
+            offen.append(n)
+    return zuordnung, offen
