@@ -127,6 +127,24 @@ class MaterialTest(unittest.TestCase):
 
 
 class DxfTest(unittest.TestCase):
+    def test_dxf_mit_unabhaengigem_leser(self):
+        """Zuschnittplan-DXF mit ezdxf (unabhängige Bibliothek) lesen und prüfen – nur wenn installiert."""
+        try:
+            from ezdxf import recover
+        except ImportError:
+            self.skipTest("ezdxf nicht installiert")
+        import tempfile
+        p = nesting.format_plan([{"breite": 250.0, "stuecke": bl([1000, 800])}], [{"breite": 1000, "laenge": 2000, "text": "T"}])
+        pfad = os.path.join(tempfile.mkdtemp(), "plan.dxf")
+        dxf_writer.zuschnittplan_dxf(nesting.lage(p["bestes"]), "Test äöü").speichern(pfad)
+        doc, auditor = recover.readfile(pfad)
+        self.assertEqual((doc.dxfversion, len(auditor.errors)), ("AC1009", 0))
+        msp = doc.modelspace()
+        self.assertEqual(len(msp.query("LINE")), 4 + 2 * 4)
+        self.assertEqual({l.dxf.name for l in doc.layers} >= {"FORMAT", "ZUSCHNITT", "TEXT"}, True)
+        xs = [e.dxf.end.x for e in msp.query('LINE[layer=="ZUSCHNITT"]')]
+        self.assertAlmostEqual(max(xs), 250.0, msg="Massstab 1:1 in mm")
+
     def test_konturpruefung(self):
         q = [((0, 0), (10, 0)), ((10, 0), (10, 10)), ((10, 10), (0, 10)), ((0, 10), (0, 0))]
         self.assertEqual(dxf_writer.kontur_pruefen(q), [])

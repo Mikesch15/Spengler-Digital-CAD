@@ -202,15 +202,19 @@ def _bauen(inp, ergebnis):
     for nr, tok in enumerate(tokens, 1):
         try:
             kante = edge_resolver.aufloesen(tok)
-            body = kante.body
+            body_name, body_token = kante.body.name, kante.body.entityToken
             feats = fa.folge_anbringen(kante, plan["operations"], t, markierung)
             ergebnis.ausgefuehrt.append("Kante %d: %d Schritt(e)" % (nr, len(feats)))
-            ergebnis.geometrie.append(body.name)
-            for p in fa.koerper_pruefen(body):
-                ergebnis.warnungen.append("Kante %d: %s" % (nr, p))
+            ergebnis.geometrie.append(body_name)
+            body = fa.koerper_neu(body_token)
+            if body is None:
+                ergebnis.warnungen.append("Kante %d: Körper nach dem Bauen nicht eindeutig auffindbar – Ergebnis bitte selbst prüfen." % nr)
+            else:
+                for p in fa.koerper_pruefen(body):
+                    ergebnis.warnungen.append("Kante %d: %s" % (nr, p))
         except fa.AdapterFehler as e:
             ergebnis.fehler.append("Kante %d: %s" % (nr, e))
-            ergebnis.zurueckgesetzt = True
+            ergebnis.zurueckgesetzt = ergebnis.zurueckgesetzt or getattr(e, "rueckbau_ok", True)
     return plan
 
 

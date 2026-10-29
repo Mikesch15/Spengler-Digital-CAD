@@ -24,6 +24,10 @@ ATTR_GRUPPE = "SpenglerDigitalCAD"
 class AdapterFehler(RuntimeError):
     """Verständliche Meldung für den Benutzer; technische Details stehen im Protokoll."""
 
+    def __init__(self, text, rueckbau_ok=True):
+        RuntimeError.__init__(self, text)
+        self.rueckbau_ok = rueckbau_ok
+
 
 def app():
     return adsk.core.Application.get()
@@ -294,8 +298,10 @@ def folge_anbringen(edge, ops, dicke_mm, markierung):
     """Operationsfolge an EINER Kante. → Liste erzeugter Features. Bei Fehler: alles wieder entfernen und AdapterFehler."""
     erzeugt = []
     aktuell = edge
+    phase = "Schritt 1"
     try:
         for i, op in enumerate(ops, 1):
+            phase = "Schritt %d" % i
             if op["typ"] == "umschlag":
                 feat = umschlag(aktuell, op["laenge"], op["winkel"] < 0, op.get("radius"))
             else:
@@ -304,14 +310,26 @@ def folge_anbringen(edge, ops, dicke_mm, markierung):
             markieren(feat, dict(markierung, schritt=i))
             logger.info("Schritt erzeugt", nr=i, typ=op["typ"], winkel=op["winkel"], laenge=op["laenge"])
             if i < len(ops):
+                phase = "Nach Schritt %d (Kante für Schritt %d suchen)" % (i, i + 1)
                 aktuell = neue_aussenkante(feat, aktuell, op["laenge"], dicke_mm or 1.0)
         return erzeugt
     except Exception as e:
-        logger.ausnahme("Folge abgebrochen", schritt=len(erzeugt) + 1)
-        entfernen(erzeugt)
-        if isinstance(e, AdapterFehler):
-            raise AdapterFehler("Schritt %d: %s" % (len(erzeugt) + 1, e))
-        raise AdapterFehler("Schritt %d: Fusion meldet: %s" % (len(erzeugt) + 1, str(e).strip().splitlines()[-1] if str(e).strip() else type(e).__name__))
+        logger.ausnahme("Folge abgebrochen", phase=phase)
+        zurueck = entfernen(erzeugt)
+        text = str(e) if isinstance(e, AdapterFehler) else "Fusion meldet: %s" % (str(e).strip().splitlines()[-1] if str(e).strip() else type(e).__name__)
+        if erzeugt:
+            text += (" – die %d bereits erzeugten Schritte wurden wieder entfernt." % len(erzeugt) if zurueck else
+                     " – ACHTUNG: die bereits erzeugten Schritte liessen sich nicht vollständig entfernen. Bitte mit Strg+Z zurücknehmen.")
+        raise AdapterFehler("%s: %s" % (phase, text), rueckbau_ok=zurueck)
+
+
+def koerper_neu(token):
+    """Körper nach dem Bauen über seinen entityToken neu holen (alte Referenzen werden in Fusion oft ungültig)."""
+    try:
+        t = [x for x in design().findEntityByToken(token) if x and x.isValid]
+        return t[0] if len(t) == 1 else None
+    except Exception:
+        return None
 
 
 def koerper_pruefen(body):
@@ -358,7 +376,10 @@ def abwicklung_masse(fp):
     if body is None:
         raise AdapterFehler("Abwicklungskörper nicht lesbar.")
     bb = body.boundingBox
-    dx, dy = units.cm_zu_mm(bb.maxPoint.x - bb.minPoint.x), units.cm_zu_mm(bb.maxPoint.y - bb.minPoint.y)
+    # Die Lage der Abwicklung im Raum ist nicht garantiert (nicht zwingend XY): alle drei Ausdehnungen nehmen,
+    # die kleinste ist die Blechdicke, die beiden grösseren sind Breite und Länge.
+    ausdehnung = sorted(units.cm_zu_mm(abs(getattr(bb.maxPoint, a) - getattr(bb.minPoint, a))) for a in ("x", "y", "z"))
+    dx, dy = ausdehnung[1], ausdehnung[2]
     flaeche = None
     try:
         # grösste ebene Fläche des flachen Körpers = Blechfläche (inkl. Ausschnitte)

@@ -143,6 +143,61 @@ class AbgleichTest(CloudBasis):
         self.assertFalse(b["darf_aendern"])
         self.assertEqual(len(self.z.cad), 1, "nichts hochgeladen")
 
+    def test_mitarbeiter_konflikt_verliert_nichts(self):
+        """Fehler bis 0.4.0: bei Konflikt wurde die lokale Änderung eines Mitarbeiters überschrieben."""
+        c1, a1 = self.pc(0)
+        v = VorlagenRepository(self.ordner[0]).speichern(testvorlage("Gemeinsam"))
+        a1.ausfuehren()
+        c2, a2 = self.pc(1, "max.muster", "pw")
+        a2.ausfuehren()
+        for i, text in ((0, "Chef ändert"), (1, "Max ändert")):
+            r = VorlagenRepository(self.ordner[i])
+            x = r.holen(v["id"])
+            x["description"] = text
+            r.speichern(x)
+        a1.ausfuehren()
+        b = a2.ausfuehren()
+        beschr = sorted(x["description"] for x in VorlagenRepository(self.ordner[1]).liste())
+        self.assertEqual(beschr, ["Chef ändert", "Max ändert"], "eigene Fassung bleibt als lokale Kopie")
+        self.assertTrue(any("nur lokal" in k for k in b["konflikte"]))
+        self.assertEqual(len(self.z.cad), 1, "Mitarbeiter lädt nichts hoch")
+
+    def test_neuere_fassung_in_der_app_wird_nie_ueberschrieben(self):
+        """Schutz (kein nachgewiesener Fehler): Datensätze aus einer neueren Add-in-Version werden nie überschrieben."""
+        c1, a1 = self.pc(0)
+        v = VorlagenRepository(self.ordner[0]).speichern(testvorlage("Zukunft"))
+        a1.ausfuehren()
+        zeile = self.z.cad[0]
+        zeile.update({"schema_version": 99, "version": 2, "daten": dict(zeile["daten"], schemaVersion=99, zukunft={"neu": 1})})
+        r = VorlagenRepository(self.ordner[0])
+        x = r.holen(v["id"])
+        x["description"] = "lokal geändert"
+        r.speichern(x)
+        b = a1.ausfuehren()
+        self.assertEqual(self.z.cad[0]["daten"]["zukunft"], {"neu": 1}, "App-Fassung unverändert")
+        self.assertEqual(self.z.versionen, [], "kein Überschreiben")
+        self.assertEqual(b["neuer"], ["Zukunft"])
+        lokal = VorlagenRepository(self.ordner[0]).liste()
+        self.assertTrue(any(y.get("_nurLesen") for y in lokal), "neue Fassung lokal schreibgeschützt")
+        self.assertTrue(any(y.get("description") == "lokal geändert" for y in lokal), "eigene Änderung als Kopie")
+
+    def test_wiederherstellen_ueberschreibt_app_nicht(self):
+        """Fehler bis 0.4.0: nach dem Wiederherstellen einer alten Sicherung hätte der Abgleich die App überschrieben."""
+        from spengler_cad.storage import backup_service
+        c1, a1 = self.pc(0)
+        r = VorlagenRepository(self.ordner[0])
+        v = r.speichern(testvorlage("Stand"))
+        a1.ausfuehren()
+        sicherung = backup_service.sichern(self.ordner[0], grund="manuell")
+        x = r.holen(v["id"])
+        x["description"] = "neu"
+        r.speichern(x)
+        a1.ausfuehren()
+        backup_service.wiederherstellen(sicherung, self.ordner[0], bestaetigt=True)
+        b = a1.ausfuehren()
+        self.assertEqual(next(z for z in self.z.cad if z["record_id"] == v["id"])["daten"]["description"], "neu", "App behält die neuere Fassung")
+        self.assertEqual(len(b["konflikte"]), 1, "alte Fassung bleibt als Konflikt-Kopie")
+
     def test_firmen_getrennt(self):
         c1, a1 = self.pc(0)
         VorlagenRepository(self.ordner[0]).speichern(testvorlage("Geheim A"))
@@ -214,6 +269,8 @@ class UpdaterTest(CloudBasis):
             self.assertEqual(f.read(), neu)
         self.assertTrue(os.path.exists(os.path.join(self.daten, "programm_sicherung")), "alter Programmstand gesichert")
         self.assertTrue(any("vor_update" in n for n in os.listdir(os.path.join(self.daten, "sicherungen"))), "Daten gesichert")
+        self.assertEqual(updater.benoetigt(r, self.addin), [], "danach nichts mehr nötig (kein zweites Installieren)")
+        self.assertEqual(updater.installieren(c, r, self.addin, self.daten), [])
 
     def test_manipuliert_oder_unvollstaendig(self):
         c, _ = self.pc(0)

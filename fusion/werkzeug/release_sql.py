@@ -36,6 +36,8 @@ def q(s):
 def main():
     art, version = sys.argv[1], sys.argv[2]
     m = updater.manifest(ADDIN, version)
+    # Markdown-Quellen der Doku braucht das Add-in nicht (Hilfe zeigt die HTML-Fassung) – hält Updates klein
+    m["dateien"] = [f for f in m["dateien"] if not (f["pfad"].startswith("docs/") and f["pfad"].endswith(".md"))]
     from spengler_cad import VERSION
     if VERSION != version:
         sys.exit("spengler_cad.VERSION ist %s, nicht %s" % (VERSION, version))

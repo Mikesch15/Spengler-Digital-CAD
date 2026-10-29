@@ -30,6 +30,10 @@ def inhalt_hash(d):
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
 
+def l_geaendert_vor(L, s):
+    return s is None or inhalt_hash(L) != s.get("hash")
+
+
 def _sauber(d):
     return {k: v for k, v in d.items() if not k.startswith("_")}
 
@@ -115,7 +119,14 @@ class Abgleich(object):
     def _eins(self, typ, rid, L, C, s, stand, k, darf, b):
         name = (L or (C or {}).get("daten") or {}).get("name", rid)
         if C and (C.get("schema_version") or 0) > SCHEMA[typ]:
-            b["neuer"].append(name)   # aus neuerer Programmversion: lokal nur lesen, nichts überschreiben
+            # aus neuerer Programmversion: nie mit einer älteren Fassung überschreiben, nur herunterladen
+            b["neuer"].append(name)
+            if L is not None and inhalt_hash(L) != inhalt_hash(C["daten"]) and l_geaendert_vor(L, s):
+                self._konflikt_kopie(typ, L, b, stand, hochladen=False)
+            if not C["geloescht"]:
+                self._lokal_schreiben(typ, rid, C["daten"], C["version"])
+                stand[k] = {"version": C["version"], "hash": inhalt_hash(C["daten"])}
+            return
         lh = inhalt_hash(L) if L else None
         l_geaendert = L is not None and (s is None or lh != s.get("hash"))
         c_geaendert = C is not None and (s is None or C["version"] != s.get("version"))
@@ -148,8 +159,8 @@ class Abgleich(object):
             return
         # beide vorhanden
         if C["geloescht"]:
-            if l_geaendert and darf:   # lokal geändert, woanders gelöscht → lokale Fassung als Kopie retten
-                self._konflikt_kopie(typ, L, b, stand)
+            if l_geaendert:   # lokal geändert, woanders gelöscht → lokale Fassung als Kopie retten
+                self._konflikt_kopie(typ, L, b, stand, hochladen=darf)
             self._lokal_papierkorb(typ, rid)
             stand.pop(k, None)
             b["geloescht"].append(name)
@@ -179,10 +190,9 @@ class Abgleich(object):
                 return
             # zwischenzeitlich in der Cloud geändert → wie Konflikt behandeln
         # Konflikt: Cloud-Fassung gilt, lokale Änderung als Kopie
-        if darf:
-            self._konflikt_kopie(typ, L, b, stand)
-        else:
-            b["nur_lokal"].append(name + " (Konflikt – lokale Fassung überschrieben)")
+        self._konflikt_kopie(typ, L, b, stand, hochladen=darf)
+        if not darf:
+            b["nur_lokal"].append(name + " (eigene Fassung als lokale Kopie behalten)")
         self._lokal_schreiben(typ, rid, C["daten"], C["version"])
         stand[k] = {"version": C["version"], "hash": inhalt_hash(C["daten"])}
 
@@ -193,7 +203,7 @@ class Abgleich(object):
             d["version"] = version
             json_store.schreiben(p, d)
 
-    def _konflikt_kopie(self, typ, L, b, stand):
+    def _konflikt_kopie(self, typ, L, b, stand, hochladen=True):
         k = _sauber(kopie(L))
         alt = k["id"]
         k["id"] = neue_id({"kantenvorlage": "kv", "detailvorlage": "dv", "materialprofil": "mat"}[typ])
@@ -204,8 +214,12 @@ class Abgleich(object):
             rel = k["source"]["file"]
             if os.path.exists(self.repo.geometrie_pfad(rel)):
                 k["source"]["file"] = self.repo.geometrie_ablegen(self.repo.geometrie_pfad(rel), k["id"], 1)
-            self._geometrie_senden(k)
+            if hochladen:
+                self._geometrie_senden(k)
         json_store.schreiben(self._datei(typ, k["id"]), k)
+        if not hochladen:   # ohne Recht: Kopie bleibt nur auf diesem PC
+            b["konflikte"].append(k["name"] + " (nur lokal)")
+            return
         r = self.cloud.einfuegen(typ, k["id"], k)
         stand["%s/%s" % (typ, k["id"])] = {"version": r["version"], "hash": inhalt_hash(k)}
         b["konflikte"].append(k["name"])

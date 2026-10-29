@@ -1,6 +1,6 @@
 # Spengler Digital CAD – Bedienungsanleitung
 
-Add-in für Autodesk Fusion · Version 0.4.0 · Stand 29.10.2026
+Add-in für Autodesk Fusion · Version 0.4.2 · Stand 29.10.2026
 
 > **Prüfstand dieser Version:** Die Rechenteile (Kurzschrift, Vorlagen, Bauplan, Zuschnitt, Material, Umformung, Sicherung, Migration) sind automatisch getestet. Die Bedienung in Fusion selbst ist **noch nicht in Fusion getestet**. Funktionen, die davon abhängen, sind mit **[nicht in Fusion geprüft]** markiert.
 

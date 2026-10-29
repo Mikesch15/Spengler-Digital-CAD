@@ -48,11 +48,11 @@ def _dialog_aktion(aktion, d):
     return KeyError
 
 
-def update_anbieten(nachfragen_wenn_aktuell=False):
+def update_anbieten(nachfragen_wenn_aktuell=False, timeout=15):
     """Neuere Version in der App? → nachfragen → installieren. Rückgabe: Text für die Palette."""
     from ..storage import updater
     from ..storage.cloud_client import Cloud
-    c = Cloud()
+    c = Cloud(timeout=timeout)
     if not c.angemeldet:
         raise RuntimeError("Für Updates zuerst unter «Konto» mit dem App-Konto anmelden.")
     r = updater.neuestes(c)
@@ -60,6 +60,9 @@ def update_anbieten(nachfragen_wenn_aktuell=False):
         if nachfragen_wenn_aktuell:
             base.melden("Update", "Sie haben die neueste Version (%s)." % VERSION)
         return "Neueste Version (%s) installiert." % VERSION
+    if not updater.benoetigt(r):
+        base.melden("Update", "Version %s ist bereits installiert. Bitte das Add-in neu starten (Shift+S → Stoppen → Ausführen)." % r["version"])
+        return "Version %s bereits installiert – Add-in neu starten." % r["version"]
     if not base.frage("Update", "Version %s ist verfügbar (installiert: %s).\n\n%s\n\nJetzt aktualisieren? Ihre Daten werden vorher gesichert."
                       % (r["version"], VERSION, r.get("hinweise") or "")):
         return "Update auf %s verschoben." % r["version"]
@@ -80,11 +83,11 @@ def beim_start():
         return
     try:
         if e.get("syncOnStart", True):
-            b = json.loads(BACKEND.behandle("abgleichen", {}))
+            b = json.loads(Backend(timeout=6).behandle("abgleichen", {}))
             if b.get("ok") and (b["daten"].get("konflikte") or b["daten"].get("fehler")):
                 base.melden("Abgleich mit der App", b["daten"]["text"])
         if e.get("updateCheckOnStart", True):
-            update_anbieten()
+            update_anbieten(timeout=6)
     except CloudFehler as ex:
         logger.warnung("Start-Abgleich", fehler=ex)
     except Exception:

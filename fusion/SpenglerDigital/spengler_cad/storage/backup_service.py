@@ -122,6 +122,11 @@ def wiederherstellen(zip_pfad, wurzel=None, bestaetigt=False, addin_version=""):
                     shutil.move(os.path.join(alt, eintrag), p)
             raise
         shutil.rmtree(alt, ignore_errors=True)
+        # Abgleichstand passt nicht mehr zu den wiederhergestellten Daten: verwerfen, damit der nächste Abgleich mit der App
+        # abweichende Fassungen als Konflikt-Kopie behält, statt die neueren Fassungen in der App zu überschreiben.
+        stand = os.path.join(wurzel, "sync_stand.json")
+        if os.path.exists(stand):
+            os.replace(stand, stand + ".vor_wiederherstellung")
     finally:
         shutil.rmtree(zwischen, ignore_errors=True)
     return vorher

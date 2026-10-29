@@ -18,7 +18,7 @@ from . import help_content
 
 
 AENDERNDE_AKTIONEN = {"speichern", "duplizieren", "umbenennen", "favorit", "kategorie", "loeschen", "papierkorb_zurueck",
-                      "import", "material_speichern", "material_loeschen", "wiederherstellen"}
+                      "import", "material_speichern", "material_loeschen"}   # nach «wiederherstellen» bewusst kein Auto-Abgleich
 
 
 def json_store_lesen(p):
@@ -34,8 +34,9 @@ def _ohne_intern(v):
 
 
 class Backend(object):
-    def __init__(self, wurzel=None):
+    def __init__(self, wurzel=None, timeout=15):
         self.wurzel = wurzel
+        self.timeout = timeout
 
     @property
     def repo(self):
@@ -177,7 +178,7 @@ class Backend(object):
     # ------------------------------------------------------------------ Spengler-Digital-App
     def _cloud(self):
         from ..storage.cloud_client import Cloud
-        return Cloud(self.wurzel or paths.daten_ordner())
+        return Cloud(self.wurzel or paths.daten_ordner(), timeout=self.timeout)
 
     def a_konto(self, d):
         c = self._cloud()
