@@ -141,3 +141,16 @@ Korrigiert:
 Zweiter Live-Test: Selbsttest und Palette zeigten noch den Stand 0.3.0. Ursache: Fusion hält geladene Python-Module über
 Stoppen/Ausführen im Speicher. `run()` entfernt jetzt alle `spengler_cad`-Module vor dem Laden; Fähigkeiten-Dialog und Selbsttest
 zeigen Versionsnummer und Ladeordner (Kontrolle, ob die richtigen Dateien geladen sind).
+
+## Nachtrag 0.4.0 – Anbindung an die Spengler-Digital-App (Supabase)
+
+- Datenbank (`supabase/v_cad_addin_grundlagen.sql`): cad_daten (+ Versionen per Trigger), Bucket «cad», cad_addin_releases/-blobs.
+  Muster der App: tenant_boundary (RESTRICTIVE, my_company_id) + has_permission('vorlagen', view/edit); kein DELETE.
+  Eigenes Recht «cad_vorlagen» war nicht möglich (permission_settings_resource_check) → bestehendes Recht «vorlagen».
+  **Probelauf gegen die echte Datenbank in einer zurückgenommenen Transaktion: 11/11 Zugriffsprüfungen OK**; danach geprüft,
+  dass nichts zurückblieb. Eingespielt wird erst nach Freigabe.
+- Add-in: cloud_client (Anmeldung wie js/03-login.js inkl. resolve-login-email, Sitzung ohne Passwort), sync_service (lokal zuerst,
+  optimistische Sperre über version, Konflikt-Kopie, Papierkorb, Rechte, 3D-Geometrie), updater (nur geänderte Dateien,
+  sha256, Daten- und Programmsicherung, Rückbau), Palette-Reiter «Konto», Abgleich/Update-Frage beim Start, HTML-Anleitung.
+- Tests: 96 (neu test_cloud gegen einen Supabase-Nachbau, Palette-Browsertest mit Anmeldung). Aus der Sandbox ist Supabase per
+  HTTPS nicht erreichbar → der echte Anmelde-/Abgleichweg aus Fusion ist NICHT getestet (Testanleitung Block 11).

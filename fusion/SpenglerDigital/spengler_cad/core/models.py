@@ -168,6 +168,7 @@ def standard_einstellungen():
         "labels": {"spalten": 3, "zeilen": 8, "breite": 70.0, "hoehe": 37.0, "oben": 0.0, "links": 0.0, "abstandX": 0.0, "abstandY": 0.0},
         "order": {"objekt": "", "auftrag": ""},   # zuletzt verwendete Angaben für Stückliste/Etiketten
         "projectLibraryFolder": "",
+        "cloud": {"syncOnStart": True, "updateCheckOnStart": True},   # Spengler-Digital-App (nur wenn angemeldet)
     }
 
 

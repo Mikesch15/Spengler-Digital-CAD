@@ -1,6 +1,6 @@
 # Spengler Digital CAD – Bedienungsanleitung
 
-Add-in für Autodesk Fusion · Version 0.3.2 · Stand 29.10.2026
+Add-in für Autodesk Fusion · Version 0.4.0 · Stand 29.10.2026
 
 > **Prüfstand dieser Version:** Die Rechenteile (Kurzschrift, Vorlagen, Bauplan, Zuschnitt, Material, Umformung, Sicherung, Migration) sind automatisch getestet. Die Bedienung in Fusion selbst ist **noch nicht in Fusion getestet**. Funktionen, die davon abhängen, sind mit **[nicht in Fusion geprüft]** markiert.
 
@@ -173,11 +173,24 @@ Beim Import werden bestehende Vorlagen nie überschrieben: gleiche ID → Import
 
 **Sicherung** (Palette → Sicherung): «Sicherung erstellen» schreibt eine ZIP-Datei mit allen Benutzerdaten und Prüfsummen. «Wiederherstellen» prüft die Datei, sichert den aktuellen Stand automatisch und ersetzt ihn erst dann.
 
+**Konto & Abgleich mit der Spengler-Digital-App** (Palette → Register **Konto**): Mit demselben Benutzernamen und Passwort wie in der App anmelden. Danach werden Kantenvorlagen, 3D-Details (samt .f3d-Geometrie) und Materialprofile mit allen PCs der Firma abgeglichen – beim Start, nach jeder Änderung in der Palette und mit «Jetzt abgleichen». Oben in der Palette steht der Stand («✓ mit der App abgeglichen», «nur lokal …»).
+
+- **Lokal zuerst:** Jede Änderung wird zuerst auf dem PC gespeichert. Ohne Internet arbeitet das Add-in normal weiter und gleicht später ab.
+- **Rechte:** Ändern dürfen Konten mit dem App-Recht «Vorlagen ändern» (Standard: Admin; in der App pro Person einstellbar – es ist dasselbe Recht wie für die Massaufnahme-Vorlagen). Alle anderen sehen und benutzen die Vorlagen; eigene Änderungen bleiben dann auf ihrem PC und werden als «nur auf diesem PC» gemeldet.
+- **Firmen getrennt:** Jede Firma sieht nur ihre eigenen Daten (Regeln der App-Datenbank).
+- **Konflikt:** Haben zwei PCs dieselbe Vorlage geändert, gilt die Fassung aus der App; die eigene bleibt als Kopie «… (Konflikt TT.MM.)» erhalten und wird ebenfalls abgeglichen.
+- **Löschen** verschiebt auf allen PCs in den Papierkorb; in der App wird nur markiert, frühere Fassungen bleiben dort gespeichert.
+- Das **Passwort** wird nicht gespeichert, nur die Sitzung (`konto.json` im Benutzerdatenordner). «Abmelden» löscht sie.
+
 ## 15. Updates und Wiederherstellung
 
+**Mit Anmeldung (ab 0.4.0):** Beim Start fragt das Add-in, wenn in der App eine neuere Version bereitliegt (oder Palette → Konto → «Nach Updates suchen»). Bei «Ja»: Benutzerdaten sichern → bisherige Programmdateien nach `…\SpenglerDigitalCAD\programm_sicherung\<Version>` kopieren → nur geänderte Dateien laden und per Prüfsumme kontrollieren → ersetzen. Danach das Add-in neu starten (Shift+S → Stoppen → Ausführen). Stimmt eine Prüfsumme nicht oder fehlt etwas, wird abgebrochen und nichts verändert. Die PDF-Anleitungen kommen nur mit dem ZIP; «Hilfe → Bedienungsanleitung öffnen» zeigt die stets aktuelle HTML-Fassung.
+
+**Von Hand (ZIP), z. B. Erstinstallation auf einem neuen PC:**
+
 1. Add-in stoppen (Skripte und Add-Ins → Stoppen).
-2. Ordner `SpenglerDigital` durch die neue Version ersetzen. Der Benutzerdatenordner wird dabei nicht berührt.
-3. Add-in starten. Das Add-in prüft das Datenformat (`schemaVersion` je Datensatz):
+2. Inhalt des ZIP in **denselben** Ordner kopieren und ersetzen (danach liegt `SpenglerDigital.py` direkt im Ordner). Der Benutzerdatenordner wird dabei nicht berührt.
+3. Add-in starten und unter Hilfe → Fusion-Fähigkeiten Version und Ladeordner prüfen. Das Add-in prüft das Datenformat (`schemaVersion` je Datensatz):
    - Umstellung nötig → **automatische Sicherung**, Umstellung auf Kopien, Prüfung jedes Datensatzes, erst dann Übernahme.
    - Kritische Umstellung → Rückfrage vor dem Start.
    - Fehler → **keine Datei wird verändert**, Meldung mit Pfad der Sicherung.
@@ -207,3 +220,4 @@ Beim Import werden bestehende Vorlagen nie überschrieben: gleiche ID → Import
 - Rundbleche als Drehkörper, nicht als Fusion-Blechkörper; Umformbarkeit nur mit eigenen Grenzwerten.
 - Keine automatische Fusion-Zeichnung (Werkstattblatt statt dessen).
 - Zuschnitt mit Rechtecken; Rollenmischung und Restelager der App nicht übernommen.
+- Abgleich mit der App: Einstellungen (Zuschnitt, Etiketten, Export) bleiben je PC; abgeglichen werden Vorlagen, 3D-Details und Materialprofile.

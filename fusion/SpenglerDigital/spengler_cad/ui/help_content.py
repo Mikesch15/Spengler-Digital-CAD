@@ -75,6 +75,15 @@ HILFE = {
         "CSV (Excel) und HTML (drucken), Etiketten als HTML-Seite im A4-Bogenformat aus den Einstellungen – eins pro Stück, im Browser drucken "
         "(Seitenränder 0, Skalierung 100 %). Fläche aus der Fusion-Abwicklung; fehlt sie, das umschliessende Rechteck (mit * markiert). "
         "Gewicht nur mit Dichte im Materialprofil und als Schätzwert."),
+    "konto": (
+        "Konto und Abgleich mit der Spengler-Digital-App",
+        "Anmelden mit demselben Benutzernamen und Passwort wie in der App. Danach werden Kantenvorlagen, 3D-Details (samt Geometrie) und "
+        "Materialprofile mit allen PCs der Firma abgeglichen: beim Start, nach jeder Änderung in der Palette und mit «Jetzt abgleichen». "
+        "Lokal wird immer zuerst gespeichert, ohne Internet arbeitet das Add-in normal weiter. Ändern dürfen nur Konten mit dem Recht "
+        "«Vorlagen ändern» der App (Standard: Admin) – das Recht gilt gleich für die Massaufnahme-Vorlagen. Haben zwei PCs dieselbe Vorlage "
+        "geändert, gilt die Fassung aus der App; die eigene bleibt als Kopie «… (Konflikt TT.MM.)». Gelöscht wird nur in den Papierkorb. "
+        "Updates: neue Versionen kommen aus der App; vor dem Installieren wird gefragt und werden Daten und Programm gesichert. "
+        "Das Passwort wird nicht gespeichert, nur die Sitzung (konto.json im Benutzerdatenordner)."),
     "einstellungen": (
         "Einstellungen und Sicherung",
         "Benutzerdaten liegen ausserhalb des Add-in-Ordners und überleben Updates. Vor jeder Datenmigration wird automatisch gesichert. "

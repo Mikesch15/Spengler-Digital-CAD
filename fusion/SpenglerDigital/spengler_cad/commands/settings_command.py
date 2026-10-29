@@ -40,10 +40,55 @@ def _dialog_aktion(aktion, d):
         if not a["ok"]:
             raise RuntimeError(a["fehler"])
         return a["daten"]
+    if aktion == "update_installieren":
+        return update_anbieten(nachfragen_wenn_aktuell=True)
     if aktion == "protokoll":
         base.oeffnen(logger.pfad())
         return True
     return KeyError
+
+
+def update_anbieten(nachfragen_wenn_aktuell=False):
+    """Neuere Version in der App? → nachfragen → installieren. Rückgabe: Text für die Palette."""
+    from ..storage import updater
+    from ..storage.cloud_client import Cloud
+    c = Cloud()
+    if not c.angemeldet:
+        raise RuntimeError("Für Updates zuerst unter «Konto» mit dem App-Konto anmelden.")
+    r = updater.neuestes(c)
+    if not r:
+        if nachfragen_wenn_aktuell:
+            base.melden("Update", "Sie haben die neueste Version (%s)." % VERSION)
+        return "Neueste Version (%s) installiert." % VERSION
+    if not base.frage("Update", "Version %s ist verfügbar (installiert: %s).\n\n%s\n\nJetzt aktualisieren? Ihre Daten werden vorher gesichert."
+                      % (r["version"], VERSION, r.get("hinweise") or "")):
+        return "Update auf %s verschoben." % r["version"]
+    ersetzt = updater.installieren(c, r)
+    logger.info("Update installiert", von=VERSION, nach=r["version"], dateien=len(ersetzt))
+    base.melden("Update", "Version %s ist installiert (%d Dateien).\n\nBitte das Add-in neu starten:\nShift+S → SpenglerDigital → Stoppen → Ausführen\n"
+                "(oder Fusion neu starten)." % (r["version"], len(ersetzt)))
+    return "Version %s installiert – bitte Add-in neu starten." % r["version"]
+
+
+def beim_start():
+    """Beim Add-in-Start: still abgleichen und nach Updates fragen (nur wenn angemeldet und eingeschaltet). Offline → nichts."""
+    from ..storage.cloud_client import Cloud, CloudFehler
+    from ..storage.settings_service import Einstellungen
+    e = Einstellungen().laden().get("cloud", {})
+    c = Cloud(timeout=6)
+    if not c.angemeldet:
+        return
+    try:
+        if e.get("syncOnStart", True):
+            b = json.loads(BACKEND.behandle("abgleichen", {}))
+            if b.get("ok") and (b["daten"].get("konflikte") or b["daten"].get("fehler")):
+                base.melden("Abgleich mit der App", b["daten"]["text"])
+        if e.get("updateCheckOnStart", True):
+            update_anbieten()
+    except CloudFehler as ex:
+        logger.warnung("Start-Abgleich", fehler=ex)
+    except Exception:
+        logger.ausnahme("Start-Abgleich")
 
 
 def html_ereignis(args):
@@ -92,7 +137,7 @@ def hilfe_erstellt(args):
     for i, (k, (titel, _)) in enumerate(help_content.HILFE.items()):
         dd.listItems.add(titel, i == 0)
     inp.addTextBoxCommandInput("text", "", "", 14, True)
-    inp.addBoolValueInput("pdf", "Bedienungsanleitung (PDF) öffnen", False, "", False)
+    inp.addBoolValueInput("pdf", "Bedienungsanleitung öffnen", False, "", False)
     inp.addBoolValueInput("faehig", "Fusion-Fähigkeiten prüfen", False, "", False)
     inp.addBoolValueInput("selbsttest", "Selbsttest in neuem Dokument", False, "", False)
     keys = list(help_content.HILFE.keys())
@@ -100,8 +145,14 @@ def hilfe_erstellt(args):
     def zeigen(a):
         i = a.inputs if hasattr(a, "inputs") else inp
         if getattr(a, "input", None) is not None and a.input.id == "pdf":
-            pdf = os.path.join(paths.ADDIN_ORDNER, "docs", "Benutzerhandbuch.pdf")
-            base.oeffnen(pdf) if os.path.exists(pdf) else base.melden("Hilfe", "PDF nicht gefunden: " + pdf, True)
+            # HTML wird mit jedem Update mitgeliefert, die PDF nur mit dem Installations-ZIP
+            for name in ("Benutzerhandbuch.html", "Benutzerhandbuch.pdf"):
+                p = os.path.join(paths.ADDIN_ORDNER, "docs", name)
+                if os.path.exists(p):
+                    base.oeffnen(p)
+                    break
+            else:
+                base.melden("Hilfe", "Bedienungsanleitung nicht gefunden.", True)
             return
         if getattr(a, "input", None) is not None and a.input.id == "faehig":
             f = fusion_capabilities.pruefen(adsk.core.Application.get())

@@ -39,6 +39,7 @@ fieldset{border:1px solid var(--rand);margin:8px 0;padding:6px 8px}legend{color:
 <body>
 <header><img src="../assets/logo/logo_64.png" alt="" onerror="this.remove()"><b>Spengler Digital CAD</b><span class="klein" id="version"></span>
   <span style="flex:1"></span>
+  <span class="klein" id="syncStatus"></span>
   <label style="min-width:0"><input type="checkbox" id="experte"> Expertenmodus</label></header>
 <nav>
   <button data-tab="vorlagen" class="aktiv">Kantenvorlagen</button>
@@ -46,6 +47,7 @@ fieldset{border:1px solid var(--rand);margin:8px 0;padding:6px 8px}legend{color:
   <button data-tab="materialien">Materialien</button>
   <button data-tab="einstellungen">Einstellungen</button>
   <button data-tab="sicherung">Sicherung</button>
+  <button data-tab="konto">Konto</button>
 </nav>
 <main>
 <div id="meldung"></div>
@@ -162,6 +164,28 @@ fieldset{border:1px solid var(--rand);margin:8px 0;padding:6px 8px}legend{color:
   <table><thead><tr><th>Papierkorb</th><th></th></tr></thead><tbody id="pkListe"></tbody></table>
 </section>
 </main>
+<section id="konto">
+  <fieldset><legend>Spengler-Digital-App <button class="hilfe" data-hilfe="konto">?</button></legend>
+    <div id="kAbgemeldet">
+      <p>Mit dem App-Konto anmelden: Vorlagen, 3D-Details und Materialprofile werden mit allen PCs der Firma abgeglichen,
+        Updates kommen per Klick. Ohne Anmeldung arbeitet das Add-in nur auf diesem PC.</p>
+      <div class="zeile"><label>Benutzername</label><input id="kBenutzer" size="28" placeholder="Vorname.Nachname oder E-Mail" autocomplete="username"></div>
+      <div class="zeile"><label>Passwort</label><input id="kPasswort" type="password" size="28" autocomplete="current-password"></div>
+      <div class="zeile"><button class="haupt" id="kAnmelden">Anmelden</button></div>
+    </div>
+    <div id="kAngemeldet" style="display:none">
+      <p id="kWer"></p>
+      <p id="kRecht" class="klein"></p>
+      <div class="zeile"><button class="haupt" id="kAbgleich">Jetzt abgleichen</button><button id="kUpdate">Nach Updates suchen</button>
+        <span style="flex:1"></span><button id="kAbmelden">Abmelden</button></div>
+      <div id="kBericht"></div>
+    </div>
+  </fieldset>
+  <fieldset><legend>Beim Start</legend>
+    <div class="zeile"><label style="min-width:0"><input type="checkbox" id="kSyncStart"> automatisch abgleichen</label></div>
+    <div class="zeile"><label style="min-width:0"><input type="checkbox" id="kUpdStart"> nach Updates suchen (mit Rückfrage)</label></div>
+  </fieldset>
+</section>
 <script src="vorlagen.js"></script>
 </body>
 </html>

@@ -58,6 +58,11 @@ def run(context):
             _ui().messageBox("Benutzerdaten konnten nicht geprüft werden – sie wurden nicht verändert.\nDetails: %s" % logger.pfad(), "Spengler Digital CAD")
         ort = command_registry.registrieren()
         logger.info("Add-in gestartet", version=VERSION, werkzeugleiste=ort)
+        try:   # Abgleich mit der Spengler-Digital-App und Update-Frage – nie ein Startfehler
+            from spengler_cad.commands import settings_command
+            settings_command.beim_start()
+        except Exception:
+            logger.ausnahme("Start-Abgleich")
     except Exception:
         _ui().messageBox("Spengler Digital CAD startet nicht:\n" + traceback.format_exc())
 

@@ -1,6 +1,6 @@
 # Spengler Digital CAD – Testanleitung
 
-Live-Test in Fusion · Version 0.3.2 · zum Ausdrucken und Abhaken
+Live-Test in Fusion · Version 0.4.0 · zum Ausdrucken und Abhaken
 
 > **So vorgehen:** Blöcke der Reihe nach, je Zeile ☐ abhaken. Wenn etwas nicht wie erwartet ist: **Meldungstext notieren oder Bildschirmfoto**, weitertesten (ausser ein Block sagt «sonst abbrechen»). Am Ende das **Protokoll** und die Notizen schicken. Dauer gesamt ca. 60–75 Minuten; die Blöcke lassen sich auf mehrere Tage verteilen.
 
@@ -10,7 +10,7 @@ Live-Test in Fusion · Version 0.3.2 · zum Ausdrucken und Abhaken
 |---|---|---|
 | ☐ | Fusion aktualisieren (Konto-Menü oben rechts → Nach Updates suchen). Fusion-Version notieren (Hilfe → Info): ________ | – |
 | ☐ | Alten Prototyp stoppen: Shift+S → Add-Ins → «SpenglerDigital» → Stoppen | – |
-| ☐ | ZIP `SpenglerDigitalCAD_0.3.2.zip` entpacken, Ordner `SpenglerDigital` an seinen Platz kopieren (siehe README) | – |
+| ☐ | ZIP `SpenglerDigitalCAD_0.4.0.zip` entpacken, Ordner `SpenglerDigital` an seinen Platz kopieren (siehe README) | – |
 | ☐ | Ein Lineal/Massband und einen Probestreifen Blech mit bekannter Dicke bereitlegen (für den K-Faktor in Block 3) | – |
 
 ## 1. Installation und Start (5 Min.) – sonst abbrechen
@@ -27,7 +27,7 @@ Live-Test in Fusion · Version 0.3.2 · zum Ausdrucken und Abhaken
 
 | ☐ | Schritt | Erwartet |
 |---|---|---|
-| ☐ | SPENGLER → Hilfe → **Fusion-Fähigkeiten prüfen** | **Versionsnummer = 0.3.2** und richtiger Ladeordner; Liste mit ✓/✗ – **Bildschirmfoto** |
+| ☐ | SPENGLER → Hilfe → **Fusion-Fähigkeiten prüfen** | **Versionsnummer = 0.4.0** und richtiger Ladeordner; Liste mit ✓/✗ – **Bildschirmfoto** |
 | ☐ | Hilfe → **Selbsttest in neuem Dokument** | neues Dokument; ✓ Einheiten, ✓ Rundblech (Ø ca. 200.7 mm), ✓ 3D-Detail (Ursprung ca. (0, 100, 0) mm, «neu beim Import: SD_H_1», «Original SD_H unverändert») – **Bildschirmfoto** |
 | ☐ | Testdokument ohne Speichern schliessen | – |
 | ☐ | Hilfe: Themen durchklicken, «Bedienungsanleitung (PDF) öffnen» | Texte erscheinen, PDF öffnet |
@@ -130,7 +130,21 @@ Vorbereitung: Blech-Arbeitsbereich, Blechregel mit Ihrer Dicke, Rechteck 300 × 
 | ☐ | **Update simulieren:** Add-in stoppen, Ordner `SpenglerDigital` löschen und aus dem ZIP neu kopieren, starten | Vorlagen, Materialien, Einstellungen **alle noch da** |
 | ☐ | Palette → Sicherung → **Protokoll öffnen** | Textdatei öffnet sich |
 
-## 11. Rückmeldung
+## 11. Konto, Abgleich und Updates (10 Min.) – ab 0.4.0
+
+| ☐ | Schritt | Erwartet |
+|---|---|---|
+| ☐ | Palette → Register **Konto** → mit App-Benutzername und Passwort anmelden | «Angemeldet als …, Firma …», Recht «dürfen Vorlagen ändern» (Admin) |
+| ☐ | Falsches Passwort versuchen | «Benutzername oder Passwort falsch.» |
+| ☐ | **Jetzt abgleichen** | Bericht: Vorlagen/Materialien «in die App hochgeladen» |
+| ☐ | Eine Vorlage ändern und speichern | oben «✓ mit der App abgeglichen» |
+| ☐ | Zweiter PC (oder zweites Windows-Konto): Add-in installieren, anmelden | dieselben Vorlagen und Materialien erscheinen |
+| ☐ | Mit einem **Mitarbeiter**-Konto anmelden, Vorlage ändern | Hinweis «nur auf diesem PC», in der App unverändert |
+| ☐ | Fusion ohne Internet starten (WLAN aus) | Add-in startet normal, kein Fehler; nach Wiederverbindung «Jetzt abgleichen» |
+| ☐ | **Nach Updates suchen** | «neueste Version» – sobald ich ein Test-Update bereitstelle: Rückfrage → «installiert» → Add-in neu starten → neue Versionsnummer |
+| ☐ | Abmelden | Anmeldemaske; Vorlagen bleiben lokal |
+
+## 12. Rückmeldung
 
 | ☐ | Was schicken |
 |---|---|

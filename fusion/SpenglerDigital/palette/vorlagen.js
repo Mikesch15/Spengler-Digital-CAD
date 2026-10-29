@@ -15,6 +15,7 @@ async function senden(aktion, daten) {
   else throw new Error("Keine Verbindung zu Fusion");
   const a = JSON.parse(antwort || "{}");
   if (!a.ok) throw new Error(a.fehler || "Unbekannter Fehler");
+  if (a.abgleich) syncAnzeige(a.abgleich);
   return a.daten;
 }
 function meldung(text, art = "info") {
@@ -28,6 +29,26 @@ const frage = (text) => senden("frage", { text }).catch(() => false);
 const zahlOderNull = (v) => (v === "" || v == null ? null : Number(String(v).replace(",", ".")));
 const zahlOderText = (v) => { const s = String(v ?? "").trim(); if (s === "") return null; const n = Number(s.replace(",", ".")); return Number.isFinite(n) ? n : s; };
 
+function syncAnzeige(s) {   // kleiner Hinweis oben: Ergebnis des automatischen Abgleichs nach einer Änderung
+  const t = !s.ok ? "⚠ Abgleich: " + s.text : s.nur_lokal && s.nur_lokal.length ? "⚠ nur auf diesem PC: " + s.nur_lokal.join(", ")
+    : s.konflikte && s.konflikte.length ? "⚠ Konflikt-Kopie: " + s.konflikte.join(", ") : "✓ mit der App abgeglichen";
+  $("syncStatus").textContent = t;
+  $("syncStatus").title = s.text || "";
+}
+async function zeigeKonto() {
+  const k = await senden("konto");
+  $("kAbgemeldet").style.display = k.angemeldet ? "none" : "block";
+  $("kAngemeldet").style.display = k.angemeldet ? "block" : "none";
+  const c = Z.einstellungen.cloud || {};
+  $("kSyncStart").checked = c.syncOnStart !== false; $("kUpdStart").checked = c.updateCheckOnStart !== false;
+  if (!k.angemeldet) { $("syncStatus").textContent = "nur lokal (nicht angemeldet)"; return; }
+  const ko = k.konto;
+  $("kWer").innerHTML = `Angemeldet als <b>${esc(ko.name || ko.benutzer)}</b> (${esc(ko.rolle)}) · Firma <b>${esc(ko.firma || "–")}</b>`;
+  $("kRecht").textContent = ko.darf_aendern ? "Sie dürfen Vorlagen ändern – Änderungen gehen an alle PCs der Firma."
+    : "Nur lesen: In der App ist «Vorlagen ändern» für Ihr Konto nicht freigegeben. Eigene Änderungen bleiben auf diesem PC.";
+  if (k.letzterAbgleich) $("kBericht").innerHTML = `<div class="meldung info">Letzter Abgleich ${esc(k.letzterAbgleich.zeit)}:\n${esc(k.letzterAbgleich.text)}</div>`;
+  if (!$("syncStatus").textContent || $("syncStatus").textContent.startsWith("nur lokal")) $("syncStatus").textContent = "angemeldet: " + (ko.firma || "");
+}
 async function laden() {
   Z = await senden("init");
   $("version").textContent = "Version " + Z.version;
@@ -35,6 +56,27 @@ async function laden() {
   document.body.classList.toggle("experte", Z.einstellungen.ui.mode === "experte");
   $("experte").checked = Z.einstellungen.ui.mode === "experte";
   zeigeVorlagen(); zeigeDetails(); zeigeMaterialien(); zeigeEinstellungen(); zeigeSicherung();
+  await zeigeKonto().catch((e) => meldung(e.message, "fehler"));
+}
+$("kAnmelden").onclick = async () => {
+  const r = await tun(() => senden("anmelden", { benutzer: $("kBenutzer").value, passwort: $("kPasswort").value }));
+  $("kPasswort").value = "";
+  if (r) { await laden(); meldung("Angemeldet. " + r.abgleich.text, "ok"); }
+};
+$("kAbmelden").onclick = async () => {
+  if (!(await frage("Abmelden? Die Vorlagen bleiben auf diesem PC, werden aber nicht mehr abgeglichen."))) return;
+  await tun(() => senden("abmelden")); await laden(); meldung("Abgemeldet.", "ok");
+};
+$("kAbgleich").onclick = async () => {
+  const r = await tun(() => senden("abgleichen"));
+  if (r) { await laden(); meldung(r.text, r.fehler.length || r.konflikte.length ? "fehler" : "ok"); }
+};
+$("kUpdate").onclick = async () => { const r = await tun(() => senden("update_installieren")); if (r) meldung(r, "ok"); };
+for (const [id, k] of [["kSyncStart", "syncOnStart"], ["kUpdStart", "updateCheckOnStart"]]) {
+  $(id).addEventListener("change", async () => {
+    Z.einstellungen.cloud = Object.assign(Z.einstellungen.cloud || {}, { [k]: $(id).checked });
+    await tun(() => senden("einstellungen_speichern", { einstellungen: Z.einstellungen }), "Gespeichert.");
+  });
 }
 
 // ------------------------------------------------------------------ Kantenvorlagen

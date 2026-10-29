@@ -17,6 +17,18 @@ from ..storage.template_repository import VorlagenRepository
 from . import help_content
 
 
+AENDERNDE_AKTIONEN = {"speichern", "duplizieren", "umbenennen", "favorit", "kategorie", "loeschen", "papierkorb_zurueck",
+                      "import", "material_speichern", "material_loeschen", "wiederherstellen"}
+
+
+def json_store_lesen(p):
+    from ..storage import json_store
+    try:
+        return json_store.lesen(p)
+    except Exception:
+        return None
+
+
 def _ohne_intern(v):
     return {k: x for k, x in v.items() if k not in ("_datei",)}
 
@@ -162,13 +174,59 @@ class Backend(object):
         return operation_plan.beschreibung(operation_plan.erstelle(d["vorlage"], d.get("werte") or {}, m, [k]))
 
     # ------------------------------------------------------------------ Eingang
+    # ------------------------------------------------------------------ Spengler-Digital-App
+    def _cloud(self):
+        from ..storage.cloud_client import Cloud
+        return Cloud(self.wurzel or paths.daten_ordner())
+
+    def a_konto(self, d):
+        c = self._cloud()
+        b = json_store_lesen(os.path.join(self.wurzel or paths.daten_ordner(), "sync_bericht.json"))
+        return {"angemeldet": c.angemeldet, "konto": c.konto, "letzterAbgleich": b}
+
+    def a_anmelden(self, d):
+        c = self._cloud()
+        k = c.anmelden(d.get("benutzer", ""), d.get("passwort", ""))
+        return {"konto": k, "abgleich": self.a_abgleichen({})}
+
+    def a_abmelden(self, d):
+        self._cloud().abmelden()
+        return True
+
+    def a_abgleichen(self, d):
+        from ..storage import sync_service
+        c = self._cloud()
+        b = sync_service.Abgleich(c, self.wurzel).ausfuehren()
+        b["text"] = sync_service.bericht_text(b)
+        from ..storage import json_store
+        json_store.schreiben(os.path.join(self.wurzel or paths.daten_ordner(), "sync_bericht.json"), b)
+        return b
+
+    def a_update_pruefen(self, d):
+        from ..storage import updater
+        r = updater.neuestes(self._cloud())
+        return {"aktuell": VERSION, "neu": r["version"] if r else None, "hinweise": r.get("hinweise") if r else ""}
+
+    def _auto_abgleich(self, aktion):
+        """Nach jeder Änderung in der Palette still abgleichen, wenn angemeldet. Fehler stoppen die Aktion nicht."""
+        if aktion not in AENDERNDE_AKTIONEN:
+            return None
+        try:
+            if not self._cloud().angemeldet:
+                return None
+            b = self.a_abgleichen({})
+            return {"ok": True, "text": b["text"], "nur_lokal": b["nur_lokal"], "konflikte": b["konflikte"]}
+        except Exception as e:
+            return {"ok": False, "text": str(e)}
+
     def behandle(self, aktion, daten_json):
         try:
             d = json.loads(daten_json) if isinstance(daten_json, str) and daten_json else (daten_json or {})
             f = getattr(self, "a_" + aktion, None)
             if f is None:
                 return json.dumps({"ok": False, "fehler": "Unbekannte Aktion %s" % aktion})
-            return json.dumps({"ok": True, "daten": f(d)}, ensure_ascii=False, default=str)
+            erg = f(d)
+            return json.dumps({"ok": True, "daten": erg, "abgleich": self._auto_abgleich(aktion)}, ensure_ascii=False, default=str)
         except Exception as e:  # jede Meldung verständlich zurück an die Palette
             from ..diagnostics import logger
             logger.ausnahme("Palette", aktion=aktion)

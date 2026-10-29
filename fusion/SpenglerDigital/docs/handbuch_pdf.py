@@ -123,7 +123,7 @@ def bauen(md_pfad, pdf_pfad, logo, fusszeile="Bedienungsanleitung", deckblatt=Tr
         c.saveState()
         c.setFont("S", 7.5)
         c.setFillColor(colors.HexColor("#666"))
-        c.drawString(20 * mm, 10 * mm, "Spengler Digital CAD 0.3.2 – " + fusszeile)
+        c.drawString(20 * mm, 10 * mm, "Spengler Digital CAD 0.4.0 – " + fusszeile)
         c.drawRightString(190 * mm, 10 * mm, "Seite %d" % d.page)
         c.restoreState()
 
@@ -132,8 +132,72 @@ def bauen(md_pfad, pdf_pfad, logo, fusszeile="Bedienungsanleitung", deckblatt=Tr
     doc.build(story, onFirstPage=fuss, onLaterPages=fuss)
 
 
+def als_html(md_pfad, html_pfad, titel):
+    """Einfaches HTML aus derselben Markdown-Teilmenge – wird mit Updates verteilt (die PDF nur per ZIP)."""
+    import html as h
+    zeilen = open(md_pfad, encoding="utf-8").read().splitlines()
+    out, i, liste = [], 0, None
+
+    def il(t):
+        t = h.escape(t)
+        t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
+        t = re.sub(r"\*(.+?)\*", r"<i>\1</i>", t)
+        return re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
+    while i < len(zeilen):
+        z = zeilen[i]
+        m = re.match(r"^\s*(-|\d+\.) (.*)", z)
+        if liste and not m:
+            out.append("</%s>" % liste)
+            liste = None
+        if z.startswith("# "):
+            out.append("<h1>%s</h1>" % il(z[2:]))
+        elif z.startswith("## "):
+            out.append("<h2>%s</h2>" % il(z[3:]))
+        elif z.startswith("> "):
+            out.append('<p class="hinweis">%s</p>' % il(z[2:]))
+        elif z.startswith("```"):
+            i += 1
+            block = []
+            while i < len(zeilen) and not zeilen[i].startswith("```"):
+                block.append(h.escape(zeilen[i]))
+                i += 1
+            out.append("<pre>%s</pre>" % "\n".join(block))
+        elif z.startswith("|"):
+            out.append("<table>")
+            erste = True
+            while i < len(zeilen) and zeilen[i].startswith("|"):
+                if not re.match(r"^\|[\s\-|:]+\|$", zeilen[i]):
+                    tag = "th" if erste else "td"
+                    out.append("<tr>%s</tr>" % "".join("<%s>%s</%s>" % (tag, il(c.strip()), tag) for c in zeilen[i].strip("|").split("|")))
+                    erste = False
+                i += 1
+            out.append("</table>")
+            continue
+        elif m:
+            art = "ol" if m.group(1)[0].isdigit() else "ul"
+            if liste != art:
+                if liste:
+                    out.append("</%s>" % liste)
+                out.append("<%s>" % art)
+                liste = art
+            out.append("<li>%s</li>" % il(m.group(2)))
+        elif z.strip():
+            out.append("<p>%s</p>" % il(z))
+        i += 1
+    if liste:
+        out.append("</%s>" % liste)
+    stil = ("body{font-family:Segoe UI,Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#1b1f24;line-height:1.45}"
+            "h1{color:#1b1f24}h2{color:#1d4f7a;margin-top:28px}table{border-collapse:collapse;width:100%;margin:8px 0}"
+            "td,th{border:1px solid #c8ced6;padding:4px 6px;text-align:left;vertical-align:top}th{background:#e6eef6}"
+            "code,pre{background:#f2f4f6;padding:1px 4px}.hinweis{background:#fff6e0;border:1px solid #e0b040;padding:8px}")
+    with open(html_pfad, "w", encoding="utf-8") as f:
+        f.write('<!doctype html><html lang="de"><head><meta charset="utf-8"><title>%s</title><style>%s</style></head><body>%s</body></html>'
+                % (h.escape(titel), stil, "\n".join(out)))
+
+
 if __name__ == "__main__":
     logo = os.path.join(HIER, "..", "assets", "logo", "logo_256.png")
     for name, fuss in (("Benutzerhandbuch", "Bedienungsanleitung"), ("Testanleitung", "Testanleitung")):
         bauen(os.path.join(HIER, name + ".md"), os.path.join(HIER, name + ".pdf"), logo, fuss, deckblatt=name == "Benutzerhandbuch")
         print("PDF erstellt:", os.path.join(HIER, name + ".pdf"))
+        als_html(os.path.join(HIER, name + ".md"), os.path.join(HIER, name + ".html"), "Spengler Digital CAD – " + fuss)

@@ -78,6 +78,14 @@ class _Brueckenserver(SimpleHTTPRequestHandler):
 @unittest.skipUnless(shutil.which("node"), "Node/Playwright nicht vorhanden")
 class BrowserTest(DatenTest):
     def test_palette_im_browser(self):
+        import fake_supabase
+        z = fake_supabase.Zustand()
+        z.benutzer_anlegen("chef@nfgryuzkpwjfmdlmevuy.supabase.co", "geheim", "admin", "firma-a", "Chef")
+        cloud_srv, url = fake_supabase.server(z)
+        os.environ["SPENGLER_CAD_CLOUD_URL"] = url
+        self.addCleanup(os.environ.pop, "SPENGLER_CAD_CLOUD_URL", None)
+        self.addCleanup(cloud_srv.server_close)
+        self.addCleanup(cloud_srv.shutdown)
         _Brueckenserver.backend = Backend()
         os.chdir(ADDIN)
         srv = ThreadingHTTPServer(("127.0.0.1", 0), _Brueckenserver)
@@ -90,6 +98,9 @@ class BrowserTest(DatenTest):
                 self.skipTest("Playwright nicht installiert")
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
             self.assertIn("BROWSERTEST OK", r.stdout)
+            self.assertIn("TEST Falz", [x["daten"]["name"] for x in z.cad], "nach Anmeldung in die App hochgeladen")
+            falz = next(x for x in z.cad if x["daten"]["name"] == "TEST Falz")
+            self.assertEqual(falz["daten"]["description"], "nach Anmeldung geändert", "Änderung automatisch abgeglichen")
         finally:
             srv.shutdown()
             srv.server_close()
