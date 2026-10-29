@@ -118,7 +118,7 @@ def bauen(md_pfad, pdf_pfad, logo):
         c.saveState()
         c.setFont("S", 7.5)
         c.setFillColor(colors.HexColor("#666"))
-        c.drawString(20 * mm, 10 * mm, "Spengler Digital CAD 0.2.0 – Bedienungsanleitung")
+        c.drawString(20 * mm, 10 * mm, "Spengler Digital CAD 0.2.1 – Bedienungsanleitung")
         c.drawRightString(190 * mm, 10 * mm, "Seite %d" % d.page)
         c.restoreState()
 

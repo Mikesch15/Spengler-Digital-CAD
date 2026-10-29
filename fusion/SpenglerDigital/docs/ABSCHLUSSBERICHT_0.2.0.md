@@ -105,3 +105,9 @@ Alles, was Fusion braucht: Kantenauswahl, Flansch/Umschlag, Aussenkantenbestimmu
 ## 10. Nächste Live-Tests (kurz)
 
 Siehe `tests/fusion/LIVE_TESTS.md` – Blöcke A–E, ca. 20 Minuten; danach Protokoll `…/SpenglerDigitalCAD/protokoll/spengler_cad.log` schicken.
+
+## Nachtrag 0.2.1 – K-Faktor aus Probebiegung
+
+Port von `kFaktorAusProbe` (kern/materialien.js) als `core/bend_geometry.k_faktor_aus_probe`; Palette → Materialprofil: Zuschnitt, a, b →
+«K-Faktor berechnen» → «In K-Faktor übernehmen» (nur bei 0.1–0.6). Tests: Rückrechnung wie test/kern.test.js (k = 0.33/0.4/0.45),
+Fehlerfälle, Backend, Browserablauf. 71 Tests bestanden. In Fusion nicht geprüft (reine Palette/Rechnung, keine Fusion-Geometrie).

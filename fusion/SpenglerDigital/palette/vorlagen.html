@@ -110,6 +110,10 @@ fieldset{border:1px solid var(--rand);margin:8px 0;padding:6px 8px}legend{color:
       <label style="min-width:0">Dichte</label><input type="number" step="0.01" id="mD"> kg/dm³</div>
     <div class="zeile"><label>Innenradius</label><input type="number" step="0.01" id="mRi"> mm <label style="min-width:0">K-Faktor</label><input type="number" step="0.01" id="mK">
       <span class="klein">optional, nur für theoretische Abwicklung</span></div>
+    <div class="zeile"><label>Probebiegung</label>Zuschnitt <input type="number" step="0.01" id="mPz"> mm, 90° gebogen, aussen gemessen
+      a <input type="number" step="0.01" id="mPa"> b <input type="number" step="0.01" id="mPb"> mm <button id="mPrech">K-Faktor berechnen</button>
+      <button class="hilfe" data-hilfe="kfaktor">?</button></div>
+    <div id="mPErg"></div>
     <div class="zeile"><label>Fusion-Blechregel</label><input id="mRegel"></div>
     <div class="zeile"><label>Tafeln</label><input id="mTafeln" size="40" placeholder="1000x2000; 1250x2500"></div>
     <div class="zeile"><label>Rollenbreiten</label><input id="mRollen" size="40" placeholder="500; 670; 1000"></div>

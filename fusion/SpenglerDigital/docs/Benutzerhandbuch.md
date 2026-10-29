@@ -1,6 +1,6 @@
 # Spengler Digital CAD – Bedienungsanleitung
 
-Add-in für Autodesk Fusion · Version 0.2.0 · Stand 29.10.2026
+Add-in für Autodesk Fusion · Version 0.2.1 · Stand 29.10.2026
 
 > **Prüfstand dieser Version:** Die Rechenteile (Kurzschrift, Vorlagen, Bauplan, Zuschnitt, Material, Umformung, Sicherung, Migration) sind automatisch getestet. Die Bedienung in Fusion selbst ist **noch nicht in Fusion getestet**. Funktionen, die davon abhängen, sind mit **[nicht in Fusion geprüft]** markiert.
 
@@ -127,6 +127,8 @@ Die angegebene Dehnung ist die reine Umfangsänderung (Geometrie) – keine Gara
 Fusion bietet per API keine zuverlässige automatische Zeichnungserstellung mit Ansichten. Das Add-in erstellt deshalb ein **Werkstattblatt** (HTML, druckbar) mit Logo, Bauteilkennung, Material, Dicke, Vorlage und Version, Abwicklungsmassen aus Fusion sowie – für Bauteile aus «Kanten bearbeiten» mit Innenradius/K-Faktor im Material – Querschnitt und Biegeliste (als *theoretisch* gekennzeichnet). Normgerechte Fusion-Zeichnungen erstellen Sie weiterhin im Arbeitsbereich Zeichnung.
 
 ## 12. Materialberechnung
+
+**K-Faktor aus Probebiegung** (Palette → Materialien → Materialprofil öffnen): Streifen genau zuschneiden, **eine** 90°-Biegung mit dem Innenradius des Profils biegen, beide Schenkel **aussen** messen. Zuschnitt, a und b eintragen → «K-Faktor berechnen». Dicke und Innenradius kommen aus den Feldern des Profils. Ist das Ergebnis plausibel (0.1–0.6), lässt es sich mit einem Klick übernehmen; danach «Speichern». Die Rechnung ist dieselbe wie im CAD-Programm. Der K-Faktor gilt für die theoretische Abwicklung des Add-ins; für die Fusion-Abwicklung denselben Wert in der Fusion-Blechregel eintragen.
 
 **Material & Zuschnitt** berechnet je Material: Anzahl Teile, Abwicklungsfläche (aus Fusion, sonst Rechteck – dann als obere Schätzung markiert), Gewicht (nur mit Dichte; Fläche × Dicke × Dichte, **Schätzwert**), Materialverbrauch und Ausnutzung des besten Lagerformats. Ergebnis: `bericht.txt` im Exportordner.
 

@@ -223,6 +223,7 @@ function oeffneMaterial(m) {
   $("mTafeln").value = (M.sheets || []).map((s) => s.join("x")).join("; ");
   $("mRollen").value = (M.coils || []).join("; ");
   const g = M.formingLimits || {};
+  $("mPz").value = $("mPa").value = $("mPb").value = ""; $("mPErg").innerHTML = "";
   $("mStau").value = g.shrinkMaxPercent ?? ""; $("mStr").value = g.stretchMaxPercent ?? ""; $("mQuelle").value = g.source || "";
 }
 $("mNeu").onclick = async () => { const m = await tun(() => senden("material_neu", { name: "Neues Material", dicke: 1 })); if (m) { m.thickness = ""; oeffneMaterial(m); } };
@@ -237,6 +238,14 @@ $("mSpeichern").onclick = async () => {
   M.formingLimits = { shrinkMaxPercent: zahlOderNull($("mStau").value), stretchMaxPercent: zahlOderNull($("mStr").value), source: $("mQuelle").value };
   const m = await tun(() => senden("material_speichern", { material: M }), "Materialprofil gespeichert.");
   if (m) { await laden(); oeffneMaterial(m); }
+};
+$("mPrech").onclick = async () => {
+  const r = await tun(() => senden("k_faktor", { zuschnitt: $("mPz").value, a: $("mPa").value, b: $("mPb").value, t: $("mT").value, ri: $("mRi").value }));
+  if (!r) { $("mPErg").innerHTML = ""; return; }
+  meldung("");
+  $("mPErg").innerHTML = `<div class="meldung ${r.plausibel ? "ok" : "fehler"}">K-Faktor: <b>${r.k.toFixed(3)}</b> (Biegeverkürzung ${r.verkuerzung.toFixed(2)} mm)` +
+    (r.plausibel ? ' <button id="mPueb">In K-Faktor übernehmen</button>' : "<br>" + esc(r.hinweis)) + "</div>";
+  if (r.plausibel) $("mPueb").onclick = () => { $("mK").value = r.k.toFixed(3); meldung("K-Faktor eingetragen – mit «Speichern» sichern.", "ok"); };
 };
 $("mLoeschen").onclick = async () => {
   if (!M.id || !(await frage(`Materialprofil «${M.name}» wirklich löschen?`))) return;

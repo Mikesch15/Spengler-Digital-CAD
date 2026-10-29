@@ -155,3 +155,26 @@ def zugabe_abwicklung(ops, t, ri, k, basis_mm=100.0):
 def grenzen_von(pts):
     xs, ys = [p[0] for p in pts], [p[1] for p in pts]
     return (min(xs), min(ys), max(xs), max(ys))
+
+
+def k_faktor_aus_probe(zuschnitt, a, b, t, ri):
+    """K-Faktor aus einer Probebiegung – Port von kFaktorAusProbe (kern/materialien.js).
+
+    Streifen mit Zuschnitt z, EINE 90°-Biegung mit Innenradius ri, danach beide Schenkel AUSSEN gemessen (a, b).
+    Masse auf Blechmitte = aussen − t/2. → {"k", "verkuerzung", "plausibel", "hinweis"}; ValueError bei unmöglichen Werten.
+    """
+    for name, v in (("Zuschnitt", zuschnitt), ("a", a), ("b", b), ("Dicke", t)):
+        if not (isinstance(v, (int, float)) and v > 0):
+            raise ValueError("%s muss grösser als 0 sein." % name)
+    if not (isinstance(ri, (int, float)) and ri >= 0):
+        raise ValueError("Innenradius fehlt (im Materialprofil oder bei der Probe eingeben).")
+    verkuerzung = a + b - zuschnitt
+    if verkuerzung <= 0:
+        raise ValueError("a + b (%.1f) ist nicht grösser als der Zuschnitt (%.1f). Wurde aussen gemessen, und stimmt der Zuschnitt?" % (a + b, zuschnitt))
+    rm = ri + t / 2.0
+    l1, l2 = a - t / 2.0, b - t / 2.0
+    bogen = zuschnitt - (l1 - rm) - (l2 - rm)   # Länge der neutralen Faser im Bogen
+    k = (bogen / (math.pi / 2) - ri) / t
+    plausibel = 0.1 < k < 0.6
+    return {"k": k, "verkuerzung": verkuerzung, "plausibel": plausibel,
+            "hinweis": "" if plausibel else "Unplausibel – üblich sind 0.3 bis 0.5. Prüfen: genau 90° gebogen? Aussen gemessen? Dicke und Innenradius richtig?"}

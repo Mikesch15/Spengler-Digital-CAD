@@ -107,6 +107,12 @@ class Backend(object):
     def a_material_neu(self, d):
         return models.neues_materialprofil(d.get("name") or "Neues Material", d.get("dicke") or 1.0)
 
+    def a_k_faktor(self, d):
+        """Probebiegung → K-Faktor (Dicke/Innenradius kommen aus dem Materialeditor)."""
+        from ..core.bend_geometry import k_faktor_aus_probe
+        z = lambda k: float(d[k]) if d.get(k) not in (None, "") else None
+        return k_faktor_aus_probe(z("zuschnitt"), z("a"), z("b"), z("t"), z("ri"))
+
     def a_material_speichern(self, d):
         return MaterialBibliothek(self.wurzel).speichern(d["material"])
 

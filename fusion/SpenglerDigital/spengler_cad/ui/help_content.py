@@ -54,6 +54,13 @@ HILFE = {
         "Materialprofile",
         "Materialprofile legen Sie selbst an: Name, Dicke (Pflicht), optional Dichte, Innenradius, K-Faktor, Fusion-Blechregel, Tafelformate, "
         "Rollenbreiten und eigene Umformgrenzwerte. Es werden keine Werte vorgegeben. Gewicht = Fläche × Dicke × Dichte und ist ein Schätzwert."),
+    "kfaktor": (
+        "K-Faktor aus Probebiegung",
+        "Einen Streifen genau zuschneiden (Zuschnitt), EINE 90°-Biegung mit dem Innenradius des Materialprofils biegen und beide Schenkel "
+        "AUSSEN messen (a, b). Dicke und Innenradius kommen aus den Feldern des Materialprofils. Das Add-in rechnet den K-Faktor zurück "
+        "(gleiche Rechnung wie im CAD-Programm, Masse auf Blechmitte). Werte ausserhalb 0.1–0.6 gelten als unplausibel und werden nicht "
+        "zum Übernehmen angeboten. Der K-Faktor wirkt nur auf die theoretische Abwicklung des Add-ins – die Fusion-Abwicklung folgt der "
+        "Blechregel in Fusion (dort den K-Faktor ebenfalls eintragen)."),
     "zuschnitt": (
         "Zuschnittoptimierung",
         "Übernommen aus der Spengler-Digital-App (gleiche Rechnung): Teile werden als Streifen ihrer Abwicklungsbreite aus Rolle oder Tafel "

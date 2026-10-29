@@ -26,6 +26,9 @@ class BackendTest(DatenTest):
         m = rufe(b, "material_neu", {"name": "TEST", "dicke": 0.7})
         m.update({"innerRadius": 1.0, "kFactor": 0.4})
         m = rufe(b, "material_speichern", {"material": m})
+        kf = rufe(b, "k_faktor", {"zuschnitt": "128.61", "a": "50", "b": "80", "t": "0.7", "ri": "1"})
+        self.assertTrue(kf["plausibel"] and 0.1 < kf["k"] < 0.6)
+        self.assertFalse(json.loads(b.behandle("k_faktor", json.dumps({"zuschnitt": 140, "a": 50, "b": 80, "t": 0.7, "ri": 1})))["ok"])
         v = rufe(b, "neue_vorlage", {"name": "TEST V"})
         k = rufe(b, "kurzschrift", {"text": "90 H U+ 7"})
         v["operations"] = k["operations"]

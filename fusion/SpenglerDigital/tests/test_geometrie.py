@@ -43,6 +43,19 @@ class GeometrieTest(unittest.TestCase):
         self.assertEqual(len(res["biegungen"]), 1)
         self.assertTrue(20 < z < 25, z)   # kleiner als 25: Biegeverkürzung
 
+    def test_k_faktor_aus_probe(self):
+        """Wie test/kern.test.js: mit bekanntem k rechnen und aus a/b wieder zurück."""
+        for k in (0.33, 0.4, 0.45):
+            probe = bg.berechne(0, [{"typ": "schenkel", "L": 49.65}, {"typ": "biegung", "winkel": 90, "ri": None, "modus": "sharp"},
+                                    {"typ": "schenkel", "L": 79.65}], 0.7, 1, k)
+            r = bg.k_faktor_aus_probe(probe["zuschnitt"], 50, 80, 0.7, 1)
+            self.assertAlmostEqual(r["k"], k, places=9)
+            self.assertTrue(r["plausibel"])
+        self.assertFalse(bg.k_faktor_aus_probe(129.5, 50, 80, 0.7, 1)["plausibel"])
+        for falsch in ((131, 50, 80, 0.7, 1), (0, 50, 80, 0.7, 1), (128, 50, 80, 0.7, None), (128, 50, 80, 0, 1)):
+            with self.assertRaises(ValueError, msg=falsch):
+                bg.k_faktor_aus_probe(*falsch)
+
     def test_einheiten(self):
         self.assertEqual(units.mm_zu_cm(25), 2.5)
         self.assertEqual(units.laenge_mm("2,5 cm"), 25)
