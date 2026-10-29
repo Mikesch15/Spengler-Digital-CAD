@@ -154,3 +154,6 @@ zeigen Versionsnummer und Ladeordner (Kontrolle, ob die richtigen Dateien gelade
   sha256, Daten- und Programmsicherung, Rückbau), Palette-Reiter «Konto», Abgleich/Update-Frage beim Start, HTML-Anleitung.
 - Tests: 96 (neu test_cloud gegen einen Supabase-Nachbau, Palette-Browsertest mit Anmeldung). Aus der Sandbox ist Supabase per
   HTTPS nicht erreichbar → der echte Anmelde-/Abgleichweg aus Fusion ist NICHT getestet (Testanleitung Block 11).
+- 29.10.2026: Migration «cad_addin_grundlagen» nach Freigabe eingespielt; Nachprüfung auf der echten Datenbank 13/13 OK
+  (Testdaten zurückgenommen), Sicherheitsbericht ohne neue Befunde. Test-Update 0.4.1 veröffentlicht (nur Versionsnummer,
+  2 Dateien; Prüfsummen in der Datenbank kontrolliert; gegen das ZIP 0.4.0 geprüft: genau diese 2 Dateien würden ersetzt).
