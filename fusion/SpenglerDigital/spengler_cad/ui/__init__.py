@@ -1,1 +1,0 @@
-"""Hilfetexte, Meldungen und Dialogbausteine."""

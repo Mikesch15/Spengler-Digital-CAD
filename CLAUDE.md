@@ -14,13 +14,8 @@ Antworten kurz und auf Deutsch. Keine langen Zusammenfassungen, keine Wiederholu
   `src/ansicht.js` Ansichten/Kanten; `src/cad.html` Markup, CSS, Hilfe
 - Feature-Dialoge: `featureDialog(f, istNeu, felder, setze, titel, hinweis, extra)`; Bearbeiten: `bearbeite(f)`
 
-## Fusion-Add-in (`fusion/SpenglerDigital`, Python)
-- Paket `spengler_cad/` (core, storage, manufacturing, forming, details, geometry, commands, ui); Fusion-Aufrufe NUR in `geometry/fusion_adapter.py`
-- Keine mitgelieferten Vorlagen/Materialien (Test `test_keine_vorlagen_im_programmcode`); Benutzerdaten ausserhalb des Add-in-Ordners
-- Prüfen: `python3 fusion/SpenglerDigital/tests/run_all.py`; PDF: `python3 fusion/SpenglerDigital/docs/handbuch_pdf.py`
-- Zuschnitt = Port von Spengler-Digital-V1 `js/29` (Referenzfälle in `tests/fixtures`)
-- Tokensparend: Tests nur mit `| tail -2`; `docs/*.md`, `fusion_adapter.py`, `palette/vorlagen.js` nie ganz lesen (grep + Ausschnitt);
-  PDF/HTML nur neu erzeugen, wenn Doku geändert; Berichte nur auf Anfrage, kurz; keine grossen Dateien per Heredoc wiederholen
+## Fusion-Add-in
+- Eigenes Repo `Mikesch15/spengler-fusion-addin` (hier nicht mehr enthalten)
 
 ## Prüfen
 - `npm test` (Kern) und `node build.mjs`; Oberfläche nur gezielt mit einem kurzen Playwright-Skript testen
