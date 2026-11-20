@@ -4049,27 +4049,9 @@ async function exaktKoerper(f) {
   const { id } = await kern().ausfuehren(kommando);
   return { id, soll, m };
 }
-function exakteTeile() {
-  const teile = [], fehlen = [];
-  for (const f of doc.features) {
-    if (f._aus || f.versteckt || f._fehler) continue;
-    if (["vorlage", "profil", "blech"].includes(f.typ) && f._res && f._kernLage) { if (lageVon(f)) fehlen.push(`${f.name} (Komponentenlage)`); else teile.push(f); }
-    else if (["extrusion", "drehung", "sweep", "loft", "import", "flaeche", "kehle"].includes(f.typ)) fehlen.push(f.name);
-  }
-  return { teile, fehlen };
-}
 async function stepExakt() {
-  const { teile, fehlen } = exakteTeile();
-  if (!teile.length) return status(`STEP exakt: keine Blechteile mit exaktem Bauplan${fehlen.length ? ` (noch nicht exakt: ${fehlen.join(", ")})` : ""}.`);
-  status(`STEP exakt: ${teile.length} Blechteil(e) werden im CAD-Kern gebaut …`);
-  const ids = [];
-  try {
-    for (const f of teile) ids.push((await exaktKoerper(f)).id);
-    const { text } = await kern().ausfuehren({ op: "stepExport", ziele: ids, namen: teile.map((f) => f.name) });
-    herunterladen(dateiBasis() + " (exakt).step", text, "application/step");
-    status(`STEP exakt (B-Rep, AP242): ${teile.length} Blechteil(e)${fehlen.length ? ` · nicht enthalten, da noch kein exakter Bauplan: ${fehlen.join(", ")}` : ""}.`);
-  } catch (e) { status(kernFehlerText(e)); }
-  finally { if (ids.length) kern().ausfuehren({ op: "freigeben", ziele: ids }).catch(() => {}); }
+  status("STEP exakt: Körper werden im CAD-Kern gebaut …");
+  try { await exaktesModell({ step: true }); } catch (e) { status(kernFehlerText(e)); }
 }
 // Werkstatt: Zuschnitt aus dem exakten 3D-Körper gegen die Abwicklung (V = t · L_Mitte · Länge)
 async function pruefe3D(f, aus) {
@@ -4099,9 +4081,9 @@ function ersetzeNetz(mesh, n, M) {
   const kante = mesh.children.find((c) => c.isLineSegments); if (kante) { kante.geometry.dispose(); kante.geometry = l; }
   mesh.userData.exakt = { flaechen: n.flaechen }; // Dreieck → Flächenindex (Auswahl auf exakte Topologie)
 }
-async function exaktesModell() {
+async function exaktesModell({ step = false } = {}) { // step: exakte Körper als STEP herunterladen statt Netze ersetzen
   if (!kernAn()) return;
-  const lauf = ++exaktLauf, K = kern(), ids = [], koerper = new Map(), nicht = new Map(), blech = new Map(), netzVon = new Map(); // netzVon: Körperschlüssel → fid des Netzes (Kopien «id:k» → «id:k:0»)
+  const lauf = step ? null : ++exaktLauf, K = kern(), ids = [], koerper = new Map(), nicht = new Map(), blech = new Map(), netzVon = new Map(); // netzVon: Körperschlüssel → fid des Netzes (Kopien «id:k» → «id:k:0»)
   const x = async (k) => { const r = await K.ausfuehren(k); if (r.id) ids.push(r.id); return r; };
   const vereinige = async (liste) => { let a = liste[0]; for (const b of liste.slice(1)) a = (await x({ op: "boolesch", art: "vereinigen", a, b })).id; return a; };
   const markiereZiel = (f, grund) => { if (f.ziel && f.ziel !== "alle") nicht.set(f.ziel, grund); else for (const k of koerper.keys()) nicht.set(k, grund); };
@@ -4117,7 +4099,7 @@ async function exaktesModell() {
   };
   try {
     for (const f of doc.features) {
-      if (lauf !== exaktLauf) return;
+      if (!step && lauf !== exaktLauf) return;
       if (f._aus || f._fehler) continue;
       if (["vorlage", "profil", "blech"].includes(f.typ)) {
         if (f._kernLage && !f.versteckt && !lageVon(f)) { const k = await exaktKoerper(f); ids.push(k.id); blech.set(f.id, k.id); }
@@ -4170,13 +4152,28 @@ async function exaktesModell() {
         } catch (e) { nicht.set(z, `${f.name}: ${e.message}`); }
       } else if (["sweep", "loft", "import", "kehle", "flaeche"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
+    if (step) { // alle sichtbaren exakten Körper (mit Komponentenlage) in eine STEP-Datei
+      const ziele = [], namen = [];
+      for (const [schl, id] of [...koerper, ...blech]) {
+        if (nicht.has(schl) || (schl.includes(":") && nicht.has(schl.split(":")[0]))) continue;
+        const h = hauptVon(schl); if (!h || h.versteckt) continue;
+        const L = lageVon(h);
+        ziele.push(L ? (await x({ op: "matrix", ziel: id, m: matrixZeilen(L.elements) })).id : id);
+        namen.push(schl.includes(":") ? `${h.name} ${schl.split(":")[1]}` : h.name);
+      }
+      const rest = [...nicht].filter(([fid]) => !finde(fid)?.versteckt).map(([fid, g]) => `${finde(fid)?.name ?? fid} (${g})`);
+      if (!ziele.length) return status(`STEP exakt: keine exakten Körper${rest.length ? ` (noch nicht exakt: ${rest.join(", ")})` : ""}.`);
+      const { text } = await K.ausfuehren({ op: "stepExport", ziele, namen });
+      herunterladen(dateiBasis() + " (exakt).step", text, "application/step");
+      return status(`STEP exakt (B-Rep, AP242): ${ziele.length} Körper${rest.length ? ` · nicht enthalten, da noch nicht exakt: ${rest.join(", ")}` : ""}.`);
+    }
     let n = 0; const eig = new Map();
     for (const [schl, id] of [...koerper, ...blech]) {
       if (nicht.has(schl) || nicht.has(schl.split(":")[0]) && schl.includes(":")) continue;
       const fid = netzVon.get(schl) ?? schl;
       const mesh = modell.children.find((o) => o.isMesh && o.userData.fid === fid); if (!mesh) continue;
       const netz = await K.ausfuehren({ op: "tessellieren", ziel: id }), e = await K.ausfuehren({ op: "eigenschaften", ziel: id });
-      if (lauf !== exaktLauf) return;
+      if (!step && lauf !== exaktLauf) return;
       ersetzeNetz(mesh, netz, lageVon(hauptVon(fid))); n++;
       eig.set(fid, { ...e, verschoben: !!lageVon(hauptVon(fid)) });
     }

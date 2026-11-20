@@ -39,7 +39,7 @@ async function seite(kern) {
   const [dl] = await Promise.all([s.waitForEvent("download", { timeout: 60000 }), s.evaluate(() => document.getElementById("wStepExakt").click())]);
   const text = readFileSync(await dl.path(), "utf8");
   ok(/exakt\)\.step$/.test(dl.suggestedFilename()) && /AP242/.test(text) && /MANIFOLD_SOLID_BREP/.test(text) && /CYLINDRICAL_SURFACE/.test(text), `Ein: STEP exakt «${dl.suggestedFilename()}» – AP242, Volumenkörper, exakte Biegezylinder`);
-  ok(/STEP exakt \(B-Rep, AP242\): 1 Blechteil/.test(await s.textContent("#status")), "Ein: Statusmeldung nennt exportierte Teile");
+  ok(/STEP exakt \(B-Rep, AP242\): 1 Körper/.test(await s.textContent("#status")), "Ein: Statusmeldung nennt exportierte Teile");
   ok(probleme.length === 0, `Ein: keine Fehler in der Konsole ${probleme.join(" | ")}`);
   await s.close();
 }
@@ -111,6 +111,11 @@ async function seite(kern) {
     if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 90000 });
     else await s.waitForTimeout(2000);
     erg[kern ?? "netz"] = { k: await s.evaluate(() => window.sdcadTest.koerperInfo()), st: await s.textContent("#status"), probleme };
+    if (kern) { // STEP exakt: alle 10 exakten Körper
+      const [dl] = await Promise.all([s.waitForEvent("download", { timeout: 90000 }), s.evaluate(() => document.getElementById("wStepExakt").click())]);
+      const t = readFileSync(await dl.path(), "utf8");
+      erg.step = { koerper: (t.match(/MANIFOLD_SOLID_BREP/g) || []).length, ap242: /AP242/.test(t), status: await s.textContent("#status") };
+    }
     await s.close();
   }
   const ex = erg.occt, nz = erg.netz, hol = (l, fid) => l.k.find((o) => o.fid === fid);
@@ -133,6 +138,7 @@ async function seite(kern) {
   ok(g?.exakt && Math.abs(g.min[2] - 50) < 1e-6 && Math.abs(g.max[2] - 60) < 1e-6, `Ein: Bewegen dz 50 exakt (z ${g?.min[2]}…${g?.max[2]})`);
   const sp = hol(ex, "pF:1:0");
   ok(sp && Math.abs(sp.min[0] + 450) < 1e-6 && Math.abs(sp.max[0] + 400) < 1e-6, `Ein: Spiegelkopie an YZ liegt bei x −450…−400 (${sp?.min[0]}…${sp?.max[0]})`);
+  ok(erg.step.koerper === 10 && erg.step.ap242 && /10 Körper/.test(erg.step.status), `Ein: STEP exakt mit allen 10 Körpern (gerundet, Schale, Muster, Spiegelkopie …) – ${erg.step.status}`);
   ok(!/als Netz/.test(ex.st) && ex.probleme.length === 0 && nz.probleme.length === 0, `Ein: alles exakt, keine Seitenfehler – ${ex.st}`);
 }
 await b.close(); srv.close();

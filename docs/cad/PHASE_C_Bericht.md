@@ -66,7 +66,12 @@
 - **Unterschied zu 0.2, offen genannt:** Die Schale wird exakt auf den **aktuellen** Körper angewendet (Wände auch um vorher ausgeschnittene Löcher). Version 0.2 zieht nur die Skizzenkontur ein.
 - **Weiterhin als Netz (mit Meldung):** Sweep, Loft, Import, Kehle, Flächenblech, Text, Schale ohne offene Seite, Muster/Bewegen an Blechteilen, Kanten an verschobenen Komponenten.
 
-## Nächste Schritte (C3 …)
+## C3a – STEP exakt für alle exakten Körper (erledigt, 20.11.2026)
+- «STEP exakt (B-Rep)» exportiert jetzt **alle sichtbaren exakten Körper**: Blechteile, Extrusionen, Drehungen, gerundete/gefaste Körper, Schalen, Muster- und Spiegelkopien. Die Komponentenlage wird dabei angewendet. Bauweg und Ergebnis sind dieselben wie beim exakten Modell der Anzeige.
+- Nicht exakte Teile werden weiterhin nur genannt und nicht facettiert in die Datei geschrieben.
+- **Test:** STEP mit 10 Volumenkörpern, AP242.
+
+## Nächste Schritte (C3b …)
 1. **Splines und Ellipsen exakt** (B-Spline- und Ellipsenkurven im Profilformat)
 3. **Abrunden/Fasen und Schale** über Kanten- und Flächenreferenzen (`topologie.js`) statt über Koordinaten am Netz.
 4. **Feature-Fehler** aus dem Kern (`KernFehler.code`) direkt in der Zeitleiste anzeigen.
