@@ -1,0 +1,12 @@
+{
+  "appId": "ch.spenglerdigital.cad",
+  "appName": "Spengler Digital CAD",
+  "webDir": "www",
+  "backgroundColor": "#eceff3",
+  "server": {
+    "url": "https://mikesch15.github.io/Spengler-Digital-CAD/",
+    "cleartext": false,
+    "allowNavigation": ["mikesch15.github.io", "*.supabase.co"]
+  },
+  "android": { "allowMixedContent": false }
+}

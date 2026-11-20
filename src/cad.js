@@ -1221,6 +1221,14 @@ async function herunterladen(name, inhalt, typ, pfad = null) {
       return ziel;
     } catch (e) { status("Speichern fehlgeschlagen: " + e); return null; }
   }
+  const cap = window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins : null; // Android-App (Capacitor): Datei ablegen und über das Android-Teilen-Menü speichern/senden
+  if (cap?.Filesystem && cap?.Share) {
+    try {
+      const sicherA = name.replace(/[\\/:*?"<>|]+/g, "-"), r = await cap.Filesystem.writeFile({ path: sicherA, data: inhalt, directory: "CACHE", encoding: "utf8" });
+      await cap.Share.share({ title: name, url: r.uri, dialogTitle: `${name} speichern oder senden` }); status(`${sicherA} bereit – im Android-Menü speichern oder senden.`);
+    } catch (e) { if (!/cancel/i.test(String(e?.message ?? e))) status("Speichern fehlgeschlagen: " + (e?.message ?? e)); }
+    return null;
+  }
   const a = document.createElement("a");
   // Browser verwerfen Download-Namen mit Umlauten teils («download»), daher umschreiben
   const sicher = name.replace(/[äöüÄÖÜß]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue", Ä: "Ae", Ö: "Oe", Ü: "Ue", ß: "ss" })[c]).replace(/[^\x20-\x7e]/g, "-");

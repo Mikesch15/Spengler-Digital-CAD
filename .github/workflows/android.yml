@@ -1,0 +1,71 @@
+# Android-App (Tablet/Handy): Capacitor-Hülle, die die Web-Version lädt. Updates des Programms kommen daher ohne Neuinstallieren;
+# die APK muss nur neu installiert werden, wenn sich die Hülle selbst ändert (selten).
+# Ergebnis: Release «android» (Vorabversion) mit sdcad-android.apk.
+# Signatur: mit den Secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS (optional ANDROID_KEY_PASSWORD) wird eine feste Signatur
+# verwendet (dann lässt sich die APK später über die alte installieren); ohne Secrets wird mit dem Debug-Schlüssel signiert.
+name: Android-App
+on:
+  push:
+    branches: [main]
+    paths: ["android-app/**", ".github/workflows/android.yml", "web/icon-512.png"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: Capacitor-Projekt erzeugen
+        working-directory: android-app
+        run: |
+          npm install --no-audit --no-fund
+          npx cap add android
+          # Symbol: eckiges Symbol statt adaptivem Standardsymbol
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            n=${d%%:*}; s=${d##*:}
+            for f in ic_launcher ic_launcher_round ic_launcher_foreground; do
+              convert ../web/icon-512.png -resize ${s}x${s} android/app/src/main/res/mipmap-$n/$f.png
+            done
+          done
+          # Version
+          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"1.${{ github.run_number }}\"/" android/app/build.gradle
+          npx cap sync android
+      - name: APK bauen
+        working-directory: android-app/android
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_KEYPASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          if [ -n "$KS_B64" ] && [ -n "$KS_PASS" ] && [ -n "$KS_ALIAS" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/sdcad.keystore"
+            ./gradlew --no-daemon assembleRelease \
+              -Pandroid.injected.signing.store.file="$RUNNER_TEMP/sdcad.keystore" \
+              -Pandroid.injected.signing.store.password="$KS_PASS" \
+              -Pandroid.injected.signing.key.alias="$KS_ALIAS" \
+              -Pandroid.injected.signing.key.password="${KS_KEYPASS:-$KS_PASS}"
+            cp app/build/outputs/apk/release/app-release.apk ../sdcad-android.apk
+            echo "SIGNATUR=fest" >> "$GITHUB_ENV"
+          else
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk ../sdcad-android.apk
+            echo "SIGNATUR=debug" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/upload-artifact@v4
+        with: { name: sdcad-android, path: android-app/sdcad-android.apk }
+      - name: Release «android» aktualisieren
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          notes="Android-App für Tablets und Handys (APK). Installation: APK laden, öffnen, «Aus dieser Quelle installieren» erlauben. Das Programm selbst wird beim Start aus dem Internet geladen und ist danach auch offline nutzbar – Updates kommen ohne Neuinstallieren. Signatur: $SIGNATUR. Stand: Lauf ${{ github.run_number }}."
+          gh release view android >/dev/null 2>&1 || gh release create android --prerelease --title "Android-App" --notes "$notes"
+          gh release edit android --prerelease --notes "$notes"
+          gh release upload android android-app/sdcad-android.apk --clobber

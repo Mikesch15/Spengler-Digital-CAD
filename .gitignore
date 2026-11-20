@@ -8,3 +8,5 @@ tests/tauri-probe/dist/
 tests/tauri-probe/src-tauri/target/
 tests/tauri-probe/src-tauri/gen/
 dist/cad/
+android-app/node_modules/
+android-app/android/
