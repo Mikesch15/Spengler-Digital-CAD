@@ -21,7 +21,9 @@ export async function occtKern({ wasmUrl } = {}) {
   let oc, R;
   try {
     const m = await import("replicad-opencascadejs");
-    const pfad = wasmUrl ?? (typeof process !== "undefined" && process.versions?.node ? new URL(import.meta.resolve("replicad-opencascadejs/wasm")).pathname : undefined);
+    // Node: Dateipfad über fileURLToPath (unter Windows ergäbe URL.pathname «/D:/…» → falscher Pfad)
+    const pfad = wasmUrl ?? (typeof process !== "undefined" && process.versions?.node
+      ? (await import("node:url")).fileURLToPath(import.meta.resolve("replicad-opencascadejs/wasm")) : undefined);
     oc = await m.default(pfad ? { locateFile: () => pfad } : {});
     R = await import("replicad");
     R.setOC(oc);
