@@ -3,3 +3,7 @@ dist/occt/
 dist/pdfjs/
 fusion/*.zip
 tests/cad-kernel-comparison/vorschau/dist/
+tests/cad-worker/dist/
+tests/tauri-probe/dist/
+tests/tauri-probe/src-tauri/target/
+tests/tauri-probe/src-tauri/gen/
