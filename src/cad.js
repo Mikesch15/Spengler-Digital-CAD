@@ -29,6 +29,7 @@ import { zuschnittAusVolumen } from "../kern/cad/blech.js";
 import { dxfLesen } from "../kern/dxflesen.js";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
 import schriftDaten from "three/examples/fonts/droid/droid_sans_bold.typeface.json";
+import { ausschnittWerkzeug, ausschnittKante } from "../kern/flaechenblech.js";
 import { BAUSTEINE_STANDARD, flaechenblech, plattenUmriss, kantenGruppen, gegenUhrzeiger, bausteinProfil, eckFaktoren } from "../kern/flaechenblech.js";
 import { profilSvg, abwicklungSvg, zuschnittSvg, bausteinSvg, bausteinGrenzen } from "../kern/zeichnung.js";
 import { folge } from "../kern/details.js";
@@ -461,11 +462,12 @@ function koerperMesh(geo, farbe, fid) {
   mesh.userData.fid = fid; return mesh;
 }
 // Vereinigen, Ausschneiden, Schneiden (wie in Fusion) – Geometrie des Zielkörpers wird ersetzt
-function verknuepfe(ziel, werkzeug, op) {
+function verknuepfe(ziel, werkzeug, op, kantenNeu = true) {
   const a = new Brush(nurPos(ziel.geometry)), b = new Brush(nurPos(werkzeug));
   a.updateMatrixWorld(); b.updateMatrixWorld();
   const r = csg.evaluate(a, b, { verbinden: ADDITION, ausschneiden: SUBTRACTION, schneiden: INTERSECTION }[op]).geometry;
   ziel.geometry.dispose(); ziel.geometry = glatteNormalen(r);
+  if (!kantenNeu) return;
   const kante = ziel.children[0]; kante.geometry.dispose(); kante.geometry = kantenGeometrie(r); // ohne Nähte der Booleschen Rechnung
 }
 const nurPos = (g) => { const n = g.index ? g.toNonIndexed() : g.clone(); for (const k of Object.keys(n.attributes)) if (k !== "position" && k !== "normal") n.deleteAttribute(k); if (!n.attributes.normal) n.computeVertexNormals(); return n; };
@@ -1105,7 +1107,16 @@ function regen() {
         f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
           laenge: +bl.abw.laenge.toFixed(1), stueck: f.stueck ?? 1, notiz: f.notiz, _blech: bl,
           _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
-        if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, blechEbene(s.ebene, f, m), m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
+        // Abwickeln/Falten: Ausschnitte (Skizze in der Abwicklung) – flach als Löcher, gefaltet als abgebildete Werkzeuge
+        const sa = f.ausschnitt ? finde(f.ausschnitt) : null, aLoops = sa && !sa._aus ? schleifen(sa) : [];
+        for (const bl of f._bleche) bl.abw.loecher = aLoops.filter((l) => innen(l[0], bl.abw.umriss));
+        if (!f.versteckt) f._bleche.forEach((bl, i) => {
+          const eb = blechEbene(s.ebene, f, m), seite = f.sichtseite === -1 ? -1 : 1, fid = `${f.id}:${i}`, art = darstellungVon(f, m);
+          if (f.flach) { modell.add(flachKoerper(bl, eb, m, fid, art)); return; }
+          const teile = flaechenKoerper(bl, eb, m, seite, fid, art);
+          let hinweis = null; if (bl.abw.loecher.length) try { schneideAus(teile, bl, bl.abw.loecher, eb, m, seite); } catch (e) { hinweis = e.message; }
+          teile.forEach((o) => modell.add(o)); if (hinweis) f._fehler = hinweis;
+        });
       } else if (f.typ === "rundblech") { // Zylinder-/Kegelmantel: exakte Abwicklung (kern/abwicklungRund.js), 3D als Drehkörper
         const m = material(f.material), kegel = f.art !== "zylinder";
         if (!(f.d1 > m.t && f.h > 0) || (kegel && !(f.d2 >= 0)) || !(f.winkel > 0 && f.winkel <= 360)) throw new Error("Durchmesser, Höhe und Winkel prüfen (Winkel 1–360°)");
@@ -1268,7 +1279,7 @@ function verschiebeFeature(f, ziel) {
 // Kontextmenü (Rechtsklick oder langes Antippen) in Zeitleiste und Browser
 function featureMenue(f, x, y) {
   const m = $("featureMenue"), i = doc.features.indexOf(f);
-  const punkte = [["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
+  const punkte = [...(f.typ === "flaeche" ? [["abw", f.flach ? "Falten (zurück in Form)" : "Abwickeln (flach bearbeiten) …"]] : []), ["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
     ["zurueck", "Bis hier zurückrollen (danach aus)"], ["ende", "Alle aktivieren (Marke ans Ende)"], ["links", "Nach vorne verschieben"], ["rechts", "Nach hinten verschieben"],
     ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["darst", "Darstellung …"]]),
     ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["kompNeu", "Eigene Komponente aus diesem Teil"], ["komp", f.komponente ? `Komponente «${esc(f.komponente)}» ändern …` : "In Komponente …"], ...(f.komponente ? [["kompAus", "Aus Komponente herauslösen"]] : [])]), ["kopie", "Duplizieren"], ["weg", "Löschen"]];
@@ -1310,6 +1321,14 @@ $("featureMenue").onclick = (e) => {
     m.innerHTML = `<button data-darst="">Automatisch${f.material ? " (nach Material)" : " (grau)"}</button>` + Object.entries(OBERFLAECHEN).map(([id, o]) =>
       `<button data-darst="${id}" class="${f.darstellung === id ? "an" : ""}"><span class="farbfeld" style="background:${hex(o.farbe)}"></span>${esc(o.name)}</button>`).join("");
     m.dataset.id = f.id; m.hidden = false; return;
+  }
+  else if (k === "abw") { // Unfold / Refold: flach schalten und Ausschnitte in einer Skizze auf der Ebene des Blechs zeichnen – Falten bildet sie aufs gekantete Blech ab
+    f.flach = !f.flach;
+    if (f.flach && !(f.ausschnitt && finde(f.ausschnitt))) {
+      const sk0 = finde(f.skizze), n = { id: neueId(), typ: "skizze", name: `Ausschnitte ${f.name}`, ebene: sk0.ebene, elemente: [] };
+      einfuegen(n); f.ausschnitt = n.id; regen(); status("Abgewickelt: jetzt die Ausschnitte in der flachen Abwicklung zeichnen, «Skizze beenden», dann Rechtsklick › «Falten»."); return starteSkizze(n);
+    }
+    regen(); status(f.flach ? "Abgewickelt – Rechtsklick › «Falten» bringt das Blech zurück in Form." : "Gefaltet: Ausschnitte der Abwicklung sind im gekanteten Blech.");
   }
   else if (k === "kompNeu") { // jedes Teil kann seine eigene Komponente werden (verschieben/drehen, ein-/ausblenden)
     const vorhanden = new Set(doc.features.map((x) => x.komponente).filter(Boolean)); let n = f.name, i = 2; while (vorhanden.has(n)) n = `${f.name} ${i++}`;
@@ -1959,6 +1978,34 @@ function sweepGlatt(kont, pts0, ek, seite) {
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
   return g;
 }
+// Abgewickelter Zustand (Unfold): das flache Blech mit allen Ausschnitten als Löcher und den Biegelinien
+function flachKoerper(bl, ebene, m, fid, art) {
+  const sh = new THREE.Shape(bl.abw.umriss.map(([u, v]) => new THREE.Vector2(u, v)));
+  for (const h of bl.abw.loecher || []) sh.holes.push(new THREE.Path(h.map(([u, v]) => new THREE.Vector2(u, v))));
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: m.t, bevelEnabled: false, curveSegments: 12 }); geo.translate(0, 0, -m.t / 2); geo.applyMatrix4(basis(ebene));
+  const mesh = new THREE.Mesh(geo, oberflaechenMaterial(art, geo)); mesh.userData.fid = fid; mesh.userData.art = art; mesh.userData.flach = true;
+  mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 28), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.5 })));
+  const B = basis(ebene);
+  for (const l of bl.abw.linien || []) { // Biegelinien rot gestrichelt
+    const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints(l.punkte.map(([u, v]) => new THREE.Vector3(u, v, m.t / 2 + 0.05).applyMatrix4(B))), new THREE.LineDashedMaterial({ color: 0xd23c3c, dashSize: 6, gapSize: 3, depthTest: false }));
+    ln.computeLineDistances(); ln.renderOrder = 12; mesh.add(ln);
+  }
+  return mesh;
+}
+// Gefalteter Zustand (Refold): Ausschnitte der Abwicklung als Werkzeuge auf das gekantete Blech abbilden und abziehen
+function schneideAus(teile, bl, loops, ebene, m, seite) {
+  const B = basis(ebene); let nicht = 0;
+  for (const lp of loops) {
+    const pos = ausschnittWerkzeug(bl, lp, seite, m.t / 2 + 0.4, 2); if (!pos.length) continue;
+    const tool = new THREE.BufferGeometry(); tool.setAttribute("position", new THREE.BufferAttribute(pos, 3)); tool.applyMatrix4(B); tool.computeBoundingBox();
+    for (const mesh of teile) {
+      mesh.geometry.computeBoundingBox(); if (!mesh.geometry.boundingBox.intersectsBox(tool.boundingBox)) continue;
+      try { verknuepfe(mesh, tool, "ausschneiden", false); } catch { nicht++; continue; } // Kanten: alte behalten + Lochränder (das Netz der Booleschen Rechnung ist für Kantenlinien zu unruhig)
+      for (const pts of ausschnittKante(bl, lp, seite, m.t / 2)) { const l = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts.map((q) => new THREE.Vector3(...q).applyMatrix4(B))), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.5 })); mesh.add(l); }
+    }
+  }
+  if (nicht) throw new Error(`${nicht} Ausschnitt${nicht === 1 ? "" : "e"} liess${nicht === 1 ? "" : "en"} sich im gefalteten Blech nicht ausführen`);
+}
 // Lage des Blechs zur Skizzenebene: Mitte (Standard), Skizze auf der Vorderseite (Blech dahinter) oder auf der Rückseite
 function blechEbene(id, f, m) {
   const e = E_(id), s = f.sichtseite === -1 ? -1 : 1, dz = f.lage === "vorne" ? -s * m.t / 2 : f.lage === "hinten" ? s * m.t / 2 : 0;
@@ -2148,6 +2195,8 @@ function flaecheDialog(f) {
   const felder = (f) => [
     { id: "skizze", label: Array.isArray(f.flaechen) ? "Flächen in" : "Grundfläche aus", wahl: Array.isArray(f.flaechen) ? "flaechen" : "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     ...(Array.isArray(f.flaechen) ? [] : [{ id: "profil", label: "Flächen", optionen: [["alle", "Alle Flächen (je ein Blech)"], ...schleifen(finde(f.skizze) || sk.at(-1)).map((_, i) => [i, `Fläche ${i + 1}`])], wert: f.profil ?? "alle" }]),
+    { id: "ansicht", label: "Ansicht", optionen: [["gefaltet", "Gefaltet (fertiges Blech)"], ["flach", "Abgewickelt (flach, Ausschnitte zeichnen)"]], wert: f.flach ? "flach" : "gefaltet" },
+    { id: "ausschnitt", label: "Ausschnitte aus Skizze", optionen: [["", "– keine –"], ...doc.features.filter((x) => x.typ === "skizze" && x.id !== f.skizze).map((x) => [x.id, x.name])], wert: f.ausschnitt || "" },
     { id: "name", label: "Name", text: true, wert: f.name },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "sichtseite", label: "Richtung der Abkantungen / Sichtseite", optionen: [["1", "Vorne (Richtung Ebenen-Normale)"], ["-1", "Hinten (gegen die Normale)"]], wert: String(f.sichtseite ?? 1) },
@@ -2155,7 +2204,7 @@ function flaecheDialog(f) {
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
   ];
-  const setze = (f, w) => { if (Array.isArray(f.flaechen) && w.skizze !== f.skizze) f.flaechen = []; Object.assign(f, { ...w, name: w.name?.trim() || f.name, sichtseite: +w.sichtseite || 1 }); };
+  const setze = (f, w) => { if (Array.isArray(f.flaechen) && w.skizze !== f.skizze) f.flaechen = []; Object.assign(f, { ...w, name: w.name?.trim() || f.name, sichtseite: +w.sichtseite || 1 }); f.flach = w.ansicht === "flach"; delete f.ansicht; if (!f.ausschnitt) delete f.ausschnitt; };
   const optionen = (v) => {
     const g = [...new Set(alleBausteine().map((b) => b.gruppe || "Eigene"))];
     return `<option value="">– keine (Schnittkante)</option>${g.map((gr) => `<optgroup label="${esc(gr)}">${alleBausteine().filter((b) => (b.gruppe || "Eigene") === gr).map((b) => `<option value="${esc(b.id)}" ${v === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</optgroup>`).join("")}
@@ -4975,6 +5024,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       } else if (f.typ === "flaeche") { // Flächenblech: Fläche bis Biegebeginn, Bausteinprofile exakt mit derselben Eckregel wie die Abwicklung
         if (f.versteckt || !f._bleche) continue;
         const m = material(f.material), ebene = blechEbene(finde(f.skizze).ebene, f, m);
+        if (f.flach || f._bleche.some((bl) => bl.abw.loecher?.length)) { f._bleche.forEach((_, i) => nicht.set(`${f.id}:${i}`, "Abwicklung/Ausschnitte noch nicht exakt")); continue; }
         for (const [i, bl] of f._bleche.entries()) {
           try { blech.set(`${f.id}:${i}`, await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1))); }
           catch (e) { nicht.set(`${f.id}:${i}`, e.message); }

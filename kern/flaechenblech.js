@@ -43,7 +43,7 @@ export function bausteinProfil(b0, m) {
   const biegungen = res.biegungen.map((bg) => ({ ...bg, anschlag: res.zuschnitt - bg.pos, abstand: bg.pos - X + v }));
   // Querschnitt (x nach aussen, y Höhe) ohne den Anfangsschenkel auf der Fläche – für die Eckprüfung
   const quer = kontur(res.pfad, m.t, 6).map(([x, y]) => [x - X + v, y]);
-  return { zeilen, res, zugabe, biegungen, versatz: v, lage: profilLage(res, m, v), quer, t: m.t, ri: m.ri };
+  return { zeilen, res, zugabe, biegungen, versatz: v, lage: profilLage(res, m, v), quer, t: m.t, ri: m.ri, k: m.k };
 }
 
 // Profil-Mittellinie: Abwicklungsmass u (ab gezeichneter Kante, wie im Zuschnitt) ↔ x = Abstand nach aussen im gekanteten Zustand.
@@ -235,4 +235,103 @@ export function flaechenblech(ptsRoh, kanten, m) {
   const pts = gegenUhrzeiger(ptsRoh), gruppen = kantenGruppen(pts);
   const profile = gruppen.map((_, k) => { const b = kanten[k]; try { return b ? { ...bausteinProfil(b, m), baustein: b } : null; } catch (e) { throw new Error(`Kante ${k + 1} (${b.name}): ${e.message}`); } });
   return { pts, gruppen, profile, abw: abwicklung(pts, gruppen, profile) };
+}
+
+// ------------------------------------------------------------------------------------------------------------------
+// Abwickeln / Falten: Punkte der flachen Abwicklung (Skizzenkoordinaten) auf das gekantete Blech abbilden.
+// Profil-Mittellinie bei Abwicklungsmass u (ab gezeichneter Kante nach aussen): x = Abstand nach aussen, y = Höhe, th = Richtung.
+export function profilPunkt(p, u) {
+  if (!p?.res) return null;
+  let s = u + X - (p.versatz || 0);
+  if (s < 0) return { x: u, y: 0, th: 0 };
+  const v = p.versatz || 0;
+  for (const el of p.res.pfad) {
+    if (el.typ === "linie") {
+      const l = Math.hypot(el.p2[0] - el.p1[0], el.p2[1] - el.p1[1]);
+      if (s <= l + 1e-9) { const f = l > 0 ? s / l : 0; return { x: el.p1[0] + (el.p2[0] - el.p1[0]) * f - X + v, y: el.p1[1] + (el.p2[1] - el.p1[1]) * f, th: Math.atan2(el.p2[1] - el.p1[1], el.p2[0] - el.p1[0]) }; }
+      s -= l;
+    } else {
+      const a = (el.winkel * Math.PI) / 180, ba = (el.rm - p.t / 2 + p.k * p.t) * Math.abs(a);
+      if (s <= ba + 1e-9) { const w = el.start + a * (ba > 0 ? s / ba : 0); return { x: el.zentrum[0] + el.rm * Math.cos(w) - X + v, y: el.zentrum[1] + el.rm * Math.sin(w), th: w + (a > 0 ? 1 : -1) * Math.PI / 2 }; }
+      s -= ba;
+    }
+  }
+  return null; // ausserhalb des Zuschnitts
+}
+// Flacher Punkt q (Skizzenkoordinaten) → { p: [x, y, z] im gekanteten Zustand (z = Höhe zur Sichtseite), n: Flächennormale }.
+// Nur gerade Kanten mit Baustein sind abgebildet; sonst bleibt der Punkt in der Platte.
+export function faltePunkt(bl, q, seite = 1) {
+  let best = null;
+  bl.gruppen.forEach((g, k) => {
+    const pr = bl.profile[k]; if (!pr?.res || !g.gerade) return;
+    for (let i = 1; i < g.punkte.length; i++) {
+      const a = g.punkte[i - 1], b = g.punkte[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-9) continue;
+      const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], nout = [d[1], -d[0]], t = (q[0] - a[0]) * d[0] + (q[1] - a[1]) * d[1], u = (q[0] - a[0]) * nout[0] + (q[1] - a[1]) * nout[1];
+      if (t < -1e-6 || t > L + 1e-6) continue;
+      const pp = profilPunkt(pr, u); if (!pp) continue;
+      if (!best || u > best.u) best = { u, a, d, nout, t, pp };
+    }
+  });
+  if (!best) return { p: [q[0], q[1], 0], n: [0, 0, seite] };
+  const { a, d, nout, t, pp } = best;
+  return { p: [a[0] + d[0] * t + nout[0] * pp.x, a[1] + d[1] * t + nout[1] * pp.x, seite * pp.y], n: [-Math.sin(pp.th) * nout[0], -Math.sin(pp.th) * nout[1], seite * Math.cos(pp.th)] };
+}
+// Ausschnitt (Polygon in der Abwicklung) als geschlossener Werkzeugkörper im gekanteten Blech: Fläche fein unterteilt, abgebildet
+// und beidseitig um T entlang der Flächennormale versetzt. Rückgabe: Dreiecke (x,y,z je Ecke), Aussenseite nach aussen.
+export function ausschnittWerkzeug(bl, loop, seite = 1, T = 1, h = 2) {
+  let poly = loop.slice(); if (poly.length > 1 && Math.hypot(poly[0][0] - poly.at(-1)[0], poly[0][1] - poly.at(-1)[1]) < 1e-9) poly.pop();
+  if (poly.length < 3) return new Float32Array(0);
+  const A = poly.reduce((s, q, i) => s + q[0] * poly[(i + 1) % poly.length][1] - poly[(i + 1) % poly.length][0] * q[1], 0);
+  if (A < 0) poly = poly.reverse();
+  // Dreiecke der Fläche (Ohrenschnitt) – Eigene, kleine Implementierung, damit der Kern ohne three.js auskommt
+  const idx = poly.map((_, i) => i), tris = [], cr = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const inTri = (p, a, b, c) => cr(a, b, p) >= -1e-12 && cr(b, c, p) >= -1e-12 && cr(c, a, p) >= -1e-12;
+  let schutz = 0;
+  while (idx.length > 3 && schutz++ < 10000) {
+    let ok = false;
+    for (let i = 0; i < idx.length; i++) {
+      const i0 = idx[(i + idx.length - 1) % idx.length], i1 = idx[i], i2 = idx[(i + 1) % idx.length], a = poly[i0], b = poly[i1], c = poly[i2];
+      if (cr(a, b, c) <= 1e-12) continue;
+      if (idx.some((j) => j !== i0 && j !== i1 && j !== i2 && inTri(poly[j], a, b, c))) continue;
+      tris.push([i0, i1, i2]); idx.splice(i, 1); ok = true; break;
+    }
+    if (!ok) break;
+  }
+  if (idx.length === 3) tris.push([idx[0], idx[1], idx[2]]);
+  // Gleichmässig unterteilen (jede Dreiecksseite in N Stücke), Knoten über gerundete Koordinaten vereinigen
+  const maxKante = Math.max(...tris.flatMap(([i, j, k]) => [[i, j], [j, k], [k, i]].map(([x, y]) => Math.hypot(poly[x][0] - poly[y][0], poly[x][1] - poly[y][1]))));
+  // Liegt der ganze Ausschnitt auf der ebenen Platte, braucht es keine Unterteilung
+  const xs = poly.map((q) => q[0]), ys = poly.map((q) => q[1]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  let eben = true; for (let i = 0; i <= 6 && eben; i++) for (let j = 0; j <= 6 && eben; j++) { const q = [x0 + ((x1 - x0) * i) / 6, y0 + ((y1 - y0) * j) / 6], f = faltePunkt(bl, q, seite); if (Math.abs(f.p[2]) > 1e-9 || Math.hypot(f.p[0] - q[0], f.p[1] - q[1]) > 1e-9) eben = false; }
+  const N = eben ? 1 : Math.min(64, Math.max(1, 2 ** Math.ceil(Math.log2(Math.max(1, maxKante / h)))));
+  const key = (q) => `${Math.round(q[0] * 1e5)},${Math.round(q[1] * 1e5)}`, knoten = new Map(), pos = [];
+  const vid = (q) => { const k = key(q); let e = knoten.get(k); if (!e) { const f = faltePunkt(bl, q, seite); e = { i: knoten.size, f }; knoten.set(k, e); } return e; };
+  const flach = []; // [e1,e2,e3] je Teildreieck, gegen den Uhrzeiger in der Abwicklung
+  for (const [i, j, k] of tris) {
+    const P = [poly[i], poly[j], poly[k]], pt = (a, b) => [P[0][0] + ((P[1][0] - P[0][0]) * a + (P[2][0] - P[0][0]) * b) / N, P[0][1] + ((P[1][1] - P[0][1]) * a + (P[2][1] - P[0][1]) * b) / N];
+    for (let a = 0; a < N; a++) for (let b = 0; b < N - a; b++) {
+      flach.push([vid(pt(a, b)), vid(pt(a + 1, b)), vid(pt(a, b + 1))]);
+      if (a + b < N - 1) flach.push([vid(pt(a + 1, b)), vid(pt(a + 1, b + 1)), vid(pt(a, b + 1))]);
+    }
+  }
+  const lis = [...knoten.values()].sort((x, y) => x.i - y.i);
+  const oben = lis.map(({ f }) => f.p.map((v, c) => v + f.n[c] * T)), unten = lis.map(({ f }) => f.p.map((v, c) => v - f.n[c] * T));
+  const tri = (a, b, c) => pos.push(...a, ...b, ...c), kanten = new Map();
+  for (const [a, b, c] of flach) { tri(oben[a.i], oben[b.i], oben[c.i]); tri(unten[a.i], unten[c.i], unten[b.i]); for (const [x, y] of [[a, b], [b, c], [c, a]]) { const k1 = `${x.i}>${y.i}`, k2 = `${y.i}>${x.i}`; if (kanten.has(k2)) kanten.delete(k2); else kanten.set(k1, [x.i, y.i]); } }
+  for (const [x, y] of kanten.values()) { tri(unten[x], unten[y], oben[y]); tri(unten[x], oben[y], oben[x]); } // Seitenwand an der Aussenkontur
+  // Umlaufsinn prüfen: negatives Volumen (z. B. Sichtseite -1) → alle Dreiecke umdrehen
+  let vol = 0; for (let i = 0; i < pos.length; i += 9) { const [a, b, c] = [pos.slice(i, i + 3), pos.slice(i + 3, i + 6), pos.slice(i + 6, i + 9)]; vol += a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]); }
+  if (vol < 0) for (let i = 0; i < pos.length; i += 9) for (let c = 0; c < 3; c++) { const t = pos[i + 3 + c]; pos[i + 3 + c] = pos[i + 6 + c]; pos[i + 6 + c] = t; }
+  return Float32Array.from(pos);
+}
+
+// Kontur des Ausschnitts auf Vorder- und Rückseite des gekanteten Blechs (für die Kantenlinien): [vorn, hinten], je Punktliste
+export function ausschnittKante(bl, loop, seite = 1, halb = 0.35, h = 1.5) {
+  let poly = loop.slice(); if (poly.length > 1 && Math.hypot(poly[0][0] - poly.at(-1)[0], poly[0][1] - poly.at(-1)[1]) < 1e-9) poly.pop();
+  const vorn = [], hinten = [];
+  poly.forEach((a, i) => {
+    const b = poly[(i + 1) % poly.length], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / h));
+    for (let k = 0; k < n; k++) { const q = [a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n], f = faltePunkt(bl, q, seite); vorn.push(f.p.map((v, c) => v + f.n[c] * halb)); hinten.push(f.p.map((v, c) => v - f.n[c] * halb)); }
+  });
+  return [vorn, hinten];
 }

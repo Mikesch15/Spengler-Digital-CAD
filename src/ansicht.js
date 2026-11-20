@@ -95,13 +95,14 @@ export function kantenGeometrie(geo, schwelle = 28) {
   const kanten = new Map();
   for (let f = 0; f < p.count; f += 3) {
     const a = vi(f), b = vi(f + 1), c = vi(f + 2); if (a === b || b === c || a === c) continue;
-    const n = pts[b].clone().sub(pts[a]).cross(pts[c].clone().sub(pts[a])); if (n.lengthSq() < 1e-14) continue; n.normalize();
+    const ab = pts[b].clone().sub(pts[a]), ac = pts[c].clone().sub(pts[a]), n = ab.clone().cross(ac); if (n.lengthSq() < 1e-14) continue;
+    const gross = Math.max(ab.lengthSq(), ac.lengthSq(), pts[c].distanceToSquared(pts[b])); n.schlecht = n.length() / gross < 2e-3; n.normalize(); // Splitterdreiecke (CSG): Normale unzuverlässig
     for (const [i, j] of [[a, b], [b, c], [c, a]]) { const k = i < j ? `${i}_${j}` : `${j}_${i}`, e = kanten.get(k); if (e) e.n.push(n); else kanten.set(k, { i, j, n: [n] }); }
   }
   const out = [], einzeln = [];
   for (const e of kanten.values()) {
-    if (e.n.length === 2) { if (e.n[0].dot(e.n[1]) < cos) out.push(pts[e.i], pts[e.j]); }
-    else if (e.n.length === 1) einzeln.push(e); else out.push(pts[e.i], pts[e.j]);
+    if (e.n.length === 2) { if (!e.n[0].schlecht && !e.n[1].schlecht && e.n[0].dot(e.n[1]) < cos) out.push(pts[e.i], pts[e.j]); }
+    else if (e.n.length === 1) einzeln.push(e); else if (e.n.some((x, i) => !x.schlecht && e.n.some((y, j) => j > i && !y.schlecht && x.dot(y) < cos))) out.push(pts[e.i], pts[e.j]); // mehr als zwei Flächen: nur bei echtem Knick
   }
   // Einzelkanten je Gerade: Abdeckung entlang der Geraden zählen
   const gruppen = new Map();
