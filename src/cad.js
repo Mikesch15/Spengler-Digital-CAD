@@ -786,7 +786,7 @@ function regen() {
         f._bleche = nr.map((pi) => {
           if (!loops[pi]) throw new Error(`Fläche ${pi + 1} fehlt in der Skizze`);
           const n = kantenGruppen(gegenUhrzeiger(loops[pi])).length;
-          return { pi, ...flaechenblech(loops[pi], [...Array(n).keys()].map((k) => bausteinFuer(f.kanten?.[`${pi}:${k}`])), m) };
+          return { pi, ...flaechenblech(loops[pi], [...Array(n).keys()].map((k) => { const b = bausteinFuer(f.kanten?.[`${pi}:${k}`]), w = f.kantenWerte?.[`${pi}:${k}`]; return b && w ? { ...b, _werte: w } : b; }), m) };
         });
         const viele = f._bleche.length > 1;
         f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
@@ -1722,6 +1722,7 @@ function kantenProfil(f, key) {
 }
 function setzeKanteVon(f, key, v) {
   f.kanten = { ...f.kanten }; if (v) f.kanten[key] = v; else delete f.kanten[key];
+  if (f.kantenWerte?.[key]) { f.kantenWerte = { ...f.kantenWerte }; delete f.kantenWerte[key]; } // Parameterwerte gehören zum Baustein der Kante
   const b = typeof v === "string" && bausteinFuer(v), p = b?.partner && partnerKante(f, key);
   if (p) { f.kanten[p] = b.partner; status(`Gegenstück an ${kantenName(f, p)}: ${bausteinName(b.partner)}.`); }
 }
@@ -1778,12 +1779,15 @@ function flaecheDialog(f) {
     return `<option value="">– keine (Schnittkante)</option>${g.map((gr) => `<optgroup label="${esc(gr)}">${alleBausteine().filter((b) => (b.gruppe || "Eigene") === gr).map((b) => `<option value="${esc(b.id)}" ${v === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</optgroup>`).join("")}
       <option value="*" ${v && typeof v === "object" ? "selected" : ""}>Eigene Abkantfolge …</option>`;
   };
+  const kantenParam = (key, v) => { const b = typeof v === "string" && bausteinFuer(v); if (!b?.parameter?.length) return ""; const w = f.kantenWerte?.[key] || {};
+    return `<div class="kparam">${b.parameter.map((p) => `<label>${esc(p.label || p.name)} <input data-kw="${key}" data-p="${esc(p.name)}" type="number" step="any" placeholder="${p.standard ?? ""}" value="${w[p.name] ?? ""}" aria-label="${esc(p.label || p.name)} Kante ${key}"></label>`).join(" ")}</div>`; };
+  const kantenWarn = (key, v, g) => { const b = typeof v === "string" && bausteinFuer(v); if (!b) return ""; const h = pruefeEignung({ ...b, _werte: f.kantenWerte?.[key] }, material(f.material), { kantenlaenge: g.laenge }); return h.length ? ` <span class="fehler" title="${esc(h.join(" · "))}">⚠</span>` : ""; };
   const tabelle = () => `<p class="hinweis">Kante in der Ansicht anklicken (oder hier wählen) und den Baustein zuweisen. Gemeinsame Kanten zweier Bleche bekommen automatisch das Gegenstück (Unter-/Oberfalz).</p>
     <table class="zeilen kanten"><thead><tr><th>Kante</th><th class="num">Länge</th><th>Baustein</th><th class="num">Zugabe</th></tr></thead><tbody>
     ${(f._bleche || []).flatMap((bl) => bl.gruppen.map((g, k) => { const key = `${bl.pi}:${k}`, v = f.kanten?.[key];
       return `<tr data-k="${key}" class="${dlg?.aktiveKante === key ? "aktiv" : ""}"><td>${f._bleche.length > 1 ? `B${bl.pi + 1} ` : ""}K${k + 1}${g.gerade ? "" : " ⌒"}</td><td class="num">${f1(g.laenge)}</td>
-        <td><select data-b="${key}" aria-label="Baustein ${key}">${optionen(v)}</select>${v && typeof v === "object" ? `<input data-eigen="${key}" class="folge" value="${esc(v.folge)}" placeholder="90 25 U+ 7" title="Ab der Kante: Winkel Schenkel Winkel Schenkel …">` : ""}</td>
-        <td class="num" data-z="${key}">${bl.profile[k] ? f1(bl.profile[k].zugabe) : "0"}</td></tr>`; })).join("")}
+        <td><select data-b="${key}" aria-label="Baustein ${key}">${optionen(v)}</select>${kantenParam(key, v)}${v && typeof v === "object" ? `<input data-eigen="${key}" class="folge" value="${esc(v.folge)}" placeholder="90 25 U+ 7" title="Ab der Kante: Winkel Schenkel Winkel Schenkel …">` : ""}</td>
+        <td class="num" data-z="${key}">${bl.profile[k] ? f1(bl.profile[k].zugabe) : "0"}${kantenWarn(key, v, g)}</td></tr>`; })).join("")}
     </tbody></table>
     <div class="reihe"><select id="kAlle" aria-label="Baustein für alle Kanten ohne Baustein">${optionen("")}</select><button class="knopf" data-alle>Allen freien Kanten zuweisen</button></div>
     <div class="reihe"><button class="knopf" data-bneu>+ Neuer Baustein …</button><button class="knopf" data-bkante ${dlg?.aktiveKante && f.kanten?.[dlg.aktiveKante] ? "" : "disabled"}>✎ Baustein der gewählten Kante</button></div>`;
@@ -1792,6 +1796,7 @@ function flaecheDialog(f) {
   const binden = (box) => {
     box.addEventListener("change", (e) => {
       const key = e.target.dataset.b, ek = e.target.dataset.eigen;
+      if (e.target.dataset.kw) { const kk = e.target.dataset.kw, p = e.target.dataset.p, x = e.target.value === "" ? null : parseFloat(e.target.value); f.kantenWerte = { ...f.kantenWerte, [kk]: { ...(f.kantenWerte?.[kk] || {}) } }; if (x == null || isNaN(x)) delete f.kantenWerte[kk][p]; else f.kantenWerte[kk][p] = x; dlg.aktiveKante = kk; neu(); return; }
       if (key) { const v = e.target.value; setzeKante(key, v === "*" ? { folge: "90 25", versatz: 0 } : v); dlg.aktiveKante = key; neu(); return; }
       if (ek) { try { folge("100 " + e.target.value); setzeKante(ek, { folge: e.target.value, versatz: 0 }); e.target.classList.remove("ungueltig"); regen(); } catch (err) { e.target.classList.add("ungueltig"); status(err.message); } }
     });
@@ -1810,7 +1815,7 @@ function flaecheDialog(f) {
     "Grundfläche des Blechs in einer Skizze zeichnen (Masse = Achsen der Falze bzw. fertige Kanten). Dann je Kante den Spenglerbaustein wählen – Zuschnitt, Ausklinkungen, Biegelinien und Abkantliste rechnet das Programm.",
     { zusatz: tabelle, binden, wahlNr: -1, aktiveKante: null,
       kantenWahl: (e) => { const k = kanteUnterMaus(f, e); if (!k) return false; waehleKanteImDialog(k, e.clientX, e.clientY); return true; },
-      nachRegen: () => { for (const bl of f._bleche || []) bl.gruppen.forEach((_, k) => { const c = document.querySelector(`#dInhalt [data-z="${bl.pi}:${k}"]`); if (c) c.textContent = bl.profile[k] ? f1(bl.profile[k].zugabe) : "0"; }); },
+      nachRegen: () => { for (const bl of f._bleche || []) bl.gruppen.forEach((_, k) => { const c = document.querySelector(`#dInhalt [data-z="${bl.pi}:${k}"]`); if (c) c.innerHTML = (bl.profile[k] ? f1(bl.profile[k].zugabe) : "0") + kantenWarn(`${bl.pi}:${k}`, f.kanten?.[`${bl.pi}:${k}`], bl.gruppen[k]); }); },
       info: () => (f._fehler ? "⚠ " + f._fehler : f._teile ? f._teile.map((t) => `${t.name}: ${f1(t._blech.abw.breite)} × ${f1(t._blech.abw.laenge)}`).join(" · ") : "") });
   const d = dlg; dialog({ ...d, felder: felder(f) }); zeigeKanten(); $("dInfo").textContent = dlg.info(); // Kantentabelle braucht die eben berechneten Bleche
   // Kante gewählt (Ansicht oder Beschriftung): Zeile markieren und Bausteinmenü an der Stelle öffnen
@@ -4553,7 +4558,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

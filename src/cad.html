@@ -117,6 +117,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 table.zeilen.teile input, table.zeilen.holz input { width: 100%; min-width: 46px; }
 table.zeilen input.folge { min-width: 150px; font-family: var(--font-num); }
 table.zeilen input.ungueltig { border-color: #c4352b; background: color-mix(in srgb, #c4352b 10%, transparent); }
+.kparam { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 3px; font-size: 12px; } .kparam input { width: 62px; }
 table.zeilen.kanten select { max-width: 210px; } table.zeilen.kanten tr.aktiv td { background: color-mix(in srgb, #e0782b 16%, transparent); }
 #bEditor { z-index: 30; }
 .modal.plan { padding: 6px; } #planEditor .planbox { width: 100%; height: 100%; max-height: none; display: flex; flex-direction: column; }
@@ -509,6 +510,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Blech ▾</b>: Flächenblech aus Skizze, <b>auf Körperfläche</b> (Fläche anklicken – Umriss wird übernommen, Blech liegt aussen auf) oder <b>Kehle / Grat</b> (zwei Flächen anklicken – gekantetes Blech entlang der Kehl- bzw. Gratlinie, Länge automatisch, an den Enden Kantenbausteine wie Saum; mit Zuschnitt und Abkantliste).</li>
       <li><b>Kante antippen</b>: Flächenblech wählen (oder öffnen) – jede Kante trägt ein Schild (K1, K2 …; grün = belegt). Kante oder Schild antippen öffnet die Bausteinliste direkt an der Stelle; Gegenstück (Ober-/Unterfalz) kommt automatisch. Auf dem Handy klappt ▾ den Dialog ein, damit die Ansicht frei ist.</li>
       <li><b>Bausteine erstellen</b>: im Flächenblech-Dialog «+ Neuer Baustein …» (wird gleich an die gewählte Kante gesetzt) oder «✎ Baustein der gewählten Kante»; ebenso unter Einstellungen → Bausteine. Der Editor zeigt den Querschnitt live mit Zugabe und Anschlagmassen; Biegungen als Tabelle (Abkanten oder Umschlag, Winkel, Radius, Schenkel) oder als Kurzschrift. Verwendete Bausteine werden im Projekt mitgespeichert.</li>
+    </ul>
+    <h4>Konto, Cloud und Vorlagen (ersetzt das Fusion-Add-in)</h4>
+    <ul>
+      <li><b>Einstellungen › Konto &amp; Cloud</b>: mit dem Namen der Spengler-Digital-App anmelden («Vorname.Nachname» oder E-Mail). «Jetzt abgleichen» tauscht Kantenbausteine und Materialien mit der Firma aus. Ohne Recht «Vorlagen bearbeiten» wird nur heruntergeladen. Bei Konflikten gilt die Cloud-Fassung, deine bleibt als «Name (Konflikt TT.MM.)». Gelöscht wird nie endgültig.</li>
+      <li><b>Projekte</b>: «Aktuelles Projekt in die Cloud» speichert unter der Auftragsnummer (Feld «Nr.»). «Teile an die App senden» übergibt Zuschnitt, Material, Stück und Schenkel; «Profilaufträge der App holen» baut offene Aufträge der App als Teil.</li>
+      <li><b>Bausteine mit Parametern</b>: im Baustein-Editor unter «Parameter und Bedingungen», z. B. Kurzschrift «90 H U+ u+4*t» und Parameter «H = 25 [10-60] Höhe». <b>t</b> (Dicke), <b>ri</b> (Innenradius) und <b>k</b> (K-Faktor) kommen aus dem Material. Im Flächenblech-Dialog lässt sich der Wert je Kante überschreiben; ⚠ warnt bei Grenzverletzungen (Parametergrenzen, Materialdicke, Kantenlänge).</li>
+      <li><b>Sicherungen und Papierkorb</b> (Einstellungen › Vorlagen &amp; Sichern): vor jedem «Übernehmen» wird der alte Stand gesichert; gelöschte Bausteine und Materialien lassen sich zurückholen.</li>
+      <li><b>Rundblech beurteilen</b> (Blech ▾): Scheibe mit Rand, Kragen oder Kegel – konstruierbar, abwickelbar, herstellbar. «Herstellbar» wird nur mit einem eigenen Erfahrungswert beurteilt (Einstellungen › Materialien › Stauchen/Strecken max %), sonst «nicht beurteilbar». Reine Geometrie, keine Garantie für die Umformbarkeit.</li>
+      <li><b>Selbsttest</b> (Einstellungen › Programm) prüft die Rechenkerne gegen bekannte Werte.</li>
     </ul>
     <h4>Pläne</h4>
     <ul>

@@ -50,6 +50,26 @@ ok(nachher?.parameter?.length === 2, "Zurückgeholt mit Parametern");
 await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="vorlagen"]').click(); });
 await s.click("[data-sich]"); await s.waitForTimeout(100); ok(/Sicherung geladen/.test(await s.textContent("#eMeldung")), "Sicherung lässt sich laden (erst mit «Übernehmen» gültig)");
 await s.click("#eAbbrechen");
+// Parameterwerte je Kante im Flächenblech
+{
+  const projekt = { objekt: "P", nr: "P-1", zaehler: 10, features: [
+    { id: "sf", typ: "skizze", name: "Umriss", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [1000, 500] }] },
+    { id: "fl", typ: "flaeche", name: "Abdeckung", skizze: "sf", material: "zink07", profil: "alle", kanten: { "0:0": "pf" } }] };
+  const p2 = await b.newPage(), pr2 = []; p2.on("pageerror", (e) => pr2.push(e.message));
+  await p2.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d.doc));
+    localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], bausteine: [{ id: "pf", name: "Falz mit Parametern", gruppe: "Eigene", folge: "90 H", versatz: 0, parameter: [{ name: "H", label: "Höhe", standard: 25, min: 10, max: 60 }] }] })); }, { doc: projekt });
+  await p2.goto("http://localhost:8770/index.html?test"); await p2.waitForTimeout(700);
+  await p2.evaluate(() => window.sdcadTest.bearbeite("fl")); await p2.waitForSelector('[data-kw="0:0"]', { timeout: 5000 });
+  const z0 = parseFloat(await p2.textContent('[data-z="0:0"]'));
+  await p2.fill('[data-kw="0:0"]', "40"); await p2.dispatchEvent('[data-kw="0:0"]', "change"); await p2.waitForTimeout(400);
+  const z1 = parseFloat(await p2.textContent('[data-z="0:0"]'));
+  ok(z0 > 0 && Math.abs(z1 - z0 - 15) < 1e-6, `Parameter H=40 statt 25 an der Kante: Zugabe ${z0} → ${z1} (+15)`);
+  await p2.fill('[data-kw="0:0"]', "99"); await p2.dispatchEvent('[data-kw="0:0"]', "change"); await p2.waitForTimeout(300);
+  ok(/⚠/.test(await p2.textContent('[data-z="0:0"]')), "H = 99 über dem Maximum 60: Warnzeichen an der Kante");
+  await p2.click("#dOk"); await p2.waitForTimeout(300);
+  ok((await p2.evaluate(() => JSON.parse(localStorage.getItem("sdcad-doc-0.2")).features[1].kantenWerte?.["0:0"]?.H)) === 99, "Wert wird im Projekt gespeichert");
+  ok(pr2.length === 0, "keine Seitenfehler (Flächenblech) " + pr2.join(" | "));
+}
 ok(probleme.length === 0, "keine Seitenfehler " + probleme.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Bausteine mit Parametern in der App: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);
