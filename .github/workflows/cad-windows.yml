@@ -65,12 +65,7 @@ jobs:
 
       - name: Zusammenfassung
         if: always()
-        shell: bash
-        run: |
-          for f in tests/tauri-probe/dist/ergebnis-*.json; do
-            [ -f "$f" ] || continue
-            node -e "const e=require('./$f'); const n='$f'.split('/').pop(); let s='### '+n+' – '+(e.fehler===0?'bestanden':'FEHLER ('+e.fehler+')')+'\n'+(e.umgebung?.ua||'')+(e.webview2?' · WebView2 '+e.webview2:'')+'\n\n'; for (const z of e.zeilen||[]) s+='- '+(z.ok?'✓':'✗')+' '+z.text+' '+(z.wert!==undefined?'`'+JSON.stringify(z.wert)+'`':'')+'\n'; require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, s+'\n')"
-          done
+        run: node tests/cad-worker/zusammenfassung.mjs tests/tauri-probe/dist
 
       - uses: actions/upload-artifact@v4
         if: always()

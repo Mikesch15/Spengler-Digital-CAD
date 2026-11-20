@@ -48,7 +48,17 @@ Lauf 1 des Workflows fand sofort einen echten Fehler. In Node ergab `new URL(...
 - **Behebung:** `fileURLToPath` (Commit «WASM-Pfad in Node über fileURLToPath»)
 - **Nebenwirkung, offen genannt:** Der Installer-Workflow (`windows-build.yml`) führt `npm test` aus. Er war auf diesem Branch für die Commits B1 und B2 rot (Läufe 66/67). Mit dem Fix ist das behoben (siehe neuer Lauf).
 
-Ergebnis nach dem Fix: *wird nach Abschluss des Laufs eingetragen.*
+Ergebnis nach dem Fix: Lauf 2 (`44717167321`, windows-latest) war **grün**. Der Installer-Lauf 68 war ebenfalls wieder grün.
+
+| Nachweis | Ergebnis |
+|---|---|
+| 1 Kern-Tests mit Node unter Windows | alle bestanden |
+| 2 Microsoft Edge (Playwright, Kanal msedge) | 14/14 |
+| 3 **Tauri 2 / WebView2 157.0.4341.46** (Edg/157, `csp: null`) | **14/14** · Laden 0,52 s · Rinnenwinkel 1,7 s · Hauptthread-Lücke max. 11 ms · STEP AP242 hin und zurück · Speicher stabil · Zeitlimit, Abbruch, Neustart und Ausfall korrekt |
+
+Die Probe-App (`sdcad-cad-probe.exe`) und die Ergebnis-JSON liegen als Artefakt «cad-windows-nachweis» am Lauf. Der Workflow läuft bei jeder Änderung an `kern/cad/` erneut und dient damit als dauerhafte Regression für Windows.
+
+**Abnahme Phase B: erfüllt.** Der Kern läuft unter Windows in Node, Edge und Tauri/WebView2, im Browser (Chromium) und unter WebKit (Tauri unter Linux). Die Adaptertests sind grün. Damit ist der Weg frei für Phase C, weiterhin hinter einem Schalter.
 
 ## Offene Punkte und Risiken
 
