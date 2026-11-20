@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { planModul } from "./plan.js";
 import { cloudModul } from "./cloud.js";
-import { werkzeugAuf, flanschStandard, werkzeugName } from "../kern/flansch.js";
+import { werkzeugAuf, flanschStandard, werkzeugName, folgeUmkehren, folgeAnhaengen } from "../kern/flansch.js";
 import { projekteModul } from "./projekte.js";
 import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern/vorlagen/detail3d.js";
 import { selbsttest } from "../kern/selbsttest.js";
@@ -2186,6 +2186,56 @@ function partnerKante(f, key) {
   }
   return null;
 }
+// ------------------------------------------------------------ Kanten-Werkzeug: Flansch / Umschlag / Kantenbaustein (erst Blech anklicken, dann die Kante)
+let kantenWz = null; // { typ, baustein, seite, schritt: "blech" | "kante", f }
+const kantenWzText = () => { const w = kantenWz; if (!w) return ""; return w.schritt === "blech" ? "① Flächenblech anklicken" : `② Kante von «${w.f.name}» anklicken`; };
+function kantenBarZeigen() {
+  const w = kantenWz, bar = $("kantenBar"); bar.hidden = !w; if (!w) return;
+  $("kbTitel").textContent = w.typ === "flansch" ? "Flansch" : w.typ === "umschlag" ? "Umschlag" : `Baustein: ${bausteinName(w.baustein)}`;
+  $("kbText").textContent = kantenWzText();
+  $("kbWinkelL").hidden = w.typ !== "flansch"; document.querySelector("#kantenBar label:nth-of-type(2)").hidden = w.typ === "baustein";
+  $("kbRichtung").textContent = `Richtung: ${w.seite === -1 ? "nach hinten" : "Sichtseite"} ⇄`;
+}
+function endeKantenWz() { kantenWz = null; kantenBarZeigen(); zeigeKanten(); }
+function starteKantenWz(typ, x = 200, y = 80) {
+  if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
+  const los = (baustein) => { kantenWz = { typ, baustein, seite: 1, schritt: "blech", f: null }; const h = hauptVon(auswahl); if (h?.typ === "flaeche" && !h.versteckt) { kantenWz.f = h; kantenWz.schritt = "kante"; zeigeKanten(); } kantenBarZeigen(); status(kantenWzText()); };
+  if (typ !== "baustein") return los(null);
+  const m = $("kantenMenue"), gruppen = [...new Set(alleBausteine().map((b) => b.gruppe || "Eigene"))];
+  m.innerHTML = `<div class="kmkopf"><b>Baustein wählen</b><button class="kmzu" data-kmzu aria-label="Schliessen">×</button></div>${gruppen.map((gr) => `<div class="kmgruppe">${esc(gr)}</div>${alleBausteine().filter((b) => (b.gruppe || "Eigene") === gr).map((b) => `<button data-kb="${esc(b.id)}">${esc(b.name)}<small>${esc(b.folge)}</small></button>`).join("")}`).join("")}`;
+  m.hidden = false; const r = m.getBoundingClientRect(); Object.assign(m.style, { left: Math.max(8, Math.min(x, innerWidth - r.width - 8)) + "px", top: Math.max(8, Math.min(y, innerHeight - r.height - 8)) + "px" });
+  m.onclick = (e) => { const t = e.target.closest("button"); if (!t) return; m.hidden = true; if (t.dataset.kb) los(t.dataset.kb); };
+}
+function kantenWzKlick(e) { // true = Klick verbraucht
+  const w = kantenWz;
+  strahl.setFromCamera(ndc(e), kamera);
+  const t = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0], h = t ? hauptVon(t.object.userData.fid) : null;
+  if (w.schritt === "kante") { const k = kanteUnterMaus(w.f, e); if (k) { wendeKantenWz(k); return true; } if (!(h?.typ === "flaeche" && h !== w.f)) { status(kantenWzText()); return true; } }
+  if (h?.typ !== "flaeche") { status("Hier ist kein Flächenblech – " + kantenWzText()); return true; }
+  w.f = h; w.schritt = "kante"; waehle(h.id); zeigeKanten(); kantenBarZeigen(); status(kantenWzText()); return true;
+}
+function wendeKantenWz(key) {
+  const w = kantenWz, f = w.f, m = material(f.material), vor = f.kanten?.[key];
+  let neu;
+  if (w.typ === "baustein") { const b = bausteinFuer(w.baustein); neu = w.seite === -1 ? { folge: folgeUmkehren(bausteinFolge(werkzeugAuf(b, m), m)), versatz: +b.versatz || 0 } : w.baustein; }
+  else { const wk = { ...flanschStandard(w.typ), winkel: parseFloat($("kbWinkel").value) || 90, laenge: parseFloat($("kbLaenge").value) || (w.typ === "umschlag" ? 10 : 25), seite: w.seite }; neu = werkzeugNeu({ werkzeug: wk }, wk, m); }
+  if (vor) { // an bestehenden Baustein/Flansch anhängen: die Abkantfolge wird hinten fortgesetzt
+    const bv = werkzeugAuf(bausteinFuer(vor), m), nb = werkzeugAuf(bausteinFuer(neu), m);
+    setzeKanteVon(f, key, { folge: folgeAnhaengen(bausteinFolge(bv, m), bausteinFolge(nb, m)), versatz: +bv.versatz || 0 });
+    status(`${kantenName(f, key)}: an ${bausteinName(vor)} angehängt.`);
+  } else { setzeKanteVon(f, key, neu); status(`${kantenName(f, key)}: ${bausteinName(neu)} gesetzt. Weitere Kante anklicken oder «Fertig».`); }
+  regen(); zeigeKanten();
+}
+// Richtung einer vorhandenen Kante umkehren (Sichtseite ⇄ Rückseite)
+function kanteUmkehren(f, key) {
+  const m = material(f.material), v = f.kanten?.[key]; if (!v) return;
+  if (v.werkzeug) setzeKanteVon(f, key, werkzeugNeu(v, { ...v.werkzeug, seite: v.werkzeug.seite === -1 ? 1 : -1 }, m));
+  else { const b = bausteinFuer(v); setzeKanteVon(f, key, { folge: folgeUmkehren(bausteinFolge(werkzeugAuf(b, m), m)), versatz: +b.versatz || 0 }); }
+}
+document.querySelectorAll("[data-kantenwz]").forEach((b) => b.addEventListener("click", () => { const r = b.getBoundingClientRect(); setTimeout(() => starteKantenWz(b.dataset.kantenwz, r.right + 6, r.top), 0); }));
+$("kbRichtung").onclick = () => { if (!kantenWz) return; kantenWz.seite = kantenWz.seite === -1 ? 1 : -1; kantenBarZeigen(); };
+$("kbEnde").onclick = endeKantenWz;
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && kantenWz && !dlg && !skizze) { endeKantenWz(); status(""); } });
 function flaecheDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && (schleifen(x).length || skizzenRegionen(x).length));
@@ -2222,7 +2272,7 @@ function flaecheDialog(f) {
     <table class="zeilen kanten"><thead><tr><th>Kante</th><th class="num">Länge</th><th>Baustein</th><th class="num">Zugabe</th></tr></thead><tbody>
     ${(f._bleche || []).flatMap((bl) => bl.gruppen.map((g, k) => { const key = `${bl.pi}:${k}`, v = f.kanten?.[key];
       return `<tr data-k="${key}" class="${dlg?.aktiveKante === key ? "aktiv" : ""}"><td>${f._bleche.length > 1 ? `B${bl.pi + 1} ` : ""}K${k + 1}${g.gerade ? "" : " ⌒"}</td><td class="num">${f1(g.laenge)}</td>
-        <td><select data-b="${key}" aria-label="Baustein ${key}">${optionen(v)}</select>${kantenParam(key, v)}${v?.werkzeug ? fwFeld(key, v) : ""}${v && typeof v === "object" && !v.werkzeug ? `<input data-eigen="${key}" class="folge" value="${esc(v.folge)}" placeholder="90 25 U+ 7" title="Ab der Kante: Winkel Schenkel Winkel Schenkel …">` : ""}</td>
+        <td><select data-b="${key}" aria-label="Baustein ${key}">${optionen(v)}</select>${v ? `<button class="knopf klein" data-rev="${key}" title="Richtung der Abkantung umkehren (Sichtseite ⇄ nach hinten)">⇅ Richtung</button>` : ""}${kantenParam(key, v)}${v?.werkzeug ? fwFeld(key, v) : ""}${v && typeof v === "object" && !v.werkzeug ? `<input data-eigen="${key}" class="folge" value="${esc(v.folge)}" placeholder="90 25 U+ 7" title="Ab der Kante: Winkel Schenkel Winkel Schenkel …">` : ""}</td>
         <td class="num" data-z="${key}">${bl.profile[k] ? f1(bl.profile[k].zugabe) : "0"}${kantenWarn(key, v, g)}</td></tr>`; })).join("")}
     </tbody></table>
     <div class="reihe"><select id="kAlle" aria-label="Baustein für alle Kanten ohne Baustein">${optionen("")}</select><button class="knopf" data-alle>Allen freien Kanten zuweisen</button></div>
@@ -2240,6 +2290,7 @@ function flaecheDialog(f) {
       if (ek) { try { folge("100 " + e.target.value); setzeKante(ek, { folge: e.target.value, versatz: 0 }); e.target.classList.remove("ungueltig"); regen(); } catch (err) { e.target.classList.add("ungueltig"); status(err.message); } }
     });
     box.addEventListener("click", (e) => {
+      if (e.target.dataset.rev != null) { kanteUmkehren(f, e.target.dataset.rev); dlg.aktiveKante = e.target.dataset.rev; neu(); return; }
       if (e.target.dataset.bneu != null || e.target.dataset.bkante != null) { // Baustein-Editor; gespeichert wird in die Bibliothek (Einstellungen)
         const key = dlg.aktiveKante, v = key && f.kanten?.[key], vorhanden = typeof v === "string" && (einst.bausteine || []).find((b) => b.id === v);
         const b = e.target.dataset.bneu != null ? neuerBaustein(v && typeof v === "object" ? v.folge : undefined) : vorhanden || { ...bausteinFuer(v), id: neuerBaustein().id, name: "Eigener Baustein" };
@@ -2261,7 +2312,7 @@ function flaecheDialog(f) {
   // Kante gewählt (Ansicht oder Beschriftung): Zeile markieren und Bausteinmenü an der Stelle öffnen
   const waehleKanteImDialog = (k, x, y) => {
     const auffrischen = (key) => { if (dlg?.feature !== f) return; dlg.aktiveKante = key; const d = dlg; dialog({ ...d, felder: felder(f) }); zeigeKanten(); $("dInfo").textContent = dlg.info(); };
-    auffrischen(k); kantenMenue(f, k, x, y, auffrischen);
+    auffrischen(k);
   };
   dlg.kanteGewaehlt = waehleKanteImDialog;
 }
@@ -3586,7 +3637,7 @@ function starteSkizze(f) {
 // ------------------------------------------------------------ 2D-Modus: nur Skizzen/Zeichnung, Körper ausgeblendet, Layer-Leiste, DXF-Ausgabe
 let modus2d = false;
 function layerZeigen() {
-  const box = $("layerBox"); box.hidden = !(modus2d || skizze); if (box.hidden) return;
+  const box = $("layerBox"); box.hidden = !skizze; if (box.hidden) return;
   const ls = layerListe(), akt = doc.aktivLayer && ls.some((l) => l.id === doc.aktivLayer) ? doc.aktivLayer : "0";
   $("layerListe").innerHTML = ls.map((l) => `<div class="lrow${l.id === akt ? " aktiv" : ""}" data-l="${esc(l.id)}">
     <input type="radio" name="layerAkt" ${l.id === akt ? "checked" : ""} title="Aktiver Layer: neue Linien kommen hierher" aria-label="Aktiver Layer ${esc(l.name)}">
@@ -4405,7 +4456,7 @@ $("labels").addEventListener("click", (e) => {
   const kd = e.target.closest(".kante");
   if (kd && !skizze) { const f = finde(kd.dataset.fid); if (!f) return; const r = kd.getBoundingClientRect();
     if (dlg?.feature === f && dlg.kanteGewaehlt) return dlg.kanteGewaehlt(kd.dataset.kante, r.right, r.top);
-    if (!dlg) { menueKante = { fid: f.id, key: kd.dataset.kante }; zeigeKanten(); kantenMenue(f, kd.dataset.kante, r.right, r.top); } return; }
+    if (!dlg && kantenWz?.schritt === "kante" && kantenWz.f === f) wendeKantenWz(kd.dataset.kante); return; }
   const d = e.target.closest(".mass, .klickbar"); if (!d || !skizze) return;
   const l = labels[+d.dataset.i]; if (!l) return;
   if (l.glyph) { skizze.bsel = l.bed; skizze.sel = null; status(`${ABH_NAME[l.bed.typ]} gewählt – Entf löscht die Abhängigkeit.`); return zeichneLive(); }
@@ -4596,8 +4647,7 @@ leinwand.addEventListener("pointerup", (e) => {
   if (messen && !skizze) { messKlick(e); return; }
   if (dlg?.kantenWahl?.(e)) return;
   if (uebernimmWahl(e)) return;
-  if (!dlg) { const h = hauptVon(auswahl); const k = h?.typ === "flaeche" && !h.versteckt && kanteUnterMaus(h, e);
-    if (k) { menueKante = { fid: h.id, key: k }; zeigeKanten(); kantenMenue(h, k, e.clientX, e.clientY); return; } }
+  if (kantenWz && !dlg && kantenWzKlick(e)) return;
   strahl.setFromCamera(ndc(e), kamera);
   const treffer = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0]; // Körper vor Ebenen
   const ebenenTreffer = strahl.intersectObjects(modell.children.filter((o) => o.userData.ebene), true).find((x) => x.object.isMesh);

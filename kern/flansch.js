@@ -11,3 +11,15 @@ export function werkzeugAuf(b, m) {
 }
 export const flanschStandard = (typ = "flansch") => ({ typ, winkel: 90, laenge: typ === "umschlag" ? 10 : 25, radius: null, bezug: "mitte", seite: 1 });
 export const werkzeugName = (w) => w.typ === "umschlag" ? `Umschlag ${w.laenge} mm ${w.seite === -1 ? "hinten" : "Sichtseite"}` : `Flansch ${w.winkel}° ${w.laenge} mm${w.bezug && w.bezug !== "mitte" ? " (" + (w.bezug === "aussen" ? "aussen" : "innen") + ")" : ""}`;
+
+// Abkantfolge eines Bausteins («90 25 U+ 7»: Winkel, Länge, Winkel, Länge …) in die Gegenrichtung (Sichtseite ⇄ Rückseite):
+// alle Winkel bekommen das andere Vorzeichen, U+ ⇄ U−; Längen und Radien bleiben.
+export function folgeUmkehren(folge) {
+  return String(folge).replace(/−/g, "-").trim().split(/\s+/).filter(Boolean).map((t, i) => {
+    if (i % 2) return t; // Länge
+    const u = /^U([+-]?)(r[\d.]+)?$/i.exec(t); if (u) return `U${u[1] === "-" ? "+" : "-"}${u[2] || ""}`;
+    const w = /^([+-]?)(\d+(?:\.\d+)?)(r[\d.]+)?$/i.exec(t); return w ? `${w[1] === "-" ? "" : "-"}${w[2]}${w[3] || ""}` : t;
+  }).join(" ");
+}
+// Neuer Baustein/Flansch an einen bestehenden: dessen Abkantfolge wird hinten fortgesetzt («90 25» + «90 15» = «90 25 90 15»)
+export const folgeAnhaengen = (basis, neu) => `${String(basis).trim()} ${String(neu).trim()}`.trim();
