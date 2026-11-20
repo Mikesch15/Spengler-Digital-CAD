@@ -1,6 +1,10 @@
 // Tests: Cloud-Client und Abgleich gegen einen Nachbau des Supabase-Servers (kein Netz nötig)
 import { CloudClient } from "../kern/cloud/client.js";
 import { abgleichen, pruefsumme } from "../kern/cloud/abgleich.js";
+import { leererSpiegel, einstInSpiegel, spiegelInEinst, spiegelSpeicher } from "../kern/cloud/spiegel.js";
+import { BAUSTEINE_STANDARD } from "../kern/flaechenblech.js";
+import { MATERIALIEN } from "../kern/materialien.js";
+import { zeilenAusSchenkel, schenkelAusZeilen, teilFuerApp } from "../kern/cloud/appformat.js";
 import { neueKantenvorlage, neuesMaterialprofil } from "../kern/vorlagen/modelle.js";
 let fehler = 0; const ok = (b, t) => { if (!b) { fehler++; console.error("✗", t); } else console.log("✓", t); };
 
@@ -99,6 +103,33 @@ const tr = await cp.teileSenden("2026-114", [{ name: "Ortbrett", material: "Zink
 ok(sv.teile.length === 1 && sv.teile[0].auftrag === "2026-114" && sv.teile[0].zuschnitt_breite_mm === 333 && sv.teile[0].company_id === "f1" && sv.teile[0].teil_nr === 1, "Teile an die App senden (cad_teile: Auftrag, Zuschnitt, Stück)");
 const pau = await cp.profilAuftraege(); ok(pau.length === 1 && pau[0].titel === "Ortbrett", "Offene Profilaufträge der App lesen");
 ok((await cp.profilAuftragGebaut("a1")).status === "gebaut" && (await cp.profilAuftraege()).length === 0 && (await cp.profilAuftragGebaut("a1")) === null, "Profilauftrag als «gebaut» melden (nur einmal)");
+// Spiegel ⇄ Einstellungen
+{
+  const sv4 = server(), cA = kunde(sv4), cB = kunde(sv4); await cA.anmelden("Max.Muster", "geheim"); await cB.anmelden("Max.Muster", "geheim");
+  const einstA = { bausteine: BAUSTEINE_STANDARD.map((b) => ({ ...b })), materialien: MATERIALIEN.map((m) => ({ ...m })) };
+  const spA = leererSpiegel(); einstInSpiegel(einstA, spA);
+  ok(Object.keys(spA.kantenvorlage).length === 0 && Object.keys(spA.materialprofil).length === 0, "Unveränderter Startbestand wird nicht in die Firmenbibliothek hochgeladen");
+  einstA.bausteine.push({ id: "eigen-1", name: "Wandanschluss 40", gruppe: "Eigene", folge: "90 40 135 15", versatz: 0 }); einstA.materialien.push({ id: "mx", name: "Kupfer 0.6", t: 0.6, ri: 1, k: 0.4, dichte: 8.9 });
+  einstA.bausteine.find((b) => b.id === BAUSTEINE_STANDARD[0].id).folge = "90 30";
+  einstInSpiegel(einstA, spA); const bA = await abgleichen(cA, spiegelSpeicher(spA));
+  ok(bA.hochgeladen === 3 && sv4.zeilen.length === 3, "Neuer + geänderter Baustein und neues Material werden hochgeladen (3)");
+  const einstB = { bausteine: BAUSTEINE_STANDARD.map((b) => ({ ...b })), materialien: MATERIALIEN.map((m) => ({ ...m })) }, spB = leererSpiegel();
+  await abgleichen(cB, spiegelSpeicher(spB)); const eB = spiegelInEinst(einstB, spB);
+  ok(eB.bausteine.some((b) => b.id === "eigen-1" && b.folge === "90 40 135 15") && eB.bausteine.find((b) => b.id === BAUSTEINE_STANDARD[0].id).folge === "90 30" && eB.materialien.some((m) => m.name === "Kupfer 0.6" && m.t === 0.6) && eB.bausteine.length === BAUSTEINE_STANDARD.length + 1, "Zweiter PC: Firmenvorlagen erscheinen als Bausteine/Materialien, Standard bleibt");
+  einstInSpiegel(eB, spB); ok(Object.keys(spB.kantenvorlage).length === 2, "Rücklauf erzeugt keine Doppelten");
+  // Löschen auf PC A → verschwindet auf PC B
+  einstA.bausteine = einstA.bausteine.filter((b) => b.id !== "eigen-1"); delete spA.kantenvorlage[Object.values(spA.kantenvorlage).find((v) => v.metadata.appId === "eigen-1").id];
+  await abgleichen(cA, spiegelSpeicher(spA)); await abgleichen(cB, spiegelSpeicher(spB)); const eB2 = spiegelInEinst(eB, spB);
+  ok(!eB2.bausteine.some((b) => b.id === "eigen-1"), "Auf PC A gelöschter Baustein verschwindet auf PC B");
+}
+// Schenkelformat der App
+{
+  const sch = [{ laenge: 168, winkel: 0 }, { laenge: 25, winkel: 90 }, { laenge: 7, winkel: 180 }], z = zeilenAusSchenkel(sch);
+  ok(JSON.stringify(z) === JSON.stringify([{ L: 168, winkel: 90, art: "abkanten" }, { L: 25, winkel: 180, art: "umschlag" }, { L: 7, winkel: 0, art: "abkanten" }]), "App-Schenkel → Zeilen des Freien Profils (Winkel nach dem Schenkel, 180 = Umschlag)");
+  ok(JSON.stringify(schenkelAusZeilen(z)) === JSON.stringify(sch), "Zeilen → Schenkel: Hin und zurück identisch");
+  const tt = teilFuerApp({ name: "Ortbrett", zeilen: z, laenge: 3000, stueck: 2 }, { zuschnitt: 200.456 }, { name: "Alu", t: 0.8 }, 1);
+  ok(tt.breite === 200.46 && tt.appData.schenkel.length === 3 && tt.appData.cad.material_name === "Alu" && tt.stueck === 2, "Teil für die App: Zuschnitt, Schenkel, Material");
+}
 // Prüfsumme ignoriert version/modified/_-Felder
 const h1 = await pruefsumme({ a: 1, version: 1, modified: "x", _z: 5 }), h2 = await pruefsumme({ version: 9, a: 1, modified: "y" });
 ok(h1 === h2 && h1 !== (await pruefsumme({ a: 2 })), "Prüfsumme ignoriert version, modified und «_»-Felder");

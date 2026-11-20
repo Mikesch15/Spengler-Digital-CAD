@@ -2,6 +2,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { planModul } from "./plan.js";
+import { cloudModul } from "./cloud.js";
 import { kantenGeometrie, RICHTUNGEN as ANSICHT_RICHTUNGEN } from "./ansicht.js";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
@@ -2696,7 +2697,7 @@ const probeWerte = { mat: 0, z: 130, a: "", b: "" };
 const meldung = (t) => { $("eMeldung").textContent = t; };
 const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
 let einstRegister = "material";
-const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["vorlagen", "Vorlagen & Sichern"]];
+const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["vorlagen", "Vorlagen & Sichern"], ["konto", "Konto & Cloud"]];
 // Feld an einen Wert der Einstellungen binden: data-e="gruppe.schluessel", data-typ zahl|text|janein|wahl
 function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
   const [g, k] = pfad.split("."), w = entwurf[g][k], id = "e_" + g + "_" + k;
@@ -2802,6 +2803,7 @@ function zeigeEinst() {
       <td class="nowrap"><button class="weg" data-bweg="${i}" aria-label="${esc(b.name)} entfernen">×</button></td></tr>`).join("")}
     </tbody></table></div>
     <div class="reihe ohnerand"><button class="knopf" id="eNeuBaustein">+ Baustein</button><button class="knopf" id="eBausteineStandard">Standard-Bausteine ergänzen</button></div>`,
+    konto: cloud.html(),
     vorlagen: `
     <h4>Eigene Vorlagen</h4>
     ${e.vorlagen.length ? `<ul class="eigene">${e.vorlagen.map((v, i) => `<li>${esc(v.name)} <small class="hinweis">${v.zeilen.length} Schenkel</small><button class="weg" data-vweg="${i}" aria-label="${esc(v.name)} entfernen">×</button></li>`).join("")}</ul>`
@@ -4112,6 +4114,19 @@ async function projektOeffnen() {
 }
 $("wSpeichern").onclick = () => projektSpeichern();
 $("wOeffnen").onclick = projektOeffnen;
+// ------------------------------------------------------------ Konto & Cloud (Spengler-Digital-App)
+const cloud = cloudModul({
+  esc, status, getEinst: () => einst, setEinst: (e) => { einst = e; if (entwurf) entwurf = JSON.parse(JSON.stringify(einst)); }, einstSpeichern, getDoc: () => doc, regen,
+  projektText: () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v)), ladeProjektText: (x) => ladeProjekt(x),
+  neuZeichnen: () => { if (!$("einst").hidden && einstRegister === "konto") zeigeEinst(); },
+  teile: () => blechteile().filter((f) => f._res).map((f) => ({ f, res: f._res, mat: material(f.material) })),
+  neuesProfil: ({ name, zeilen, laenge, stueck, staerke }) => {
+    const m = (staerke > 0 && einst.materialien.find((x) => x.t === +staerke)) || einst.materialien.find((x) => x.id === neuMaterial()) || einst.materialien[0];
+    const f = { id: neueId(), typ: "profil", name, start: 0, zeilen: zeilen.length ? zeilen : [{ L: 100, winkel: 0, art: "abkanten" }], material: m.id, laenge: laenge > 0 ? +laenge : einst.neu.laenge, stueck: stueck > 0 ? +stueck : 1, richtung: "eine", ebene: einst.neu.ebene };
+    einfuegen(f); regen(); waehle(f.id); },
+});
+$("eInhalt").addEventListener("click", (ev) => { const b = ev.target.closest("[data-cloud]"); if (b) cloud.aktion(b.dataset.cloud, b.dataset.id); });
+cloud.start().then(() => { if (!$("einst").hidden && einstRegister === "konto") zeigeEinst(); });
 // ------------------------------------------------------------ Exakter CAD-Kern (Beta): OpenCascade im Web Worker (kern/cad)
 // Schalter in den Einstellungen (Standard aus = Version 0.2). Die Anzeige bleibt vorerst das Netz; der Kern liefert exakte
 // Körper für STEP und Prüfungen. Fällt er aus, bleibt alles andere unverändert nutzbar.
