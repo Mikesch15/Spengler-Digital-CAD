@@ -74,6 +74,15 @@ async function seite(kern) {
       ok(platte.exakt && ring.exakt && platte.flaechen >= 8, `Ein: Platte und Ring aus dem Kern (Platte ${platte.flaechen} Flächen) – ${st}`);
       ok(Math.abs(platte.volumen - vP) / vP < 0.002 && Math.abs(ring.volumen - vR) / vR < 0.002, `Ein: Netzvolumen ≈ exakt (Platte ${platte.volumen.toFixed(0)}/${vP.toFixed(0)}, Ring ${ring.volumen.toFixed(0)}/${vR.toFixed(0)})`);
       ok(!ell.exakt && /Ellipse \(Ellipse noch nicht exakt\)/.test(st), "Ein: Ellipse bleibt Netz und wird in der Statusmeldung genannt");
+      // Prüfen → Eigenschaften (exakt)
+      await s.evaluate(() => document.getElementById("wEigenschaften").click());
+      const tab = await s.$$eval("#werkstatt table.liste tbody tr", (tr) => tr.map((r) => [...r.cells].map((c) => c.textContent)));
+      const zp = tab.find((r) => r[0].startsWith("Platte")), zr = tab.find((r) => r[0].startsWith("Ring"));
+      const zahl = (t) => +t.replace(/[’']/g, "").replace(",", ".");
+      ok(zp && Math.abs(zahl(zp[1]) - vP / 1000) < 0.001 && zp[6] === "✓" && zr && Math.abs(zahl(zr[1]) - vR / 1000) < 0.001, `Ein: Eigenschaften exakt – Platte ${zp?.[1]} cm³ (soll ${(vP / 1000).toFixed(3)}), Ring ${zr?.[1]} cm³ (soll ${(vR / 1000).toFixed(3)}), gültig`);
+      ok(zp && zp[5] === "100.00 × 50.00 × 20.00" && zp[4] === `${((250000 - PI * 100 * 25 - PI * 64 * 75) / (5000 - PI * 100 - PI * 64)).toFixed(2)} / 25.00 / 10.00`, `Ein: Abmessungen ${zp?.[5]}, Schwerpunkt ${zp?.[4]}`);
+      const [dl] = await Promise.all([s.waitForEvent("download"), s.click("#kEigCsv")]);
+      ok(/Eigenschaften\.csv$/.test(dl.suggestedFilename()) && /^Körper;Volumen mm3/.test(readFileSync(await dl.path(), "utf8")), "Ein: Eigenschaften als CSV exportierbar");
       ok(probleme.length === 0, `Ein: keine Seitenfehler ${probleme.join(" | ")}`);
     }
     await s.close();

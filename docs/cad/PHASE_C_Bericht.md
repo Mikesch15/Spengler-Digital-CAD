@@ -40,9 +40,13 @@
 
 **Hinweis:** Masse, die die App heute aus Netzen rechnet (z. B. Messen am Körper), werden bei eingeschaltetem Kern mit dem genaueren Netz gerechnet. Exakte Masse direkt aus dem Kern (Volumen, Fläche, Schwerpunkt im Prüfen-Menü) sind der nächste Schritt.
 
-## Nächste Schritte (C2c …)
-1. **Prüfen → Eigenschaften:** exaktes Volumen, Fläche, Schwerpunkt und Masse je Körper aus dem Kern; Gültigkeitsprüfung
-2. **Splines und Ellipsen exakt** (B-Spline- und Ellipsenkurven im Profilformat)
+## C2c – Prüfen → Eigenschaften (exakt) (erledigt, 20.11.2026)
+- **Prüfen ▾ → «Eigenschaften (exakt)»** (nur mit eingeschaltetem Kern): Tabelle je exaktem Körper mit Volumen, Oberfläche, Masse (Dichte aus dem Material, falls vorhanden), Schwerpunkt, Abmessungen und Gültigkeit (BRepCheck). Dazu der Export als CSV. Nicht exakte Körper werden mit Grund genannt.
+- **Test (App, jetzt 18/18):** Platte 89,696 cm³ = analytisch. Schwerpunkt x 50,63 = (250000 − π·100·25 − π·64·75)/(5000 − π·164) analytisch. Abmessungen 100 × 50 × 20. Ring 1055,575 cm³. CSV-Export.
+- **Grenze:** Bei Teilen mit Komponentenlage beziehen sich Schwerpunkt und Abmessungen auf die unverschobene Lage (mit * markiert).
+
+## Nächste Schritte (C2d …)
+1. **Splines und Ellipsen exakt** (B-Spline- und Ellipsenkurven im Profilformat)
 3. **Abrunden/Fasen und Schale** über Kanten- und Flächenreferenzen (`topologie.js`) statt über Koordinaten am Netz.
 4. **Feature-Fehler** aus dem Kern (`KernFehler.code`) direkt in der Zeitleiste anzeigen.
 5. **Offline:** Service Worker legt `cad/` beim ersten Laden in den Zwischenspeicher. Heute geschieht das bereits über «Netz zuerst, dann Cache», aber ohne Vorabladen.

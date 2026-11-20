@@ -1049,6 +1049,7 @@ function zeigeWerkstatt() {
   const w = $("werkstatt");
   document.querySelectorAll("[data-register]").forEach((b) => b.setAttribute("aria-selected", b.dataset.register === register));
   if (register === "auftrag") return zeigeAuftrag(w);
+  if (register === "eigenschaften") return zeigeEigenschaften(w);
   if (f?.typ === "ebene") {
     const e = f._ebene, v3 = (a) => a.map((x) => +x.toFixed(2)).join(" / ");
     w.innerHTML = `<div class="unter" style="padding-top:12px">${esc(f.name)} · ${EBENEN_ARTEN[f.art]}</div>
@@ -4037,7 +4038,7 @@ function kern() {
   return cadK;
 }
 function kernAnzeige() {
-  const b = $("wStepExakt"); if (b) b.hidden = !kernAn();
+  for (const id of ["wStepExakt", "wEigenschaften"]) { const b = $(id); if (b) b.hidden = !kernAn(); }
   if (!kernAn() && cadK) { cadK.beenden(); cadK = null; }
 }
 const kernFehlerText = (e) => e?.code === "NICHT_GELADEN" ? `Der CAD-Kern konnte nicht geladen werden (${e.message}). Web-Version oder PC-Programm verwenden; alles andere funktioniert weiter.` : `CAD-Kern: ${e?.message ?? e}`;
@@ -4087,7 +4088,7 @@ async function pruefe3D(f, aus) {
 // Exaktes Modell: Volumenkörper (Extrusion, Drehung inkl. Verbinden/Ausschneiden/Schneiden) und Blechteile werden im Kern
 // gebaut; ihr Anzeige-Netz wird durch die Tessellierung des exakten Körpers ersetzt (mit Flächenzuordnung).
 // Was noch nicht exakt geht (Abrunden/Fasen, Schale, Muster, Sweep, Loft, Import, Splines …), bleibt als Netz und wird genannt.
-let exaktLauf = 0, exaktTimer = null;
+let exaktLauf = 0, exaktTimer = null, exaktEig = new Map(), exaktNicht = new Map(); // fid → Eigenschaften aus dem Kern / Grund «nicht exakt»
 const exaktPlanen = () => { if (!kernAn()) return; clearTimeout(exaktTimer); exaktTimer = setTimeout(() => exaktesModell().catch((e) => status(kernFehlerText(e))), 250); };
 function ersetzeNetz(mesh, n, M) {
   const g = new THREE.BufferGeometry();
@@ -4130,19 +4131,41 @@ async function exaktesModell() {
       } else if (["kanten3d", "schale", "kmuster", "kspiegel", "bewegen"].includes(f.typ)) markiereZiel(f, `${f.name} noch nicht exakt`);
       else if (["sweep", "loft", "import", "kehle", "flaeche"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
-    let n = 0;
+    let n = 0; const eig = new Map();
     for (const [fid, id] of [...koerper, ...blech]) {
       if (nicht.has(fid)) continue;
       const mesh = modell.children.find((o) => o.isMesh && o.userData.fid === fid); if (!mesh) continue;
-      const netz = await K.ausfuehren({ op: "tessellieren", ziel: id });
+      const netz = await K.ausfuehren({ op: "tessellieren", ziel: id }), e = await K.ausfuehren({ op: "eigenschaften", ziel: id });
       if (lauf !== exaktLauf) return;
       ersetzeNetz(mesh, netz, lageVon(hauptVon(fid))); n++;
+      eig.set(fid, { ...e, verschoben: !!lageVon(hauptVon(fid)) });
     }
+    exaktEig = eig; exaktNicht = nicht;
+    if (register === "eigenschaften") zeigeWerkstatt();
     zeigeKanten?.();
     const rest = [...nicht].map(([fid, g]) => `${finde(fid)?.name ?? fid} (${g})`);
     status(`Exakt aus dem CAD-Kern: ${n} Körper${rest.length ? ` · als Netz: ${rest.join(", ")}` : ""}`);
   } finally { if (ids.length) K.ausfuehren({ op: "freigeben", ziele: ids }).catch(() => {}); }
 }
+
+// Prüfen → Eigenschaften (exakt): Volumen, Oberfläche, Schwerpunkt, Abmessungen, Masse, Gültigkeit je Körper aus dem Kern
+function zeigeEigenschaften(w) {
+  if (!kernAn()) { register = "teil"; return zeigeWerkstatt(); }
+  const f3 = (v) => v.toLocaleString("de-CH", { maximumFractionDigits: 3 }), zeilen = [];
+  for (const [fid, e] of exaktEig) {
+    const f = finde(fid), m = f?.material ? material(f.material) : null, masse = m?.dichte ? e.volumen * m.dichte * 1e-6 : null; // mm³ · kg/dm³
+    const ab = e.grenzen.max.map((v, i) => v - e.grenzen.min[i]);
+    zeilen.push({ name: f?.name ?? fid, volumen: e.volumen, flaeche: e.flaeche, sp: e.schwerpunkt, ab, masse, material: m?.name ?? "", gueltig: e.gueltig && e.geschlossen, verschoben: e.verschoben });
+  }
+  w.innerHTML = `<h3>Eigenschaften (exakt, CAD-Kern)</h3>
+    <p class="hinweis">Aus den exakten B-Rep-Körpern gerechnet, nicht aus dem Anzeige-Netz. Einheiten: mm, mm², cm³, kg. ${exaktNicht.size ? `Nicht exakt (nicht in der Liste): ${[...exaktNicht].map(([fid, g]) => esc(`${finde(fid)?.name ?? fid} – ${g}`)).join(", ")}.` : ""}</p>
+    ${zeilen.length ? `<table class="liste"><thead><tr><th>Körper</th><th class="num">Volumen cm³</th><th class="num">Oberfläche mm²</th><th class="num">Masse kg</th><th>Schwerpunkt mm</th><th>Abmessungen mm</th><th>Gültig</th></tr></thead><tbody>
+    ${zeilen.map((z) => `<tr><td>${esc(z.name)}${z.verschoben ? ' <small title="Schwerpunkt und Abmessungen ohne Komponentenverschiebung">*</small>' : ""}</td><td class="num">${f3(z.volumen / 1000)}</td><td class="num">${f3(z.flaeche)}</td><td class="num">${z.masse == null ? "–" : f3(z.masse)}</td><td>${z.sp.map((v) => v.toFixed(2)).join(" / ")}</td><td>${z.ab.map((v) => v.toFixed(2)).join(" × ")}</td><td>${z.gueltig ? "✓" : "✗ ungültig"}</td></tr>`).join("")}
+    </tbody></table><div class="reihe"><button class="knopf" id="kEigCsv">Als CSV speichern</button></div>` : '<p class="leer">Noch keine exakten Körper – der Kern rechnet nach jeder Änderung neu.</p>'}`;
+  if ($("kEigCsv")) $("kEigCsv").onclick = () => herunterladen(`${doc.nr || "modell"} Eigenschaften.csv`, ["Körper;Volumen mm3;Oberfläche mm2;Masse kg;Material;Schwerpunkt X;Y;Z;Abmessung X;Y;Z;gültig",
+    ...zeilen.map((z) => [z.name, z.volumen.toFixed(3), z.flaeche.toFixed(3), z.masse == null ? "" : z.masse.toFixed(4), z.material, ...z.sp.map((v) => v.toFixed(3)), ...z.ab.map((v) => v.toFixed(3)), z.gueltig ? "ja" : "nein"].join(";"))].join("\n"), "text/csv");
+}
+if ($("wEigenschaften")) $("wEigenschaften").onclick = () => { register = "eigenschaften"; zeigeWerkstatt(); status(exaktEig.size ? `Eigenschaften von ${exaktEig.size} exakten Körpern.` : "Der CAD-Kern rechnet noch …"); };
 
 // ------------------------------------------------------------ Austausch: STEP/STL exportieren, STEP/STL importieren
 function sichtbareKoerper() {
