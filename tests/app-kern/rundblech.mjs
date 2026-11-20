@@ -34,5 +34,19 @@ for (const kern of [null, "occt"]) {
   ok(probleme.length === 0, `${name}: keine Seitenfehler ${probleme.join(" | ")}`);
   await s.close();
 }
+// Rohr Ø150 durch Dach 30° (kürzeste Länge 200): Volumen = t·2π·rm·(h + rm·tan α), Netz (CSG) und exakt (Halbraum)
+for (const kern of [null, "occt"]) {
+  const s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
+  await s.addInitScript((k) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Rohr", nr: "R-2", zaehler: 5, features: [{ id: "ro", typ: "rundblech", name: "Entlüftungsrohr", art: "zylinder", d1: 150, d2: 150, h: 200, neigung: 30, winkel: 360, zugabe: 8, material: "zink07", ebene: "XZ" }] }));
+    localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: k || "netz" } })); }, kern);
+  await s.goto("http://localhost:8768/index.html?test");
+  if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 60000 }); else await s.waitForTimeout(1500);
+  const k = (await s.evaluate(() => window.sdcadTest.koerperInfo())).find((o) => o.fid === "ro"), ta = Math.tan(PI / 6), V = t * 2 * PI * 75 * (200 + 75 * ta);
+  const name = kern ? "Ein" : "Aus";
+  ok(k && Math.abs(k.volumen - V) / V < (kern ? 0.002 : 0.02) && !!k.exakt === !!kern, `${name}: Rohr mit Anschnitt 30° V ${k?.volumen.toFixed(0)} ≈ ${V.toFixed(0)} mm³ (exakt: ${k?.exakt})`);
+  ok(k && Math.abs(k.max[1] - (200 + 75 * ta)) < 0.05 && Math.abs(k.min[1] + 75.35 * ta) < 0.5, `${name}: Oberkante ${k?.max[1].toFixed(2)}, tiefster Punkt ${k?.min[1].toFixed(2)} (Dachseite)`);
+  ok(probleme.length === 0, `${name}: keine Seitenfehler ${probleme.join(" | ")}`);
+  await s.close();
+}
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Rund-/Kegelblech in der App: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

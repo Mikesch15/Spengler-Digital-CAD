@@ -71,10 +71,11 @@ export function rundblechDxf(abw, titel) {
   const f = (v) => v.toFixed(4), out = ["0", "SECTION", "2", "ENTITIES"];
   for (const e of abw.elemente) {
     const farbe = e.lage === "NAHT" ? "1" : "7";
-    if (e.typ === "linie") out.push("0", "LINE", "8", e.lage, "62", farbe, "10", f(e.a[0]), "20", f(e.a[1]), "30", "0", "11", f(e.b[0]), "21", f(e.b[1]), "31", "0");
+    if (e.typ === "polylinie") { out.push("0", "POLYLINE", "8", e.lage, "62", farbe, "66", "1", "10", "0", "20", "0", "30", "0"); for (const p of e.punkte) out.push("0", "VERTEX", "8", e.lage, "10", f(p[0]), "20", f(p[1]), "30", "0"); out.push("0", "SEQEND", "8", e.lage); }
+    else if (e.typ === "linie") out.push("0", "LINE", "8", e.lage, "62", farbe, "10", f(e.a[0]), "20", f(e.a[1]), "30", "0", "11", f(e.b[0]), "21", f(e.b[1]), "31", "0");
     else out.push("0", "ARC", "8", e.lage, "62", farbe, "10", f(e.c[0]), "20", f(e.c[1]), "30", "0", "40", f(e.r), "50", f(e.w0), "51", f(e.w1));
   }
-  const m = abw.masse, info = abw.art === "zylinder" ? `Zuschnitt ${m.zuschnitt[0].toFixed(1)} x ${m.zuschnitt[1].toFixed(1)} mm` : `R ${m.R.toFixed(2)} / r ${m.r.toFixed(2)} mm, Winkel ${m.phi.toFixed(3)} Grad`;
+  const m = abw.masse, info = abw.art === "rohr" ? `Zuschnitt ${m.zuschnitt[0].toFixed(1)} x ${m.zuschnitt[1].toFixed(1)} mm, kurz ${m.kurz.toFixed(1)} / lang ${m.lang.toFixed(1)} mm, Neigung ${m.neigung} Grad` : abw.art === "zylinder" ? `Zuschnitt ${m.zuschnitt[0].toFixed(1)} x ${m.zuschnitt[1].toFixed(1)} mm` : `R ${m.R.toFixed(2)} / r ${m.r.toFixed(2)} mm, Winkel ${m.phi.toFixed(3)} Grad`;
   out.push("0", "TEXT", "8", "TEXT", "10", "0", "20", f(-20), "30", "0", "40", "6.00", "1", ascii(`${titel}  ${info}`));
   out.push("0", "ENDSEC", "0", "EOF");
   return out.join("\n") + "\n";

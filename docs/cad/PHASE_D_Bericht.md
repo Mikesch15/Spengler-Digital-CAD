@@ -35,3 +35,12 @@ Neues Werkzeug **Blech ▾ → Rund-/Kegelblech** für Zylinder- und Kegelmänte
 **Noch nicht:**
 - Rundbleche sind nicht im gedruckten Werkstattblatt und nicht in «Alle als DXF»; die Einzel-DXF in der Werkstatt gibt es.
 - Schräg abgeschnittene Rohre (Rohr an Dachneigung) und Übergänge rund ↔ eckig fehlen noch; das wäre der nächste Schritt in Phase D.
+
+## D2 – Rohr mit schrägem Anschnitt (Dachdurchführung) (erledigt, 20.11.2026)
+- Rund-/Kegelblech, Form Zylinder: neues Feld **«Anschnitt unten (Dachneigung)»**. Die Höhe ist dann die kürzeste Mantellinie.
+- **Abwicklung:** Die Unterkante ist die exakte Funktion L(θ) = h + rk·tan α·(1 − cos θ) auf der K-Faser, Naht bei der kürzesten Seite. Ausgabe als Polylinie in 1°-Schritten: **eine Näherung der exakten Kurve, als solche ausgewiesen**. Werkstatt: Länge kurz/lang, Breite, Gewicht (Fläche integriert).
+- **3D:** ohne Kern Netz mit Netz-CSG-Schnitt, mit Kern Drehkörper mit Halbraum-Schnitt. Schnittebene durch den Ursprung der Grundebene.
+- **Kegel mit Anschnitt** wird abgewiesen («nur beim Zylinder»), da noch nicht exakt umgesetzt.
+- **Tests:**
+  - Kern (+4): lang = h + 2·rk·tan α, Kurve = L(θ), DXF-Polylinie lesbar, Kegel abgewiesen
+  - App (+6): Volumen = t·2π·rm·(h + rm·tan α) – exakt auf 0,003 %, Netz auf 0,1 %. Oberkante und tiefster Punkt geprüft, mit Kern aus und ein.

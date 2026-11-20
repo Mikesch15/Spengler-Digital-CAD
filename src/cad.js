@@ -785,8 +785,8 @@ function regen() {
       } else if (f.typ === "rundblech") { // Zylinder-/Kegelmantel: exakte Abwicklung (kern/abwicklungRund.js), 3D als Drehkörper
         const m = material(f.material), kegel = f.art !== "zylinder";
         if (!(f.d1 > m.t && f.h > 0) || (kegel && !(f.d2 >= 0)) || !(f.winkel > 0 && f.winkel <= 360)) throw new Error("Durchmesser, Höhe und Winkel prüfen (Winkel 1–360°)");
-        f._rund = rundblechAbwicklung({ art: kegel && Math.abs(f.d1 - f.d2) > 1e-9 ? "kegel" : "zylinder", d1: f.d1, d2: kegel ? f.d2 : f.d1, h: f.h, t: m.t, k: m.k, winkel: f.winkel, zugabe: f.zugabe });
-        if (!f.versteckt) modell.add(koerperMesh(rundGeometrie(f, m), darstellungVon(f, m), f.id));
+        f._rund = rundblechAbwicklung({ art: kegel && Math.abs(f.d1 - f.d2) > 1e-9 ? "kegel" : "zylinder", d1: f.d1, d2: kegel ? f.d2 : f.d1, h: f.h, t: m.t, k: m.k, winkel: f.winkel, zugabe: f.zugabe, neigung: kegel ? 0 : +f.neigung || 0 });
+        if (!f.versteckt) { const mesh = koerperMesh(rundGeometrie(f, m), darstellungVon(f, m), f.id); if (rohrNeigung(f)) verknuepfe(mesh, rohrSchnittWerkzeug(f), "ausschneiden"); modell.add(mesh); }
       } else if (f.typ === "detail") {
         f._teile = null; throw new Error("Spenglerdetails gibt es nicht mehr – als Flächenblech mit Kantenbausteinen zeichnen und dieses Feature löschen");
       } else if (f.typ === "profil") {
@@ -1487,7 +1487,21 @@ function profilDialog(f) {
 
 // ------------------------------------------------------------ Rund-/Kegelblech (Zylinder- oder Kegelmantel mit exakter Abwicklung)
 // Meridian-Querschnitt (r, h) mit Dicke t senkrecht zur Mantellinie – gleich für Netz und exakten Körper
+const rohrNeigung = (f) => (f.art === "zylinder" && +f.neigung > 0 ? +f.neigung : 0);
+// Rohr mit schrägem Anschnitt: Schnittebene durch den Ursprung der Grundfläche, z = tan α · x_u (kürzeste Mantellinie bei +u)
+function rohrSchnitt(f) {
+  const E = E_(f.ebene), ta = Math.tan((rohrNeigung(f) * Math.PI) / 180), N = V(E.u).multiplyScalar(ta).sub(V(E.n)).normalize();
+  return { E, ta, N, H: f.h + (f.d1 / 2) * ta };
+}
+function rohrSchnittWerkzeug(f) { // grosser Quader auf der wegzuschneidenden Seite (Netz-Rechnung)
+  const { E, N } = rohrSchnitt(f), S = 4 * (f.d1 + f.h + 100), X = new THREE.Vector3().crossVectors(N, Math.abs(N.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize(), Y = new THREE.Vector3().crossVectors(N, X);
+  const g = new THREE.BoxGeometry(S, S, S); g.translate(0, 0, S / 2); g.applyMatrix4(new THREE.Matrix4().makeBasis(X, Y, N).setPosition(V(E.o))); return g;
+}
 function rundMeridian(f, m) {
+  if (rohrNeigung(f)) { // Rohr: Rechteck vom Schnitt (unten, mit Reserve) bis zur Oberkante H
+    const { ta, H } = rohrSchnitt(f), ri = f.d1 / 2 - m.t / 2, ra = f.d1 / 2 + m.t / 2, zb = -ra * ta - 1;
+    return [[ri, zb], [ra, zb], [ra, H], [ri, H], [ri, zb]];
+  }
   const t = m.t, r1 = f.d1 / 2, r2 = (f.art === "zylinder" ? f.d1 : f.d2) / 2, s = Math.hypot(r1 - r2, f.h), nx = f.h / s, ny = (r1 - r2) / s;
   const p = (r, z, d) => [r + nx * d, z + ny * d];
   return [p(r1, 0, -t / 2), p(r1, 0, t / 2), p(r2, f.h, t / 2), p(r2, f.h, -t / 2), p(r1, 0, -t / 2)];
@@ -1509,7 +1523,8 @@ function rundDialog(f) {
     { id: "art", label: "Form", optionen: [["kegel", "Kegelstumpf / Kegel"], ["zylinder", "Zylinder (Rohr)"]], wert: f.art },
     { id: "d1", label: "Ø unten (Blechmitte)", einheit: "mm", wert: f.d1 },
     ...(f.art === "zylinder" ? [] : [{ id: "d2", label: "Ø oben (0 = Spitze)", einheit: "mm", wert: f.d2 }]),
-    { id: "h", label: "Höhe", einheit: "mm", wert: f.h },
+    { id: "h", label: f.art === "zylinder" ? "Höhe (kürzeste Seite)" : "Höhe", einheit: "mm", wert: f.h },
+    ...(f.art === "zylinder" ? [{ id: "neigung", label: "Anschnitt unten (Dachneigung, 0 = gerade)", einheit: "°", wert: f.neigung ?? 0 }] : []),
     { id: "winkel", label: "Umfang (360 = ganz)", einheit: "°", wert: f.winkel },
     { id: "zugabe", label: "Zugabe an der Naht", einheit: "mm", wert: f.zugabe ?? 0 },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
@@ -1522,18 +1537,20 @@ function rundDialog(f) {
     "Masse auf der Blechmitte. Die Abwicklung wird exakt auf der K-Faser des Materials gerechnet (Zylinder und Kegel sind abwickelbar). Zugabe = Überlappung an der Naht.");
 }
 function zeigeRund(w, f) {
-  const a = f._rund, M = a.masse, m = material(f.material), kegel = a.art === "kegel";
-  const flaeche = kegel ? (M.phi * Math.PI / 360) * (M.R * M.R - M.r * M.r) + M.zugabe * (M.R - M.r) : (M.breite + M.zugabe) * M.hoehe;
-  const zeilen = kegel
+  const a = f._rund, M = a.masse, m = material(f.material), kegel = a.art === "kegel", rohr = a.art === "rohr", rk = M.faserDurchmesser / 2;
+  const flaeche = kegel ? (M.phi * Math.PI / 360) * (M.R * M.R - M.r * M.r) + M.zugabe * (M.R - M.r)
+    : rohr ? M.breite * M.kurz + rk * rk * Math.tan((M.neigung * Math.PI) / 180) * (M.breite / rk - Math.sin(M.breite / rk)) + M.zugabe * M.kurz : (M.breite + M.zugabe) * M.hoehe;
+  const zeilen = rohr ? [["Abwicklungsbreite", `${f1(M.breite)} mm`], ["Länge kurz / lang", `${f1(M.kurz)} / ${f1(M.lang)} mm`], ["Anschnitt (Dachneigung)", `${M.neigung}°`], ["Ø K-Faser", `${f1(M.faserDurchmesser)} mm`]]
+    : kegel
     ? [["Radius aussen R", `${f1(M.R)} mm`], ["Radius innen r", `${f1(M.r)} mm`], ["Öffnungswinkel", `${M.phi.toFixed(3)}°`], ["Sehne", `${f1(M.sehne)} mm`], ["Mantellinie", `${f1(M.mantellinie)} mm`]]
     : [["Abwicklungsbreite", `${f1(M.breite)} mm`], ["Höhe", `${f1(M.hoehe)} mm`], ["Ø K-Faser", `${f1(M.faserDurchmesser)} mm`]];
   zeilen.push(["Zugabe Naht", `${f1(M.zugabe)} mm`], ["Gewicht", m.dichte ? `${(flaeche * m.t * m.dichte * 1e-6).toFixed(3)} kg` : "–"]);
   w.innerHTML = `<div class="zahl"><b>${f1(M.zuschnitt[0])} × ${f1(M.zuschnitt[1])}</b><span>mm Zuschnitt (Rechteck)</span></div>
-    <div class="unter">${esc(f.name)} · ${kegel ? (f.d2 > 0 ? "Kegelstumpf" : "Kegel") : "Zylinder"} · ${esc(m.name)} · ${f.stueck ?? 1} Stk.</div>
+    <div class="unter">${esc(f.name)} · ${kegel ? (f.d2 > 0 ? "Kegelstumpf" : "Kegel") : rohr ? `Rohr, Anschnitt ${M.neigung}°` : "Zylinder"} · ${esc(m.name)} · ${f.stueck ?? 1} Stk.</div>
     ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
     <div class="zeichnung">${rundblechSvg(a, { breite: 276 })}</div>
     <table class="liste"><tbody>${zeilen.map(([k, v]) => `<tr><td>${k}</td><td class="num">${v}</td></tr>`).join("")}</tbody></table>
-    <p class="hinweis">Exakt abwickelbar. Gerechnet auf der K-Faser (k ${m.k}, t ${m.t} mm). Rot gestrichelt: Nahtlinie (Überlappung anreissen).</p>
+    <p class="hinweis">Exakt abwickelbar${rohr ? "; die Anschnittkurve ist L(θ) = h + r·tan α·(1 − cos θ), im DXF als Polylinie in 1°-Schritten" : ""}. Gerechnet auf der K-Faser (k ${m.k}, t ${m.t} mm). Rot gestrichelt: Nahtlinie (Überlappung anreissen).</p>
     <div class="reihe"><button class="knopf haupt" id="kRundDxf">DXF speichern</button><button class="knopf" id="kRundKopie">Masse kopieren</button></div>`;
   $("kRundDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, rundblechDxf(a, f.name), "application/dxf");
   $("kRundKopie").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(M.zuschnitt[0])} × ${f1(M.zuschnitt[1])} mm`, ...zeilen.map(([k, v]) => `${k}\t${v}`)].join("\n"));
@@ -4228,7 +4245,11 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       } else if (f.typ === "rundblech") { // Mantel als Drehkörper um die Ebenennormale (Meridianebene u/n)
         if (f.versteckt || !f._rund) continue;
         const E = E_(f.ebene), q = rundMeridian(f, material(f.material)), profil = { start: q[0], segmente: q.slice(1, 4).map((p) => ({ bis: p })) };
-        try { blech.set(f.id, (await x({ op: "rotation", profil, ebene: { ursprung: E.o, x: E.u, n: E.v.map((v) => -v) }, winkel: Math.min(360, f.winkel || 360), achse: { punkt: E.o, richtung: E.n } })).id); }
+        try {
+          let id = (await x({ op: "rotation", profil, ebene: { ursprung: E.o, x: E.u, n: E.v.map((v) => -v) }, winkel: Math.min(360, f.winkel || 360), achse: { punkt: E.o, richtung: E.n } })).id;
+          if (rohrNeigung(f)) id = (await x({ op: "halbraum", ziel: id, punkt: E.o, normale: rohrSchnitt(f).N.toArray() })).id;
+          blech.set(f.id, id);
+        }
         catch (e) { nicht.set(f.id, e.message); }
       } else if (["sweep", "loft", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }

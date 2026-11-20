@@ -29,4 +29,13 @@ ok((dx.match(/\nARC\n/g) || []).length === 2 && /\nNAHT\n/.test(dx) && /\nZUSCHN
 const gelesen = dxfLesen(dx);
 ok(gelesen.elemente.filter((e) => e.art === "bogen").length === 2, "DXF wieder lesbar (2 Bögen)");
 ok(/<svg/.test(rundblechSvg(kg)) && /A\d/.test(rundblechSvg(kg)), "SVG-Vorschau mit echten Bögen");
+// Rohr Ø150 durch Dach 30°: Länge kurz 200, lang = 200 + 2·rk·tan30; Kurve L(θ) exakt; DXF als Polylinie
+const ro = rundblechAbwicklung({ art: "zylinder", d1: 150, d2: 150, h: 200, t, k, neigung: 30, zugabe: 8 }), rk = 75 - t / 2 + k * t;
+ok(Math.abs(ro.masse.lang - (200 + 2 * rk * Math.tan(PI / 6))) < 1e-9 && Math.abs(ro.masse.breite - 2 * PI * rk) < 1e-9, `Rohr Ø150 / Dach 30°: kurz 200, lang ${ro.masse.lang.toFixed(2)} mm, Breite ${ro.masse.breite.toFixed(2)} mm`);
+const kv = ro.elemente.find((e) => e.typ === "polylinie").punkte, mitte = kv[Math.floor(kv.length / 2)];
+ok(Math.abs(mitte[1] + (200 + rk * Math.tan(PI / 6) * (1 - Math.cos(mitte[0] / rk)))) < 1e-9 && kv.length >= 361, "Rohr: Anschnittkurve folgt L(θ) = h + rk·tan α·(1 − cos θ), 1°-Schritte");
+const dxr = rundblechDxf(ro, "Rohr"), lr = dxfLesen(dxr);
+ok(/\nPOLYLINE\n/.test(dxr) && lr.elemente.some((e) => e.art === "linie" && e.pts.length >= 361), "Rohr: DXF mit Polylinie (wieder lesbar)");
+let ff = null; try { rundblechAbwicklung({ art: "kegel", d1: 300, d2: 200, h: 100, t, k, neigung: 20 }); } catch (e) { ff = e.message; }
+ok(/nur beim Zylinder/.test(ff ?? ""), "Schräger Anschnitt am Kegel wird abgewiesen (noch nicht exakt umgesetzt)");
 if (fehler) { console.error(fehler + " Fehler"); process.exit(1); } else console.log("Rundblech: alle Tests bestanden");

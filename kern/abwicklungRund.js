@@ -36,8 +36,12 @@ export function abwickelbarkeit(stichprobenGauss, toleranz = 1e-6) {
 // zugabe = Überlappung/Falzzugabe an der Naht (Streifen parallel zur Nahtkante, eine Seite), t/k aus dem Material.
 // Elemente: { typ: "linie", a, b, lage } | { typ: "bogen", c, r, w0, w1, lage } (Winkel in Grad, gegen den Uhrzeiger von w0 nach w1)
 // lage: "ZUSCHNITT" (Schnittkontur) oder "NAHT" (Nahtlinie innerhalb der Zugabe, zum Anreissen).
-export function rundblechAbwicklung({ art = "kegel", d1, d2, h, t, k, winkel = 360, zugabe = 0 }) {
+export function rundblechAbwicklung({ art = "kegel", d1, d2, h, t, k, winkel = 360, zugabe = 0, neigung = 0 }) {
   const el = [], z = Math.max(0, +zugabe || 0);
+  if (+neigung) {
+    if (!(art === "zylinder" || Math.abs(d1 - d2) < 1e-9)) throw new Error("Schräger Anschnitt: nur beim Zylinder (Rohr)");
+    return rohrSchraeg({ d: d1, h, t, k, winkel, zugabe: z, neigung: +neigung });
+  }
   if (art === "zylinder" || Math.abs(d1 - d2) < 1e-9) {
     const a = zylinderAbwicklung({ rm: d1 / 2, t, k, winkel, hoehe: h }), B = a.breite;
     el.push({ typ: "linie", a: [0, 0], b: [B, 0], lage: "ZUSCHNITT" }, { typ: "linie", a: [B, 0], b: [B, h], lage: "ZUSCHNITT" }, { typ: "linie", a: [B, h], b: [0, h], lage: "ZUSCHNITT" });
@@ -60,14 +64,31 @@ export function rundblechAbwicklung({ art = "kegel", d1, d2, h, t, k, winkel = 3
 
 // SVG-Vorschau der Abwicklung (Bögen als echte SVG-Bögen)
 export function rundblechSvg(abw, { breite = 276, rand = 8 } = {}) {
-  const pts = abw.elemente.flatMap((e) => e.typ === "linie" ? [e.a, e.b] : Array.from({ length: 33 }, (_, i) => { const w = ((e.w0 + ((e.w1 - e.w0) * i) / 32) * Math.PI) / 180; return [e.c[0] + e.r * Math.cos(w), e.c[1] + e.r * Math.sin(w)]; }));
+  const pts = abw.elemente.flatMap((e) => e.typ === "linie" ? [e.a, e.b] : e.typ === "polylinie" ? e.punkte : Array.from({ length: 33 }, (_, i) => { const w = ((e.w0 + ((e.w1 - e.w0) * i) / 32) * Math.PI) / 180; return [e.c[0] + e.r * Math.cos(w), e.c[1] + e.r * Math.sin(w)]; }));
   const x0 = Math.min(...pts.map((p) => p[0])), x1 = Math.max(...pts.map((p) => p[0])), y0 = Math.min(...pts.map((p) => p[1])), y1 = Math.max(...pts.map((p) => p[1]));
   const s = (breite - 2 * rand) / Math.max(x1 - x0, 1e-9), H = (y1 - y0) * s + 2 * rand, X = (x) => rand + (x - x0) * s, Y = (y) => H - rand - (y - y0) * s;
   const pfad = (e) => {
+    if (e.typ === "polylinie") return e.punkte.map((p, i) => `${i ? "L" : "M"}${X(p[0]).toFixed(2)} ${Y(p[1]).toFixed(2)}`).join("");
     if (e.typ === "linie") return `M${X(e.a[0]).toFixed(2)} ${Y(e.a[1]).toFixed(2)}L${X(e.b[0]).toFixed(2)} ${Y(e.b[1]).toFixed(2)}`;
     const p = (w) => [e.c[0] + e.r * Math.cos((w * Math.PI) / 180), e.c[1] + e.r * Math.sin((w * Math.PI) / 180)], a = p(e.w0), b = p(e.w1);
     return `M${X(a[0]).toFixed(2)} ${Y(a[1]).toFixed(2)}A${(e.r * s).toFixed(2)} ${(e.r * s).toFixed(2)} 0 ${e.w1 - e.w0 > 180 ? 1 : 0} 0 ${X(b[0]).toFixed(2)} ${Y(b[1]).toFixed(2)}`;
   };
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${H.toFixed(1)}" width="${breite}" height="${H.toFixed(1)}">` +
     abw.elemente.map((e) => `<path d="${pfad(e)}" fill="none" stroke="${e.lage === "NAHT" ? "#c0392b" : "currentColor"}" stroke-width="${e.lage === "NAHT" ? 0.8 : 1.2}"${e.lage === "NAHT" ? ' stroke-dasharray="4 3"' : ""}/>`).join("") + "</svg>";
+}
+
+// Rohr mit schrägem Anschnitt unten (Rohr durch die Dachfläche, Neigung α): Mantellinie bei Umfangswinkel θ
+//   L(θ) = h + rk · tan α · (1 − cos θ)   (h = kürzeste Länge bei θ = 0, auf der K-Faser rk; die Naht liegt bei θ = 0)
+// Die Anschnittkurve ist keine Gerade/kein Bogen: sie wird als Polylinie in 1°-Schritten der exakten Funktion ausgegeben.
+function rohrSchraeg({ d, h, t, k, winkel, zugabe, neigung }) {
+  if (!(neigung > 0 && neigung < 75)) throw new Error("Neigung 0–75°");
+  const rk = d / 2 - t / 2 + k * t, ta = Math.tan((neigung * Math.PI) / 180), phi = (winkel * Math.PI) / 180, B = rk * phi;
+  const n = Math.max(8, Math.ceil(winkel)), kurve = Array.from({ length: n + 1 }, (_, i) => { const th = (phi * i) / n; return [rk * th, -(h + rk * ta * (1 - Math.cos(th)))]; });
+  const el = [{ typ: "linie", a: [0, 0], b: [B, 0], lage: "ZUSCHNITT" }, { typ: "linie", a: [B, 0], b: kurve.at(-1), lage: "ZUSCHNITT" },
+    { typ: "polylinie", punkte: kurve.slice().reverse(), lage: "ZUSCHNITT" }];
+  const y0 = kurve[0][1];
+  if (zugabe > 0) el.push({ typ: "linie", a: [0, y0], b: [-zugabe, y0], lage: "ZUSCHNITT" }, { typ: "linie", a: [-zugabe, y0], b: [-zugabe, 0], lage: "ZUSCHNITT" }, { typ: "linie", a: [-zugabe, 0], b: [0, 0], lage: "ZUSCHNITT" }, { typ: "linie", a: [0, 0], b: [0, y0], lage: "NAHT" });
+  else el.push({ typ: "linie", a: [0, y0], b: [0, 0], lage: "ZUSCHNITT" });
+  const lang = h + rk * ta * (1 - Math.cos(Math.min(phi, Math.PI)));
+  return { art: "rohr", elemente: el, masse: { breite: B, kurz: h, lang, neigung, zugabe, zuschnitt: [B + zugabe, lang], faserDurchmesser: 2 * rk }, exakt: true };
 }
