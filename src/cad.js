@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { planModul } from "./plan.js";
 import { cloudModul } from "./cloud.js";
+import { selbsttest } from "../kern/selbsttest.js";
 import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
 import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
 import { kantenGeometrie, RICHTUNGEN as ANSICHT_RICHTUNGEN } from "./ansicht.js";
@@ -2815,7 +2816,9 @@ function zeigeEinst() {
     </div>
     <div class="reihe ohnerand"><button class="knopf" id="eUpdate">Jetzt nach Updates suchen</button></div>`
       : '<p class="hinweis">Updates und «Zuletzt» gibt es nur im Windows-Programm. Die Web-Version ist immer aktuell.</p>'}
-    <p class="hinweis">Version ${VERSION}</p>`,
+    <p class="hinweis">Version ${VERSION}</p>
+    <h4>Selbsttest</h4><p class="hinweis">Prüft die Rechenkerne (Biegung, Kurzschrift, Parameter, Kantenbausteine, Rundblech, Umformung) gegen bekannte Werte.</p>
+    <div class="reihe ohnerand"><button class="knopf" id="eSelbstTest">Selbsttest ausführen</button></div><div id="eSelbst"></div>`,
     bausteine: `
     <h4>Kantenbausteine für Flächenbleche</h4>
     <p class="hinweis">Abkantfolge ab der gezeichneten Kante nach aussen: Winkel Schenkel Winkel Schenkel … – + biegt zur Sichtseite, − nach hinten, U+ / U− = Umschlag, «90r5» = Radius 5, «U-r1.4» = Umschlag um eine Lage.
@@ -2909,6 +2912,11 @@ $("eInhalt").addEventListener("click", async (ev) => {
 $("einstDatei").onchange = async (e) => { if (e.target.files[0]) einstLaden(await e.target.files[0].text()); e.target.value = ""; };
 $("eInhalt").addEventListener("click", async (ev) => {
   if (ev.target.dataset.ereg) { einstRegister = ev.target.dataset.ereg; zeigeEinst(); return; }
+  if (ev.target.id === "eSelbstTest") {
+    const r = selbsttest(), ok = r.every((x) => x.ok);
+    $("eSelbst").innerHTML = `<p class="${ok ? "" : "fehler"}"><b>${ok ? "✓ Alle " + r.length + " Prüfungen bestanden" : "⚠ " + r.filter((x) => !x.ok).length + " von " + r.length + " Prüfungen fehlgeschlagen"}</b></p><ul>${r.map((x) => `<li>${x.ok ? "✓" : "✗"} ${esc(x.name)} <small class="hinweis">${esc(x.detail)}</small></li>`).join("")}</ul>`;
+    return;
+  }
   if (ev.target.id === "eUpdate") {
     meldung("Suche nach Updates …");
     try {

@@ -49,3 +49,7 @@ Stand 20.11.2026. Grundlage: Repo `spengler-fusion-addin` (Version 0.4.7, nur ge
 
 ## Entscheid 20.11.2026: kein eigenes SPENGLER-Register
 Das gesamte CAD ersetzt das Add-in; ein Nachbau der Fusion-Leiste «SPENGLER» ist nicht nötig. Die Funktionen leben in den bestehenden Bereichen (Einstellungen › Konto & Cloud, Bausteine, Werkstatt). Phase 4 entfällt; offen bleiben nur Add-in-Funktionen ohne CAD-Gegenstück (Parameter-Vorlagen, Sicherung/Papierkorb, Selbsttest, Rundblech-Beurteilung, 3D-Detailvorlagen als exakte Körper).
+
+## Stand 20.11.2026 (Add-in-Funktionen im CAD)
+- Fertig: Kantenbausteine mit Parametern/Ausdrücken/Eignungsprüfung (`kern/vorlagen/parameter.js`), Sicherungen + Papierkorb (`kern/sicherung.js`), Rundblech beurteilen (`kern/umformung.js`, Dialog «Rundblech beurteilen», Umformgrenzen im Material), Selbsttest (`kern/selbsttest.js`, Einstellungen › Programm).
+- Offen: Parameterwerte je Kante im Flächenblech-Dialog (heute gelten die Standardwerte), 3D-Detailvorlagen als exakte Körper (setzt STEP-Import als exakter Körper voraus), Handbuch/Hilfe zu den neuen Funktionen, echter Test gegen Supabase.
