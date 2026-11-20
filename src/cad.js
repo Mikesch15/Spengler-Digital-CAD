@@ -871,10 +871,32 @@ function griffeFuer(f) {
     const E = E_(f.ebene), n = V(E.n).normalize(), sg = f.richtung === "umgekehrt" ? -1 : 1, d = n.clone().multiplyScalar(sg), c = bb.getCenter(new THREE.Vector3());
     let ext = 0; for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) ext = Math.max(ext, new THREE.Vector3(x, y, z).sub(c).dot(d));
     l.push({ feld: "laenge", pos: c.addScaledVector(d, ext), dir: d, faktor: f.richtung === "symmetrisch" ? 2 : 1, min: 0.1, farbe: 0xe0782b });
-  } else if (f.typ === "bewegen") {
+  } else if (f.typ === "bewegen" || f.typ === "kmuster") {
     const bb = mitte(modell.children.filter((o) => o.isMesh && (String(o.userData.fid) === f.ziel || String(o.userData.fid).startsWith(f.ziel + ":")))); if (!bb) return l;
     const c = bb.getCenter(new THREE.Vector3());
+    if (f.typ === "kmuster") { // Abstand der Kopien entlang der Mustrichtung(en)
+      if (f.art !== "kreis") for (const [feld, ref] of [["abstand", f.richtung1], ["abstand2", f.richtung2]]) { if (feld === "abstand2" && !(f.anzahl2 > 1)) continue; try { const k = bezugKante(ref), d = V(k.d).normalize(); l.push({ feld, pos: c.clone(), dir: d, faktor: 1, min: 0, farbe: 0xe0782b }); } catch {} }
+      return l;
+    }
     [["dx", [1, 0, 0], 0xd23c3c], ["dy", [0, 1, 0], 0x3aa655], ["dz", [0, 0, 1], 0x2f7dd1]].forEach(([feld, d, farbe]) => l.push({ feld, pos: c.clone(), dir: V(d), faktor: 1, farbe }));
+  } else if (f.typ === "schale" || f.typ === "kantenrund") { // Wanddicke bzw. Radius/Fase: Pfeil an der Aussenseite nach innen
+    const bb = mitte(modell.children.filter((o) => o.isMesh && (o.userData.fid === f.ziel || String(o.userData.fid).startsWith(f.ziel + ":")))); if (!bb) return l;
+    const c = bb.getCenter(new THREE.Vector3());
+    if (f.typ === "schale") l.push({ feld: "dicke", pos: new THREE.Vector3(bb.max.x, c.y, c.z), dir: new THREE.Vector3(-1, 0, 0), faktor: 1, min: 0.1, farbe: 0xe0782b });
+    else l.push({ feld: "mass", pos: new THREE.Vector3(bb.max.x, bb.max.y, bb.max.z), dir: new THREE.Vector3(-1, -1, -1).normalize(), faktor: 1 / Math.sqrt(3) * 1.0, min: 0.1, farbe: 0xe0782b });
+  } else if (f.typ === "kanten3d") { // Radius/Fase der angeklickten Kanten: Pfeil in der Mitte der ersten Kante zum Körper hin
+    const k = f.kanten?.[0]; if (!k) return l;
+    const a = V(k.a), b = V(k.b), mid = a.clone().add(b).multiplyScalar(0.5), e = b.clone().sub(a).normalize();
+    const bb = mitte(modell.children.filter((o) => o.isMesh && o.userData.fid === f.ziel)); if (!bb) return l;
+    const zu = bb.getCenter(new THREE.Vector3()).sub(mid); zu.addScaledVector(e, -zu.dot(e)); if (zu.length() < 1e-6) return l;
+    l.push({ feld: "mass", pos: mid, dir: zu.normalize(), faktor: 1, min: 0.1, farbe: 0xe0782b });
+  } else if (f.typ === "ebene" && f.art === "versatz" && f._ebene) {
+    l.push({ feld: "abstand", pos: V(f._ebene.o), dir: V(f._ebene.n).normalize(), faktor: 1, farbe: 0xe0782b });
+  } else if (f.typ === "rundblech" && f.h > 0) {
+    const bb = mitte(modell.children.filter((o) => o.isMesh && o.userData.fid === f.id)); if (!bb) return l;
+    const E = E_(f.ebene), n = V(E.n).normalize(), c = bb.getCenter(new THREE.Vector3());
+    let ext = 0; for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) ext = Math.max(ext, new THREE.Vector3(x, y, z).sub(c).dot(n));
+    l.push({ feld: "h", pos: c.addScaledVector(n, ext), dir: n, faktor: 1, min: 0.1, farbe: 0xe0782b });
   }
   return l;
 }
