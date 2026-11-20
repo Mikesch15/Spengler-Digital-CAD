@@ -1,6 +1,8 @@
 // Spengler Digital CAD – Skizzenelemente → exakte Kern-Profile (rein, ohne Kern)
-// Exakt: Linien/Linienzüge (auch mit Eckradien), Dreipunktbögen, Kreise, Rechtecke, Langlöcher.
-// Nicht exakt (noch): Splines, Ellipsen, Text → Fehler NichtExakt, damit nie still eine Näherung als exakt gilt.
+// Exakt: Linien/Linienzüge (auch mit Eckradien), Dreipunktbögen, Kreise, Rechtecke, Langlöcher, Ellipsen und Splines.
+// Splines: die App zeichnet zentripetale Catmull-Rom-Kurven (kern/skizze.js splinePunkte). Jedes Segment ist ein kubisches
+// Polynom und wird hier exakt als kubische Bézierkurve übergeben – Kern und Anzeige haben dieselbe Kurve.
+// Nicht exakt (noch): Text → Fehler NichtExakt, damit nie still eine Näherung als exakt gilt.
 import { abrundung, verbindeStuecke } from "../skizze.js";
 
 export class NichtExakt extends Error {}
@@ -32,12 +34,27 @@ function linienzug(pts, radien = {}, geschlossen = false) {
   return { start, segmente: out };
 }
 
+// Zentripetale Catmull-Rom-Kurve (wie splinePunkte) → kubische Bézier-Segmente { bis, bezier: [c1, c2] }
+// Hermite-Tangenten nach Barry–Goldman (Yuksel et al.): m1, m2 auf das Intervall [t1, t2] skaliert, c1 = p1 + m1/3, c2 = p2 − m2/3.
+export function splineSegmente(pts, geschlossen = false) {
+  const n = pts.length, P = (i) => (geschlossen ? pts[(i + n) % n] : pts[Math.min(Math.max(i, 0), n - 1)]);
+  const dt = (a, b) => Math.max(Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1])), 1e-6), seg = [];
+  for (let i = 0; i < (geschlossen ? n : n - 1); i++) {
+    const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+    const d0 = dt(p0, p1), d1 = dt(p1, p2), d2 = dt(p2, p3);
+    const m1 = [0, 1].map((k) => ((p1[k] - p0[k]) / d0 - (p2[k] - p0[k]) / (d0 + d1) + (p2[k] - p1[k]) / d1) * d1);
+    const m2 = [0, 1].map((k) => ((p2[k] - p1[k]) / d1 - (p3[k] - p1[k]) / (d1 + d2) + (p3[k] - p2[k]) / d2) * d1);
+    seg.push({ bis: p2.slice(), bezier: [[p1[0] + m1[0] / 3, p1[1] + m1[1] / 3], [p2[0] - m2[0] / 3, p2[1] - m2[1] / 3]] });
+  }
+  return seg;
+}
+
 // Einzelnes Element als offener Pfad (für Ketten) – Rückgabe { start, segmente, ende }
 export function elementPfad(el) {
   switch (el.art) {
     case "linie": if (el.geschlossen) return null; { const p = linienzug(el.pts, el.radien || {}, false); return { ...p, ende: el.pts.at(-1) }; }
     case "bogen": return { start: el.a, segmente: [{ bis: el.b, bogenMitte: el.m }], ende: el.b };
-    case "spline": throw new NichtExakt("Spline");
+    case "spline": return el.geschlossen ? null : { start: el.pts[0], segmente: splineSegmente(el.pts, false), ende: el.pts.at(-1) };
     default: return null;
   }
 }
@@ -51,8 +68,11 @@ export function elementProfil(el) {
       const { a, b, r } = el, w = Math.atan2(b[1] - a[1], b[0] - a[0]), q = Math.PI / 2;
       return { start: auf(b, r, w - q), segmente: [{ bis: auf(b, r, w + q), bogenMitte: auf(b, r, w) }, { bis: auf(a, r, w + q) }, { bis: auf(a, r, w - q), bogenMitte: auf(a, r, w + 2 * q) }] };
     }
-    case "spline": if (el.geschlossen) throw new NichtExakt("Spline"); return null;
-    case "ellipse": throw new NichtExakt("Ellipse");
+    case "spline": return el.geschlossen ? { start: el.pts[0], segmente: splineSegmente(el.pts, true) } : null;
+    case "ellipse": { // zwei halbe Ellipsenbögen zwischen den Enden der Hauptachse (c, a = Ende der Hauptachse, r2 = kleine Halbachse)
+      const { c, a, r2 } = el, R = Math.hypot(a[0] - c[0], a[1] - c[1]), w = Math.atan2(a[1] - c[1], a[0] - c[0]), b = [2 * c[0] - a[0], 2 * c[1] - a[1]];
+      const e = { c, rx: R, ry: r2, w }; return { start: a, segmente: [{ bis: b, ellipse: e }, { bis: a, ellipse: e }] };
+    }
     case "text": throw new NichtExakt("Skizzentext");
     default: return null;
   }
@@ -65,7 +85,7 @@ function kettenProfil(teile) {
     let s = p.segmente, a = p.start;
     if (umgekehrt) { // rückwärts: Endpunkte verschieben sich, Bogenmitte bleibt
       const pkt = [p.start, ...p.segmente.map((x) => x.bis)];
-      s = p.segmente.map((x, i) => ({ bis: pkt[i], ...(x.bogenMitte ? { bogenMitte: x.bogenMitte } : {}) })).reverse();
+      s = p.segmente.map((x, i) => ({ bis: pkt[i], ...(x.bogenMitte ? { bogenMitte: x.bogenMitte } : {}), ...(x.bezier ? { bezier: [x.bezier[1], x.bezier[0]] } : {}) })).reverse();
       a = pkt.at(-1);
     }
     if (!start) start = a;
@@ -86,6 +106,12 @@ export function profilPolygon(p, n = 16) {
       const r = Math.hypot(a[0] - c[0], a[1] - c[1]), wa = Math.atan2(a[1] - c[1], a[0] - c[0]), wm = Math.atan2(m[1] - c[1], m[0] - c[0]), wb = Math.atan2(b[1] - c[1], b[0] - c[0]);
       const norm = (w) => ((w % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI), bis = norm(wb - wa), zuM = norm(wm - wa), sw = zuM < bis ? bis : bis - 2 * Math.PI;
       for (let i = 1; i <= n; i++) out.push(auf(c, r, wa + (sw * i) / n));
+    } else if (s.bezier) {
+      const [c1, c2] = s.bezier, a = vor, b = s.bis;
+      for (let i = 1; i <= n; i++) { const t = i / n, u = 1 - t; out.push([0, 1].map((k) => u * u * u * a[k] + 3 * u * u * t * c1[k] + 3 * u * t * t * c2[k] + t * t * t * b[k])); }
+    } else if (s.ellipse) { // halber Bogen von «vor» bis «bis» (gegen den Uhrzeiger in Ellipsen-Koordinaten)
+      const { c, rx, ry, w } = s.ellipse, co = Math.cos(w), si = Math.sin(w), t0 = Math.atan2(((vor[1] - c[1]) * co - (vor[0] - c[0]) * si) / ry, ((vor[0] - c[0]) * co + (vor[1] - c[1]) * si) / rx);
+      for (let i = 1; i <= n; i++) { const t = t0 + (Math.PI * i) / n, x = rx * Math.cos(t), y = ry * Math.sin(t); out.push([c[0] + x * co - y * si, c[1] + x * si + y * co]); }
     } else out.push(s.bis);
     vor = s.bis;
   }

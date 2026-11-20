@@ -55,6 +55,8 @@ async function seite(kern) {
     { id: "d2", typ: "drehung", name: "Segment 90°", skizze: "s5", achse: "V", winkel: 90, vorgang: "neu" },
     { id: "s4", typ: "skizze", name: "Skizze 4", ebene: "XY", elemente: [{ id: 1, art: "ellipse", c: [0, 200], a: [30, 200], r2: 10 }] },
     { id: "e3", typ: "extrusion", name: "Ellipse", skizze: "s4", abstand: 5, richtung: "eine", vorgang: "neu" },
+    { id: "s6", typ: "skizze", name: "Skizze 6", ebene: "XY", elemente: [{ id: 1, art: "text", text: "SD", p: [0, 300], hoehe: 20 }] },
+    { id: "e4", typ: "extrusion", name: "Schrift", skizze: "s6", abstand: 2, richtung: "eine", vorgang: "neu" },
   ] };
   let netzD2 = null;
   for (const kern of [null, "occt"]) {
@@ -64,7 +66,7 @@ async function seite(kern) {
     if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
     else await s.waitForTimeout(1500);
     const k = await s.evaluate(() => window.sdcadTest.koerperInfo()), st = await s.textContent("#status");
-    const platte = k.find((o) => o.fid === "e1"), ring = k.find((o) => o.fid === "d1"), ell = k.find((o) => o.fid === "e3");
+    const platte = k.find((o) => o.fid === "e1"), ring = k.find((o) => o.fid === "d1"), ell = k.find((o) => o.fid === "e3"), txt = k.find((o) => o.fid === "e4");
     const vP = 100 * 50 * 20 - PI * 100 * 20 - PI * 64 * 20, vR = PI * (220 ** 2 - 200 ** 2) * 40;
     const d2 = k.find((o) => o.fid === "d2");
     if (!kern) netzD2 = d2;
@@ -73,7 +75,8 @@ async function seite(kern) {
     else {
       ok(platte.exakt && ring.exakt && platte.flaechen >= 8, `Ein: Platte und Ring aus dem Kern (Platte ${platte.flaechen} Flächen) – ${st}`);
       ok(Math.abs(platte.volumen - vP) / vP < 0.002 && Math.abs(ring.volumen - vR) / vR < 0.002, `Ein: Netzvolumen ≈ exakt (Platte ${platte.volumen.toFixed(0)}/${vP.toFixed(0)}, Ring ${ring.volumen.toFixed(0)}/${vR.toFixed(0)})`);
-      ok(!ell.exakt && /Ellipse \(Ellipse noch nicht exakt\)/.test(st), "Ein: Ellipse bleibt Netz und wird in der Statusmeldung genannt");
+      ok(ell.exakt && Math.abs(ell.volumen - PI * 30 * 10 * 5) / (PI * 1500) < 0.002, `Ein: Ellipse exakt aus dem Kern (V ${ell.volumen.toFixed(0)} ≈ ${(PI * 1500).toFixed(0)})`);
+      ok(!txt.exakt && /Schrift \(Skizzentext noch nicht exakt\)/.test(st), "Ein: Skizzentext bleibt Netz und wird in der Statusmeldung genannt");
       // Prüfen → Eigenschaften (exakt)
       await s.evaluate(() => document.getElementById("wEigenschaften").click());
       const tab = await s.$$eval("#werkstatt table.liste tbody tr", (tr) => tr.map((r) => [...r.cells].map((c) => c.textContent)));

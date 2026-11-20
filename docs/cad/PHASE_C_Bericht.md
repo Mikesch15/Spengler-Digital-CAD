@@ -45,7 +45,13 @@
 - **Test (App, jetzt 18/18):** Platte 89,696 cm³ = analytisch. Schwerpunkt x 50,63 = (250000 − π·100·25 − π·64·75)/(5000 − π·164) analytisch. Abmessungen 100 × 50 × 20. Ring 1055,575 cm³. CSV-Export.
 - **Grenze:** Bei Teilen mit Komponentenlage beziehen sich Schwerpunkt und Abmessungen auf die unverschobene Lage (mit * markiert).
 
-## Nächste Schritte (C2d …)
+## C2d – Splines und Ellipsen exakt (erledigt, 20.11.2026)
+- **Splines:** Die App zeichnet zentripetale Catmull-Rom-Kurven. Jedes Segment wird **exakt** als kubische Bézierkurve an den Kern übergeben (Barry–Goldman-Tangenten). Abweichung zu den Kurvenpunkten der App: 0,0000 mm. Das gilt für offene Splines in Ketten und für geschlossene Splines.
+- **Ellipsen:** zwei halbe Ellipsenbögen, auch gedreht (V = π·a·b·h exakt)
+- **Weiterhin nicht exakt:** Skizzentext (bleibt Netz, wird genannt)
+- **Tests:** `cad.test.js` +5. App-Test 20/20 (Ellipse exakt aus dem Kern, Text als Netz gemeldet).
+
+## Nächste Schritte (C2e …)
 1. **Splines und Ellipsen exakt** (B-Spline- und Ellipsenkurven im Profilformat)
 3. **Abrunden/Fasen und Schale** über Kanten- und Flächenreferenzen (`topologie.js`) statt über Koordinaten am Netz.
 4. **Feature-Fehler** aus dem Kern (`KernFehler.code`) direkt in der Zeitleiste anzeigen.

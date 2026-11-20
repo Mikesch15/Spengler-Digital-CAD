@@ -43,8 +43,14 @@ export async function occtKern({ wasmUrl } = {}) {
   };
   const zeichne = (profil, schliessen = true) => {
     let p = R.draw(profil.start);
-    for (const s of profil.segmente) p = s.bogenMitte ? p.threePointsArcTo(s.bis, s.bogenMitte) : p.lineTo(s.bis);
-    return schliessen ? p.close() : p.done();
+    for (const s of profil.segmente) {
+      if (s.bogenMitte) p = p.threePointsArcTo(s.bis, s.bogenMitte);
+      else if (s.bezier) p = p.cubicBezierCurveTo(s.bis, s.bezier[0], s.bezier[1]);
+      else if (s.ellipse) p = p.ellipseTo(s.bis, s.ellipse.rx, s.ellipse.ry, (s.ellipse.w * 180) / Math.PI, false, true);
+      else p = p.lineTo(s.bis);
+    }
+    const zu = profil.segmente.length && Math.hypot(profil.segmente.at(-1).bis[0] - profil.start[0], profil.segmente.at(-1).bis[1] - profil.start[1]) < 1e-9;
+    return schliessen ? (zu ? p.done() : p.close()) : p.done(); // endet das Profil schon am Start (Kurve), nicht nochmals schliessen
   };
   // Körper entlang +Z gebaut → auf basis/achse ausrichten
   const ausrichten = (form, basis = [0, 0, 0], achse = [0, 0, 1]) => {

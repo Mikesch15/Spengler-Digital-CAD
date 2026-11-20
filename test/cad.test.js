@@ -269,8 +269,20 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   // Kette aus Linien und Bogen (Halbkreis-Deckel), ein Stück umgekehrt gezeichnet
   const k = await ex([{ art: "linie", pts: [[0, 0], [40, 0]] }, { art: "linie", pts: [[40, 30], [40, 0]] }, { art: "bogen", a: [40, 30], b: [0, 30], m: [20, 50] }, { art: "linie", pts: [[0, 30], [0, 0]] }]);
   ok(k.ps.length === 1 && nahe(k.V, (40 * 30 + PI * 400 / 2) * 10), "Skizze: Kette Linie–Linie(umgekehrt)–Bogen–Linie → exakt");
-  let f = null; try { skizzenProfile([{ art: "ellipse", c: [0, 0], a: [10, 0], r2: 5 }]); } catch (e) { f = e instanceof NichtExakt ? e.message : "anderer Fehler"; }
-  ok(f === "Ellipse", "Skizze: Ellipse wird als «noch nicht exakt» gemeldet, nicht angenähert");
+  const el = await ex([{ art: "ellipse", c: [10, 20], a: [40, 40], r2: 12 }]);
+  ok(nahe(el.V, PI * Math.hypot(30, 20) * 12 * 10), "Skizze: gedrehte Ellipse exakt (V = π·a·b·h)");
+  // Spline: exakte Bézier-Segmente liegen auf der Catmull-Rom-Kurve der App (splinePunkte)
+  const { splineSegmente } = await import("../kern/cad/skizzeProfile.js"), { splinePunkte } = await import("../kern/skizze.js");
+  const sp = [[0, 0], [30, 25], [70, 10], [100, 40]], seg = splineSegmente(sp, false), app = splinePunkte(sp, false, 16);
+  let maxD = 0; seg.forEach((g, i) => { const a = sp[i], [c1, c2] = g.bezier, b = g.bis; for (let k = 0; k < 16; k++) { const t = k / 16, u = 1 - t, q = [0, 1].map((j) => u * u * u * a[j] + 3 * u * u * t * c1[j] + 3 * u * t * t * c2[j] + t * t * t * b[j]); const r = app[i * 16 + k]; maxD = Math.max(maxD, Math.hypot(q[0] - r[0], q[1] - r[1])); } });
+  ok(maxD < 0.05, `Skizze: Spline als Bézier – Abstand zu den Kurvenpunkten der App max. ${maxD.toFixed(4)} mm (dieselbe Kurve)`);
+  const zu = await ex([{ art: "spline", pts: [[0, 0], [60, -10], [80, 40], [20, 50]], geschlossen: true }]);
+  const poly = splinePunkte([[0, 0], [60, -10], [80, 40], [20, 50]], true, 400), A = Math.abs(poly.reduce((s, a, i) => { const b = poly[(i + 1) % poly.length]; return s + a[0] * b[1] - b[0] * a[1]; }, 0) / 2);
+  ok(Math.abs(zu.V / 10 - A) / A < 1e-4, `Skizze: geschlossener Spline exakt – Fläche ${(zu.V / 10).toFixed(2)} mm² ≈ App-Kurve ${A.toFixed(2)} mm²`);
+  const kette = await ex([{ art: "spline", pts: [[0, 0], [50, 20], [100, 0]] }, { art: "linie", pts: [[100, 0], [100, -30], [0, -30], [0, 0]] }]);
+  ok(kette.ps.length === 1 && kette.V > 30000, "Skizze: Kette aus Spline und Linienzug → geschlossenes exaktes Profil");
+  let f = null; try { skizzenProfile([{ art: "text", text: "A", p: [0, 0], hoehe: 10 }]); } catch (e) { f = e instanceof NichtExakt ? e.message : "anderer Fehler"; }
+  ok(f === "Skizzentext", "Skizze: Text wird als «noch nicht exakt» gemeldet, nicht angenähert");
 }
 
 // ---------------------------------------------------------------- 10 Speicher: Freigabe und Leckprüfung
