@@ -1,0 +1,82 @@
+# Windows-Nachweis für den CAD-Kern (OpenCascade als WebAssembly im Web Worker):
+#   1. Kern-Tests mit Node unter Windows
+#   2. Prüfseite in Microsoft Edge (Playwright, Kanal msedge)
+#   3. Prüfseite in einer Tauri-2-App mit WebView2 (wie das PC-Programm, csp: null)
+# Ergebnisse als Artefakt «cad-windows-nachweis» und in der Zusammenfassung des Laufs.
+name: CAD-Kern Windows-Nachweis
+
+on:
+  push:
+    branches: ["**", "!gh-pages"]
+    paths: ["kern/cad/**", "kern/geometrie.js", "test/cad.test.js", "tests/cad-worker/**", "tests/tauri-probe/**", ".github/workflows/cad-windows.yml", "package.json", "package-lock.json"]
+  workflow_dispatch:
+
+concurrency:
+  group: cad-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nachweis:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 1 Kern-Tests (Node, Windows)
+        run: node --expose-gc test/cad.test.js
+
+      - name: Prüfseite bauen
+        run: node tests/cad-worker/bauen.mjs tests/tauri-probe/dist
+
+      - name: 2 Microsoft Edge
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          npm install --no-save playwright@1.63.0
+          node tests/cad-worker/pruefen.mjs tests/tauri-probe/dist msedge
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: tests/tauri-probe/src-tauri
+
+      - name: Tauri-Probe bauen
+        working-directory: tests/tauri-probe/src-tauri
+        run: cargo build --release --features tauri/custom-protocol
+
+      - name: 3 Tauri 2 / WebView2
+        shell: pwsh
+        run: |
+          $wv = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' -ErrorAction SilentlyContinue).pv
+          Write-Output "WebView2-Runtime: $wv"
+          $env:SDCAD_PROBE_OUT = "$PWD\tests\tauri-probe\dist\ergebnis-tauri.json"
+          $p = Start-Process -FilePath "tests\tauri-probe\src-tauri\target\release\sdcad-cad-probe.exe" -PassThru
+          if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw "Probe hat nach 300 s nicht beendet" }
+          Write-Output "Exitcode: $($p.ExitCode)"
+          node -e "const e=require('./tests/tauri-probe/dist/ergebnis-tauri.json'); e.webview2='$wv'; require('fs').writeFileSync('./tests/tauri-probe/dist/ergebnis-tauri.json', JSON.stringify(e,null,1)); console.log(JSON.stringify(e.umgebung)); for (const z of e.zeilen||[]) console.log((z.ok?'OK  ':'FEHLER ')+z.text+' '+JSON.stringify(z.wert??'')); console.log('Fehler:', e.fehler, e.grund||''); process.exit(e.fehler===0?0:1)"
+
+      - name: Zusammenfassung
+        if: always()
+        shell: bash
+        run: |
+          for f in tests/tauri-probe/dist/ergebnis-*.json; do
+            [ -f "$f" ] || continue
+            node -e "const e=require('./$f'); const n='$f'.split('/').pop(); let s='### '+n+' – '+(e.fehler===0?'bestanden':'FEHLER ('+e.fehler+')')+'\n'+(e.umgebung?.ua||'')+(e.webview2?' · WebView2 '+e.webview2:'')+'\n\n'; for (const z of e.zeilen||[]) s+='- '+(z.ok?'✓':'✗')+' '+z.text+' '+(z.wert!==undefined?'`'+JSON.stringify(z.wert)+'`':'')+'\n'; require('fs').appendFileSync(process.env.GITHUB_STEP_SUMMARY, s+'\n')"
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cad-windows-nachweis
+          path: |
+            tests/tauri-probe/dist/ergebnis-*.json
+            tests/tauri-probe/src-tauri/target/release/sdcad-cad-probe.exe
+          if-no-files-found: warn

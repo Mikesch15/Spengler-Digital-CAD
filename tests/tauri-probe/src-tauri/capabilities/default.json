@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Probe-Fenster",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
