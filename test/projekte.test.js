@@ -1,0 +1,12 @@
+import { pruefeProjekt, suche, modellFelder, geaendert, STATUS } from "../kern/cloud/projekte.js";
+let f = 0; const ok = (b, t) => { if (!b) { f++; console.error("✗", t); } else console.log("✓", t); };
+const liste = [{ id: 1, name: "Dach Müller", order_no: "2026-114", customer: "Müller AG", object: "Haus 3, Bern" }, { id: 2, name: "Fassade", order_no: " ab-7 ", customer: "", object: "Weg 2" }];
+ok(pruefeProjekt({ name: "", order_no: "", object: "" }, liste).length === 3, "Name, Auftrags-Nr. und Adresse sind Pflicht (wie in der App)");
+ok(pruefeProjekt({ name: "X", order_no: "2026-114", object: "a" }, liste)[0].includes("gibt es schon"), "Doppelte Auftrags-Nr. wird erkannt");
+ok(pruefeProjekt({ name: "X", order_no: "AB-7", object: "a" }, liste).length === 1, "… ohne Gross-/Kleinschreibung und Leerzeichen");
+ok(pruefeProjekt({ name: "X", order_no: "2026-114", object: "a" }, liste, 1).length === 0, "Das eigene Projekt zählt beim Bearbeiten nicht als Doppelt");
+ok(suche(liste, "müller").length === 1 && suche(liste, "weg").length === 1 && suche(liste, "").length === 2 && suche(liste, "zzz").length === 0, "Suche in Name, Auftrags-Nr., Kunde, Adresse");
+const m = modellFelder(liste[0]); ok(m.nr === "2026-114" && m.objekt === "Müller AG, Haus 3, Bern" && m.appProjekt.id === 1, "Modellfelder: Auftragsnummer, Objekt = Kunde + Adresse, Verbindung");
+ok(!geaendert({ nr: m.nr, objekt: m.objekt, appProjekt: m.appProjekt }, liste[0]) && geaendert({ nr: "alt", objekt: m.objekt, appProjekt: m.appProjekt }, liste[0]) && geaendert({ ...m, appProjekt: { id: 1, name: "Alt" } }, liste[0]), "Änderung in der App wird erkannt");
+ok(STATUS.map((s) => s[0]).join() === "offen,in_arbeit,abgeschlossen", "Status wie in der App");
+if (f) { console.error(f + " Fehler"); process.exit(1); } else console.log("Projekte: alle Tests bestanden");

@@ -19,12 +19,12 @@ await s.route("**/nfgryuzkpwjfmdlmevuy.supabase.co/**", async (r) => {
   if (p === "/rest/v1/rpc/has_permission") return j(200, true);
   if (p === "/rest/v1/cad_daten") { if (m === "GET") return j(200, db.daten); db.daten.push({ ...body }); return j(201, [body]); }
   if (p === "/rest/v1/cad_projekte") { if (m === "POST") { const z = { id: "p1", ...body }; db.proj.push(z); return j(201, [z]); } return j(200, db.proj.map((x) => ({ ...x, geaendert: "2026-11-20T10:00:00" }))); }
-  if (p === "/rest/v1/projects") return j(200, [{ id: 7, name: "Dach Müller", order_no: "2026-777", customer: "Müller AG", object: "Haus 3", status: "offen" }]);
+  if (p === "/rest/v1/projects") return j(200, [{ id: 7, name: "Dach Müller", order_no: "2026-114", customer: "", object: "Test", status: "offen", archived: false, updated_at: "x" }]);
   if (p === "/rest/v1/cad_teile") { db.teile.push(...body); return j(201, body); }
   if (p === "/rest/v1/cad_profil_auftraege") return j(200, []);
   return j(404, {});
 });
-await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Test", nr: "2026-114", zaehler: 5, features: [{ id: "f1", typ: "profil", name: "Ortbrett", start: 0, zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 40, winkel: 0, art: "abkanten" }], material: "zink07", laenge: 2000, stueck: 2, richtung: "eine", ebene: "XY" }] }));
+await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Test", nr: "2026-114", appProjekt: { id: 7, name: "Dach Müller" }, zaehler: 5, features: [{ id: "f1", typ: "profil", name: "Ortbrett", start: 0, zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 40, winkel: 0, art: "abkanten" }], material: "zink07", laenge: 2000, stueck: 2, richtung: "eine", ebene: "XY" }] }));
   const e = { materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }] }; localStorage.setItem("sdcad-einstellungen", JSON.stringify(e)); });
 await s.goto("http://localhost:8769/index.html?test"); await s.waitForTimeout(600);
 await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="konto"]').click(); });
@@ -36,12 +36,9 @@ ok(/Max Muster/.test(t1) && /Muster AG/.test(t1) && /Abgleich fertig/.test(t1), 
 ok(!(await s.evaluate(() => JSON.stringify(localStorage))).includes("geheim"), "Passwort wird nirgends gespeichert");
 await s.click('[data-cloud="speichern"]'); await s.waitForFunction(() => /in der Cloud gespeichert/.test(document.getElementById("eInhalt").textContent), null, { timeout: 5000 });
 ok(db.proj.length === 1 && db.proj[0].auftrag === "2026-114" && db.proj[0].daten.features.length === 1, "Projekt in der Cloud gespeichert (Auftrag 2026-114)");
-await s.click('[data-cloud="appprojekte"]'); await s.waitForSelector('[data-cloud="appwahl"]', { timeout: 5000 }); await s.click('[data-cloud="appwahl"]');
-await s.waitForFunction(() => /Verbunden mit dem App-Projekt/.test(document.getElementById("eInhalt").textContent), null, { timeout: 5000 });
-ok(await s.evaluate(() => { const d = JSON.parse(localStorage.getItem("sdcad-doc-0.2")); return d.nr === "2026-777" && d.objekt === "Müller AG, Haus 3" && d.appProjekt.id === 7; }), "App-Projekt übernommen: Auftragsnummer, Objekt und Verbindung gesetzt");
 await s.click('[data-cloud="senden"]'); await s.waitForFunction(() => /an die App gesendet|Keine Blechteile/.test(document.getElementById("eInhalt").textContent), null, { timeout: 5000 });
 const tl = db.teile[0];
-ok(db.teile.length === 1 && tl.project_id === 7 && tl.auftrag === "2026-777" && tl.stueck === 2 && tl.app_data.schenkel.length === 2 && tl.app_data.schenkel[1].winkel === 90 && tl.zuschnitt_breite_mm > 130, `Teil an die App: Zuschnitt ${tl?.zuschnitt_breite_mm}, Schenkel ${JSON.stringify(tl?.app_data.schenkel)}`);
+ok(db.teile.length === 1 && tl.project_id === 7 && tl.auftrag === "2026-114" && tl.stueck === 2 && tl.app_data.schenkel.length === 2 && tl.app_data.schenkel[1].winkel === 90 && tl.zuschnitt_breite_mm > 130, `Teil an die App: Zuschnitt ${tl?.zuschnitt_breite_mm}, Schenkel ${JSON.stringify(tl?.app_data.schenkel)}`);
 await s.click('[data-cloud="liste"]'); await s.waitForSelector('[data-cloud="oeffnen"]', { timeout: 5000 });
 ok(true, "Projektliste zeigt das Cloud-Projekt");
 ok(probleme.length === 0, "keine Seitenfehler " + probleme.join(" | "));

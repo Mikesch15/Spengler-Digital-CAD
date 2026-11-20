@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { planModul } from "./plan.js";
 import { cloudModul } from "./cloud.js";
+import { projekteModul } from "./projekte.js";
 import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern/vorlagen/detail3d.js";
 import { selbsttest } from "../kern/selbsttest.js";
 import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
@@ -4295,7 +4296,7 @@ function ladeProjekt(text, pfad = null) {
   try {
     const d = JSON.parse(text); if (!d.features) throw 0;
     doc = d; auswahl = null; projektPfad = pfad; titel(); merkeDatei(pfad); verlauf.stapel = []; verlauf.pos = -1;
-    $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; regen();
+    $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; auftragAnzeige(); regen();
     waehle(doc.features.find((f) => f._res)?.id || null); ansicht("iso"); status("Projekt geöffnet.");
   } catch { status("Diese Datei ist kein Spengler-Digital-CAD-Projekt."); }
 }
@@ -4307,9 +4308,11 @@ async function projektOeffnen() {
 $("wSpeichern").onclick = () => projektSpeichern();
 $("wOeffnen").onclick = projektOeffnen;
 // ------------------------------------------------------------ Konto & Cloud (Spengler-Digital-App)
+function setzeAuftrag({ nr, objekt, appProjekt }) { doc.nr = nr; doc.objekt = objekt; if (appProjekt) doc.appProjekt = appProjekt; else delete doc.appProjekt; $("aNr").value = nr; $("aObjekt").value = objekt; auftragAnzeige(); speichern(); }
 const cloud = cloudModul({
   esc, status, getEinst: () => einst, setEinst: (e) => { einst = e; if (entwurf) entwurf = JSON.parse(JSON.stringify(einst)); }, einstSpeichern, getDoc: () => doc, regen,
-  setzeAuftrag: ({ nr, objekt, appProjekt }) => { doc.nr = nr; doc.objekt = objekt; doc.appProjekt = appProjekt; $("aNr").value = nr; $("aObjekt").value = objekt; speichern(); },
+  projektAktualisieren: () => projekte.aktualisiere(), projekteOeffnen: () => { $("einst").hidden = true; entwurf = null; projekte.oeffnen(); },
+  setzeAuftrag,
   projektText: () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v)), ladeProjektText: (x) => ladeProjekt(x),
   neuZeichnen: () => { if (!$("einst").hidden && einstRegister === "konto") zeigeEinst(); },
   teile: () => blechteile().filter((f) => f._res).map((f) => ({ f, res: f._res, mat: material(f.material) })),
@@ -4318,6 +4321,17 @@ const cloud = cloudModul({
     const f = { id: neueId(), typ: "profil", name, start: 0, zeilen: zeilen.length ? zeilen : [{ L: 100, winkel: 0, art: "abkanten" }], material: m.id, laenge: laenge > 0 ? +laenge : einst.neu.laenge, stueck: stueck > 0 ? +stueck : 1, richtung: "eine", ebene: einst.neu.ebene };
     einfuegen(f); regen(); waehle(f.id); },
 });
+// Projekte der App (anlegen, bearbeiten, zuordnen)
+const projekte = projekteModul({ esc, status, getDoc: () => doc, client: () => cloud.client, angemeldet: () => cloud.angemeldet,
+  setzeAuftrag, zumKonto: () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); einstRegister = "konto"; zeigeEinst(); $("einst").hidden = false; } });
+projekte.binden();
+function auftragAnzeige() { // zugeordnetes Projekt: Objekt und Nummer kommen aus der App (nur dort änderbar)
+  const z = !!doc.appProjekt; $("aProjektName").textContent = z ? doc.appProjekt.name : "nicht zugeordnet";
+  for (const id of ["aObjekt", "aNr"]) { $(id).readOnly = z; $(id).title = z ? "Kommt aus dem App-Projekt – im Projekt ändern (Datei › Projekte)" : ""; }
+}
+$("wProjekte").onclick = () => { if (dlg) $("dAbbrechen").click(); projekte.oeffnen(); };
+$("aProjektWahl").onclick = () => projekte.oeffnen();
+auftragAnzeige();
 $("eInhalt").addEventListener("click", (ev) => { const b = ev.target.closest("[data-cloud]"); if (b) cloud.aktion(b.dataset.cloud, b.dataset.id); });
 cloud.start().then(() => { if (!$("einst").hidden && einstRegister === "konto") zeigeEinst(); });
 // ------------------------------------------------------------ 3D-Detailvorlagen (STEP-Körper mit Ankerkante, ersetzen die .f3d-Vorlagen des Add-ins)

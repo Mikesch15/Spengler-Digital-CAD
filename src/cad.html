@@ -397,6 +397,15 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   .baum li:not(.kopf):hover { background: color-mix(in srgb, var(--accent) 9%, transparent); }
   .baum li.kopf { padding-top: 8px; }
 }
+
+/* ---- Projekte der App ---- */
+.projbox { width: min(980px, 100%); } .pjgitter { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; } @media (max-width: 820px) { .pjgitter { grid-template-columns: minmax(0, 1fr); } }
+.pjliste { list-style: none; margin: 6px 0; padding: 0; max-height: 44vh; overflow: auto; border: 1px solid var(--line); border-radius: 3px; }
+.pjliste li { padding: 6px 10px; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; flex-direction: column; gap: 1px; } .pjliste li:last-child { border-bottom: 0; }
+.pjliste li:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); } .pjliste li.aktiv { background: var(--accent-soft); } .pjliste li.archiv b { opacity: .6; }
+.pjliste small { color: var(--muted); } .pjmarke { font: 600 11px var(--font-body); color: #fff; background: var(--accent); border-radius: 3px; padding: 0 5px; margin-left: 4px; } .pjmarke.grau { background: var(--muted); }
+#pjInhalt .feld { display: grid; gap: 2px; margin: 6px 0; } #pjInhalt .feld span { color: var(--muted); font-size: 12px; } #pjInhalt input[type=text], #pjInhalt input[type=search], #pjInhalt textarea, #pjInhalt select { width: 100%; }
+.projzeile { display: flex; align-items: center; gap: 8px; justify-content: space-between; } #aProjektName { font-weight: 600; color: var(--fg); }
 </style>
 
 <div class="app">
@@ -443,6 +452,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <button class="wz" id="wPlan" title="Planblatt: Ansichten des Modells, Bausteinschnitte, Bemassung, Schriftfeld – A3/A4 drucken oder als PDF/SVG"><svg viewBox="0 0 24 24"><rect class="f" x="4" y="3" width="16" height="18" rx="1.5"/><rect x="7" y="6" width="10" height="7"/><path d="M7 17h10"/></svg>Plan</button>
       <span class="trenner" aria-hidden="true"></span>
     <div class="klapp" data-klapp="datei"><button class="wz klappknopf" aria-haspopup="true" title="Speichern, Öffnen, Austausch, Drucken"><svg viewBox="0 0 24 24"><path class="f" d="M4 4h13l3 3v13H4z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><span class="kz"><span class="kl">Datei</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
+      <button class="wz" id="wProjekte" title="Projekte der App anlegen, bearbeiten und diesem Modell zuordnen"><svg viewBox="0 0 24 24"><path class="f" d="M3 6.5h6l2 2.5h10V19H3z"/><path d="M12 12v4.5M9.75 14.25h4.5"/></svg>Projekte …</button>
       <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path class="f" d="M4 4h13l3 3v13H4z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
       <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path class="f" d="M3 6.5h6l2 2.5h10V19H3z"/></svg>Öffnen</button>
       <button class="wz" id="wZuletzt" title="Zuletzt geöffnete Projekte" hidden><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>Zuletzt</button>
@@ -525,6 +535,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <aside class="panel werkstatt"><div class="register" role="tablist" aria-label="Werkstatt">
       <button role="tab" data-register="teil" aria-selected="true">Teil</button><button role="tab" data-register="auftrag" aria-selected="false">Auftrag</button></div><div id="werkstatt"></div>
       <div class="auftrag">
+        <div class="feld"><label>App-Projekt</label><div class="projzeile"><span id="aProjektName" class="hinweis">nicht zugeordnet</span><button class="knopf klein" id="aProjektWahl">Projekt …</button></div></div>
         <div class="feld"><label for="aObjekt">Objekt</label><input id="aObjekt"></div>
         <div class="feld"><label for="aNr">Objektnummer</label><input id="aNr"></div>
       </div>
@@ -538,6 +549,10 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 <div class="modal" id="einst" hidden><div class="modalbox" role="dialog" aria-labelledby="eTitel">
   <h3 id="eTitel">Einstellungen</h3><div class="inhalt" id="eInhalt"></div>
   <div class="fuss"><button class="knopf weg" id="eStandard">Standardwerte</button><span id="eMeldung" class="hinweis" role="status"></span><button class="knopf" id="eAbbrechen">Abbrechen</button><button class="knopf haupt" id="eOk">Übernehmen</button></div>
+</div></div>
+<div class="modal" id="projekte" hidden><div class="modalbox projbox" role="dialog" aria-labelledby="pjTitel">
+  <h3 id="pjTitel">Projekte der App</h3><div class="inhalt" id="pjInhalt"></div>
+  <div class="fuss"><span id="pjMeldung" class="hinweis" role="status"></span><button class="knopf" id="pjZu">Schliessen</button></div>
 </div></div>
 <div class="modal" id="bEditor" hidden><div class="modalbox" role="dialog" aria-labelledby="bTitel">
   <h3 id="bTitel">Kantenbaustein</h3><div class="inhalt" id="bInhalt"></div>
@@ -585,6 +600,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <ul>
       <li><b>Einstellungen › Konto &amp; Cloud</b>: mit dem Namen der Spengler-Digital-App anmelden («Vorname.Nachname» oder E-Mail). «Jetzt abgleichen» tauscht Kantenbausteine und Materialien mit der Firma aus. Ohne Recht «Vorlagen bearbeiten» wird nur heruntergeladen. Bei Konflikten gilt die Cloud-Fassung, deine bleibt als «Name (Konflikt TT.MM.)». Gelöscht wird nie endgültig.</li>
       <li><b>Projekte der App</b>: «Projekte der App laden» zeigt die offenen Projekte; «Verwenden» setzt Auftragsnummer und Objekt und verbindet das CAD-Projekt mit dem App-Projekt (Teile und Profilaufträge laufen dann über dieses Projekt).</li>
+      <li><b>Projekte der App</b> (Datei › Projekte … oder rechts im Register «Auftrag»): Projekte der App <b>anlegen, bearbeiten und archivieren</b> – direkt in der App-Datenbank, also immer synchron. «Diesem Modell zuordnen» übernimmt Auftragsnummer und Objekt ins Modell und verbindet es mit dem Projekt; Änderungen in der App ziehen beim Öffnen und beim Abgleich nach. Pflichtfelder wie in der App: Projektname, Auftrags-Nr. (je Firma einmalig) und Adresse.</li>
       <li><b>Projekte</b>: «Aktuelles Projekt in die Cloud» speichert unter der Auftragsnummer (Feld «Nr.»). «Teile an die App senden» übergibt Zuschnitt, Material, Stück und Schenkel; «Profilaufträge der App holen» baut offene Aufträge der App als Teil.</li>
       <li><b>Bausteine mit Parametern</b>: im Baustein-Editor unter «Parameter und Bedingungen», z. B. Kurzschrift «90 H U+ u+4*t» und Parameter «H = 25 [10-60] Höhe». <b>t</b> (Dicke), <b>ri</b> (Innenradius) und <b>k</b> (K-Faktor) kommen aus dem Material. Im Flächenblech-Dialog lässt sich der Wert je Kante überschreiben; ⚠ warnt bei Grenzverletzungen (Parametergrenzen, Materialdicke, Kantenlänge).</li>
       <li><b>3D-Details</b> (Einstellungen › Details 3D, dann Blech ▾ › 3D-Detail): Körper für wiederkehrende Details aus einer STEP-Datei als Vorlage ablegen (Ursprung = Kantenanfang, +X = Kantenrichtung, +Z = Sichtseite) und an eine Kante setzen, mit Versatz und Drehung. Mit exaktem Kern entsteht ein exakter Körper. Vorlagen werden mit der Firma abgeglichen (bis 1.5 MB je Vorlage). <b>STEP-Import</b> ist mit exaktem Kern ebenfalls exakt (B-Rep) statt Netz.</li>

@@ -2,7 +2,7 @@
 // Nur das Sitzungs-Token wird gehalten, nie das Passwort. Der Schlüssel ist der öffentliche Schlüssel (RLS regelt den Zugriff).
 export const URL_STANDARD = "https://nfgryuzkpwjfmdlmevuy.supabase.co";
 export const SCHLUESSEL_STANDARD = "sb_publishable_U1YsWEdl4X9U94JO4sL5Lg_7_dU0erM";
-export class CloudFehler extends Error { constructor(m, status = 0, art = "netz") { super(m); this.status = status; this.art = art; } }
+export class CloudFehler extends Error { constructor(m, status = 0, art = "netz", code = null) { super(m); this.status = status; this.art = art; this.code = code; } }
 
 export class CloudClient {
   constructor({ url = URL_STANDARD, schluessel = SCHLUESSEL_STANDARD, abruf = (...a) => globalThis.fetch(...a), sitzung = null } = {}) {
@@ -14,7 +14,7 @@ export class CloudClient {
       r = await this.abruf(this.url + pfad, { method: methode, headers: { apikey: this.schluessel, Authorization: `Bearer ${token || this.schluessel}`, "Content-Type": "application/json", ...kopf }, body: body === undefined ? undefined : JSON.stringify(body) });
     } catch (e) { throw new CloudFehler("Keine Verbindung zum Server (offline?).", 0, "netz"); }
     const text = await r.text(); let daten = null; try { daten = text ? JSON.parse(text) : null; } catch { daten = text; }
-    if (!r.ok) throw new CloudFehler(daten?.msg || daten?.message || daten?.error_description || `Serverfehler ${r.status}`, r.status, r.status === 401 || r.status === 403 ? "recht" : "server");
+    if (!r.ok) throw new CloudFehler(daten?.msg || daten?.message || daten?.error_description || `Serverfehler ${r.status}`, r.status, r.status === 401 || r.status === 403 ? "recht" : "server", daten?.code ?? null);
     return daten;
   }
   // Anmeldung: «Vorname.Nachname» oder E-Mail; Rückfall auf die Edge Function, die den Namen auflöst
@@ -69,7 +69,14 @@ export class CloudClient {
   async projektSpeichern(id, erwartet, { name, auftrag, daten, geloescht = false }) { const r = await this._mitToken(`/rest/v1/cad_projekte?id=eq.${id}&version=eq.${erwartet}`, { methode: "PATCH", kopf: { Prefer: "return=representation" }, body: { name, auftrag, daten, version: erwartet + 1, geloescht } }); return r?.[0] || null; }
   // ---- Verbindung zur Spengler-Digital-App ----
   // Projekte der App (Tabelle projects): Auftragsnummer = order_no
-  async appProjekte() { return this._mitToken("/rest/v1/projects?select=id,name,order_no,customer,object,status,updated_at&archived=eq.false&order=updated_at.desc&limit=300"); }
+  async appProjekte({ archiviert = false } = {}) { return this._mitToken(`/rest/v1/projects?select=id,name,order_no,customer,object,hinweis,status,archived,updated_at${archiviert ? "" : "&archived=eq.false"}&order=name.asc&limit=1000`); }
+  async appProjekt(id) { const r = await this._mitToken(`/rest/v1/projects?select=id,name,order_no,customer,object,hinweis,status,archived,updated_at&id=eq.${encodeURIComponent(id)}`); return r?.[0] || null; }
+  // Anlegen/Ändern direkt in der Tabelle der App (created_by, updated_by, updated_at setzt die Datenbank); Auftrags-Nr. ist je Firma einmalig
+  async appProjektNeu(f) { try { const r = await this._mitToken("/rest/v1/projects", { methode: "POST", kopf: { Prefer: "return=representation" }, body: this._projektFelder(f) }); return r?.[0]; } catch (e) { throw this._projektFehler(e); } }
+  // Nur wenn das Projekt seit dem Laden unverändert ist (updated_at); null = in der App inzwischen geändert
+  async appProjektAendern(id, erwartetUpdatedAt, f) { try { const r = await this._mitToken(`/rest/v1/projects?id=eq.${encodeURIComponent(id)}&updated_at=eq.${encodeURIComponent(erwartetUpdatedAt)}`, { methode: "PATCH", kopf: { Prefer: "return=representation" }, body: { ...this._projektFelder(f), ...(f.archived !== undefined ? { archived: !!f.archived } : {}) } }); return r?.[0] || null; } catch (e) { throw this._projektFehler(e); } }
+  _projektFelder(f) { const o = { name: String(f.name).trim(), order_no: String(f.order_no).trim(), customer: String(f.customer ?? "").trim(), object: String(f.object).trim() }; if (f.hinweis !== undefined) o.hinweis = f.hinweis || null; if (f.status) o.status = f.status; return o; }
+  _projektFehler(e) { return e.code === "23505" || /duplicate|projects_firma_auftragsnr/i.test(e.message) ? new CloudFehler("Diese Auftrags-Nr. gibt es in der App schon.", e.status, "doppelt", e.code) : e; }
   // CAD → App: Zuschnittteile (Tabelle cad_teile); die App übernimmt sie in die Aufmasse des Projekts (Auftrag)
   async teileSenden(auftrag, teile) {
     // Spalten laut Tabelle cad_teile: Textspalten sind NOT NULL (leer statt null), Längen begrenzt, company_id kommt vom Server (my_company_id())

@@ -36,9 +36,7 @@ export function cloudModul(ctx) {
         <button class="knopf klein" data-cloud="oeffnen" data-id="${esc(p.id)}">Öffnen</button></li>`).join("")}</ul>` : '<p class="hinweis">Keine Cloud-Projekte.</p>') : ""}
       <h4>Spengler-Digital-App</h4>
       <p class="hinweis">${doc.appProjekt ? `Verbunden mit dem App-Projekt <b>${esc(doc.appProjekt.name)}</b>.` : "Noch mit keinem App-Projekt verbunden."}</p>
-      <div class="reihe ohnerand"><button class="knopf" data-cloud="appprojekte">Projekte der App laden</button></div>
-      ${st.appProjekte ? (st.appProjekte.length ? `<ul class="eigene">${st.appProjekte.map((p) => `<li>${esc(p.name)} <small class="hinweis">${esc([p.order_no, p.customer].filter(Boolean).join(" · ") || "")}</small>
-        <button class="knopf klein" data-cloud="appwahl" data-id="${esc(p.id)}">Verwenden</button></li>`).join("")}</ul>` : '<p class="hinweis">Keine offenen Projekte in der App.</p>') : ""}
+      <div class="reihe ohnerand"><button class="knopf" data-cloud="projekteoeffnen">Projekte der App … (anlegen, bearbeiten, zuordnen)</button></div>
       <div class="reihe ohnerand"><button class="knopf" data-cloud="senden" ${st.laeuft ? "disabled" : ""}>Teile an die App senden</button><button class="knopf" data-cloud="auftraege">Profilaufträge der App holen</button></div>
       <p class="hinweis">Gesendet wird als Auftrag «${esc(doc.nr || "–")}»: Zuschnitt, Material, Stück und Schenkel jedes Blechteils.</p>
       ${st.auftraege ? (st.auftraege.length ? `<ul class="eigene">${st.auftraege.map((a) => `<li>${esc(a.titel || "Profil")} <small class="hinweis">${a.laenge_mm || "?"} mm · ${a.stueck || 1} Stk</small>
@@ -52,7 +50,7 @@ export function cloudModul(ctx) {
       let e = ctx.getEinst(); einstInSpiegel(e, z.spiegel);
       const b = await abgleichen(client, spiegelSpeicher(z.spiegel, sichern)); st.darf = !b.nur_lokal;
       ctx.setEinst(spiegelInEinst(ctx.getEinst(), z.spiegel)); ctx.einstSpeichern();
-      z.letzter = new Date().toLocaleString("de-CH"); sichern();
+      z.letzter = new Date().toLocaleString("de-CH"); sichern(); ctx.projektAktualisieren?.();
       const t = [`${b.geladen} geladen`, `${b.hochgeladen} hochgeladen`, b.geloescht ? `${b.geloescht} gelöscht (Papierkorb)` : "", b.konflikte ? `${b.konflikte} Konflikt(e): lokale Fassung als Kopie behalten` : "", b.nur_lokal ? "nur lokal (kein Recht zum Hochladen)" : "", z.spiegel.uebersprungen?.length ? `zu gross für die Cloud, nur lokal: ${z.spiegel.uebersprungen.join(", ")}` : "", ...b.fehler].filter(Boolean).join(" · ");
       st.laeuft = false; ctx.regen(); fertig("Abgleich fertig: " + t);
     } catch (e) { st.laeuft = false; fertig("Abgleich nicht möglich: " + fehlerText(e)); }
@@ -75,6 +73,7 @@ export function cloudModul(ctx) {
         const teile = ctx.teile().map((t, i) => ({ ...teilFuerApp(t.f, t.res, t.mat, i + 1), projectId: doc.appProjekt?.id ?? null })); if (!teile.length) return fertig("Keine Blechteile zum Senden.");
         st.laeuft = true; await client.teileSenden(doc.nr, teile); st.laeuft = false; return fertig(`${teile.length} Teil(e) an die App gesendet (Auftrag ${doc.nr}).`);
       }
+      if (a === "projekteoeffnen") { ctx.projekteOeffnen(); return; }
       if (a === "appprojekte") { st.appProjekte = await client.appProjekte(); return fertig(""); }
       if (a === "appwahl") { const p = st.appProjekte.find((x) => String(x.id) === String(id)); if (!p) return; ctx.setzeAuftrag({ nr: String(p.order_no || p.name).slice(0, 40), objekt: [p.customer, p.object].filter(Boolean).join(", ") || p.name, appProjekt: { id: p.id, name: p.name } }); st.auftraege = null; return fertig(`Projekt «${p.name}» übernommen: Auftragsnummer und Objekt sind gesetzt.`); }
       if (a === "auftraege") { st.auftraege = await client.profilAuftraege(doc.appProjekt?.id ?? null); return fertig(""); }
@@ -86,5 +85,5 @@ export function cloudModul(ctx) {
     } catch (e) { st.laeuft = false; fertig("Nicht möglich: " + fehlerText(e)); }
   }
   const loeschungen = (g) => { loescheImSpiegel(z.spiegel, g); sichern(); }; // vom Programm aufgerufen, wenn Bausteine/Materialien/Details bewusst gelöscht wurden
-  return { html, aktion, start, loeschungen, get angemeldet() { return client.angemeldet; } };
+  return { html, aktion, start, loeschungen, get client() { return client; }, get angemeldet() { return client.angemeldet; } };
 }
