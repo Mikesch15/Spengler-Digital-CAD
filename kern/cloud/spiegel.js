@@ -5,7 +5,8 @@ import { BAUSTEINE_STANDARD } from "../flaechenblech.js";
 import { MATERIALIEN } from "../materialien.js";
 
 export const leererSpiegel = () => ({ kantenvorlage: {}, detailvorlage: {}, materialprofil: {}, stand: {}, papierkorb: [] });
-const gleichB = (a, b) => a && b && a.name === b.name && a.folge === b.folge && (+a.versatz || 0) === (+b.versatz || 0) && (a.gruppe || "") === (b.gruppe || "") && (a.partner || "") === (b.partner || "");
+const norm = (x) => (Array.isArray(x) ? (x.length ? x : null) : x && Object.values(x).some((v) => (Array.isArray(v) ? v.length : v != null)) ? x : null);
+const gleichB = (a, b) => a && b && JSON.stringify(norm(a.parameter)) === JSON.stringify(norm(b.parameter)) && JSON.stringify(norm(a.bedingungen)) === JSON.stringify(norm(b.bedingungen)) && a.name === b.name && a.folge === b.folge && (+a.versatz || 0) === (+b.versatz || 0) && (a.gruppe || "") === (b.gruppe || "") && (a.partner || "") === (b.partner || "");
 const gleichM = (a, b) => a && b && a.name === b.name && a.t === b.t && a.ri === b.ri && a.k === b.k && (a.dichte ?? 0) === (b.dichte ?? 0);
 
 // Einstellungen → Spiegel (vor dem Abgleich): neue/geänderte Bausteine und Materialien als Vorlagen eintragen

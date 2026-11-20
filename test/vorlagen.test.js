@@ -1,6 +1,7 @@
 // Tests: Vorlagen-Datenkern (Modelle, Kurzschrift mit Parametern, Wandler) – kompatibel zum Fusion-Add-in
 import { neueKantenvorlage, neuesMaterialprofil, neueDetailvorlage, parameter, operation, SCHEMA, KATEGORIE_OHNE, kopie } from "../kern/vorlagen/modelle.js";
 import { zerlege, alsText, aufloesen, KurzschriftFehler } from "../kern/vorlagen/kurzschrift.js";
+import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
 import { bausteinZuVorlage, vorlageZuBaustein, materialZuProfil, profilZuMaterial } from "../kern/vorlagen/wandler.js";
 import { folge } from "../kern/details.js";
 import { BAUSTEINE_STANDARD } from "../kern/flaechenblech.js";
@@ -41,11 +42,25 @@ const dsf = bausteinZuVorlage(BAUSTEINE_STANDARD.find((b) => b.id === "dsf-o"));
 ok(dsf.operations[1].radius === 1.75 && dsf.operations[1].typ === "umschlag" && dsf.operations[1].winkel === -180 && dsf.metadata.versatz === 0.7 && dsf.metadata.partner === "dsf-u" && /^kv-/.test(dsf.id), "Oberfalz: Umschlag −180 mit r1.75, Versatz 0.7 und Partner in metadata");
 // Vorlage mit Parametern → Baustein mit eingesetzten Werten (Material t = 0.7)
 const pvv = neueKantenvorlage("Falz H", { parameters: [parameter("H", { standard: 25 })], operations: zerlege("90 H U+ 7") });
-ok(vorlageZuBaustein(pvv).folge === "90 25 U+ 7" && vorlageZuBaustein(pvv, { H: 30 }).folge === "90 30 U+ 7", "Vorlage mit Parameter H: Standard 25, Überschreibung 30 → Baustein «90 30 U+ 7»");
+const bz = vorlageZuBaustein(pvv), mz1 = { id: "z", name: "Zink", t: 0.7, ri: 1, k: 0.4 };
+ok(bz.folge === "90 H U+ 7" && bz.parameter[0].standard === 25 && bausteinFolge(bz, mz1) === "90 25 U+ 7" && bausteinFolge(bz, mz1, { H: 30 }) === "90 30 U+ 7", "Vorlage mit Parameter H: Ausdruck bleibt im Baustein, Standard 25, Überschreibung 30 → «90 30 U+ 7»");
+const bt = { folge: "90 H U+ u+4*t", parameter: [{ name: "H", standard: 25, min: 10, max: 60 }, { name: "u", standard: 5 }], bedingungen: { dickeMin: 0.5, dickeMax: 1, kantenMin: 200 } };
+ok(bausteinFolge(bt, mz1) === "90 25 U+ 7.8" && hatAusdruck(bt) && !hatAusdruck({ folge: "90 25 U+ 7" }), "Baustein mit Ausdruck u+4·t: Folge «90 25 U+ 7.8», reine Zahlen bleiben unverändert");
+ok(pruefeEignung(bt, mz1, { kantenlaenge: 300 }).length === 0 && pruefeEignung(bt, { ...mz1, t: 1.5 }).some((x) => /dicker/.test(x)) && pruefeEignung(bt, mz1, { kantenlaenge: 100 }).some((x) => /kürzer/.test(x)) && pruefeEignung(bt, mz1, { werte: { H: 80 } }).some((x) => /grösser/.test(x)) && pruefeEignung({ folge: "90 X" }, mz1).length === 1, "Eignungsprüfung: Dicke, Kantenlänge, Parametergrenzen, unbekannter Name");
+const pt = parameterAusText("H = 25 [10-60] Höhe\nu = 5");
+ok(pt.length === 2 && pt[0].min === 10 && pt[0].max === 60 && pt[0].label === "Höhe" && pt[1].min === null && parameterText(pt) === "H = 25 [10-60] Höhe\nu = 5" && wirft(() => parameterAusText("t = 3"), KurzschriftFehler) && wirft(() => parameterAusText("H = x"), KurzschriftFehler), "Parameter ⇄ Text; t/ri/k reserviert; Fehlerzeilen");
+const rt = bausteinZuVorlage(bt); ok(rt.parameters.length === 2 && rt.constraints.thicknessMin === 0.5 && rt.constraints.edgeLengthMin === 200 && vorlageZuBaustein(rt).bedingungen.dickeMax === 1 && vorlageZuBaustein(rt).parameter[0].max === 60, "Parameter und Bedingungen laufen verlustfrei Baustein → Vorlage → Baustein");
 // Material
 const mz = MATERIALIEN[0], mp = materialZuProfil(mz), zur = profilZuMaterial(mp);
 ok(mp.thickness === mz.t && mp.kFactor === mz.k && mp.density === mz.dichte && zur.t === mz.t && zur.k === mz.k && zur.dichte === mz.dichte && zur.ri === mz.ri, "Material ⇄ Materialprofil: Dicke, Ri, K, Dichte unverändert");
 // Unbekannte (neuere) Felder gehen beim Wandeln nicht verloren
 const neuer = Object.assign(kopie(dsf), { zukunft: { x: 1 }, version: 5 }), rueck = bausteinZuVorlage({ id: "dsf-o", name: "Neuer Name", gruppe: "Falze", folge: "90 25", versatz: 0 }, neuer);
 ok(rueck.zukunft?.x === 1 && rueck.version === 5 && rueck.name === "Neuer Name" && rueck.operations.length === 1, "Aktualisieren einer bestehenden Vorlage: neuere Felder und Versionsstand bleiben erhalten");
+// Rechnung: Baustein mit Parametern = gleicher Baustein mit festen Zahlen
+{
+  const { bausteinProfil } = await import("../kern/flaechenblech.js"), M = { id: "z", name: "Zink", t: 0.7, ri: 1, k: 0.4 };
+  const a = bausteinProfil({ folge: "90 H U+ u+4*t", parameter: [{ name: "H", standard: 25 }, { name: "u", standard: 5 }], versatz: 0 }, M), b = bausteinProfil({ folge: "90 25 U+ 7.8", versatz: 0 }, M);
+  ok(Math.abs(a.zugabe - b.zugabe) < 1e-9 && a.biegungen.length === 2, `bausteinProfil rechnet Parameter wie feste Zahlen (Zugabe ${a.zugabe.toFixed(3)})`);
+  ok(wirft(() => bausteinProfil({ folge: "90 Q", versatz: 0 }, M)), "Unbekannter Parameter in der Rechnung → Fehler");
+}
 if (fehler) { console.error(fehler + " Fehler"); process.exit(1); } else console.log("Vorlagen: alle Tests bestanden");

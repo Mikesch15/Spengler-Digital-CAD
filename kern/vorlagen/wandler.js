@@ -2,7 +2,8 @@
 //   Kantenvorlage  ⇄ Kantenbaustein (Kurzschrift «folge», Gruppe, Versatz)
 //   Materialprofil ⇄ Material (t, ri, k, dichte, Tafeln, Rollen)
 // Verlustfrei in beide Richtungen soweit die App die Felder kennt; alles andere bleibt in `daten` erhalten.
-import { zerlege, alsText, aufloesen } from "./kurzschrift.js";
+import { zerlege, alsText } from "./kurzschrift.js";
+import { bausteinFolge } from "./parameter.js";
 import { neueKantenvorlage, neuesMaterialprofil, parameter, KATEGORIE_OHNE, jetzt, kopie } from "./modelle.js";
 
 // Baustein der App → Kantenvorlage (Parameter «Versatz» wird als fester Wert in metadata gehalten)
@@ -10,15 +11,20 @@ export function bausteinZuVorlage(b, bestehend = null) {
   const v = bestehend ? kopie(bestehend) : neueKantenvorlage(b.name);
   Object.assign(v, { name: b.name, category: b.gruppe || KATEGORIE_OHNE, operations: zerlege(b.folge), modified: jetzt() });
   if (bestehend) v.version = bestehend.version; // die Versionszählung führt der Abgleich
+  v.parameters = (b.parameter || []).map((q) => parameter(q.name, { label: q.label, standard: q.standard, minimum: q.min, maximum: q.max }));
+  const c = b.bedingungen || {}; v.constraints = { ...(v.constraints || {}), thicknessMin: c.dickeMin ?? null, thicknessMax: c.dickeMax ?? null, materials: c.materialien || [], edgeLengthMin: c.kantenMin ?? null };
   v.metadata = { ...(v.metadata || {}), versatz: +b.versatz || 0, partner: b.partner || null, appId: b.id };
   if (b.id && !bestehend) v.id = String(b.id).startsWith("kv-") ? b.id : `kv-${String(b.id).replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 70)}`;
   return v;
 }
-// Kantenvorlage → Baustein der App; Parameter werden mit ihren Standardwerten eingesetzt (t, ri, k aus dem Material)
-export function vorlageZuBaustein(v, werte = {}) {
-  const wert = { ...Object.fromEntries((v.parameters || []).filter((p) => p.default !== null && p.default !== undefined).map((p) => [p.name, p.default])), ...werte };
-  const ops = (v.parameters || []).length || (v.operations || []).some((o) => [o.winkel, o.laenge, o.radius].some((x) => typeof x === "string")) ? aufloesen(v.operations, { t: 1, ri: 1, k: 0.4, ...wert }) : v.operations;
-  return { id: v.metadata?.appId || v.id, name: v.name, gruppe: v.category === KATEGORIE_OHNE ? "" : v.category, folge: alsText(ops), versatz: +v.metadata?.versatz || 0, partner: v.metadata?.partner || undefined, vorlageId: v.id, vorlageVersion: v.version };
+// Kantenvorlage → Baustein; Parameter und Ausdrücke bleiben erhalten (aufgelöst wird erst mit dem Material beim Berechnen)
+export function vorlageZuBaustein(v) {
+  const c = v.constraints || {}, ps = (v.parameters || []).map((p) => ({ name: p.name, label: p.label || p.name, standard: p.default ?? null, min: p.min ?? null, max: p.max ?? null }));
+  const bed = { dickeMin: c.thicknessMin ?? null, dickeMax: c.thicknessMax ?? null, kantenMin: c.edgeLengthMin ?? null, materialien: c.materials || [] };
+  const b = { id: v.metadata?.appId || v.id, name: v.name, gruppe: v.category === KATEGORIE_OHNE ? "" : v.category, folge: alsText(v.operations), versatz: +v.metadata?.versatz || 0, partner: v.metadata?.partner || undefined, vorlageId: v.id, vorlageVersion: v.version };
+  if (ps.length) b.parameter = ps;
+  if (Object.values(bed).some((x) => (Array.isArray(x) ? x.length : x != null))) b.bedingungen = bed;
+  return b;
 }
 // Material der App → Materialprofil
 export function materialZuProfil(m, bestehend = null) {

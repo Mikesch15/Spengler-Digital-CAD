@@ -3,6 +3,7 @@
 // Kantenbaustein (Doppelstehfalz, Umschlag, Aufkantung …) als Abkantfolge ab der Kante nach aussen.
 // Daraus: Zugabe je Kante, Zuschnitt (Umriss mit Eckausklinkung), Biegelinien, Abkantliste.
 // Querschnitt eines Bausteins: x = von der Kante nach aussen, y = zur Sichtseite. Reines JavaScript.
+import { bausteinFolge } from "./vorlagen/parameter.js";
 import { berechne, versatzLinie, grenzen, kontur } from "./geometrie.js";
 import { freiesProfil } from "./profile.js";
 import { folge } from "./details.js";
@@ -32,7 +33,7 @@ export const BAUSTEINE_STANDARD = [
 const X = 100;
 export function bausteinProfil(b, m) {
   if (!b || !String(b.folge ?? "").trim()) return { zugabe: 0, biegungen: [], zeilen: [] };
-  const zeilen = folge(`${X} ${b.folge}`);
+  const zeilen = folge(`${X} ${bausteinFolge(b, m)}`);
   const { start, ops } = freiesProfil(0, zeilen, m);
   const res = berechne(start, ops, m.t, m.ri, m.k);
   const v = +b.versatz || 0, zugabe = res.zuschnitt - X + v;

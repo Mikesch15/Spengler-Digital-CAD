@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { planModul } from "./plan.js";
 import { cloudModul } from "./cloud.js";
+import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
 import { kantenGeometrie, RICHTUNGEN as ANSICHT_RICHTUNGEN } from "./ansicht.js";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
@@ -1564,7 +1565,7 @@ const bausteinFuer = (v) => !v ? null : typeof v === "string" ? alleBausteine().
 const bausteinName = (v) => (!v ? "–" : bausteinFuer(v)?.name || `fehlt (${v})`);
 // Profilquerschnitt eines Bausteins für 3D: kurzer Anfangsschenkel auf der Fläche, Kante bei x = 0
 function bausteinKontur(b, m) {
-  const zeilen0 = (L) => folge(`${L} ${b.folge}`);
+  const zeilen0 = (L) => folge(`${L} ${bausteinFolge(b, m)}`);
   for (const L of [1, 2, 4, 8, 16, 30]) {
     try {
       const { start, ops } = freiesProfil(0, zeilen0(L), m), res = berechne(start, ops, m.t, m.ri, m.k), v = +b.versatz || 0;
@@ -1876,10 +1877,13 @@ function bVorschau() {
   $("bVorschau").innerHTML = p ? bausteinSvg(p, m.t, { breite: 440, hoehe: 230, schrift: 11 }) : "";
   $("bZugabe").innerHTML = p ? `Zugabe <b>${f1(p.zugabe)} mm</b> ab der gezeichneten Kante · ${p.biegungen.length} Biegung${p.biegungen.length === 1 ? "" : "en"} · Anschlag ab Schnittkante ${p.biegungen.map((x) => f1(x.anschlag)).join(" / ")}`
     : `<span class="fehler">⚠ ${esc(fehler || "Abkantfolge fehlt")}</span>`;
+  const hinweise = pruefeEignung(b, m); if (p && hinweise.length) $("bZugabe").innerHTML += `<br><span class="fehler">⚠ ${hinweise.map(esc).join(" · ")}</span>`;
 }
+const bFolgeOk = (b) => folge("100 " + bausteinFolge(b, material(bEdit.mat)));
 function zeigeBEditor() {
   const { b, liste } = bEdit;
   let zeilen = []; try { zeilen = bZeilen(b.folge); } catch {}
+  const ausdruck = hatAusdruck(b), bd = b.bedingungen || {};
   const gruppen = [...new Set(liste.map((x) => x.gruppe).filter(Boolean))];
   $("bInhalt").innerHTML = `<div class="egitter">
       <label class="feld"><span>Name</span><input id="b_name" data-bf="name" value="${esc(b.name)}"></label>
@@ -1889,7 +1893,8 @@ function zeigeBEditor() {
       <label class="feld"><span>Vorschau mit Material</span><select data-bf="mat">${matOpt().map(([id, n]) => `<option value="${id}" ${id === bEdit.mat ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></label>
     </div>
     <div class="bvorschau" id="bVorschau"></div><div class="bzugabe" id="bZugabe"></div>
-    <table class="zeilen bfolge"><thead><tr><th>#</th><th>Biegung</th><th>Winkel °</th><th>Radius innen</th><th>Schenkel mm</th><th></th></tr></thead><tbody>
+    ${ausdruck ? '<p class="hinweis">Die Kurzschrift enthält Parameter oder Ausdrücke (z. B. «90 H U+ u+4*t»). Die Tabelle ist dann ausgeblendet – bearbeite die Kurzschrift unten.</p>' : ""}
+    <table class="zeilen bfolge" ${ausdruck ? "hidden" : ""}><thead><tr><th>#</th><th>Biegung</th><th>Winkel °</th><th>Radius innen</th><th>Schenkel mm</th><th></th></tr></thead><tbody>
     ${zeilen.map((r, i) => { const u = typeof r.winkel === "string"; return `<tr data-i="${i}"><td>B${i + 1}</td>
       <td><select data-z="art"><option value="ab" ${u ? "" : "selected"}>Abkanten</option><option value="U+" ${r.winkel === "U+" ? "selected" : ""}>Umschlag zur Sichtseite</option><option value="U-" ${r.winkel === "U-" ? "selected" : ""}>Umschlag nach hinten</option></select></td>
       <td>${u ? "180" : `<input data-z="winkel" type="number" step="any" inputmode="decimal" value="${r.winkel}" aria-label="Winkel B${i + 1}">`}</td>
@@ -1897,8 +1902,15 @@ function zeigeBEditor() {
       <td><input data-z="L" type="number" step="any" inputmode="decimal" value="${r.L}" aria-label="Schenkel nach B${i + 1}"></td>
       <td>${zeilen.length > 1 ? `<button class="weg" data-zweg="${i}" aria-label="B${i + 1} entfernen">×</button>` : ""}</td></tr>`; }).join("")}
     </tbody></table>
-    <div class="reihe ohnerand"><button class="knopf" data-zneu>+ Biegung und Schenkel</button></div>
+    <div class="reihe ohnerand" ${ausdruck ? "hidden" : ""}><button class="knopf" data-zneu>+ Biegung und Schenkel</button></div>
     <label class="feld breit"><span>Kurzschrift</span><input id="bText" class="folge" value="${esc(b.folge)}"></label>
+    <details ${b.parameter?.length || b.bedingungen ? "open" : ""}><summary>Parameter und Bedingungen (wie Kantenvorlagen im Add-in)</summary>
+      <label class="feld breit"><span>Parameter (eine Zeile je Parameter: «H = 25 [10-60] Höhe»)</span><textarea id="bParam" rows="3" class="folge">${esc(parameterText(b.parameter))}</textarea></label>
+      <p class="hinweis">In der Kurzschrift als Name oder Ausdruck verwenden, z. B. «90 H U+ u+4*t». Reserviert: t = Materialdicke, ri = Innenradius, k = K-Faktor.</p>
+      <div class="egitter">
+      <label class="feld"><span>Materialdicke min (mm)</span><input data-bd="dickeMin" type="number" step="any" value="${bd.dickeMin ?? ""}"></label>
+      <label class="feld"><span>Materialdicke max (mm)</span><input data-bd="dickeMax" type="number" step="any" value="${bd.dickeMax ?? ""}"></label>
+      <label class="feld"><span>Kantenlänge min (mm)</span><input data-bd="kantenMin" type="number" step="any" value="${bd.kantenMin ?? ""}"></label></div></details>
     <p class="hinweis">Die erste Biegung sitzt an der gezeichneten Kante der Fläche. Winkel + biegt zur Sichtseite, − nach hinten. Radius leer = Innenradius des Materials; bei Umschlägen um weitere Lagen grösser wählen.
       Schenkelmasse wie beim freien Profil (bis zur Kante, Umschlag bis Aussenkante). Versatz: Kante liegt so viel weiter aussen (Oberfalz = Blechdicke).</p>`;
   bVorschau();
@@ -1910,11 +1922,13 @@ const bZeilenAusTabelle = () => [...$("bInhalt").querySelectorAll("table.bfolge 
 $("bInhalt").addEventListener("input", (e) => {
   const t = e.target, b = bEdit?.b; if (!b) return;
   if (t.dataset.bf) { if (t.dataset.bf === "mat") bEdit.mat = t.value; else if (t.dataset.bf === "versatz") b.versatz = parseFloat(t.value) || 0; else if (t.dataset.bf === "partner") b.partner = t.value || undefined; else b[t.dataset.bf] = t.value; return bVorschau(); }
-  if (t.id === "bText") { b.folge = t.value; try { bZeilen(t.value); t.classList.remove("ungueltig"); } catch { t.classList.add("ungueltig"); } return bVorschau(); }
+  if (t.id === "bParam") { try { b.parameter = parameterAusText(t.value); t.classList.remove("ungueltig"); $("bMeldung").textContent = ""; } catch (err) { t.classList.add("ungueltig"); $("bMeldung").textContent = err.message; } return bVorschau(); }
+  if (t.dataset.bd) { const w = t.value === "" ? null : parseFloat(t.value); b.bedingungen = { ...(b.bedingungen || {}), [t.dataset.bd]: w }; return bVorschau(); }
+  if (t.id === "bText") { b.folge = t.value; try { bFolgeOk(b); t.classList.remove("ungueltig"); } catch { t.classList.add("ungueltig"); } return bVorschau(); }
   if (t.dataset.z) { b.folge = bText(bZeilenAusTabelle()); $("bText").value = b.folge; $("bText").classList.remove("ungueltig"); bVorschau(); }
 });
 $("bInhalt").addEventListener("change", (e) => {
-  if (e.target.dataset.z === "art" || e.target.id === "bText") { try { bZeilen(bEdit.b.folge); zeigeBEditor(); } catch {} }
+  if (e.target.dataset.z === "art" || e.target.id === "bText") { try { bFolgeOk(bEdit.b); zeigeBEditor(); } catch {} }
 });
 $("bInhalt").addEventListener("click", (e) => {
   const z = (() => { try { return bZeilen(bEdit.b.folge); } catch { return []; } })();
@@ -1924,7 +1938,10 @@ $("bInhalt").addEventListener("click", (e) => {
 $("bAbbrechen").onclick = () => { $("bEditor").hidden = true; bEdit = null; };
 $("bOk").onclick = () => {
   const { b, liste, fertig } = bEdit;
-  try { bZeilen(b.folge); } catch (err) { return ($("bMeldung").textContent = "Abkantfolge: " + err.message); }
+  try { bFolgeOk(b); } catch (err) { return ($("bMeldung").textContent = "Abkantfolge: " + err.message); }
+  try { b.parameter = parameterAusText($("bParam")?.value ?? parameterText(b.parameter)); } catch (err) { return ($("bMeldung").textContent = "Parameter: " + err.message); }
+  if (!b.parameter.length) delete b.parameter;
+  if (b.bedingungen && Object.values(b.bedingungen).every((x) => x == null || x === "")) delete b.bedingungen;
   if (!b.name.trim()) return ($("bMeldung").textContent = "Bitte einen Namen eingeben.");
   b.name = b.name.trim();
   const i = liste.findIndex((x) => x.id === b.id);
@@ -2837,7 +2854,7 @@ function probe() {
 $("eInhalt").addEventListener("input", (ev) => {
   const t = ev.target;
   if (t.dataset.bk) { const b = entwurf.bausteine[+t.closest("tr").dataset.bi], k = t.dataset.bk; b[k] = k === "versatz" ? parseFloat(t.value) || 0 : t.value;
-    if (k === "folge") { try { folge("100 " + t.value); t.classList.remove("ungueltig"); } catch (err) { t.classList.add("ungueltig"); meldung(err.message); } } }
+    if (k === "folge") { try { folge("100 " + bausteinFolge({ ...entwurf.bausteine[+t.closest("tr").dataset.bi], folge: t.value }, entwurf.materialien[0])); t.classList.remove("ungueltig"); } catch (err) { t.classList.add("ungueltig"); meldung(err.message); } } }
   else if (t.dataset.k) { const m = entwurf.materialien[+t.dataset.i]; m[t.dataset.k] = t.dataset.k === "name" ? t.value : parseFloat(t.value); }
   else if (t.id === "lBand") entwurf.spaltbaender = zahlen(t.value);
   else if (t.id === "lCoil") entwurf.coil = parseFloat(t.value) || 0;
@@ -2916,7 +2933,7 @@ $("eOk").onclick = () => {
     : !(et.breite > 0 && et.hoehe > 0) ? ["etiketten", "Etikettgrösse muss grösser als 0 sein."]
     : ![et.oben, et.links, et.abstandX, et.abstandY].every((v) => v >= 0) ? ["etiketten", "Ränder und Abstände dürfen nicht negativ sein."]
     : !ganz(pr.zuletzt) ? ["programm", "Anzahl «Zuletzt»: ganze Zahl ab 1."] : null;
-  const bFalsch = !fehler && entwurf.bausteine.find((b) => { try { folge("100 " + b.folge); return !b.name.trim(); } catch { return true; } });
+  const bFalsch = !fehler && entwurf.bausteine.find((b) => { try { folge("100 " + bausteinFolge(b, entwurf.materialien[0])); return !b.name.trim(); } catch { return true; } });
   if (bFalsch) { einstRegister = "bausteine"; zeigeEinst(); return meldung(`Baustein «${bFalsch.name || "ohne Namen"}»: Name und gültige Abkantfolge nötig (z. B. «90 25 U+ 7»).`); }
   if (fehler) { einstRegister = fehler[0]; zeigeEinst(); return meldung(fehler[1]); }
   einst = entwurf; entwurf = null; $("einst").hidden = true;
