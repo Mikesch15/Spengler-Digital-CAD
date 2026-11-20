@@ -15,7 +15,8 @@ export function cloudModul(ctx) {
   const sichern = () => schreibe({ sitzung: client.sitzungOeffentlich(), spiegel: z.spiegel, letzter: z.letzter });
   const fehlerText = (e) => e?.art === "netz" ? "Keine Verbindung – die Arbeit lokal geht weiter, abgleichen später." : e?.message || String(e);
   const fertig = (m) => { st.meldung = m; ctx.neuZeichnen(); };
-  async function start() { if (z.sitzung) { try { await client.wiederherstellen(z.sitzung); sichern(); } catch { /* offline: Sitzung behalten */ client.sitzung = z.sitzung; } } }
+  async function start() { if (z.sitzung && !z.sitzung.firma) { z.sitzung = null; sichern(); } // alte, unvollständige Sitzung (ohne Firma) verwerfen: neu anmelden
+  if (z.sitzung) { try { await client.wiederherstellen(z.sitzung); sichern(); } catch { /* offline: Sitzung behalten */ client.sitzung = z.sitzung; } } }
 
   function html() {
     const s = client.sitzung, doc = ctx.getDoc();
