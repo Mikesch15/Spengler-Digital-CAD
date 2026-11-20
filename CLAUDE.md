@@ -19,4 +19,5 @@ Antworten kurz und auf Deutsch. Keine langen Zusammenfassungen, keine Wiederholu
 - Keine Screenshots/Bilder lesen, ausser bei Darstellungsproblemen
 
 ## Git
-- Branch `claude/tauri-windows-github-action-ltlved`, kein PR ohne Auftrag; `index.html` und `dist/index.html` nach `node build.mjs` mitcommitten
+- Direkt auf `main` arbeiten und pushen (Auftrag des Besitzers 20.11.2026: jede Änderung soll als Update auf den PC kommen); kein PR ohne Auftrag; `index.html` und `dist/index.html` nach `node build.mjs` mitcommitten
+- Vor jedem Push: `npm test` und `node build.mjs` grün – jeder Push auf `main` veröffentlicht ein Windows-Release mit Auto-Update
