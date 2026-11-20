@@ -14,7 +14,7 @@ await s.route("**/nfgryuzkpwjfmdlmevuy.supabase.co/**", async (r) => {
   const q = r.request(), u = new URL(q.url()), p = u.pathname, m = q.method(), body = q.postData() ? JSON.parse(q.postData()) : null, j = (st, d) => r.fulfill({ status: st, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(d) });
   if (m === "OPTIONS") return r.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "*", "access-control-allow-methods": "*" } });
   if (p === "/auth/v1/token") return body.password === "geheim" ? j(200, { access_token: "T", refresh_token: "R", expires_in: 3600, user: { id: "u1", email: body.email } }) : j(400, { error_description: "bad" });
-  if (p === "/rest/v1/profiles") return j(200, [{ id: "u1", company_id: "f1", full_name: "Max Muster" }]);
+  if (p === "/rest/v1/profiles") return u.searchParams.get("select").includes("full_name") ? j(400, { message: "column profiles.full_name does not exist" }) : j(200, [{ id: "u1", company_id: "f1", first_name: "Max", last_name: "Muster" }]);
   if (p === "/rest/v1/companies") return j(200, [{ name: "Muster AG" }]);
   if (p === "/rest/v1/rpc/has_permission") return j(200, true);
   if (p === "/rest/v1/cad_daten") { if (m === "GET") return j(200, db.daten); db.daten.push({ ...body }); return j(201, [body]); }

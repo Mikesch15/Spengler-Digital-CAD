@@ -21,7 +21,7 @@ function server({ darf = true, offline = false } = {}) {
       return body.refresh_token === "R" ? antwort(200, { access_token: "T2", refresh_token: "R2", expires_in: 3600, user: { id: "u1", email: "x" } }) : antwort(400, {});
     }
     if (p === "/functions/v1/resolve-login-email") return body.username === "anna.test" ? antwort(200, { email: "anna@firma.ch" }) : antwort(404, {});
-    if (p === "/rest/v1/profiles") return antwort(200, [{ id: "u1", company_id: s.firma, full_name: "Max Muster" }]);
+    if (p === "/rest/v1/profiles") { if (q.get("select").includes("full_name")) return antwort(400, { message: "column profiles.full_name does not exist" }); return antwort(200, [{ id: "u1", company_id: s.firma, first_name: "Max", last_name: "Muster" }]); }
     if (p === "/rest/v1/companies") return antwort(200, [{ name: "Muster Spenglerei" }]);
     if (p === "/rest/v1/rpc/has_permission") return antwort(200, s.darf);
     if (p === "/rest/v1/cad_daten") {
@@ -88,6 +88,8 @@ let sp3 = speicher(); sp3.d.kantenvorlage.set(k1.id, k1);
 b = await abgleichen(c3, sp3); ok(b.nur_lokal && b.geladen === 1 && b.hochgeladen === 0 && sv.zeilen.length === 1 && sp3.d.materialprofil.get("mat-x").version === 3, "Ohne Recht «vorlagen edit»: nur herunterladen, nichts hochladen, Bericht «nur lokal»");
 // Offline
 sv.offline = true; fe = null; try { await abgleichen(c3, sp3); } catch (e) { fe = e; } ok(fe?.art === "netz" && sp3.d.kantenvorlage.size === 1, "Offline: Fehler «netz», lokale Daten unverändert");
+{ const s0 = server(); s0.firma = null; let w = null; const c0 = kunde(s0); try { await c0.anmelden("Max.Muster", "geheim"); } catch (e) { w = e; }
+  ok(w?.art === "recht" && !c0.angemeldet, "Konto ohne Firma: klare Meldung und kein halber Anmeldezustand"); }
 // Cloud-Projekte
 sv = server(); const cp = kunde(sv); await cp.anmelden("Max.Muster", "geheim");
 const p1 = await cp.projektAnlegen({ name: "Dach Müller", auftrag: "2026-114", daten: { teile: [1, 2] } });
