@@ -971,6 +971,7 @@ function regen() {
   // Verwendete Kantenbausteine ebenfalls ins Projekt (andere Geräte haben evtl. andere Bausteine)
   const bIds = new Set(doc.features.filter((f) => f.typ === "flaeche").flatMap((f) => Object.values(f.kanten || {})).filter((v) => typeof v === "string"));
   doc.bausteine = [...bIds].map((id) => alleBausteine().find((b) => b.id === id)).filter(Boolean);
+  const flachStand = new Map(); let aktSchnitt = null; // Abwickeln/Falten: abgewickelte Bleche mit den Ausschnitten (Skizzenumrisse) dazwischen
   const volumen = new Map(); // Volumenkörper (Extrusion, Drehung) für Vereinigen/Ausschneiden/Schneiden
   const volumenKoerper = (f, geo) => {
     const op = f.vorgang || "neu";
@@ -981,6 +982,11 @@ function regen() {
     if (!ziele.length && !bleche.length) throw new Error("Kein Körper zum " + ({ verbinden: "Vereinigen", ausschneiden: "Ausschneiden", schneiden: "Schneiden" })[op]);
     for (const z of op === "verbinden" ? ziele.slice(0, 1) : ziele) verknuepfe(z, geo, op);
     let nicht = 0; for (const z of bleche) { try { verknuepfe(z, geo, "ausschneiden"); } catch { nicht++; } }
+    for (const hid of new Set(bleche.map((o) => String(o.userData.fid).split(":")[0]))) { // abgewickelte Bleche: Umriss des Ausschnitts für «Falten» merken
+      const st = flachStand.get(hid); if (!st) continue;
+      if (!aktSchnitt || aktSchnitt.ebene !== finde(finde(hid).skizze).ebene) throw new Error("Ausschneiden an der Abwicklung: die Skizze muss auf derselben Ebene wie das Blech liegen");
+      st.schnitte.push(...aktSchnitt.loops);
+    }
     if (nicht) throw new Error(`${nicht} Blechteil${nicht === 1 ? "" : "e"} lie${nicht === 1 ? "ss" : "ssen"} sich nicht ausschneiden`);
   };
   doc.features.forEach((f) => (f._faktor = 1));
@@ -1018,7 +1024,8 @@ function regen() {
         if (Array.isArray(f.flaechen) && !f.flaechen.length) throw new Error("Fläche in der Skizze anklicken");
         const fs = formen(s, undefined, f); if (!fs.length) throw new Error(Array.isArray(f.flaechen) ? "Gewählte Fläche gibt es nicht mehr – neu anklicken" : "Skizze hat kein geschlossenes Profil");
         const kr = doc.features.filter((x) => x.typ === "kantenrund" && x.ziel === f.id && !x._aus);
-        volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, f.abstand, f.richtung, (f.vorgang || "neu") === "neu" ? 0 : 0.01));
+        aktSchnitt = { ebene: s.ebene, loops: gewaehlteRegionen(f, s)?.map((r) => r.aussen) ?? schleifen(s) };
+        try { volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, f.abstand, f.richtung, (f.vorgang || "neu") === "neu" ? 0 : 0.01)); } finally { aktSchnitt = null; }
       } else if (f.typ === "bild") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         if (!f.versteckt) bilder.add(bildObjekt(f));
@@ -1053,7 +1060,7 @@ function regen() {
       } else if (f.typ === "kmuster" || f.typ === "kspiegel" || f.typ === "bewegen") {
         koerperTransform(f, volumen);
       } else if (f.typ === "teilen") {
-        koerperTeilen(f, volumen);
+        koerperTeilen(f, volumen, flachStand);
       } else if (f.typ === "drehung") {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
         const loops = schleifen(s); if (!loops.length) throw new Error("Skizze hat kein geschlossenes Profil");
@@ -1093,7 +1100,7 @@ function regen() {
         f._kernLage = null;
         if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id)); }
       } else if (f.typ === "flaeche") {
-        f._bleche = null; f._teile = null;
+        f._bleche = null; f._teile = null; f._mitAbwicklung = false;
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
         if (Array.isArray(f.flaechen) && !f.flaechen.length) throw new Error("Fläche in der Skizze anklicken");
         const loops = gewaehlteRegionen(f, s)?.map((r) => r.aussen) ?? schleifen(s); if (!loops.length) throw new Error(Array.isArray(f.flaechen) ? "Gewählte Fläche gibt es nicht mehr – neu anklicken" : "Skizze hat keine geschlossene Fläche");
@@ -1107,13 +1114,24 @@ function regen() {
         f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
           laenge: +bl.abw.laenge.toFixed(1), stueck: f.stueck ?? 1, notiz: f.notiz, _blech: bl,
           _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
-        // Abwickeln/Falten: Ausschnitte (Skizze in der Abwicklung) – flach als Löcher, gefaltet als abgebildete Werkzeuge
-        const sa = f.ausschnitt ? finde(f.ausschnitt) : null, aLoops = sa && !sa._aus ? schleifen(sa) : [];
-        for (const bl of f._bleche) bl.abw.loecher = aLoops.filter((l) => innen(l[0], bl.abw.umriss));
-        if (!f.versteckt) f._bleche.forEach((bl, i) => {
-          const eb = blechEbene(s.ebene, f, m), seite = f.sichtseite === -1 ? -1 : 1, fid = `${f.id}:${i}`, art = darstellungVon(f, m);
-          if (f.flach) { modell.add(flachKoerper(bl, eb, m, fid, art)); return; }
-          const teile = flaechenKoerper(bl, eb, m, seite, fid, art);
+        for (const bl of f._bleche) bl.abw.loecher = [];
+        if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, blechEbene(s.ebene, f, m), m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
+      } else if (f.typ === "abwickeln") { // Unfold: das Blech liegt flach, bis «Falten» folgt – dazwischen schneiden Extrusionen (Ausschneiden) die Abwicklung
+        const z = finde(f.ziel); if (z?.typ !== "flaeche" || !z._bleche) throw new Error("Flächenblech fehlt (Abwickeln braucht ein Flächenblech vor diesem Schritt)");
+        if (flachStand.has(z.id)) throw new Error(`«${z.name}» ist schon abgewickelt`);
+        const m = material(z.material), s0 = finde(z.skizze);
+        for (const o of modell.children.filter((o) => o.isMesh && String(o.userData.fid).startsWith(z.id + ":"))) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); }
+        flachStand.set(z.id, { schnitte: [] }); z._mitAbwicklung = true;
+        if (!z.versteckt) z._bleche.forEach((bl, i) => { bl.abw.loecher = []; modell.add(flachKoerper(bl, blechEbene(s0.ebene, z, m), m, `${z.id}:${i}`, darstellungVon(z, m))); });
+      } else if (f.typ === "falten") { // Refold: gefaltetes Blech zurück, die Ausschnitte der Abwicklung werden aufs gekantete Blech abgebildet
+        const z = finde(f.ziel), st = z && flachStand.get(z.id); if (!st) throw new Error("Dieses Blech ist nicht abgewickelt (vorher «Abwickeln»)");
+        const m = material(z.material), s0 = finde(z.skizze), seite = z.sichtseite === -1 ? -1 : 1;
+        for (const o of modell.children.filter((o) => o.isMesh && String(o.userData.fid).startsWith(z.id + ":"))) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); }
+        flachStand.delete(z.id);
+        z._bleche.forEach((bl, i) => {
+          bl.abw.loecher = st.schnitte.filter((l) => innen(l[0], bl.abw.umriss));
+          if (z.versteckt) return;
+          const eb = blechEbene(s0.ebene, z, m), teile = flaechenKoerper(bl, eb, m, seite, `${z.id}:${i}`, darstellungVon(z, m));
           let hinweis = null; if (bl.abw.loecher.length) try { schneideAus(teile, bl, bl.abw.loecher, eb, m, seite); } catch (e) { hinweis = e.message; }
           teile.forEach((o) => modell.add(o)); if (hinweis) f._fehler = hinweis;
         });
@@ -1218,11 +1236,11 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
-  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft"].includes(f.typ) && (f.vorgang || "neu") !== "neu")); // Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
+  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft"].includes(f.typ) && (f.vorgang || "neu") !== "neu") && f.typ !== "abwickeln" && f.typ !== "falten"); // Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
   const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span></li>`;
   $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, f.typ === "ebene" ? "ebene" : f.typ)).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
     <li class="kopf">Körper</li>${kp.filter((f) => !f.komponente).map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech")).join("") || (kp.length ? "" : '<li class="hinweis">Noch keine</li>')}` +
@@ -1276,10 +1294,12 @@ function verschiebeFeature(f, ziel) {
   if (frueher) return status(`«${frueher.name}» verwendet «${f.name}» – es muss davor bleiben.`);
   doc.features = liste; regen(); status(`«${f.name}» verschoben.`);
 }
+// Ist das Flächenblech gerade abgewickelt? (letzter Abwickeln/Falten-Schritt für dieses Blech ist «Abwickeln»)
+const istAbgewickelt = (f) => doc.features.filter((x) => (x.typ === "abwickeln" || x.typ === "falten") && x.ziel === f.id && !x.unterdrueckt).at(-1)?.typ === "abwickeln";
 // Kontextmenü (Rechtsklick oder langes Antippen) in Zeitleiste und Browser
 function featureMenue(f, x, y) {
   const m = $("featureMenue"), i = doc.features.indexOf(f);
-  const punkte = [...(f.typ === "flaeche" ? [["abw", f.flach ? "Falten (zurück in Form)" : "Abwickeln (flach bearbeiten) …"]] : []), ["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
+  const punkte = [...(f.typ === "flaeche" ? [["abw", istAbgewickelt(f) ? "Falten (zurück in Form)" : "Abwickeln (flach bearbeiten) …"]] : []), ["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
     ["zurueck", "Bis hier zurückrollen (danach aus)"], ["ende", "Alle aktivieren (Marke ans Ende)"], ["links", "Nach vorne verschieben"], ["rechts", "Nach hinten verschieben"],
     ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["darst", "Darstellung …"]]),
     ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["kompNeu", "Eigene Komponente aus diesem Teil"], ["komp", f.komponente ? `Komponente «${esc(f.komponente)}» ändern …` : "In Komponente …"], ...(f.komponente ? [["kompAus", "Aus Komponente herauslösen"]] : [])]), ["kopie", "Duplizieren"], ["weg", "Löschen"]];
@@ -1322,13 +1342,13 @@ $("featureMenue").onclick = (e) => {
       `<button data-darst="${id}" class="${f.darstellung === id ? "an" : ""}"><span class="farbfeld" style="background:${hex(o.farbe)}"></span>${esc(o.name)}</button>`).join("");
     m.dataset.id = f.id; m.hidden = false; return;
   }
-  else if (k === "abw") { // Unfold / Refold: flach schalten und Ausschnitte in einer Skizze auf der Ebene des Blechs zeichnen – Falten bildet sie aufs gekantete Blech ab
-    f.flach = !f.flach;
-    if (f.flach && !(f.ausschnitt && finde(f.ausschnitt))) {
-      const sk0 = finde(f.skizze), n = { id: neueId(), typ: "skizze", name: `Ausschnitte ${f.name}`, ebene: sk0.ebene, elemente: [] };
-      einfuegen(n); f.ausschnitt = n.id; regen(); status("Abgewickelt: jetzt die Ausschnitte in der flachen Abwicklung zeichnen, «Skizze beenden», dann Rechtsklick › «Falten»."); return starteSkizze(n);
-    }
-    regen(); status(f.flach ? "Abgewickelt – Rechtsklick › «Falten» bringt das Blech zurück in Form." : "Gefaltet: Ausschnitte der Abwicklung sind im gekanteten Blech.");
+  else if (k === "abw") { // Unfold / Refold wie in Fusion: Abwickeln · Skizze auf dem flachen Blech · Extrusion «Ausschneiden» · Falten
+    const flach = istAbgewickelt(f);
+    const n = { id: neueId(), typ: flach ? "falten" : "abwickeln", name: `${flach ? "Falten" : "Abwickeln"} ${f.name}`, ziel: f.id };
+    einfuegen(n); regen();
+    if (!flach) { const sk0 = finde(f.skizze), sk = { id: neueId(), typ: "skizze", name: `Skizze auf Abwicklung ${f.name}`, ebene: sk0.ebene, elemente: [] }; einfuegen(sk); regen();
+      status("Abgewickelt: Skizze auf dem flachen Blech zeichnen, dann «Extrudieren › Ausschneiden» (Richtung symmetrisch oder Abstand > Blechdicke) und zuletzt Rechtsklick auf das Blech › «Falten»."); return starteSkizze(sk); }
+    status("Gefaltet: die Ausschnitte der Abwicklung sind im gekanteten Blech.");
   }
   else if (k === "kompNeu") { // jedes Teil kann seine eigene Komponente werden (verschieben/drehen, ein-/ausblenden)
     const vorhanden = new Set(doc.features.map((x) => x.komponente).filter(Boolean)); let n = f.name, i = 2; while (vorhanden.has(n)) n = `${f.name} ${i++}`;
@@ -1658,6 +1678,7 @@ function bearbeite(f) {
   if (f.typ === "profil") return profilDialog(f);
   if (f.typ === "flaechenteil") return bearbeite(f.eltern);
   if (f.typ === "flaeche") return flaecheDialog(f);
+  if (f.typ === "abwickeln" || f.typ === "falten") return status(f.typ === "abwickeln" ? "Abwickeln: das Blech liegt flach, bis «Falten» folgt. Dazwischen Skizze + Extrusion «Ausschneiden»." : "Falten: bildet die Ausschnitte der Abwicklung aufs gekantete Blech ab.");
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
   if (f.typ === "achse" || f.typ === "konpunkt") return konstruktionDialog(f.typ, f.art, f);
 }
@@ -2245,8 +2266,6 @@ function flaecheDialog(f) {
   const felder = (f) => [
     { id: "skizze", label: Array.isArray(f.flaechen) ? "Flächen in" : "Grundfläche aus", wahl: Array.isArray(f.flaechen) ? "flaechen" : "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     ...(Array.isArray(f.flaechen) ? [] : [{ id: "profil", label: "Flächen", optionen: [["alle", "Alle Flächen (je ein Blech)"], ...schleifen(finde(f.skizze) || sk.at(-1)).map((_, i) => [i, `Fläche ${i + 1}`])], wert: f.profil ?? "alle" }]),
-    { id: "ansicht", label: "Ansicht", optionen: [["gefaltet", "Gefaltet (fertiges Blech)"], ["flach", "Abgewickelt (flach, Ausschnitte zeichnen)"]], wert: f.flach ? "flach" : "gefaltet" },
-    { id: "ausschnitt", label: "Ausschnitte aus Skizze", optionen: [["", "– keine –"], ...doc.features.filter((x) => x.typ === "skizze" && x.id !== f.skizze).map((x) => [x.id, x.name])], wert: f.ausschnitt || "" },
     { id: "name", label: "Name", text: true, wert: f.name },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "sichtseite", label: "Richtung der Abkantungen / Sichtseite", optionen: [["1", "Vorne (Richtung Ebenen-Normale)"], ["-1", "Hinten (gegen die Normale)"]], wert: String(f.sichtseite ?? 1) },
@@ -2254,7 +2273,7 @@ function flaecheDialog(f) {
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
   ];
-  const setze = (f, w) => { if (Array.isArray(f.flaechen) && w.skizze !== f.skizze) f.flaechen = []; Object.assign(f, { ...w, name: w.name?.trim() || f.name, sichtseite: +w.sichtseite || 1 }); f.flach = w.ansicht === "flach"; delete f.ansicht; if (!f.ausschnitt) delete f.ausschnitt; };
+  const setze = (f, w) => { if (Array.isArray(f.flaechen) && w.skizze !== f.skizze) f.flaechen = []; Object.assign(f, { ...w, name: w.name?.trim() || f.name, sichtseite: +w.sichtseite || 1 }); delete f.ansicht; delete f.ausschnitt; delete f.flach; };
   const optionen = (v) => {
     const g = [...new Set(alleBausteine().map((b) => b.gruppe || "Eigene"))];
     return `<option value="">– keine (Schnittkante)</option>${g.map((gr) => `<optgroup label="${esc(gr)}">${alleBausteine().filter((b) => (b.gruppe || "Eigene") === gr).map((b) => `<option value="${esc(b.id)}" ${v === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</optgroup>`).join("")}
@@ -2584,7 +2603,8 @@ function transformAus(f, k) {
   return M.makeTranslation(v.x, v.y, v.z);
 }
 // Teilen: Körper oder Blech (Netz) an einer Ebene in zwei Teile schneiden; behalten = beide / nur die Seite der Ebenen-Normale / nur die Gegenseite
-function koerperTeilen(f, volumen) {
+function koerperTeilen(f, volumen, flachStand = new Map()) {
+  if (flachStand.has(f.ziel)) throw new Error("Teilen an der Abwicklung ist noch nicht möglich – Ausschnitte mit «Extrudieren › Ausschneiden», danach «Falten»");
   const quellen = koerperVon(f.ziel, volumen); if (!quellen.length && finde(f.ziel)?.versteckt) return;
   if (!quellen.length) throw new Error("Körper fehlt (ausgeblendet, unterdrückt oder noch nicht da)");
   const e = bezugEbene(f.ebene), S = 20000, M = new THREE.Matrix4().makeBasis(V(e.u), V(e.v), V(e.n)).setPosition(V(e.o));
@@ -5116,7 +5136,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       } else if (f.typ === "flaeche") { // Flächenblech: Fläche bis Biegebeginn, Bausteinprofile exakt mit derselben Eckregel wie die Abwicklung
         if (f.versteckt || !f._bleche) continue;
         const m = material(f.material), ebene = blechEbene(finde(f.skizze).ebene, f, m);
-        if (f.flach || f._bleche.some((bl) => bl.abw.loecher?.length)) { f._bleche.forEach((_, i) => nicht.set(`${f.id}:${i}`, "Abwicklung/Ausschnitte noch nicht exakt")); continue; }
+        if (f._mitAbwicklung || f._bleche.some((bl) => bl.abw.loecher?.length)) { f._bleche.forEach((_, i) => nicht.set(`${f.id}:${i}`, "Abwicklung/Ausschnitte noch nicht exakt")); continue; }
         for (const [i, bl] of f._bleche.entries()) {
           try { blech.set(`${f.id}:${i}`, await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1))); }
           catch (e) { nicht.set(`${f.id}:${i}`, e.message); }
