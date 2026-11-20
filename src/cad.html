@@ -156,7 +156,7 @@ tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in
 .eingabe label { display: flex; align-items: center; gap: 3px; font: 600 11px var(--font-label); color: var(--muted); text-transform: uppercase; }
 .eingabe input { width: 64px; font: 12px var(--font-num); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; background: var(--panel-2); color: var(--fg); }
 /* Befehlsdialog */
-.dialog { position: absolute; top: 44px; right: 8px; width: 330px; max-width: calc(100% - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 6px 24px rgb(0 0 0 / .15); }
+.dialog { position: absolute; z-index: 8; top: 44px; right: 8px; width: 330px; max-width: calc(100% - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 6px 24px rgb(0 0 0 / .15); }
 .dialog h3 { margin: 0; padding: 8px 12px; font: 600 14px var(--font-label); letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
 .dialog h3 { padding-right: 40px; }
 .dialog .dklein { position: absolute; top: 3px; right: 6px; border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px 8px; }
@@ -406,7 +406,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .pjliste li:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); } .pjliste li.aktiv { background: var(--accent-soft); } .pjliste li.archiv b { opacity: .6; }
 .pjliste small { color: var(--muted); } .pjmarke { font: 600 11px var(--font-body); color: #fff; background: var(--accent); border-radius: 3px; padding: 0 5px; margin-left: 4px; } .pjmarke.grau { background: var(--muted); }
 #pjInhalt .feld { display: grid; gap: 2px; margin: 6px 0; } #pjInhalt .feld span { color: var(--muted); font-size: 12px; } #pjInhalt input[type=text], #pjInhalt input[type=search], #pjInhalt textarea, #pjInhalt select { width: 100%; }
-.projzeile { display: flex; align-items: center; gap: 8px; justify-content: space-between; } #aProjektName { font-weight: 600; color: var(--fg); }
+.projzeile { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; justify-content: space-between; } .projzeile .knopf { white-space: nowrap; } #aProjektName { font-weight: 600; color: var(--fg); }
 </style>
 
 <div class="app">
@@ -595,6 +595,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <li>Das Programm rechnet Zugabe je Kante, Zuschnitt mit Eckausklinkungen, Biegelinien, Abkantliste (Anschlag ab Schnittkante), m² für die Stückliste, DXF und Werkstattblatt.</li>
       <li><b>Blech ▾</b>: Flächenblech aus Skizze, <b>auf Körperfläche</b> (Fläche anklicken – Umriss wird übernommen, Blech liegt aussen auf) oder <b>Kehle / Grat</b> (zwei Flächen anklicken – gekantetes Blech entlang der Kehl- bzw. Gratlinie, Länge automatisch, an den Enden Kantenbausteine wie Saum; mit Zuschnitt und Abkantliste).</li>
       <li><b>Kante antippen</b>: Flächenblech wählen (oder öffnen) – jede Kante trägt ein Schild (K1, K2 …; grün = belegt). Kante oder Schild antippen öffnet die Bausteinliste direkt an der Stelle; Gegenstück (Ober-/Unterfalz) kommt automatisch. Auf dem Handy klappt ▾ den Dialog ein, damit die Ansicht frei ist.</li>
+      <li><b>Auswahl im Raum</b>: Wenn eine Ebene, Fläche, Kante oder ein Punkt gewählt werden soll (z. B. Skizze erstellen), leuchtet das, was angeklickt würde, orange auf und trägt eine Beschriftung.</li>
       <li><b>Bemassung (D)</b>: Linie → Länge. Danach <b>gleich ein zweites Objekt anklicken</b>: Linie → Abstand (parallel) oder Winkel bzw. Abstand eines Endpunkts (nicht parallel); Punkt → Abstand; Kreis/Bogen → Mittelpunktabstand zu Linie, Kreis oder Punkt. Wert eintippen, Enter.</li>
       <li><b>Flansch und Umschlag wie in Fusion</b>: in der Kantenliste oder im Menü an der Kante «Flansch …» bzw. «Umschlag …» wählen und Winkel, Länge, Radius, Richtung (zur Sichtseite / nach hinten) eingeben, bei Flansch auch «Mass bis» Mittellinie, Aussenkante oder Innenkante. Das Blech endet immer am Biegebeginn; der Versatz der Kante (Aussen-/Innenmass) kürzt oder verlängert die Platte automatisch. Funktioniert auch an runden Kanten (Bogen, Kreis) – dort als Näherung aus kurzen Geraden, die Abwicklung ist rein theoretisch (der Rand muss gestaucht bzw. gestreckt werden).</li>
       <li><b>Bausteine erstellen</b>: im Flächenblech-Dialog «+ Neuer Baustein …» (wird gleich an die gewählte Kante gesetzt) oder «✎ Baustein der gewählten Kante»; ebenso unter Einstellungen → Bausteine. Der Editor zeigt den Querschnitt live mit Zugabe und Anschlagmassen; Biegungen als Tabelle (Abkanten oder Umschlag, Winkel, Radius, Schenkel) oder als Kurzschrift. Verwendete Bausteine werden im Projekt mitgespeichert.</li>

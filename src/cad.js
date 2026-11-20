@@ -676,6 +676,54 @@ function zeigeWahl() {
     punkt: "Punkt anklicken: Skizzenpunkt, Körperecke oder Ursprung.", zylinder: "Zylindrische Fläche anklicken (extrudierter Kreis).", pfad: "Linie, Kreis oder Körperkante als Pfad anklicken.",
     profil: "Skizzenprofil anklicken – in die geschlossene Fläche oder auf ihre Linie.", kette: "Offenen Linienzug einer Skizze anklicken." }[a.wahl] + ` (Feld «${a.label}»)`);
 }
+// Vorschau beim Überfahren: was angeklickt würde, leuchtet orange auf (Fläche, Ebene, Kante, Punkt, Profil) – wie in Fusion
+const hoverGruppe = new THREE.Group(); szene.add(hoverGruppe);
+const HOVERFARBE = 0xff8a1f, hoverMat = () => new THREE.MeshBasicMaterial({ color: HOVERFARBE, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+const hoverCache = new WeakMap(); // Geometrie → Dreiecke je Eckpunkt (für zusammenhängende ebene Flächen)
+function flaechenRegion(hit) { // alle zusammenhängenden, koplanaren Dreiecke der Fläche unter dem Zeiger (Weltkoordinaten)
+  const m = hit.object, geo = m.geometry, pos = geo.attributes.position, idx = geo.index, n = (idx ? idx.count : pos.count) / 3;
+  const vi = (t, k) => (idx ? idx.getX(t * 3 + k) : t * 3 + k), P = (t, k) => new THREE.Vector3().fromBufferAttribute(pos, vi(t, k)).applyMatrix4(m.matrixWorld);
+  let adj = hoverCache.get(geo);
+  if (!adj) { adj = new Map(); const key = (t, k) => { const v = new THREE.Vector3().fromBufferAttribute(pos, vi(t, k)); return `${Math.round(v.x * 100)},${Math.round(v.y * 100)},${Math.round(v.z * 100)}`; };
+    for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) { const s = key(t, k); if (!adj.has(s)) adj.set(s, []); adj.get(s).push(t); }
+    adj.key = key; hoverCache.set(geo, adj); }
+  const tri = hit.faceIndex, nrm = (t) => new THREE.Triangle(P(t, 0), P(t, 1), P(t, 2)).getNormal(new THREE.Vector3()), n0 = nrm(tri), p0 = P(tri, 0), d0 = n0.dot(p0);
+  const gleich = (t) => { const nn = nrm(t); return nn.dot(n0) > 0.9995 && Math.abs(nn.dot(P(t, 0)) - d0) < 0.02; };
+  const gesehen = new Set([tri]), warte = [tri];
+  while (warte.length) { const t = warte.pop(); for (let k = 0; k < 3; k++) for (const u of adj.get(adj.key(t, k)) || []) if (!gesehen.has(u) && gleich(u)) { gesehen.add(u); warte.push(u); } }
+  const out = []; for (const t of gesehen) for (let k = 0; k < 3; k++) out.push(P(t, k).addScaledVector(n0, 0.04));
+  return new THREE.BufferGeometry().setFromPoints(out);
+}
+let hoverWartet = false;
+function hoverWahl(e) {
+  if (hoverWartet) return; hoverWartet = true;
+  requestAnimationFrame(() => { hoverWartet = false; hoverZeichnen(e); });
+}
+function hoverLoeschen() { leeren(hoverGruppe); fangZeigen(null); }
+function hoverZeichnen(e) {
+  const a = aktiveWahl(); if (!a || skizze) return hoverLoeschen();
+  leeren(hoverGruppe); const sm = smPos(e);
+  let w = null; try { w = waehleImRaum(a.wahl, e, dlg.feature, a); } catch { w = null; }
+  if (!w) return fangZeigen(null);
+  const ref = String(w[0]), linie = (pts) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: HOVERFARBE, depthTest: false, linewidth: 2 })); l.renderOrder = 20; hoverGruppe.add(l); };
+  try {
+    if (ref.startsWith("F:")) { // Körperfläche: die ganze ebene Fläche aufleuchten lassen
+      strahl.setFromCamera(ndc(e), kamera);
+      const hit = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
+      if (hit) { const g = flaechenRegion(hit), mesh = new THREE.Mesh(g, hoverMat()); mesh.renderOrder = 19; hoverGruppe.add(mesh); const rand = new THREE.LineSegments(new THREE.EdgesGeometry(g, 5), new THREE.LineBasicMaterial({ color: HOVERFARBE, depthTest: false })); rand.renderOrder = 20; hoverGruppe.add(rand); }
+    } else if (a.wahl === "ebene") { // Konstruktionsebene oder Grundebene
+      const ziele = [...modell.children.filter((o) => o.userData.ebene === ref), ...(grundebenen.visible ? grundebenen.children : [])];
+      strahl.setFromCamera(ndc(e), kamera);
+      const t = strahl.intersectObjects(ziele, true).find((x) => x.object.isMesh);
+      if (t) { const m = new THREE.Mesh(t.object.geometry, hoverMat()); m.matrixAutoUpdate = false; t.object.updateWorldMatrix(true, false); m.matrix.copy(t.object.matrixWorld); m.renderOrder = 19; hoverGruppe.add(m); }
+    } else if (a.wahl === "kante" || a.wahl === "pfad") {
+      const k = bezugKante(ref); const d = ref.startsWith("A:") || ref.startsWith("X:") ? k.d.map((x) => x * 5000 / (Math.hypot(...k.d) || 1)) : k.d;
+      linie(ref.startsWith("A:") || ref.startsWith("X:") ? [V(k.p).sub(V(d)), V(k.p).add(V(d))] : [V(k.p), V(k.p).add(V(k.d))]);
+    } else if (a.wahl === "punkt") { const q = bezugPunkt(ref), S = aufSchirm(q); return fangZeigen({ art: "wahl", s: [S[0], S[1]], text: w[1] }); }
+    else if (a.wahl === "profil" || a.wahl === "kette") { const sk = finde(w[0]), i = w[2]?.profil ?? w[2]?.kette; const pts = a.wahl === "profil" ? schleifen(sk)[i] : ketten(sk)[i]?.pts; if (pts) { const l = pts.map((p) => zu3D(sk.ebene, p)); if (a.wahl === "profil") l.push(l[0]); linie(l); } }
+  } catch { /* Vorschau ist nur Zugabe */ }
+  fangZeigen({ art: "wahl", s: sm, text: w[1] });
+}
 function uebernimmWahl(e) {
   const a = aktiveWahl(); if (!a) return false;
   let w = null;
@@ -1313,7 +1361,7 @@ function merkeAusdruecke(f) {
 }
 function schliesse() {
   if (dlg?.felder.some((fd) => fd.wahl)) status(""); // Hinweis «… anklicken» gilt nur im Dialog
-  $("dialog").hidden = true; dlg = null; grundebenen.visible = false; setTimeout(leisteZustand);
+  $("dialog").hidden = true; dlg = null; grundebenen.visible = false; hoverLoeschen(); setTimeout(leisteZustand);
 }
 $("dOk").onclick = () => { dlg?.ok?.(werte()); schliesse(); regen(); };
 $("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); if (typeof wendeSchnittAn === "function") wendeSchnittAn(); };
@@ -3244,7 +3292,8 @@ function fangZeigen(f) { // Fangzeichen mit Beschriftung an der Mausposition
   const z = $("fangZeichen"); if (!z) return;
   if (!f) { z.hidden = true; fangArtZuletzt = ""; return; }
   z.hidden = false; z.style.left = f.s[0] + "px"; z.style.top = f.s[1] + "px";
-  if (f.art !== fangArtZuletzt) { fangArtZuletzt = f.art; z.querySelector("g").innerHTML = FANGGLYPHE[f.art] || ""; z.querySelector("span").textContent = FANGNAME[f.art] || f.art; }
+  const marke = f.art + "|" + (f.text || "");
+  if (marke !== fangArtZuletzt) { fangArtZuletzt = marke; z.querySelector("g").innerHTML = f.art === "wahl" ? "" : FANGGLYPHE[f.art] || ""; z.querySelector("span").textContent = f.text || FANGNAME[f.art] || f.art; }
 }
 function ebenenPunkt(e) {
   strahl.setFromCamera(ndc(e), kamera);
@@ -4099,9 +4148,9 @@ leinwand.addEventListener("pointerdown", (e) => {
     if (skizze.zug && start) leinwand.setPointerCapture(e.pointerId); else skizze.zug = null;
   }
 });
-leinwand.addEventListener("pointerleave", () => fangZeigen(null));
+leinwand.addEventListener("pointerleave", () => hoverLoeschen());
 leinwand.addEventListener("pointermove", (e) => {
-  if (!skizze) { if (messen) { const q = messPunkt(e); fangZeigen(q ? { art: q.fa, s: q.s } : null); } else fangZeigen(null); return; }
+  if (!skizze) { if (messen) { const q = messPunkt(e); fangZeigen(q ? { art: q.fa, s: q.s } : null); } else if (aktiveWahl()) hoverWahl(e); else hoverLoeschen(); return; }
   if (skizze.zug) {
     const uv = planUV(e); if (!uv) return;
     const z = skizze.zug, rund = (v) => (e.shiftKey ? v : rastern(v));
@@ -4750,7 +4799,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
