@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { planModul } from "./plan.js";
 import { cloudModul } from "./cloud.js";
+import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
 import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
 import { kantenGeometrie, RICHTUNGEN as ANSICHT_RICHTUNGEN } from "./ansicht.js";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
@@ -138,6 +139,11 @@ const darstellung = () => {
 };
 darstellung();
 const neuMaterial = () => (einst.materialien.some((m) => m.id === einst.neu.material) ? einst.neu.material : einst.materialien[0].id);
+const SICHERUNG = "sdcad-sicherung";
+const sichLesen = () => { try { return JSON.parse(localStorage.getItem(SICHERUNG)) || { liste: [], korb: [] }; } catch { return { liste: [], korb: [] }; } };
+const sichSchreiben = (s) => { try { localStorage.setItem(SICHERUNG, JSON.stringify(s)); } catch {} };
+// Vor jeder Änderung der Einstellungen: alten Stand sichern, Gelöschtes in den Papierkorb
+function sichereEinst(alt, neu, grund) { const s = sichLesen(); s.liste = sichere(s.liste, alt, grund); s.korb = inPapierkorb(s.korb, geloeschte(alt, neu)); sichSchreiben(s); }
 const einstSpeichern = () => { try { localStorage.setItem(EINST, JSON.stringify(einst)); } catch {} };
 // Reihenfolge: Einstellungen, dann die im Projekt mitgespeicherten Werte (Projekt von einem anderen Gerät)
 const material = (id) => einst.materialien.find((m) => m.id === id) || doc.materialien?.find((m) => m.id === id) || einst.materialien[0];
@@ -2825,6 +2831,10 @@ function zeigeEinst() {
     <h4>Eigene Vorlagen</h4>
     ${e.vorlagen.length ? `<ul class="eigene">${e.vorlagen.map((v, i) => `<li>${esc(v.name)} <small class="hinweis">${v.zeilen.length} Schenkel</small><button class="weg" data-vweg="${i}" aria-label="${esc(v.name)} entfernen">×</button></li>`).join("")}</ul>`
       : '<p class="hinweis">Noch keine. Ein freies Profil wählen und in der Werkstatt «Als eigene Vorlage speichern».</p>'}
+    <h4>Sicherungen (automatisch vor jedem «Übernehmen»)</h4>
+    ${(() => { const s = sichLesen(); return s.liste.length ? `<ul class="eigene">${s.liste.map((x, i) => `<li>${esc(new Date(x.zeit).toLocaleString("de-CH"))} <small class="hinweis">${esc(x.grund)} · ${x.einst.bausteine?.length ?? 0} Bausteine, ${x.einst.materialien?.length ?? 0} Materialien</small><button class="knopf klein" data-sich="${i}">Wiederherstellen</button></li>`).join("")}</ul>` : '<p class="hinweis">Noch keine Sicherung.</p>'; })()}
+    <h4>Papierkorb</h4>
+    ${(() => { const s = sichLesen(); return s.korb.length ? `<ul class="eigene">${s.korb.map((x, i) => `<li>${esc(x.daten.name)} <small class="hinweis">${x.art === "baustein" ? "Baustein" : "Material"} · gelöscht ${esc(new Date(x.zeit).toLocaleString("de-CH"))}</small><button class="knopf klein" data-korb="${i}">Zurückholen</button></li>`).join("")}</ul>` : '<p class="hinweis">Leer. Gelöschte Bausteine und Materialien landen hier.</p>'; })()}
     <h4>Sichern und übertragen</h4>
     <p class="hinweis">Einstellungen gelten pro Gerät. Zum Übertragen (z. B. PC → Handy) hier als Datei sichern und auf dem anderen Gerät laden.
       Laden übernimmt alle Einstellungen und ergänzt eigene Vorlagen.</p>
@@ -2917,6 +2927,13 @@ $("eInhalt").addEventListener("click", async (ev) => {
     $("eInhalt").querySelector(`tr:nth-child(${entwurf.materialien.length}) input`)?.focus();
   }
 });
+$("eInhalt").addEventListener("click", (ev) => {
+  const sb = ev.target.closest("[data-sich]"), kb = ev.target.closest("[data-korb]"); if (!sb && !kb) return;
+  const s = sichLesen();
+  if (sb) { const e = s.liste[+sb.dataset.sich]; if (!e) return; sichereEinst(einst, einspielen(e), "Vor Wiederherstellung"); entwurf = mitStandard(einspielen(e)); meldung("Sicherung geladen – mit «Übernehmen» gelten lassen oder «Abbrechen»."); }
+  else { const e = s.korb[+kb.dataset.korb]; if (!e) return; entwurf = zurueckholen(entwurf, e); s.korb.splice(+kb.dataset.korb, 1); sichSchreiben(s); meldung(`«${e.daten.name}» zurückgeholt – mit «Übernehmen» speichern.`); }
+  zeigeEinst();
+});
 $("wEinst").onclick = () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); meldung(""); zeigeEinst(); $("einst").hidden = false; };
 $("eAbbrechen").onclick = () => { $("einst").hidden = true; entwurf = null; };
 $("eStandard").onclick = () => { entwurf = { ...standardEinst(), vorlagen: entwurf.vorlagen, eigeneDetails: entwurf.eigeneDetails, bausteine: entwurf.bausteine }; zeigeEinst(); meldung("Alle Standardwerte geladen (eigene Vorlagen, Details und Bausteine bleiben) – mit «Übernehmen» speichern."); };
@@ -2936,6 +2953,7 @@ $("eOk").onclick = () => {
   const bFalsch = !fehler && entwurf.bausteine.find((b) => { try { folge("100 " + bausteinFolge(b, entwurf.materialien[0])); return !b.name.trim(); } catch { return true; } });
   if (bFalsch) { einstRegister = "bausteine"; zeigeEinst(); return meldung(`Baustein «${bFalsch.name || "ohne Namen"}»: Name und gültige Abkantfolge nötig (z. B. «90 25 U+ 7»).`); }
   if (fehler) { einstRegister = fehler[0]; zeigeEinst(); return meldung(fehler[1]); }
+  sichereEinst(einst, entwurf, "Vor «Übernehmen»");
   einst = entwurf; entwurf = null; $("einst").hidden = true;
   einstSpeichern(); darstellung(); kernAnzeige();
   regen(); status("Einstellungen gespeichert. Alle Teile neu berechnet.");

@@ -1,0 +1,16 @@
+import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
+let fehler = 0; const ok = (b, t) => { if (!b) { fehler++; console.error("✗", t); } else console.log("✓", t); };
+const e1 = { bausteine: [{ id: "a", name: "A" }, { id: "b", name: "B" }], materialien: [{ id: "m1", name: "Zink" }] };
+let l = sichere([], e1, "Übernehmen", "t1");
+ok(l.length === 1 && l[0].einst !== e1 && l[0].einst.bausteine.length === 2, "Sicherung ist eine Kopie");
+ok(sichere(l, e1, "x", "t2").length === 1, "Unveränderter Stand: keine neue Sicherung");
+const e2 = { ...e1, bausteine: [e1.bausteine[0]] }; l = sichere(l, e2, "Übernehmen", "t3");
+ok(l.length === 2 && l[0].zeit === "t3", "Neue Sicherung steht vorn");
+for (let i = 0; i < 20; i++) l = sichere(l, { ...e1, n: i }, "x", "z" + i); ok(l.length === 10, "Höchstens 10 Sicherungen");
+const g = geloeschte(e1, e2); ok(g.baustein.length === 1 && g.baustein[0].id === "b" && g.material.length === 0, "Gelöschter Baustein wird erkannt");
+const k = inPapierkorb([], g, "t4"); ok(k.length === 1 && k[0].art === "baustein" && k[0].daten.name === "B", "Papierkorb nimmt ihn auf");
+const z = zurueckholen(e2, k[0]); ok(z.bausteine.length === 2 && z.bausteine[1].id === "b" && e2.bausteine.length === 1, "Zurückholen fügt wieder ein, ändert das Original nicht");
+const z2 = zurueckholen(z, k[0]); ok(z2.bausteine.length === 3 && z2.bausteine[2].id !== "b", "Vorhandene id wird nicht überschrieben (neue id)");
+ok(inPapierkorb(Array.from({ length: 60 }, (_, i) => ({ art: "baustein", zeit: "", daten: { id: "" + i } })), g, "t5").length === 50, "Papierkorb begrenzt auf 50");
+const ein = einspielen(l[0]); ein.n = 99; ok(l[0].einst.n !== 99, "Einspielen liefert Kopie");
+if (fehler) { console.error(fehler + " Fehler"); process.exit(1); } else console.log("Sicherung: alle Tests bestanden");
