@@ -77,12 +77,14 @@ export async function occtKern({ wasmUrl } = {}) {
     let n = null; if (typ === "PLANE") n = vec(f.normalAt());
     return flaechenSignatur(i, { typ, mitte: c, normale: n, flaeche: R.measureArea(f) });
   });
-  const kantenDaten = (form) => form.edges.map((e, i) => kantenSignatur(i, { typ: e.geomType, mitte: vec(e.pointAt(0.5)), start: vec(e.startPoint), ende: vec(e.endPoint), laenge: e.length }));
+  // Nahtkanten (z. B. die Naht eines Zylindermantels) gehören zweimal zur selben Fläche – sie lassen sich nicht verrunden
+  const nahtKanten = (form) => { const n = new Set(); for (const f of form.faces) for (const e of f.edges) if (oc.BRep_Tool.IsClosed(e.wrapped, f.wrapped)) n.add(e.hashCode); return n; };
+  const kantenDaten = (form) => { const naht = nahtKanten(form); return form.edges.map((e, i) => ({ ...kantenSignatur(i, { typ: e.geomType, mitte: vec(e.pointAt(0.5)), start: vec(e.startPoint), ende: vec(e.endPoint), laenge: e.length }), naht: naht.has(e.hashCode) })); };
   const kantenWahl = (form, refs) => {
     const sig = kantenDaten(form), alle = form.edges, gew = new Set();
     for (const ref of refs) {
       if (ref.punkt) { // alle Kanten, auf denen der Punkt liegt
-        const v = R.makeVertex(ref.punkt), t = alle.filter((e) => R.measureDistanceBetween(e, v) < 1e-4); weg(v);
+        const v = R.makeVertex(ref.punkt), tol = ref.toleranz ?? 1e-4, t = alle.filter((e) => R.measureDistanceBetween(e, v) < tol); weg(v);
         if (!t.length) throw fehl(CODES.REFERENZ, `Keine Kante durch Punkt ${ref.punkt.join(", ")}`);
         t.forEach((e) => gew.add(alle.indexOf(e)));
       } else gew.add(aufloesen({ ...ref, art: "kante" }, sig));
@@ -169,6 +171,14 @@ export async function occtKern({ wasmUrl } = {}) {
       if (k.spiegeln) f = f.mirror(new R.Plane(k.spiegeln.punkt ?? [0, 0, 0], null, k.spiegeln.normale));
       if (k.verschieben) f = f.translate(k.verschieben);
       return ergebnis(f, "Transformieren");
+    }),
+    // Allgemeine Lage (Zeilen einer 3×4-Matrix, auch Spiegelung): für Muster/Spiegeln/Bewegen der App
+    matrix: (k) => versuch("Matrix", () => {
+      if (!(k.m?.length === 12)) throw fehl(CODES.EINGABE, "matrix: m = 12 Werte (3 Zeilen × 4)");
+      const t = new oc.gp_Trsf(); t.SetValues(...k.m);
+      const b = new oc.BRepBuilderAPI_Transform(hol(k.ziel).wrapped, t, true, false), f = R.cast(b.Shape());
+      t.delete(); b.delete();
+      return ergebnis(f, "Matrix");
     }),
     muster: (k) => versuch("Muster", () => {
       let f = kopie(k.ziel);

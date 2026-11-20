@@ -10,7 +10,7 @@ import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
-import { blechTeilKommando, extrusionKommandos, rotationKommandos } from "../kern/cad/featureBau.js";
+import { blechTeilKommando, extrusionKommandos, rotationKommandos, extrusionsHoehen, extrusionsKanten, extrusionsFlaechen, matrixZeilen } from "../kern/cad/featureBau.js";
 import { skizzenProfile, NichtExakt } from "../kern/cad/skizzeProfile.js";
 import { zuschnittAusVolumen } from "../kern/cad/blech.js";
 import { dxfLesen } from "../kern/dxflesen.js";
@@ -4101,10 +4101,20 @@ function ersetzeNetz(mesh, n, M) {
 }
 async function exaktesModell() {
   if (!kernAn()) return;
-  const lauf = ++exaktLauf, K = kern(), ids = [], koerper = new Map(), nicht = new Map(), blech = new Map();
+  const lauf = ++exaktLauf, K = kern(), ids = [], koerper = new Map(), nicht = new Map(), blech = new Map(), netzVon = new Map(); // netzVon: Körperschlüssel → fid des Netzes (Kopien «id:k» → «id:k:0»)
   const x = async (k) => { const r = await K.ausfuehren(k); if (r.id) ids.push(r.id); return r; };
   const vereinige = async (liste) => { let a = liste[0]; for (const b of liste.slice(1)) a = (await x({ op: "boolesch", art: "vereinigen", a, b })).id; return a; };
   const markiereZiel = (f, grund) => { if (f.ziel && f.ziel !== "alle") nicht.set(f.ziel, grund); else for (const k of koerper.keys()) nicht.set(k, grund); };
+  // Abrunden/Fasen einer Extrusion wie gerundeteExtrusion(): erst Kanten entlang der Extrusion, dann Boden/Deckel
+  const kantenRunden = async (w, kr, f, s) => {
+    const senk = kr.find((k) => k.kanten !== "quer"), quer = kr.find((k) => k.kanten !== "senkrecht"), lage = extrusionsHoehen({ ebene: E_(s.ebene), abstand: f.abstand, richtung: f.richtung });
+    for (const [k, art] of [[senk, "senkrecht"], [quer, "quer"]]) {
+      if (!k) continue;
+      const kanten = extrusionsKanten(await K.ausfuehren({ op: "topologie", ziel: w }), lage, art), mass = art === "quer" ? Math.min(k.mass, Math.abs(f.abstand) / 2 - 0.01) : k.mass;
+      if (kanten.length && mass > 0) w = (await x(k.art === "fase" ? { op: "fasen", ziel: w, d: mass, kanten } : { op: "verrunden", ziel: w, r: mass, kanten })).id;
+    }
+    return w;
+  };
   try {
     for (const f of doc.features) {
       if (lauf !== exaktLauf) return;
@@ -4120,20 +4130,50 @@ async function exaktesModell() {
           if (f.typ === "extrusion") kmd = extrusionKommandos({ profile, ebene: E_(s.ebene), abstand: f.abstand, richtung: f.richtung });
           else { const [a, d] = drehAchse(s, f.achse); kmd = rotationKommandos({ profile, ebene: E_(s.ebene), a, d, winkel: f.winkel ?? 360 }); }
         } catch (e) { if (op === "neu") nicht.set(f.id, `${e.message} noch nicht exakt`); else markiereZiel(f, `${f.name}: ${e.message} noch nicht exakt`); continue; }
-        const w = await vereinige(await Promise.all(kmd.map(async (k) => (await x(k)).id)));
+        let w = await vereinige(await Promise.all(kmd.map(async (k) => (await x(k)).id)));
+        const kr = f.typ === "extrusion" ? doc.features.filter((k) => k.typ === "kantenrund" && k.ziel === f.id && !k._aus) : [];
+        if (kr.length) try { w = await kantenRunden(w, kr, f, s); } catch (e) { if (op === "neu") nicht.set(f.id, `Abrunden/Fasen: ${e.message}`); else markiereZiel(f, `${f.name} Abrunden/Fasen: ${e.message}`); continue; }
         if (op === "neu") { koerper.set(f.id, w); continue; }
         const ziele = f.ziel && f.ziel !== "alle" ? [f.ziel].filter((z) => koerper.has(z)) : [...koerper.keys()];
         for (const z of op === "verbinden" ? ziele.slice(0, 1) : ziele) {
           if (nicht.has(z)) continue;
           koerper.set(z, (await x({ op: "boolesch", art: { verbinden: "vereinigen", ausschneiden: "abziehen", schneiden: "schneiden" }[op], a: koerper.get(z), b: w })).id);
         }
-        if (doc.features.some((k) => k.typ === "kantenrund" && k.ziel === f.id && !k._aus)) nicht.set(f.id, "Abrunden/Fasen noch nicht exakt");
-      } else if (["kanten3d", "schale", "kmuster", "kspiegel", "bewegen"].includes(f.typ)) markiereZiel(f, `${f.name} noch nicht exakt`);
-      else if (["sweep", "loft", "import", "kehle", "flaeche"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
+      } else if (f.typ === "kanten3d") { // angeklickte Kanten: Kante über ihren Mittelpunkt (Toleranz 0.2 mm für Netzkanten)
+        const z = f.ziel; if (!koerper.has(z) || nicht.has(z) || !(f.kanten || []).length) continue;
+        if (lageVon(hauptVon(z))) { nicht.set(z, `${f.name} an verschobener Komponente noch nicht exakt`); continue; }
+        const kanten = f.kanten.map((k) => ({ punkt: k.a.map((v, i) => (v + k.b[i]) / 2), toleranz: 0.2 })), mass = Math.max(0.1, +f.mass || 1);
+        try { koerper.set(z, (await x(f.art === "fase" ? { op: "fasen", ziel: koerper.get(z), d: mass, kanten } : { op: "verrunden", ziel: koerper.get(z), r: mass, kanten })).id); }
+        catch (e) { nicht.set(z, `${f.name}: ${e.message}`); }
+      } else if (f.typ === "schale") { // Wände nach innen, Boden/Deckel der Extrusion offen
+        const z = finde(f.ziel); if (!koerper.has(f.ziel) || nicht.has(f.ziel)) continue;
+        if (!["oben", "unten", "beide"].includes(f.offen)) { nicht.set(f.ziel, "Schale ohne offene Seite noch nicht exakt"); continue; }
+        try {
+          const lage = extrusionsHoehen({ ebene: E_(finde(z.skizze).ebene), abstand: z.abstand, richtung: z.richtung });
+          const offen = extrusionsFlaechen(await K.ausfuehren({ op: "topologie", ziel: koerper.get(f.ziel) }), lage, f.offen);
+          koerper.set(f.ziel, (await x({ op: "schale", ziel: koerper.get(f.ziel), dicke: f.dicke > 0 ? f.dicke : 2, offen })).id);
+        } catch (e) { nicht.set(f.ziel, `${f.name}: ${e.message}`); }
+      } else if (["kmuster", "kspiegel", "bewegen"].includes(f.typ)) { // wie koerperTransform(): Kopien «id:k» oder Lage ändern
+        const z = f.ziel;
+        if (blech.has(z)) { nicht.set(z, `${f.name} an Blechteil noch nicht exakt`); continue; }
+        if (!koerper.has(z) || nicht.has(z)) continue;
+        const kopie = f.typ === "kspiegel" || f.typ === "kmuster" || f.kopie;
+        const anzahl = f.typ === "kmuster" ? (f.art === "kreis" ? Math.max(2, Math.round(f.anzahl)) : Math.max(1, Math.round(f.anzahl || 1)) * Math.max(1, Math.round(f.anzahl2 || 1))) : 2;
+        try {
+          let id = koerper.get(z);
+          for (let k = 1; k < anzahl; k++) {
+            const m = matrixZeilen(transformAus(f, k).elements);
+            if (!kopie) id = (await x({ op: "matrix", ziel: id, m })).id;
+            else { koerper.set(`${f.id}:${k}`, (await x({ op: "matrix", ziel: koerper.get(z), m })).id); netzVon.set(`${f.id}:${k}`, `${f.id}:${k}:0`); }
+          }
+          if (!kopie) koerper.set(z, id);
+        } catch (e) { nicht.set(z, `${f.name}: ${e.message}`); }
+      } else if (["sweep", "loft", "import", "kehle", "flaeche"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
     let n = 0; const eig = new Map();
-    for (const [fid, id] of [...koerper, ...blech]) {
-      if (nicht.has(fid)) continue;
+    for (const [schl, id] of [...koerper, ...blech]) {
+      if (nicht.has(schl) || nicht.has(schl.split(":")[0]) && schl.includes(":")) continue;
+      const fid = netzVon.get(schl) ?? schl;
       const mesh = modell.children.find((o) => o.isMesh && o.userData.fid === fid); if (!mesh) continue;
       const netz = await K.ausfuehren({ op: "tessellieren", ziel: id }), e = await K.ausfuehren({ op: "eigenschaften", ziel: id });
       if (lauf !== exaktLauf) return;

@@ -285,6 +285,19 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   ok(f === "Skizzentext", "Skizze: Text wird als «noch nicht exakt» gemeldet, nicht angenähert");
 }
 
+// ---------------------------------------------------------------- 10c Nahtkanten, Kantenpunkt mit Toleranz, Matrix (Vorbereitung C2e)
+{
+  const z = (await x({ op: "zylinder", r: 10, h: 20 })).id, t = await x({ op: "topologie", ziel: z });
+  ok(t.kanten.filter((k) => k.naht).length === 1 && t.kanten.find((k) => k.naht).typ === "LINE", "Topologie: Naht des Zylindermantels erkannt");
+  const q = (await x({ op: "quader", min: [0, 0, 0], max: [100, 50, 20] })).id;
+  const r = await eig((await x({ op: "verrunden", ziel: q, r: 2, kanten: [{ punkt: [100.03, 50, 10], toleranz: 0.1 }] })).id);
+  ok(nahe(r.volumen, 100000 - (4 - PI) * 20), "Kante über Punkt mit Toleranz 0.1 mm (angeklickte Netzkante)");
+  const sp = await eig((await x({ op: "matrix", ziel: q, m: [-1, 0, 0, 300, 0, 1, 0, 0, 0, 0, 1, 0] })).id); // Spiegelung an x = 150
+  ok(sp.gueltig && nahe(sp.volumen, 100000) && nahe(sp.grenzen.min[0], 200) && nahe(sp.grenzen.max[0], 300), "Matrix: Spiegelung (det −1) ergibt gültigen Körper mit positivem Volumen");
+  const c = Math.cos(PI / 6), si = Math.sin(PI / 6), dr = await eig((await x({ op: "matrix", ziel: q, m: [c, -si, 0, 10, si, c, 0, 0, 0, 0, 1, 5] })).id);
+  ok(dr.gueltig && nahe(dr.volumen, 100000) && nahe(dr.grenzen.min[2], 5), "Matrix: Drehung 30° + Verschiebung");
+}
+
 // ---------------------------------------------------------------- 10 Speicher: Freigabe und Leckprüfung
 {
   const vorher = (await x({ op: "speicher" })).handles;

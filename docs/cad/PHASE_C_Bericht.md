@@ -51,7 +51,22 @@
 - **Weiterhin nicht exakt:** Skizzentext (bleibt Netz, wird genannt)
 - **Tests:** `cad.test.js` +5. App-Test 20/20 (Ellipse exakt aus dem Kern, Text als Netz gemeldet).
 
-## Nächste Schritte (C2e …)
+## C2e – Abrunden/Fasen, Schale, Muster, Spiegeln, Bewegen exakt (erledigt, 20.11.2026)
+- **Kern:** Nahtkanten werden erkannt (`BRep_Tool.IsClosed`), Kantenpunkte mit Toleranz für angeklickte Netzkanten angenommen, und es gibt das neue Kommando `matrix` (3×4, auch Spiegelung mit det −1, gültig geprüft).
+- **`featureBau.js`:**
+  - `extrusionsHoehen` und `extrusionsKanten`: «senkrecht» sind gerade Kanten entlang der Extrusion ohne Nähte, «quer» sind die Kanten in Boden und Deckel.
+  - `extrusionsFlaechen`: Boden- und Deckelflächen für die Schale.
+  - `matrixZeilen`: Umrechnung der Matrix aus three.js.
+- **App (Kern ein):**
+  - Abrunden/Fasen einer Extrusion (wie `gerundeteExtrusion`) läuft im Kern.
+  - Angeklickte Kanten werden über ihre Mitte im exakten Körper gefunden und abgerundet oder gefast.
+  - Schale: oben, unten oder beidseitig offen, Wände nach innen.
+  - Muster, Spiegeln und Bewegen über `matrix`; Kopien unter denselben Schlüsseln wie in der App (`id:k`).
+- **Test (App, jetzt 25/25):** 10 Körper exakt, analytisch auf 0,3 % (Netz der Anzeige) und gegen das Netz-Ergebnis von 0.2 auf 2 %. Die Fase an allen Kanten ergibt 98 676 mm³ exakt wie im Netz, Bewegen liegt auf z 50…60, die Spiegelkopie auf x −450…−400.
+- **Unterschied zu 0.2, offen genannt:** Die Schale wird exakt auf den **aktuellen** Körper angewendet (Wände auch um vorher ausgeschnittene Löcher). Version 0.2 zieht nur die Skizzenkontur ein.
+- **Weiterhin als Netz (mit Meldung):** Sweep, Loft, Import, Kehle, Flächenblech, Text, Schale ohne offene Seite, Muster/Bewegen an Blechteilen, Kanten an verschobenen Komponenten.
+
+## Nächste Schritte (C3 …)
 1. **Splines und Ellipsen exakt** (B-Spline- und Ellipsenkurven im Profilformat)
 3. **Abrunden/Fasen und Schale** über Kanten- und Flächenreferenzen (`topologie.js`) statt über Koordinaten am Netz.
 4. **Feature-Fehler** aus dem Kern (`KernFehler.code`) direkt in der Zeitleiste anzeigen.

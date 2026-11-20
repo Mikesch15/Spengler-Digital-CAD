@@ -91,5 +91,49 @@ async function seite(kern) {
     await s.close();
   }
 }
+{ // 4 Abrunden/Fasen, angeklickte Kanten, Schale, Muster, Spiegeln, Bewegen exakt – gegen Analytik und gegen das Netz (Version 0.2)
+  const PI = Math.PI, R = (id, a, b, ebene = "XY") => ({ id, typ: "skizze", name: id, ebene, elemente: [{ id: 1, art: "rechteck", a, b }] });
+  const E = (id, s, abstand, extra = {}) => ({ id, typ: "extrusion", name: id, skizze: s, abstand, richtung: "eine", vorgang: "neu", ...extra });
+  const projekt = { objekt: "Kerntest 2", nr: "T-2", zaehler: 50, features: [
+    R("sA", [0, 0], [100, 50]), E("eA", "sA", 20), { id: "kA", typ: "kantenrund", name: "Rund senkrecht", ziel: "eA", art: "rund", mass: 5, kanten: "senkrecht" },
+    R("sB", [200, 0], [300, 50]), E("eB", "sB", 20), { id: "kB", typ: "kantenrund", name: "Fase alle", ziel: "eB", art: "fase", mass: 2, kanten: "alle" },
+    R("sC", [0, 100], [100, 150]), E("eC", "sC", 20), { id: "hC", typ: "schale", name: "Schale", ziel: "eC", dicke: 2, offen: "oben" },
+    R("sD", [0, 200], [20, 220]), E("eD", "sD", 10), { id: "mD", typ: "kmuster", name: "Muster", ziel: "eD", art: "rechteck", richtung1: "A:X", anzahl: 3, abstand: 50, anzahl2: 1 },
+    R("sF", [400, 0], [450, 30]), E("eF", "sF", 10), { id: "pF", typ: "kspiegel", name: "Spiegel", ziel: "eF", ebene: "YZ" },
+    R("sG", [0, 300], [40, 340]), E("eG", "sG", 10), { id: "bG", typ: "bewegen", name: "Bewegen", ziel: "eG", dx: 0, dy: 0, dz: 50 },
+    R("sH", [200, 200], [260, 240]), E("eH", "sH", 30), { id: "tH", typ: "kanten3d", name: "Kante fasen", ziel: "eH", art: "fase", mass: 3, kanten: [{ a: [260, 240, 0], b: [260, 240, 30] }] },
+  ] };
+  const erg = {};
+  for (const kern of [null, "occt"]) {
+    const s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
+    await s.addInitScript(([k, d]) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); if (k) localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: k } })); }, [kern, projekt]);
+    await s.goto("http://localhost:8767/index.html?test");
+    if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 90000 });
+    else await s.waitForTimeout(2000);
+    erg[kern ?? "netz"] = { k: await s.evaluate(() => window.sdcadTest.koerperInfo()), st: await s.textContent("#status"), probleme };
+    await s.close();
+  }
+  const ex = erg.occt, nz = erg.netz, hol = (l, fid) => l.k.find((o) => o.fid === fid);
+  const soll = {
+    eA: (5000 - (100 - 25 * PI)) * 20,                                             // 4 senkrechte Kanten r5
+    eC: 100 * 50 * 20 - 96 * 46 * 18,                                              // Schale 2 mm, oben offen
+    eD: 20 * 20 * 10, "mD:1:0": 4000, "mD:2:0": 4000, eF: 50 * 30 * 10, "pF:1:0": 15000, eG: 40 * 40 * 10,
+    eH: 60 * 40 * 30 - 4.5 * 30,                                                   // eine senkrechte Kante gefast 3 mm
+  };
+  const bericht = [];
+  for (const [fid, v] of Object.entries(soll)) {
+    const e = hol(ex, fid), n = hol(nz, fid);
+    const gut = e?.exakt && Math.abs(e.volumen - v) / v < 0.003 && n && Math.abs(n.volumen - v) / v < 0.02;
+    if (!gut) bericht.push(`${fid}: exakt=${e?.exakt} V=${e?.volumen?.toFixed(0)} soll ${v.toFixed(0)} Netz ${n?.volumen?.toFixed(0)}`);
+  }
+  ok(!bericht.length, `Ein: Abrunden, Schale, Muster (3), Spiegeln, Fasen an Kante exakt und wie das Netz ${bericht.join(" | ")}`);
+  const eB = hol(ex, "eB"), vB = 100 * 50 * 20, nB = hol(nz, "eB");
+  ok(eB?.exakt && eB.volumen < vB && Math.abs(eB.volumen - nB.volumen) / nB.volumen < 0.01, `Ein: Fase an allen Kanten exakt, Volumen wie Netz (${eB?.volumen.toFixed(0)} / Netz ${nB?.volumen.toFixed(0)})`);
+  const g = hol(ex, "eG");
+  ok(g?.exakt && Math.abs(g.min[2] - 50) < 1e-6 && Math.abs(g.max[2] - 60) < 1e-6, `Ein: Bewegen dz 50 exakt (z ${g?.min[2]}…${g?.max[2]})`);
+  const sp = hol(ex, "pF:1:0");
+  ok(sp && Math.abs(sp.min[0] + 450) < 1e-6 && Math.abs(sp.max[0] + 400) < 1e-6, `Ein: Spiegelkopie an YZ liegt bei x −450…−400 (${sp?.min[0]}…${sp?.max[0]})`);
+  ok(!/als Netz/.test(ex.st) && ex.probleme.length === 0 && nz.probleme.length === 0, `Ein: alles exakt, keine Seitenfehler – ${ex.st}`);
+}
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "App mit CAD-Kern: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

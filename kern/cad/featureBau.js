@@ -42,3 +42,25 @@ export function rotationKommandos({ profile, ebene, a, d, winkel }) {
     return { op: "rotation", profil: p.profil, ebene: e, winkel, achse: { punkt, richtung } };
   });
 }
+
+// Lage einer Extrusion entlang der Ebenennormalen: Boden h0 und Deckel h1 (h = Punkt · n)
+export function extrusionsHoehen({ ebene, abstand, richtung = "eine" }) {
+  const n = ebene.n, l = Math.hypot(...n), nn = n.map((v) => v / l), h = dot(ebene.o, nn);
+  const start = richtung === "umgekehrt" ? -abstand : richtung === "symmetrisch" ? -abstand / 2 : 0;
+  return { n: nn, h0: h + start, h1: h + start + abstand };
+}
+// Kanten einer extrudierten Form für «Abrunden/Fasen» wie in der App: "senkrecht" = gerade Kanten entlang der Extrusion
+// (ohne Nähte), "quer" = Kanten in Boden- oder Deckelebene. topo: Ergebnis von { op: "topologie" }.
+export function extrusionsKanten(topo, { n, h0, h1 }, art) {
+  const auf = (k, hh) => [k.start, k.ende, k.mitte].every((p) => Math.abs(dot(p, n) - hh) < 1e-6);
+  return topo.kanten.filter((k) => art === "senkrecht"
+    ? !k.naht && k.richtung && Math.abs(Math.abs(dot(k.richtung, n)) - 1) < 1e-6
+    : auf(k, h0) || auf(k, h1));
+}
+// Boden-/Deckelflächen einer Extrusion (für «Schale»: offen oben/unten/beide)
+export function extrusionsFlaechen(topo, { n, h0, h1 }, offen) {
+  const will = { oben: [h1], unten: [h0], beide: [h0, h1] }[offen] ?? [];
+  return topo.flaechen.filter((f) => f.typ === "PLANE" && f.normale && Math.abs(Math.abs(dot(f.normale, n)) - 1) < 1e-6 && will.some((hh) => Math.abs(dot(f.mitte, n) - hh) < 1e-6));
+}
+// THREE.Matrix4 (spaltenweise elements) → 3×4 zeilenweise für { op: "matrix" }
+export const matrixZeilen = (te) => [te[0], te[4], te[8], te[12], te[1], te[5], te[9], te[13], te[2], te[6], te[10], te[14]];
