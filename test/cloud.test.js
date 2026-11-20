@@ -1,7 +1,7 @@
 // Tests: Cloud-Client und Abgleich gegen einen Nachbau des Supabase-Servers (kein Netz nötig)
 import { CloudClient } from "../kern/cloud/client.js";
 import { abgleichen, pruefsumme } from "../kern/cloud/abgleich.js";
-import { leererSpiegel, einstInSpiegel, spiegelInEinst, spiegelSpeicher } from "../kern/cloud/spiegel.js";
+import { loescheImSpiegel, leererSpiegel, einstInSpiegel, spiegelInEinst, spiegelSpeicher } from "../kern/cloud/spiegel.js";
 import { BAUSTEINE_STANDARD } from "../kern/flaechenblech.js";
 import { MATERIALIEN } from "../kern/materialien.js";
 import { zeilenAusSchenkel, schenkelAusZeilen, teilFuerApp } from "../kern/cloud/appformat.js";
@@ -129,6 +129,26 @@ ok((await cp.profilAuftragGebaut("a1")).status === "gebaut" && (await cp.profilA
   ok(JSON.stringify(schenkelAusZeilen(z)) === JSON.stringify(sch), "Zeilen → Schenkel: Hin und zurück identisch");
   const tt = teilFuerApp({ name: "Ortbrett", zeilen: z, laenge: 3000, stueck: 2 }, { zuschnitt: 200.456 }, { name: "Alu", t: 0.8 }, 1);
   ok(tt.breite === 200.46 && tt.appData.schenkel.length === 3 && tt.appData.cad.material_name === "Alu" && tt.stueck === 2, "Teil für die App: Zuschnitt, Schenkel, Material");
+}
+// 3D-Detailvorlagen und Löschung aus der App
+{
+  const { detailAusStep } = await import("../kern/vorlagen/detail3d.js");
+  const sv5 = server(), cA = kunde(sv5), cB = kunde(sv5); await cA.anmelden("Max.Muster", "geheim"); await cB.anmelden("Max.Muster", "geheim");
+  const dv = detailAusStep("Kehle 40", "ISO-10303-21;", Float32Array.from([0, 0, 0, 40, 0, 0, 0, 5, 0]), "k.step"), gross = { ...detailAusStep("Riese", "x".repeat(1.6e6), Float32Array.from([0, 0, 0, 1, 0, 0, 0, 1, 0])) };
+  const einstA = { bausteine: [], materialien: [{ id: "m1", name: "X", t: 1, ri: 1, k: 0.4 }], detailvorlagen: [dv, gross] }, spA = leererSpiegel(); einstInSpiegel(einstA, spA);
+  ok(Object.keys(spA.detailvorlage).length === 1 && spA.uebersprungen.includes("Riese"), "Detailvorlage geht in den Spiegel, über 1.5 MB bleibt lokal (gemeldet)");
+  const bA = await abgleichen(cA, spiegelSpeicher(spA)); ok(bA.hochgeladen === 2 && sv5.zeilen.some((z) => z.typ === "detailvorlage" && z.daten.name === "Kehle 40"), "Detailvorlage wird als «detailvorlage» in cad_daten abgelegt");
+  const spB = leererSpiegel(); await abgleichen(cB, spiegelSpeicher(spB)); const eB = spiegelInEinst({ bausteine: [], materialien: [], detailvorlagen: [] }, spB);
+  ok(eB.detailvorlagen.length === 1 && eB.detailvorlagen[0].source.step === "ISO-10303-21;", "Zweiter PC erhält die 3D-Detailvorlage samt STEP-Text");
+  // Löschen in der App: nur der Aufruf von loescheImSpiegel nötig
+  loescheImSpiegel(spA, { baustein: [], material: [], detail: [{ id: dv.id }] }); const bA2 = await abgleichen(cA, spiegelSpeicher(spA));
+  ok(bA2.geloescht === 1 && sv5.zeilen.find((z) => z.record_id === dv.id).geloescht === true, "Gelöschte Detailvorlage geht als «geloescht» an die Cloud");
+  await abgleichen(cB, spiegelSpeicher(spB)); ok(spiegelInEinst(eB, spB).detailvorlagen.length === 0, "… und verschwindet auf dem zweiten PC");
+  // Baustein/Material aus der App löschen
+  const e1 = { bausteine: [{ id: "eigen-9", name: "Eigener", gruppe: "X", folge: "90 20", versatz: 0 }], materialien: [{ id: "mz", name: "Mat", t: 0.5, ri: 1, k: 0.4 }], detailvorlagen: [] }, sp1 = leererSpiegel(), sv6 = server(), c6 = kunde(sv6); await c6.anmelden("Max.Muster", "geheim");
+  einstInSpiegel(e1, sp1); await abgleichen(c6, spiegelSpeicher(sp1)); ok(sv6.zeilen.length === 2, "Eigener Baustein und Material hochgeladen");
+  loescheImSpiegel(sp1, { baustein: [e1.bausteine[0]], material: [e1.materialien[0]], detail: [] }); const b6 = await abgleichen(c6, spiegelSpeicher(sp1));
+  ok(b6.geloescht === 2 && sv6.zeilen.every((z) => z.geloescht), "Lokal gelöschter Baustein und Material werden in der Cloud als gelöscht markiert (nicht mehr zurückgeholt)");
 }
 // Prüfsumme ignoriert version/modified/_-Felder
 const h1 = await pruefsumme({ a: 1, version: 1, modified: "x", _z: 5 }), h2 = await pruefsumme({ version: 9, a: 1, modified: "y" });

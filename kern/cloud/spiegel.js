@@ -25,6 +25,21 @@ export function einstInSpiegel(einst, sp) {
     if (alt && gleichM(profilZuMaterial(alt), { ...m })) continue;
     const p = materialZuProfil(m, alt || null); sp.materialprofil[p.id] = p;
   }
+  // 3D-Detailvorlagen (gleiches Format wie im Add-in); sehr grosse bleiben lokal
+  sp.uebersprungen = [];
+  const ohne = (d) => JSON.stringify({ ...d, version: 0, modified: 0 });
+  for (const d of einst.detailvorlagen || []) {
+    const alt = sp.detailvorlage[d.id]; if (alt && ohne(alt) === ohne(d)) continue;
+    if (JSON.stringify(d).length > 1.5e6) { sp.uebersprungen.push(d.name); continue; }
+    sp.detailvorlage[d.id] = alt ? { ...d, version: alt.version } : d;
+  }
+  return sp;
+}
+// Lokal bewusst gelöschte Einträge aus dem Spiegel nehmen (Löschung geht beim nächsten Abgleich als «geloescht» an die Cloud)
+export function loescheImSpiegel(sp, g) {
+  for (const b of g.baustein || []) for (const [id, v] of Object.entries(sp.kantenvorlage)) if (id === b.id || id === `kv-${b.id}` || v.metadata?.appId === b.id) delete sp.kantenvorlage[id];
+  for (const m of g.material || []) for (const id of Object.keys(sp.materialprofil)) if (id === m.id || id === `mat-${m.id}`) delete sp.materialprofil[id];
+  for (const d of g.detail || []) delete sp.detailvorlage[d.id];
   return sp;
 }
 // Spiegel → Einstellungen (nach dem Abgleich): Cloud-Vorlagen erscheinen als Bausteine/Materialien, Papierkorb entfernt sie
@@ -42,7 +57,9 @@ export function spiegelInEinst(einst, sp) {
     const m = profilZuMaterial(p), i = mats.findIndex((x) => x.id === m.id || `mat-${x.id}` === m.id);
     if (i >= 0) mats[i] = { ...mats[i], ...m, id: mats[i].id }; else mats.push(m);
   }
-  return { ...einst, bausteine, materialien: mats.length ? mats : einst.materialien };
+  const details = (einst.detailvorlagen || []).filter((d) => !weg.has(d.id));
+  for (const d of Object.values(sp.detailvorlage)) { if (weg.has(d.id)) continue; const i = details.findIndex((x) => x.id === d.id); if (i >= 0) details[i] = d; else details.push(d); }
+  return { ...einst, bausteine, materialien: mats.length ? mats : einst.materialien, detailvorlagen: details };
 }
 // Speicher-Adapter für abgleichen()
 export function spiegelSpeicher(sp, sichern = () => {}) {

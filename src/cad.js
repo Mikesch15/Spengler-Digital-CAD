@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { planModul } from "./plan.js";
 import { cloudModul } from "./cloud.js";
+import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern/vorlagen/detail3d.js";
 import { selbsttest } from "../kern/selbsttest.js";
 import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
 import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
@@ -111,7 +112,7 @@ const hauptVon = (id) => finde(String(id ?? "").split(":")[0]);
 // Werkstatt-Einstellungen (pro Gerät): kalibrierte und eigene Materialien, Lagerformate
 const EINST = "sdcad-einstellungen";
 const standardEinst = () => JSON.parse(JSON.stringify({
-  materialien: MATERIALIEN, ...LAGER, vorlagen: [], bausteine: BAUSTEINE_STANDARD, eigeneDetails: [],
+  materialien: MATERIALIEN, ...LAGER, vorlagen: [], bausteine: BAUSTEINE_STANDARD, eigeneDetails: [], detailvorlagen: [],
   neu: { laenge: 1000, stueck: 1, material: MATERIALIEN[0].id, ebene: "XY", lage: "mitte" }, // Vorgaben für neue Teile
   skizze: { raster: 5, abstand: 80 },                                                 // Fangraster mm, Abstand der Teile in 3D mm
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
@@ -146,7 +147,7 @@ const sichLesen = () => { try { return JSON.parse(localStorage.getItem(SICHERUNG
 const sichSchreiben = (s) => { try { localStorage.setItem(SICHERUNG, JSON.stringify(s)); } catch {} };
 // Vor jeder Änderung der Einstellungen: alten Stand sichern, Gelöschtes in den Papierkorb
 function sichereEinst(alt, neu, grund) { const s = sichLesen(); s.liste = sichere(s.liste, alt, grund); s.korb = inPapierkorb(s.korb, geloeschte(alt, neu)); sichSchreiben(s); }
-const einstSpeichern = () => { try { localStorage.setItem(EINST, JSON.stringify(einst)); } catch {} };
+const einstSpeichern = () => { try { localStorage.setItem(EINST, JSON.stringify(einst)); } catch { status("⚠ Einstellungen konnten nicht gespeichert werden (Speicher voll – 3D-Detailvorlagen sind gross)."); } };
 // Reihenfolge: Einstellungen, dann die im Projekt mitgespeicherten Werte (Projekt von einem anderen Gerät)
 const material = (id) => einst.materialien.find((m) => m.id === id) || doc.materialien?.find((m) => m.id === id) || einst.materialien[0];
 const matOpt = () => [...einst.materialien, ...(doc.materialien || []).filter((m) => !einst.materialien.some((e) => e.id === m.id))].map((m) => [m.id, m.name]);
@@ -722,6 +723,14 @@ function regen() {
         if (!f._geo) { const bin = atob(f.daten || ""), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
           f._geo = new THREE.BufferGeometry(); f._geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(u8.buffer), 3)); f._geo.computeVertexNormals(); }
         volumenKoerper({ ...f, vorgang: "neu" }, f._geo.clone());
+      } else if (f.typ === "detail3d") {
+        const v = (einst.detailvorlagen || []).find((x) => x.id === f.vorlage); if (!v) throw new Error("Detailvorlage fehlt (Einstellungen › Details 3D)");
+        const k = bezugKante(f.kante), M = kantenLage(k.p, k.d, { versatz: +f.versatz || 0, drehung: +f.drehung || 0 });
+        let pos = DETAILMESH.get(v.id + "|" + (v.version ?? 1)); if (!pos) DETAILMESH.set(v.id + "|" + (v.version ?? 1), pos = meshAusVorlage(v));
+        const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(pos), 3));
+        geo.applyMatrix4(new THREE.Matrix4().set(...M, 0, 0, 0, 1)); geo.computeVertexNormals();
+        f._detail3d = { vorlage: v, kantenlaenge: Math.hypot(...k.d), m: M };
+        volumenKoerper({ ...f, vorgang: "neu" }, geo);
       } else if (f.typ === "kehle") {
         const r = kehlBlech(f); f._res = r.res; f._kehle = r;
         if (!f.versteckt) { const m = koerperMesh(r.geo, darstellungVon(f, material(f.material)), f.id); modell.add(m); }
@@ -892,7 +901,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
@@ -1303,6 +1312,7 @@ function bearbeite(f) {
   if (f.typ === "kanten3d") return kantenDialog(f);
   if (f.typ === "kehle") return kehleDialog(f);
   if (f.typ === "rundblech") return rundDialog(f);
+  if (f.typ === "detail3d") return detail3dDialog(f);
   if (KOERPER_WZ[f.typ]) return koerperDialog(f.typ, f);
   if (f.typ === "loft") return loftDialog(f);
   if (f.typ === "blech") return blechDialog(f);
@@ -2727,7 +2737,7 @@ const probeWerte = { mat: 0, z: 130, a: "", b: "" };
 const meldung = (t) => { $("eMeldung").textContent = t; };
 const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
 let einstRegister = "material";
-const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["vorlagen", "Vorlagen & Sichern"], ["konto", "Konto & Cloud"]];
+const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["detail3d", "Details 3D"], ["vorlagen", "Vorlagen & Sichern"], ["konto", "Konto & Cloud"]];
 // Feld an einen Wert der Einstellungen binden: data-e="gruppe.schluessel", data-typ zahl|text|janein|wahl
 function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
   const [g, k] = pfad.split("."), w = entwurf[g][k], id = "e_" + g + "_" + k;
@@ -2835,6 +2845,15 @@ function zeigeEinst() {
       <td class="nowrap"><button class="weg" data-bweg="${i}" aria-label="${esc(b.name)} entfernen">×</button></td></tr>`).join("")}
     </tbody></table></div>
     <div class="reihe ohnerand"><button class="knopf" id="eNeuBaustein">+ Baustein</button><button class="knopf" id="eBausteineStandard">Standard-Bausteine ergänzen</button></div>`,
+    detail3d: `
+    <h4>3D-Detailvorlagen (STEP)</h4>
+    <p class="hinweis">Körper für wiederkehrende Details (Kehle, Stutzen, Halter …) als STEP-Datei. Konvention: <b>Ursprung = Anfang der Ankerkante, +X = Richtung der Kante, +Z = Sichtseite</b>, Masse in mm. Eingesetzt wird mit «3D-Detail» (Blech ▾) an einer Kante. Die Vorlagen werden mit der Firma abgeglichen (bis 1.5 MB je Vorlage).</p>
+    ${(e.detailvorlagen || []).length ? `<div class="tabwrap"><table class="zeilen"><thead><tr><th>Name</th><th>Gruppe</th><th>Länge mm</th><th>Blechdicke mm</th><th>Kante min mm</th><th>Kante max mm</th><th></th></tr></thead><tbody>
+    ${e.detailvorlagen.map((v, i) => `<tr><td><input data-dv="name" data-i="${i}" value="${esc(v.name)}" aria-label="Name"></td><td><input data-dv="category" data-i="${i}" value="${esc(v.category || "")}" aria-label="Gruppe"></td>
+      <td>${esc(v.anchor?.edgeLength ?? "")}</td><td><input data-dv="thickness" data-i="${i}" type="number" step="any" value="${v.compatibility?.thickness ?? ""}" aria-label="Blechdicke"></td>
+      <td><input data-dv="edgeLengthMin" data-i="${i}" type="number" step="any" value="${v.compatibility?.edgeLengthMin ?? ""}" aria-label="Kante min"></td><td><input data-dv="edgeLengthMax" data-i="${i}" type="number" step="any" value="${v.compatibility?.edgeLengthMax ?? ""}" aria-label="Kante max"></td>
+      <td><button class="weg" data-dvweg="${i}" aria-label="${esc(v.name)} entfernen">×</button></td></tr>`).join("")}</tbody></table></div>` : '<p class="hinweis">Noch keine Detailvorlage.</p>'}
+    <div class="reihe ohnerand"><button class="knopf" id="eNeuDetail">+ Aus STEP-Datei</button></div>`,
     konto: cloud.html(),
     vorlagen: `
     <h4>Eigene Vorlagen</h4>
@@ -2843,7 +2862,7 @@ function zeigeEinst() {
     <h4>Sicherungen (automatisch vor jedem «Übernehmen»)</h4>
     ${(() => { const s = sichLesen(); return s.liste.length ? `<ul class="eigene">${s.liste.map((x, i) => `<li>${esc(new Date(x.zeit).toLocaleString("de-CH"))} <small class="hinweis">${esc(x.grund)} · ${x.einst.bausteine?.length ?? 0} Bausteine, ${x.einst.materialien?.length ?? 0} Materialien</small><button class="knopf klein" data-sich="${i}">Wiederherstellen</button></li>`).join("")}</ul>` : '<p class="hinweis">Noch keine Sicherung.</p>'; })()}
     <h4>Papierkorb</h4>
-    ${(() => { const s = sichLesen(); return s.korb.length ? `<ul class="eigene">${s.korb.map((x, i) => `<li>${esc(x.daten.name)} <small class="hinweis">${x.art === "baustein" ? "Baustein" : "Material"} · gelöscht ${esc(new Date(x.zeit).toLocaleString("de-CH"))}</small><button class="knopf klein" data-korb="${i}">Zurückholen</button></li>`).join("")}</ul>` : '<p class="hinweis">Leer. Gelöschte Bausteine und Materialien landen hier.</p>'; })()}
+    ${(() => { const s = sichLesen(); return s.korb.length ? `<ul class="eigene">${s.korb.map((x, i) => `<li>${esc(x.daten.name)} <small class="hinweis">${{ baustein: "Baustein", material: "Material", detail: "3D-Detail" }[x.art]} · gelöscht ${esc(new Date(x.zeit).toLocaleString("de-CH"))}</small><button class="knopf klein" data-korb="${i}">Zurückholen</button></li>`).join("")}</ul>` : '<p class="hinweis">Leer. Gelöschte Bausteine und Materialien landen hier.</p>'; })()}
     <h4>Sichern und übertragen</h4>
     <p class="hinweis">Einstellungen gelten pro Gerät. Zum Übertragen (z. B. PC → Handy) hier als Datei sichern und auf dem anderen Gerät laden.
       Laden übernimmt alle Einstellungen und ergänzt eigene Vorlagen.</p>
@@ -2874,6 +2893,7 @@ $("eInhalt").addEventListener("input", (ev) => {
   const t = ev.target;
   if (t.dataset.bk) { const b = entwurf.bausteine[+t.closest("tr").dataset.bi], k = t.dataset.bk; b[k] = k === "versatz" ? parseFloat(t.value) || 0 : t.value;
     if (k === "folge") { try { folge("100 " + bausteinFolge({ ...entwurf.bausteine[+t.closest("tr").dataset.bi], folge: t.value }, entwurf.materialien[0])); t.classList.remove("ungueltig"); } catch (err) { t.classList.add("ungueltig"); meldung(err.message); } } }
+  else if (t.dataset.dv) { const v = entwurf.detailvorlagen[+t.dataset.i], k = t.dataset.dv, x = t.type === "number" ? (t.value === "" ? null : parseFloat(t.value)) : t.value; if (k === "name" || k === "category") v[k] = x; else v.compatibility = { ...(v.compatibility || {}), [k]: x }; v.modified = new Date().toISOString().replace(/\.\d+Z$/, ""); }
   else if (t.dataset.k === "umSchr" || t.dataset.k === "umStr") { const m = entwurf.materialien[+t.dataset.i], v = t.value === "" ? null : parseFloat(t.value); m.umform = { ...(m.umform || {}), quelle: "Eigener Wert (Einstellungen)", [t.dataset.k === "umSchr" ? "schrumpfMaxProzent" : "streckMaxProzent"]: v }; }
   else if (t.dataset.k) { const m = entwurf.materialien[+t.dataset.i]; m[t.dataset.k] = t.dataset.k === "name" ? t.value : parseFloat(t.value); }
   else if (t.id === "lBand") entwurf.spaltbaender = zahlen(t.value);
@@ -2917,6 +2937,8 @@ $("eInhalt").addEventListener("click", async (ev) => {
 $("einstDatei").onchange = async (e) => { if (e.target.files[0]) einstLaden(await e.target.files[0].text()); e.target.value = ""; };
 $("eInhalt").addEventListener("click", async (ev) => {
   if (ev.target.dataset.ereg) { einstRegister = ev.target.dataset.ereg; zeigeEinst(); return; }
+  if (ev.target.id === "eNeuDetail") return $("detailDatei").click();
+  if (ev.target.dataset.dvweg != null) { entwurf.detailvorlagen.splice(+ev.target.dataset.dvweg, 1); return zeigeEinst(); }
   if (ev.target.id === "eSelbstTest") {
     const r = selbsttest(), ok = r.every((x) => x.ok);
     $("eSelbst").innerHTML = `<p class="${ok ? "" : "fehler"}"><b>${ok ? "✓ Alle " + r.length + " Prüfungen bestanden" : "⚠ " + r.filter((x) => !x.ok).length + " von " + r.length + " Prüfungen fehlgeschlagen"}</b></p><ul>${r.map((x) => `<li>${x.ok ? "✓" : "✗"} ${esc(x.name)} <small class="hinweis">${esc(x.detail)}</small></li>`).join("")}</ul>`;
@@ -2968,7 +2990,7 @@ $("eOk").onclick = () => {
   const bFalsch = !fehler && entwurf.bausteine.find((b) => { try { folge("100 " + bausteinFolge(b, entwurf.materialien[0])); return !b.name.trim(); } catch { return true; } });
   if (bFalsch) { einstRegister = "bausteine"; zeigeEinst(); return meldung(`Baustein «${bFalsch.name || "ohne Namen"}»: Name und gültige Abkantfolge nötig (z. B. «90 25 U+ 7»).`); }
   if (fehler) { einstRegister = fehler[0]; zeigeEinst(); return meldung(fehler[1]); }
-  sichereEinst(einst, entwurf, "Vor «Übernehmen»");
+  sichereEinst(einst, entwurf, "Vor «Übernehmen»"); { const g = geloeschte(einst, entwurf); g.baustein = g.baustein.filter((b) => !BAUSTEINE_STANDARD.some((s) => s.id === b.id)); g.material = g.material.filter((m) => !MATERIALIEN.some((s) => s.id === m.id)); cloud.loeschungen(g); }
   einst = entwurf; entwurf = null; $("einst").hidden = true;
   einstSpeichern(); darstellung(); kernAnzeige();
   regen(); status("Einstellungen gespeichert. Alle Teile neu berechnet.");
@@ -4211,6 +4233,38 @@ const cloud = cloudModul({
 });
 $("eInhalt").addEventListener("click", (ev) => { const b = ev.target.closest("[data-cloud]"); if (b) cloud.aktion(b.dataset.cloud, b.dataset.id); });
 cloud.start().then(() => { if (!$("einst").hidden && einstRegister === "konto") zeigeEinst(); });
+// ------------------------------------------------------------ 3D-Detailvorlagen (STEP-Körper mit Ankerkante, ersetzen die .f3d-Vorlagen des Add-ins)
+const DETAILMESH = new Map(); // dekodierte Dreiecke je Vorlage und Version
+function detail3dDialog(f) {
+  const vl = einst.detailvorlagen || [];
+  if (!vl.length) return status("Zuerst unter Einstellungen › Details 3D eine Detailvorlage aus einer STEP-Datei anlegen.");
+  const istNeu = !f;
+  f ||= { id: neueId(), typ: "detail3d", name: "3D-Detail " + (doc.features.filter((x) => x.typ === "detail3d").length + 1), vorlage: vl[0].id, kante: "A:X", versatz: 0, drehung: 0 };
+  const felder = (f) => [
+    { id: "name", label: "Name", text: true, wert: f.name },
+    { id: "vorlage", label: "Detailvorlage", optionen: mitWert(vl.map((v) => [v.id, v.name]), f.vorlage), wert: f.vorlage },
+    { id: "kante", label: "Ankerkante", wahl: "kante", optionen: mitWert(kantenListe(f), f.kante), wert: f.kante },
+    { id: "versatz", label: "Versatz entlang der Kante", einheit: "mm", wert: f.versatz ?? 0 },
+    { id: "drehung", label: "Drehung um die Kante", einheit: "°", wert: f.drehung ?? 0 },
+  ];
+  const hinweise = () => { const v = vl.find((x) => x.id === f.vorlage); return f._fehler ? "⚠ " + f._fehler : v ? (pruefeDetail(v, { kantenlaenge: f._detail3d?.kantenlaenge, dicke: null }).map((h) => "⚠ " + h).join(" · ") || `Detail ${v.anchor?.edgeLength ?? "?"} mm lang an einer Kante von ${f1(f._detail3d?.kantenlaenge ?? 0)} mm.`) : ""; };
+  featureDialog(f, istNeu, felder, (f, w) => Object.assign(f, w, { name: w.name?.trim() || f.name }), "3D-Detail einfügen",
+    "Setzt den Körper der Detailvorlage an eine Kante: Vorlagen-Ursprung am Kantenanfang, Vorlagen-X entlang der Kante, Vorlagen-Z zur Sichtseite. Kante in der Ansicht anklicken (Körperkante oder Skizzenkante).", { wahlNr: -1, info: hinweise });
+}
+$("wDetail3d").onclick = () => { if (dlg) $("dAbbrechen").click(); detail3dDialog(); };
+async function detailAusDatei(datei) {
+  const name = datei.name.replace(/\.[^.]+$/, ""), puffer = await datei.arrayBuffer();
+  try {
+    status("STEP wird gelesen …"); const o = await occtLaden(), r = o.ReadStepFile(new Uint8Array(puffer), null);
+    if (!r.success || !r.meshes.length) return status("STEP-Datei enthält keine lesbaren Körper.");
+    const teile = r.meshes.map((m) => { const p = m.attributes.position.array, ix = m.index?.array; if (!ix) return Float32Array.from(p); const out = new Float32Array(ix.length * 3); ix.forEach((v, i) => { out[i * 3] = p[v * 3]; out[i * 3 + 1] = p[v * 3 + 1]; out[i * 3 + 2] = p[v * 3 + 2]; }); return out; });
+    const alle = new Float32Array(teile.reduce((s, x) => s + x.length, 0)); let o2 = 0; for (const x of teile) { alle.set(x, o2); o2 += x.length; }
+    const v = detailAusStep(name, new TextDecoder().decode(puffer), alle, datei.name);
+    if (JSON.stringify(v).length > 1.5e6) return status(`«${name}» ist zu gross für eine Vorlage (${(JSON.stringify(v).length / 1e6).toFixed(1)} MB, max. 1.5 MB). Das Detail vereinfachen.`);
+    entwurf.detailvorlagen = [...(entwurf.detailvorlagen || []), v]; zeigeEinst(); meldung(`«${name}» als Detailvorlage angelegt – Ankerlänge ${v.anchor.edgeLength} mm. Mit «Übernehmen» speichern.`);
+  } catch (err) { status("Vorlage nicht angelegt: " + err.message); }
+}
+$("detailDatei").onchange = async (e) => { const d = e.target.files[0]; e.target.value = ""; if (d && entwurf) await detailAusDatei(d); };
 // ------------------------------------------------------------ Exakter CAD-Kern (Beta): OpenCascade im Web Worker (kern/cad)
 // Schalter in den Einstellungen (Standard aus = Version 0.2). Die Anzeige bleibt vorerst das Netz; der Kern liefert exakte
 // Körper für STEP und Prüfungen. Fällt er aus, bleibt alles andere unverändert nutzbar.
@@ -4388,6 +4442,14 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
           blech.set(f.id, id);
         }
         catch (e) { nicht.set(f.id, e.message); }
+      } else if (f.typ === "detail3d") { // STEP der Vorlage exakt importieren und an die Kante legen
+        if (f.versteckt || !f._detail3d) continue;
+        const v = f._detail3d.vorlage; if (!v.source?.step) { nicht.set(f.id, "Vorlage ohne STEP-Körper"); continue; }
+        try { const r = await K.ausfuehren({ op: "stepImport", text: v.source.step }); ids.push(...r.ids); const id = await vereinige(r.ids); koerper.set(f.id, (await x({ op: "matrix", ziel: id, m: f._detail3d.m })).id); }
+        catch (e) { nicht.set(f.id, e.message); }
+      } else if (f.typ === "import" && f.step) { // STEP-Import als exakter Körper
+        try { const r = await K.ausfuehren({ op: "stepImport", text: f.step }); ids.push(...r.ids); koerper.set(f.id, await vereinige(r.ids)); }
+        catch (e) { nicht.set(f.id, `STEP-Import: ${e.message}`); }
       } else if (["sweep", "loft", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
     if (step) { // alle sichtbaren exakten Körper (mit Komponentenlage) in eine STEP-Datei
@@ -4476,11 +4538,11 @@ async function occtLaden() { // OpenCascade (WebAssembly, ~7 MB) erst beim erste
   }
   throw new Error("STEP-Leser nicht gefunden (Ordner «occt» fehlt neben dem Programm)");
 }
-function importFeature(name, pos) {
+function importFeature(name, pos, stepText = null) {
   if (pos.length < 9) return status("In der Datei sind keine Dreiecke.");
   const u8 = new Uint8Array(pos.buffer, pos.byteOffset, pos.byteLength); let bin = "";
   for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
-  const f = { id: neueId(), typ: "import", name, daten: btoa(bin) };
+  const f = { id: neueId(), typ: "import", name, daten: btoa(bin), ...(stepText && kernAn() && stepText.length < 8e6 ? { step: stepText } : {}) };
   einfuegen(f); auswahl = f.id; regen(); merke?.();
   status(`«${name}» importiert: ${pos.length / 9} Dreiecke${bin.length > 3e6 ? " – gross: das Projekt wird entsprechend gross" : ""}. Wie ein Körper verwendbar (Verschieben, Vereinigen, Ausschneiden …).`);
 }
@@ -4493,7 +4555,7 @@ async function importiereDatei(datei) {
       if (!r.success || !r.meshes.length) return status("STEP-Datei enthält keine lesbaren Körper.");
       const teile = r.meshes.map((m) => { const p = m.attributes.position.array, ix = m.index?.array; if (!ix) return Float32Array.from(p); const out = new Float32Array(ix.length * 3); ix.forEach((v, i) => { out[i * 3] = p[v * 3]; out[i * 3 + 1] = p[v * 3 + 1]; out[i * 3 + 2] = p[v * 3 + 2]; }); return out; });
       const alle = new Float32Array(teile.reduce((s, t) => s + t.length, 0)); let o2 = 0; for (const t of teile) { alle.set(t, o2); o2 += t.length; }
-      return importFeature(name, alle);
+      return importFeature(name, alle, new TextDecoder().decode(puffer));
     }
     status("Nur STEP (.step/.stp) und STL lassen sich importieren.");
   } catch (err) { status("Import fehlgeschlagen: " + err.message); }

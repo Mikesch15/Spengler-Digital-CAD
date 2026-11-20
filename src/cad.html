@@ -352,6 +352,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path d="M3 6h10l-3 12h11"/><circle cx="3" cy="6" r="1.5"/></svg>Spengler-Vorlage</button>
       <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14"/></svg>Freies Profil</button>
       <button class="wz" id="wRund" title="Zylinder- oder Kegelmantel (Rohr, Kaminhut, Trichter, Rinnenstutzen …) mit exakter Abwicklung und DXF"><svg viewBox="0 0 24 24"><path d="M7 5h10l3 14H4z"/><ellipse cx="12" cy="5" rx="5" ry="1.5"/></svg>Rund-/Kegelblech</button>
+      <button class="wz" id="wDetail3d" title="Körper einer 3D-Detailvorlage (STEP) an eine Kante setzen"><svg viewBox="0 0 24 24"><path d="M4 18h16M6 18V9l6-4 6 4v9"/></svg>3D-Detail</button>
       <button class="wz" id="wUmform" title="Scheibe mit Rand, Kragen oder Kegel beurteilen: konstruierbar, abwickelbar, herstellbar (wie im Fusion-Add-in)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/></svg>Rundblech beurteilen</button>
       <button class="wz" id="wFlaeche" title="Blech als Grundfläche aus der Skizze; Kanten anklicken und Spenglerbaustein zuweisen (Falz, Traufe, Ortgang …)"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg>Flächenblech</button>
       <button class="wz" id="wBlechAufFlaeche"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg><span><b>Blech auf Körperfläche</b><small>Fläche anklicken – Umriss wird übernommen</small></span></button>
@@ -388,6 +389,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" data-aus="bild"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>Bild / PDF-Plan als Hintergrund</b><small>auf Ebene legen, kalibrieren</small></span></button>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
       <input type="file" id="importDatei" accept=".step,.stp,.stl" hidden>
+      <input type="file" id="detailDatei" accept=".step,.stp" hidden>
       <input type="file" id="bildDatei" accept="image/*,.pdf,application/pdf" hidden>
       <input type="file" id="dxfDatei" accept=".dxf" hidden>
       <input type="file" id="einstDatei" accept=".json,application/json" hidden>
@@ -516,6 +518,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <li><b>Einstellungen › Konto &amp; Cloud</b>: mit dem Namen der Spengler-Digital-App anmelden («Vorname.Nachname» oder E-Mail). «Jetzt abgleichen» tauscht Kantenbausteine und Materialien mit der Firma aus. Ohne Recht «Vorlagen bearbeiten» wird nur heruntergeladen. Bei Konflikten gilt die Cloud-Fassung, deine bleibt als «Name (Konflikt TT.MM.)». Gelöscht wird nie endgültig.</li>
       <li><b>Projekte</b>: «Aktuelles Projekt in die Cloud» speichert unter der Auftragsnummer (Feld «Nr.»). «Teile an die App senden» übergibt Zuschnitt, Material, Stück und Schenkel; «Profilaufträge der App holen» baut offene Aufträge der App als Teil.</li>
       <li><b>Bausteine mit Parametern</b>: im Baustein-Editor unter «Parameter und Bedingungen», z. B. Kurzschrift «90 H U+ u+4*t» und Parameter «H = 25 [10-60] Höhe». <b>t</b> (Dicke), <b>ri</b> (Innenradius) und <b>k</b> (K-Faktor) kommen aus dem Material. Im Flächenblech-Dialog lässt sich der Wert je Kante überschreiben; ⚠ warnt bei Grenzverletzungen (Parametergrenzen, Materialdicke, Kantenlänge).</li>
+      <li><b>3D-Details</b> (Einstellungen › Details 3D, dann Blech ▾ › 3D-Detail): Körper für wiederkehrende Details aus einer STEP-Datei als Vorlage ablegen (Ursprung = Kantenanfang, +X = Kantenrichtung, +Z = Sichtseite) und an eine Kante setzen, mit Versatz und Drehung. Mit exaktem Kern entsteht ein exakter Körper. Vorlagen werden mit der Firma abgeglichen (bis 1.5 MB je Vorlage). <b>STEP-Import</b> ist mit exaktem Kern ebenfalls exakt (B-Rep) statt Netz.</li>
       <li><b>Sicherungen und Papierkorb</b> (Einstellungen › Vorlagen &amp; Sichern): vor jedem «Übernehmen» wird der alte Stand gesichert; gelöschte Bausteine und Materialien lassen sich zurückholen.</li>
       <li><b>Rundblech beurteilen</b> (Blech ▾): Scheibe mit Rand, Kragen oder Kegel – konstruierbar, abwickelbar, herstellbar. «Herstellbar» wird nur mit einem eigenen Erfahrungswert beurteilt (Einstellungen › Materialien › Stauchen/Strecken max %), sonst «nicht beurteilbar». Reine Geometrie, keine Garantie für die Umformbarkeit.</li>
       <li><b>Selbsttest</b> (Einstellungen › Programm) prüft die Rechenkerne gegen bekannte Werte.</li>

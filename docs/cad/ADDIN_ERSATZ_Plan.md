@@ -53,3 +53,10 @@ Das gesamte CAD ersetzt das Add-in; ein Nachbau der Fusion-Leiste «SPENGLER» i
 ## Stand 20.11.2026 (Add-in-Funktionen im CAD)
 - Fertig: Kantenbausteine mit Parametern/Ausdrücken/Eignungsprüfung (`kern/vorlagen/parameter.js`), Sicherungen + Papierkorb (`kern/sicherung.js`), Rundblech beurteilen (`kern/umformung.js`, Dialog «Rundblech beurteilen», Umformgrenzen im Material), Selbsttest (`kern/selbsttest.js`, Einstellungen › Programm).
 - Offen: Parameterwerte je Kante im Flächenblech-Dialog (heute gelten die Standardwerte), 3D-Detailvorlagen als exakte Körper (setzt STEP-Import als exakter Körper voraus), Handbuch/Hilfe zu den neuen Funktionen, echter Test gegen Supabase.
+
+## Stand 20.11.2026 (3D-Detailvorlagen, STEP-Import)
+- `kern/vorlagen/detail3d.js`: Vorlage aus STEP (Format «detailvorlage» des Add-ins, Körper in `source.step`/`source.mesh`), Lage an einer Kante (Ursprung am Kantenanfang, X entlang der Kante, Z zur Sichtseite, Versatz, Drehung), Eignungsprüfung (Kantenlänge, Blechdicke).
+- App: Register «Details 3D», Feature «3D-Detail» (Netz und exakt über `stepImport` + `matrix`), STEP-Import mit exaktem Kern als exakter Körper; Abgleich mit der Cloud (`detailvorlage`), Löschen und Papierkorb.
+- Löschungen in der App gehen jetzt beim nächsten Abgleich an die Cloud (soft: `geloescht`); der Startbestand ist ausgenommen.
+- Abweichung vom Add-in: keine .f3d (Fusion-Archive) – die Vorlagen sind STEP. Bestehende .f3d müssen einmal aus Fusion als STEP exportiert werden.
+- Offen: Spiegeln der Vorlage, Anker mit mehreren Kanten/Parametern im Körper (Parametrik), Abgleich grosser Vorlagen (>1.5 MB bleiben lokal).

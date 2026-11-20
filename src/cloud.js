@@ -1,7 +1,7 @@
 // Konto & Cloud: Anmeldung bei der Spengler-Digital-App, Abgleich der Vorlagen, Cloud-Projekte, Übergabe an die App
 import { CloudClient } from "../kern/cloud/client.js";
 import { abgleichen } from "../kern/cloud/abgleich.js";
-import { leererSpiegel, einstInSpiegel, spiegelInEinst, spiegelSpeicher } from "../kern/cloud/spiegel.js";
+import { leererSpiegel, einstInSpiegel, spiegelInEinst, spiegelSpeicher, loescheImSpiegel } from "../kern/cloud/spiegel.js";
 import { teilFuerApp, zeilenAusSchenkel } from "../kern/cloud/appformat.js";
 
 const KEY = "sdcad-cloud";
@@ -48,7 +48,7 @@ export function cloudModul(ctx) {
       const b = await abgleichen(client, spiegelSpeicher(z.spiegel, sichern)); st.darf = !b.nur_lokal;
       ctx.setEinst(spiegelInEinst(ctx.getEinst(), z.spiegel)); ctx.einstSpeichern();
       z.letzter = new Date().toLocaleString("de-CH"); sichern();
-      const t = [`${b.geladen} geladen`, `${b.hochgeladen} hochgeladen`, b.geloescht ? `${b.geloescht} gelöscht (Papierkorb)` : "", b.konflikte ? `${b.konflikte} Konflikt(e): lokale Fassung als Kopie behalten` : "", b.nur_lokal ? "nur lokal (kein Recht zum Hochladen)" : "", ...b.fehler].filter(Boolean).join(" · ");
+      const t = [`${b.geladen} geladen`, `${b.hochgeladen} hochgeladen`, b.geloescht ? `${b.geloescht} gelöscht (Papierkorb)` : "", b.konflikte ? `${b.konflikte} Konflikt(e): lokale Fassung als Kopie behalten` : "", b.nur_lokal ? "nur lokal (kein Recht zum Hochladen)" : "", z.spiegel.uebersprungen?.length ? `zu gross für die Cloud, nur lokal: ${z.spiegel.uebersprungen.join(", ")}` : "", ...b.fehler].filter(Boolean).join(" · ");
       st.laeuft = false; ctx.regen(); fertig("Abgleich fertig: " + t);
     } catch (e) { st.laeuft = false; fertig("Abgleich nicht möglich: " + fehlerText(e)); }
   }
@@ -78,5 +78,6 @@ export function cloudModul(ctx) {
       }
     } catch (e) { st.laeuft = false; fertig("Nicht möglich: " + fehlerText(e)); }
   }
-  return { html, aktion, start, get angemeldet() { return client.angemeldet; } };
+  const loeschungen = (g) => { loescheImSpiegel(z.spiegel, g); sichern(); }; // vom Programm aufgerufen, wenn Bausteine/Materialien/Details bewusst gelöscht wurden
+  return { html, aktion, start, loeschungen, get angemeldet() { return client.angemeldet; } };
 }

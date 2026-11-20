@@ -13,4 +13,6 @@ const z = zurueckholen(e2, k[0]); ok(z.bausteine.length === 2 && z.bausteine[1].
 const z2 = zurueckholen(z, k[0]); ok(z2.bausteine.length === 3 && z2.bausteine[2].id !== "b", "Vorhandene id wird nicht überschrieben (neue id)");
 ok(inPapierkorb(Array.from({ length: 60 }, (_, i) => ({ art: "baustein", zeit: "", daten: { id: "" + i } })), g, "t5").length === 50, "Papierkorb begrenzt auf 50");
 const ein = einspielen(l[0]); ein.n = 99; ok(l[0].einst.n !== 99, "Einspielen liefert Kopie");
+const ed = { bausteine: [], materialien: [], detailvorlagen: [{ id: "dv-1", name: "Kehle" }] }, gd = geloeschte(ed, { bausteine: [], materialien: [], detailvorlagen: [] });
+ok(gd.detail.length === 1 && inPapierkorb([], gd, "t")[0].art === "detail" && zurueckholen({ detailvorlagen: [] }, inPapierkorb([], gd, "t")[0]).detailvorlagen[0].id === "dv-1", "3D-Detailvorlage: Papierkorb und Zurückholen");
 if (fehler) { console.error(fehler + " Fehler"); process.exit(1); } else console.log("Sicherung: alle Tests bestanden");
