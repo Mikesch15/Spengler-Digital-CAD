@@ -372,6 +372,28 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .ansichtsknoepfe button { text-align: center; text-transform: none; letter-spacing: 0; font: 500 12px var(--font-body); background: rgba(255,255,255,.85); }
 .ansichtsknoepfe button[data-ansicht="oben"], .ansichtsknoepfe button[data-ansicht="vorne"], .ansichtsknoepfe button[data-ansicht="rechts"] { display: none; }
 .baum li button, .baum li { font-size: 13px; }
+
+/* ---- Browser wie in Fusion: durchscheinend über der Ansicht, Auge vor dem Namen ---- */
+.baum li .auge { margin: 0 2px 0 -4px; width: 22px; height: 22px; padding: 0; display: inline-grid; place-items: center; border-radius: 3px; color: var(--muted); flex: none; }
+.baum li .auge svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.baum li .auge:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.baum li .auge.zu { color: color-mix(in srgb, var(--muted) 60%, transparent); }
+.baum li.verborgen .nm, .baum li.verborgen .typ { opacity: .45; }
+.baum li .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.baum li.komp .auge { margin-left: -4px; }
+.browser .ptitel { cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
+.browser .ptitel::after { content: "▾"; font-size: 10px; opacity: .6; transition: transform .15s; } .browser.zu .ptitel::after { transform: rotate(-90deg); }
+.browser.zu .baum { display: none; }
+@media (min-width: 1001px) {
+  .mitte { position: relative; grid-template-columns: minmax(0, 1fr) 300px; }
+  .browser { position: absolute; left: 10px; top: 10px; z-index: 5; width: 236px; max-height: calc(100% - 20px); border-radius: 6px;
+    background: color-mix(in srgb, var(--panel) 58%, transparent); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1);
+    border: 1px solid color-mix(in srgb, var(--line) 75%, transparent); box-shadow: 0 4px 18px rgba(20, 35, 50, .14); }
+  .browser .ptitel { background: transparent; border-bottom-color: color-mix(in srgb, var(--line) 60%, transparent); }
+  .baum li.aktiv { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  .baum li:not(.kopf):hover { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+  .baum li.kopf { padding-top: 8px; }
+}
 </style>
 
 <div class="app">

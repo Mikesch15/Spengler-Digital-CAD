@@ -925,24 +925,26 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
   if (o.userData.bildschirm) o.scale.setScalar(kamera.position.distanceTo(o.position) * o.userData.bildschirm);
 });
 
+// Browser ein-/ausklappen (Kopfzeile antippen)
+document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
 const NAMEN = { detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
-  const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}"><span class="typ ${typ}"></span>${f.name}${f._fehler ? " ⚠" : ""}
-    <button class="auge" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}">${f.versteckt ? "○" : "●"}</button></li>`;
+  const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span></li>`;
   $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, f.typ === "ebene" ? "ebene" : f.typ)).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
     <li class="kopf">Körper</li>${kp.filter((f) => !f.komponente).map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech")).join("") || (kp.length ? "" : '<li class="hinweis">Noch keine</li>')}` +
     // Komponenten (wie in Fusion): Körper zu Baugruppen zusammenfassen, gemeinsam ein-/ausblenden
     [...new Set(kp.map((f) => f.komponente).filter(Boolean))].map((k) => { const fs = kp.filter((f) => f.komponente === k), aus = fs.every((f) => f.versteckt);
-      return `<li class="komp" data-komp="${esc(k)}"><span class="typ komponente"></span>${esc(k)} <small>(${fs.length})</small><button class="auge" data-kompauge="${esc(k)}" aria-label="${aus ? "Einblenden" : "Ausblenden"}">${aus ? "○" : "●"}</button></li>` +
+      return `<li class="komp${aus ? " verborgen" : ""}" data-komp="${esc(k)}"><button class="auge${aus ? " zu" : ""}" data-kompauge="${esc(k)}" aria-label="${aus ? "Einblenden" : "Ausblenden"}" title="${aus ? "Einblenden" : "Ausblenden"}">${AUGE(aus)}</button><span class="typ komponente"></span><span class="nm">${esc(k)} <small>(${fs.length})</small></span></li>` +
         fs.map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech").replace("<li ", '<li style="padding-left:22px" ')).join(""); }).join("");
 }
 $("baum").addEventListener("click", (e) => {
-  const auge = e.target.dataset.auge;
+  const ab = e.target.closest("button.auge"), auge = ab?.dataset.auge;
   if (auge) { const f = finde(auge); f.versteckt = !f.versteckt; regen(); return; }
-  const ka = e.target.dataset.kompauge;
+  const ka = ab?.dataset.kompauge;
   if (ka != null) { const fs = doc.features.filter((f) => f.komponente === ka), aus = fs.every((f) => f.versteckt); fs.forEach((f) => (f.versteckt = !aus)); regen(); return; }
   const id = e.target.closest("li")?.dataset.id;
   if (id) waehle(id);
