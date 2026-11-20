@@ -105,7 +105,7 @@ export async function occtKern({ wasmUrl } = {}) {
     vp.delete?.(); sp.delete?.();
     return e;
   };
-  const punkteDerKante = (e, n = 24) => {
+  const punkteDerKante = (e, n = 96) => { // Bögen/Kurven in der Zeichnung fein genug (Sehnenfehler < 0.01 mm bei r 100)
     const typ = e.geomType;
     if (typ === "LINE") return [vec(e.startPoint), vec(e.endPoint)];
     return Array.from({ length: n + 1 }, (_, i) => vec(e.pointAt(i / n)));
@@ -222,7 +222,11 @@ export async function occtKern({ wasmUrl } = {}) {
       };
     },
     projektion: (k) => versuch("Projektion", () => {
-      const f = hol(k.ziel), kam = R.lookFromPlane(k.ansicht ?? "front"), { visible, hidden } = R.makeProjectedEdges(f, kam, k.verdeckt !== false);
+      // Ziel: ein Körper (ziel) oder mehrere (ziele → Verbund); Blick: Normansicht (ansicht) oder frei (richtung = zur Kamera, xAchse)
+      const formen = (k.ziele ?? [k.ziel]).map(hol), f = formen.length === 1 ? formen[0] : R.makeCompound(formen.map((x) => x.clone()));
+      const kam = k.richtung ? new R.ProjectionCamera([0, 0, 0], k.richtung, k.xAchse) : R.lookFromPlane(k.ansicht ?? "front");
+      const { visible, hidden } = R.makeProjectedEdges(f, kam, k.verdeckt !== false);
+      if (formen.length > 1) weg(f);
       const zuLinien = (es) => es.map((e) => punkteDerKante(e).map((p) => [p[0], p[1]]));
       const lang = (es) => es.reduce((s, e) => s + e.length, 0);
       const r = { sichtbar: zuLinien(visible), verdeckt: zuLinien(hidden), laengeSichtbar: lang(visible), laengeVerdeckt: lang(hidden) };

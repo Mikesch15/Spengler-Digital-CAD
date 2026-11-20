@@ -66,7 +66,10 @@ export function planModul(ctx) {
   const cache = new Map();
   const ansicht = (a) => {
     if (a.lupe) return lupenAnsicht(a);
-    const key = `${a.art}|${a.massstab}|${a.verdeckt !== false}|${a.schnitt ? a.schnitt.lage : ""}|${ctx.signatur()}`;
+    // Exaktes Modell (CAD-Kern ein): Ansicht aus exakter Projektion, verdeckte Kanten ohne Doppelungen; Schnitte bleiben vorerst Netz
+    const ex = !a.schnitt && ctx.exaktAnsicht ? ctx.exaktAnsicht(a.art, 1 / a.massstab, a.verdeckt !== false, () => aktualisiere()) : null;
+    if (ex?.r) return ex.r;
+    const key = `${a.art}|${a.massstab}|${a.verdeckt !== false}|${a.schnitt ? a.schnitt.lage : ""}|${ex?.stand ?? ""}|${ctx.signatur()}`;
     if (!cache.has(key)) {
       if (cache.size > 40) cache.clear();
       let r;
@@ -194,6 +197,8 @@ ${out.join("\n")}
     $("planEditor").hidden = false; zeige();
   }
   const element = (id) => [...plan.ansichten, ...plan.details, ...plan.masse, ...plan.texte].find((x) => x.id === id);
+  const aktualisiere = () => { if (plan && !$("planEditor").hidden) zeige(); };
+  document.addEventListener("sdcad-exakt", aktualisiere);
   function zeige() {
     const p = plaene(), i = p.indexOf(plan);
     $("plBlatt").innerHTML = p.map((x, k) => `<option value="${k}" ${k === i ? "selected" : ""}>${esc(x.name)}</option>`).join("");

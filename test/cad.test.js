@@ -323,6 +323,27 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   ok(e3.gueltig && e3.anzahl.koerper === 1 && e3.volumen > 0, `Flächenblech gemischt (Doppelstehfalz, Traufe, Ortgang, Sichtseite −1): ein gültiger Körper (V ${(e3.volumen / 1000).toFixed(1)} cm³)`);
 }
 
+// ---------------------------------------------------------------- 10e Zeichnungsansicht aus exakter Projektion (Phase E)
+{
+  const { ansichtAusProjektion, kameraAchsen } = await import("../kern/cad/ansichtExakt.js");
+  const R = { vorne: { d: [0, 0, 1], oben: [0, 1, 0] }, oben: { d: [0, 1, 0], oben: [0, 0, -1] }, rechts: { d: [1, 0, 0], oben: [0, 1, 0] } };
+  const q = (await x({ op: "quader", min: [0, 0, 0], max: [100, 50, 20] })).id, kb = (await x({ op: "bohrung", ziel: q, punkt: [50, 25, 20], richtung: [0, 0, -1], d: 20, tiefe: 10 })).id;
+  const proj = async (art, ziel, extra = {}) => { const { d, oben } = R[art], a = kameraAchsen(d, oben); return x({ op: "projektion", ziele: [ziel], richtung: d, xAchse: a.x, ...extra }); };
+  const laenge = (ls) => ls.reduce((s, [x1, y1, x2, y2]) => s + Math.hypot(x2 - x1, y2 - y1), 0);
+  // Quader 100 × 50 × 20 (x × y × z) mit Sackloch Ø20 × 10 von oben (+z): von vorn (Blick auf z) sieht man 100 × 50 mit dem Lochkreis
+  const av = ansichtAusProjektion(await proj("vorne", kb), { ...R.vorne, massstab: 0.5 });
+  ok(Math.abs(av.breite - 51) < 1e-6 && Math.abs(av.hoehe - 26) < 1e-6, `Vorderansicht 1:2: Blatt ${av.breite.toFixed(2)} × ${av.hoehe.toFixed(2)} mm (Rand 1 % der längeren Seite)`);
+  ok(Math.abs(laenge(av.sichtbar) - (2 * (100 + 50) + PI * 20) * 0.5) < 0.05, `Vorderansicht: sichtbar ${laenge(av.sichtbar).toFixed(2)} mm = Umriss + Lochkreis (${((2 * 150 + PI * 20) * 0.5).toFixed(2)})`);
+  ok(av.verdeckt.length === 0, "Vorderansicht: Lochgrund liegt genau hinter dem Lochkreis → keine doppelte verdeckte Linie");
+  const au = ansichtAusProjektion(await proj("oben", kb), { ...R.oben, massstab: 1 });
+  ok(Math.abs(au.breite - 102) < 1e-6 && Math.abs(au.hoehe - 22) < 1e-6 && au.punkte.length >= 4, `Draufsicht (Blick auf y): ${au.breite.toFixed(1)} × ${au.hoehe.toFixed(1)} mm, Fangpunkte ${au.punkte.length}`);
+  ok(au.verdeckt.length >= 2, `Draufsicht: Lochmantel und Lochgrund verdeckt gezeichnet (${au.verdeckt.length} Segmente)`);
+  const links = au.punkte.filter((p) => Math.abs(p.x - 1) < 0.01).sort((a, b) => a.y - b.y), d3 = Math.hypot(...[0, 1, 2].map((i) => links[0].w[i] - links.at(-1).w[i])), ab = au.abbild(links[0].w);
+  ok(links.length === 2 && Math.abs(d3 - 20) < 1e-6 && Math.abs(ab[0] - links[0].x) < 1e-9 && Math.abs(ab[1] - links[0].y) < 1e-9, `Fangpunkte tragen Weltpunkte: Abstand ${d3.toFixed(3)} mm (z), abbild() deckt sich`);
+  const ar = ansichtAusProjektion(await proj("rechts", kb), { ...R.rechts, massstab: 1, verdeckte: false });
+  ok(ar.verdeckt.length === 0 && Math.abs(ar.breite - 21) < 1e-6 && Math.abs(ar.hoehe - 51) < 1e-6, `Seitenansicht ohne verdeckte Kanten: ${ar.breite.toFixed(1)} × ${ar.hoehe.toFixed(1)} mm`);
+}
+
 // ---------------------------------------------------------------- 10 Speicher: Freigabe und Leckprüfung
 {
   const vorher = (await x({ op: "speicher" })).handles;
