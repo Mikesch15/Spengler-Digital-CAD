@@ -27,6 +27,15 @@ ok(flachOhne.length === 1 && Math.abs(flachOhne[0] - 200 * 124.3 * t) < 0.03 * 2
 ok(flachOhne[0] - flachMit[0] > 0.7 * soll && flachOhne[0] - flachMit[0] < 1.3 * soll, `Erst die Extrusion «Ausschneiden» schneidet die Abwicklung (${(flachOhne[0] - flachMit[0]).toFixed(0)} mm³ weg)`);
 ok(Math.abs(gefaltetOhneSchnitt.reduce((a, v) => a + v, 0) - ohneAbw) < 1, "Falten ohne Ausschneiden: Blech unverändert, nichts wird «zurückgeschnitten»");
 const gs = gefaltet.reduce((a, v) => a + v, 0); ok(ohneAbw - gs > 0.7 * soll && ohneAbw - gs < 1.3 * soll, `Gefaltet: Ausschnitte in Platte und Flansch (${(ohneAbw - gs).toFixed(0)} mm³ weg, erwartet ≈ ${soll.toFixed(0)})`);
+// Keine Geisterlinien: Ausklinkung am Rand des Flanschs – Kantenlinien im ausgeschnittenen Bereich dürfen nicht stehen bleiben
+for (const [nm, fs] of [["flach", [...basis(), { ...schnitt, id: "ex2", skizze: "s3", flaechen: [[100, -18]] }]], ["gefaltet", [...basis(), { ...schnitt, id: "ex2", skizze: "s3", flaechen: [[100, -18]] }, falten]]]) {
+  const s3 = { id: "s3", typ: "skizze", name: "Ausklinkung", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [90, -30], b: [110, -12] }] };
+  const f2 = fs.slice(); f2.splice(f2.findIndex((x) => x.id === "ex2"), 0, s3);
+  const sx = await b.newPage({ viewport: { width: 1280, height: 800 } }); sx.on("pageerror", (e) => pr.push(e.message));
+  await sx.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "U", nr: "U-1", zaehler: 10, features: d })); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, f2);
+  await sx.goto("http://localhost:8790/index.html?test"); await sx.waitForTimeout(1500);
+  const n = await sx.evaluate((fl) => fl ? window.sdcadTest.segmenteImKasten("fl", 92, 108, -28, -14) : window.sdcadTest.segmenteImKasten("fl", 92, 108, -3, 3, 15, 23), nm === "flach"); ok(n === 0, `${nm}: keine Kantenlinien mehr im ausgeklinkten Bereich (${n})`); await sx.close();
+}
 await b.close(); srv.close();
 if (pr.length) { console.log("✗ Seitenfehler", pr.join(" | ")); fehler++; }
 console.log(fehler ? `${fehler} Fehler` : "Abwickeln/Falten: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

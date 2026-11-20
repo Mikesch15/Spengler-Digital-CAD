@@ -22,17 +22,31 @@ await s.keyboard.press("Escape");
 await s.evaluate(() => window.sdcadTest.waehleNichts?.()); await werkzeug("flansch");
 ok(await s.isVisible("#kantenBar"), "Werkzeugleiste «Flansch» erscheint");
 await klick([100, 50]); ok(/Kante/.test(await s.textContent("#kbText")), "Schritt 1: Blech angeklickt, jetzt Kante");
+const q0 = await uv([100, 0]); await s.mouse.move(q0[0], q0[1] + 1); await s.waitForTimeout(250);
+ok((await s.evaluate(() => window.sdcadTest.kantenAn())).includes("0:0"), "Kante unter dem Zeiger leuchtet auf");
 await klick([100, 0]); let k = await kanten(); ok(k["0:0"]?.werkzeug?.typ === "flansch", "Schritt 2: Kante angeklickt → Flansch an Kante 1");
+const feats = () => s.evaluate(() => window.sdcadTest.dok().features.filter((f) => f.typ === "kante"));
+ok((await feats()).length === 1 && /Flansch K1/.test(await s.textContent("#zeit")), "Flansch steht als Schritt «Flansch K1» in der Zeitleiste");
 // Umschlag an dieselbe Kante: anhängen
 await werkzeug("umschlag"); await klick([100, 0]); k = await kanten();
 ok(typeof k["0:0"]?.folge === "string" && /^90 .* U\+ /.test(k["0:0"].folge), `Umschlag an Flansch angehängt: «${k["0:0"]?.folge}»`);
 // Richtung umkehren im Werkzeug: Flansch nach hinten an Kante 3 (oben)
 await s.keyboard.press("Escape"); await werkzeug("flansch"); await s.click("#kbRichtung"); await klick([100, 100]); k = await kanten();
+// live: Richtung des eben angelegten Flanschs im Werkzeug umschalten
+await s.click("#kbRichtung"); await s.waitForTimeout(300); k = await kanten(); ok(k["0:2"]?.werkzeug?.seite === 1, "Richtung-Schalter kehrt den eben angelegten Flansch sofort um");
+await s.click("#kbRichtung"); await s.waitForTimeout(300);
+// live: Länge im Werkzeug ändert den eben angelegten Flansch
+await s.fill("#kbLaenge", "40"); await s.waitForTimeout(300); k = await kanten(); ok(k["0:2"]?.werkzeug?.laenge === 40, "Länge im Werkzeug ändert den Flansch sofort");
 ok(k["0:2"]?.werkzeug?.seite === -1, "Richtung «nach hinten» gilt für den neuen Flansch");
 // bestehende Kante umkehren (Dialog)
 await s.keyboard.press("Escape"); await s.evaluate(() => window.sdcadTest.bearbeite("fl")); await s.waitForSelector('[data-rev="0:2"]', { timeout: 4000 });
 await s.click('[data-rev="0:2"]'); await s.waitForTimeout(300); k = await kanten(); ok(k["0:2"]?.werkzeug?.seite === 1, "«⇅ Richtung» im Dialog kehrt die Kante um");
 await s.click("#dOk"); await s.waitForTimeout(300);
+// Schritt in der Zeitleiste bearbeiten: Dialog wirkt live
+const id = (await feats()).find((f) => f.key === "0:2").id; await s.evaluate((i) => window.sdcadTest.bearbeite(i), id); await s.waitForSelector("#d_laenge", { timeout: 4000 });
+await s.fill("#d_laenge", "55"); await s.waitForTimeout(300); k = await kanten(); ok(k["0:2"]?.werkzeug?.laenge === 55, "Dialog des Schritts: Länge 55 wirkt sofort am Blech");
+ok((await s.evaluate(() => window.sdcadTest.kantenAn())).includes("0:2"), "Im Dialog leuchtet die Kante des Schritts");
+await s.click("#dOk"); await s.waitForTimeout(200);
 ok(!(await s.isVisible("#layerBox")), "Layer-Leiste ist ohne aktive Skizze nicht da");
 await s.evaluate(() => document.getElementById("w2D").click()); await s.waitForTimeout(700); ok(await s.isVisible("#layerBox"), "Layer-Leiste erscheint in der aktiven Skizze");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
