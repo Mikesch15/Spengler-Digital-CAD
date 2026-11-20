@@ -1,6 +1,7 @@
 // Spengler Digital CAD – App-Features → Kern-Kommandos (rein, ohne Kern, ohne Oberfläche)
 // Damit die Oberfläche keine OCCT-Details kennt: sie liefert die Daten, die sie ohnehin hat
 // (Rechenergebnis aus kern/geometrie.js, Material, Ebene {o,u,v,n}, Länge, Richtung, Versatz), hier entstehen Kommandos.
+import { werkzeugAuf } from "../flansch.js";
 import { blechQuerschnitt, verschiebeProfil } from "./blech.js";
 import { berechne } from "../geometrie.js";
 import { freiesProfil } from "../profile.js";
@@ -72,7 +73,8 @@ export const matrixZeilen = (te) => [te[0], te[4], te[8], te[12], te[1], te[5], 
 // ---------------------------------------------------------------- Flächenblech mit Kantenbausteinen (exakt)
 // Querschnitt eines Bausteins wie bausteinKontur() in der App (kurzer Anlauf L auf der Fläche), aber mit exakten Bögen.
 // xFlach: wo der Anlauf in die erste Biegung übergeht (x nach aussen ab der gezeichneten Kante) – bis dorthin ist es Fläche.
-export function bausteinQuerschnitt(b, m) {
+export function bausteinQuerschnitt(b0, m) {
+  const b = werkzeugAuf(b0, m);
   for (const L of [1, 2, 4, 8, 16, 30]) {
     try {
       const { start, ops } = freiesProfil(0, folge(`${L} ${b.folge}`), m), res = berechne(start, ops, m.t, m.ri, m.k), v = +b.versatz || 0;

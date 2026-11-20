@@ -4,6 +4,7 @@
 // Daraus: Zugabe je Kante, Zuschnitt (Umriss mit Eckausklinkung), Biegelinien, Abkantliste.
 // Querschnitt eines Bausteins: x = von der Kante nach aussen, y = zur Sichtseite. Reines JavaScript.
 import { bausteinFolge } from "./vorlagen/parameter.js";
+import { werkzeugAuf } from "./flansch.js";
 import { berechne, versatzLinie, grenzen, kontur } from "./geometrie.js";
 import { freiesProfil } from "./profile.js";
 import { folge } from "./details.js";
@@ -31,7 +32,8 @@ export const BAUSTEINE_STANDARD = [
 
 // Abkantfolge des Bausteins rechnen (wie ein Profil mit einem langen Anfangsschenkel auf der Fläche)
 const X = 100;
-export function bausteinProfil(b, m) {
+export function bausteinProfil(b0, m) {
+  const b = werkzeugAuf(b0, m); // Flansch/Umschlag-Werkzeug → Abkantfolge und Versatz
   if (!b || !String(b.folge ?? "").trim()) return { zugabe: 0, biegungen: [], zeilen: [] };
   const zeilen = folge(`${X} ${bausteinFolge(b, m)}`);
   const { start, ops } = freiesProfil(0, zeilen, m);
@@ -216,6 +218,16 @@ export function abwicklung(pts, gruppen, profile) {
   const dreh = (p) => [p[0] * c - p[1] * s, p[0] * s + p[1] * c];
   const gr = grenzen(sauber.map(dreh));
   return { umriss: sauber, linien, drehung: w, laenge: gr.x1 - gr.x0, breite: gr.y1 - gr.y0, flaeche: Math.abs(flaeche(sauber)) / 1e6, dreh };
+}
+
+// Fläche des Blechs bis zum Biegebeginn: jede Kante mit Baustein wird um kuerzen[k] mm nach innen versetzt (Ecken mit den Nachbarkanten
+// verschnitten). So endet die ebene Platte dort, wo die erste Biegung beginnt – nicht erst an der gezeichneten Kante.
+export function plattenUmriss(pts, gruppen, kuerzen) {
+  const n = pts.length, d = new Array(n).fill(0);
+  gruppen.forEach((g, k) => g.segmente.forEach((i) => { d[i] = Math.max(0, kuerzen[k] || 0); }));
+  if (!d.some((v) => v > 1e-9)) return pts;
+  const lin = pts.map((a, i) => { const r = richtung(a, pts[(i + 1) % n]); return { p: [a[0] - r[1] * d[i], a[1] + r[0] * d[i]], r }; }); // nach links = nach innen (Umriss gegen den Uhrzeiger)
+  return pts.map((_, i) => { const L0 = lin[(i - 1 + n) % n], L1 = lin[i]; return schnitt(L0.p, L0.r, L1.p, L1.r) ?? L1.p; });
 }
 
 // Alles für ein Blech: Kanten, Profile der Bausteine, Abwicklung. kanten[k] = Baustein (oder null)

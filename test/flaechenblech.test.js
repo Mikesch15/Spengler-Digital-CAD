@@ -1,5 +1,6 @@
 // Prüft Flächenblech mit Kantenbausteinen (kern/flaechenblech.js)
-import { eckFaktoren, BAUSTEINE_STANDARD, bausteinProfil, kantenGruppen, flaechenblech } from "../kern/flaechenblech.js";
+import { eckFaktoren, BAUSTEINE_STANDARD, bausteinProfil, kantenGruppen, flaechenblech, plattenUmriss } from "../kern/flaechenblech.js";
+import { bausteinQuerschnitt } from "../kern/cad/featureBau.js";
 import { MATERIALIEN } from "../kern/materialien.js";
 
 let fehler = 0;
@@ -58,6 +59,23 @@ for (const b of BAUSTEINE_STANDARD) { const p = bausteinProfil(b, m); ok(p.zugab
   pts.splice(3, 1); pts.push([0, 300]);
   const g = kantenGruppen(pts.filter((p, i, a) => !i || Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 1e-6));
   ok(g.length === 4 && g.filter((x) => !x.gerade).length === 1 && g.some((x) => !x.gerade && x.laenge > 700), `Bogen als eine Kante (${g.map((x) => x.laenge.toFixed(0)).join(", ")})`);
+}
+// Platte bis zum Biegebeginn: die ebene Fläche wird an Kanten mit Baustein um das Mass bis zur ersten Biegung gekürzt
+{
+  const flaeche = (q) => Math.abs(q.reduce((s, p, i) => s + (p[0] * q[(i + 1) % q.length][1] - q[(i + 1) % q.length][0] * p[1]), 0) / 2);
+  const rect = [[0, 0], [1000, 0], [1000, 500], [0, 500]], g = kantenGruppen(rect), x = bausteinQuerschnitt(B.ortgang, m), d = -x.xFlach;
+  ok(d > 0.5 && d < 3, `Biegebeginn liegt ${d.toFixed(2)} mm innerhalb der gezeichneten Kante`);
+  const einKante = plattenUmriss(rect, g, g.map((_, k) => (k === 0 ? d : 0)));
+  ok(nah(flaeche(einKante), 1000 * (500 - d), 1e-6) && nah(einKante[0][1], d, 1e-9) && nah(einKante[1][1], d, 1e-9) && nah(einKante[0][0], 0, 1e-9), `Eine Kante gekürzt: Fläche ${flaeche(einKante).toFixed(2)} = 1000 × (500 − ${d.toFixed(2)})`);
+  const alle = plattenUmriss(rect, g, g.map(() => d));
+  ok(nah(flaeche(alle), (1000 - 2 * d) * (500 - 2 * d), 1e-6), "Alle vier Kanten gekürzt: Ecken verschnitten, Rechteck schrumpft rundum");
+  ok(plattenUmriss(rect, g, g.map(() => 0)) === rect, "Ohne Baustein bleibt der Umriss unverändert");
+  const R = 200, kreis = Array.from({ length: 64 }, (_, i) => [R * Math.cos((2 * Math.PI * i) / 64), R * Math.sin((2 * Math.PI * i) / 64)]), gk = kantenGruppen(kreis);
+  const rund = plattenUmriss(kreis, gk, gk.map(() => d)), r1 = Math.hypot(...rund[0]), r2 = Math.hypot(...rund[10]);
+  ok(gk.length === 1 && nah(r1, (R - d / Math.cos(Math.PI / 64)) * 1, 0.02) && nah(r1, r2, 1e-9), `Runde Kante: Radius ${r1.toFixed(3)} statt ${R} (rundum gleichmässig gekürzt)`);
+  // L-förmiges Blech (einspringende Ecke): nur die Kante mit Baustein wird gekürzt, der Rest bleibt
+  const L = [[0, 0], [600, 0], [600, 200], [200, 200], [200, 500], [0, 500]], gl = kantenGruppen(L), u = plattenUmriss(L, gl, gl.map((_, k) => (k === 0 ? d : 0)));
+  ok(nah(flaeche(u), flaeche(L) - 600 * d, 1e-6), "L-Blech: nur die untere Kante gekürzt (Fläche −600 × d), einspringende Ecke unberührt");
 }
 console.log(fehler ? `${fehler} Fehler im Flächenblech` : "Flächenblech: alle Tests bestanden");
 process.exit(fehler ? 1 : 0);
