@@ -1,5 +1,5 @@
 // Tests: Umformung (Werte aus tests/test_forming.py des Fusion-Add-ins)
-import { scheibeMitRand, kragen, kegelstumpf, beurteilen, zuschnitt } from "../kern/umformung.js";
+import { scheibeMitRand, kragen, kegelstumpf, beurteilen, zuschnitt, zuschnittDxf } from "../kern/umformung.js";
 let fehler = 0; const ok = (b, t) => { if (!b) { fehler++; console.error("✗", t); } else console.log("✓", t); };
 const nah = (a, b, t = 1e-9) => Math.abs(a - b) < t, wirft = (f) => { try { f(); return false; } catch { return true; } };
 const e = scheibeMitRand(100, 20);
@@ -16,4 +16,6 @@ const kb = beurteilen(kragen(10, 15), "auto", {}); ok(kb.herstellbar === false &
 ok(beurteilen(g, "auto", {}).herstellbar === true, "Kegel: abwickelbar, herstellbar ohne Umformung");
 const z = zuschnitt(e); ok(z.kontur[0][3] === 120 && z.biegelinien[0][3] === 100 && z.grenzen[2] === 120, "Zuschnitt Scheibe: Rohling R120, Biegelinie R100");
 ok(zuschnitt(g).kontur.length === 4 && wirft(() => zuschnitt(kragen(10, 15))) && zuschnitt(kegelstumpf(100, 0, 100)).kontur.length === 3 && wirft(() => zuschnitt({ ...g, mehrteiligNoetig: true })), "Zuschnitt Kegel (Sektor, Spitze ohne Innenbogen), Kragen-Fehler und Mantel über 360° werfen");
+const dx = zuschnittDxf(zuschnitt(e), "Scheibe"), dk = zuschnittDxf(zuschnitt(g), "Kegel");
+ok(/CIRCLE[\s\S]*KONTUR[\s\S]*40\n120\.0000/.test(dx.replace(/\r/g, "")) && dx.includes("BIEGELINIE") && dx.trimEnd().endsWith("EOF") && /ARC/.test(dk) && /LINE/.test(dk) && !dk.includes("BIEGELINIE"), "Zuschnitt-DXF: Scheibe = Kreis R120 + Biegelinie, Kegel = Bögen und Linien");
 if (fehler) { console.error(fehler + " Fehler"); process.exit(1); } else console.log("Umformung: alle Tests bestanden");

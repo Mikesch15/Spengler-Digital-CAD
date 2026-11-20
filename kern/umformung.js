@@ -67,3 +67,17 @@ export function zuschnitt(e) {
   }
   throw new Error("Unbekannter Fall");
 }
+
+// Zuschnitt als DXF (mm, Blechmitte): Layer KONTUR (weiss/schwarz) und BIEGELINIE (blau), Titel als Text; Elemente wie bei zuschnitt()
+export function zuschnittDxf(z, titel = "Zuschnitt") {
+  const f = (v) => (+v).toFixed(4), out = ["0", "SECTION", "2", "ENTITIES"];
+  const el = (e, lage, farbe) => {
+    if (e[0] === "kreis") out.push("0", "CIRCLE", "8", lage, "62", farbe, "10", f(e[1]), "20", f(e[2]), "30", "0", "40", f(e[3]));
+    else if (e[0] === "bogen") out.push("0", "ARC", "8", lage, "62", farbe, "10", f(e[1]), "20", f(e[2]), "30", "0", "40", f(e[3]), "50", f(e[4]), "51", f(e[5]));
+    else out.push("0", "LINE", "8", lage, "62", farbe, "10", f(e[1]), "20", f(e[2]), "30", "0", "11", f(e[3]), "21", f(e[4]), "31", "0");
+  };
+  z.kontur.forEach((e) => el(e, "KONTUR", "7")); z.biegelinien.forEach((e) => el(e, "BIEGELINIE", "5"));
+  const txt = `${titel}  ${z.beschreibung}`.replace(/[^\x20-\x7e]/g, (c) => ({ ä: "ae", ö: "oe", ü: "ue", Ä: "Ae", Ö: "Oe", Ü: "Ue", ß: "ss", "–": "-", "Ø": "D" })[c] || "?");
+  out.push("0", "TEXT", "8", "TEXT", "10", "0", "20", f(z.grenzen[1] - 20), "30", "0", "40", "6.00", "1", txt, "0", "ENDSEC", "0", "EOF");
+  return out.join("\n") + "\n";
+}

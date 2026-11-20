@@ -14,7 +14,7 @@ import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geom
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf, rundblechDxf } from "../kern/dxf.js";
-import { scheibeMitRand, kragen, kegelstumpf, beurteilen, zuschnitt, VERFAHREN } from "../kern/umformung.js";
+import { scheibeMitRand, kragen, kegelstumpf, beurteilen, zuschnitt, zuschnittDxf, VERFAHREN } from "../kern/umformung.js";
 import { rundblechAbwicklung, rundblechSvg } from "../kern/abwicklungRund.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
@@ -4110,6 +4110,7 @@ $("wSweep").onclick = () => { if (dlg) $("dAbbrechen").click(); sweepDialog(); }
 $("wFlaeche").onclick = () => { if (dlg) $("dAbbrechen").click(); flaecheDialog(); };
 $("wRund").onclick = () => { if (dlg) $("dAbbrechen").click(); rundDialog(); };
 // Rundblech beurteilen: Scheibe mit Rand / Kragen / Kegel – konstruierbar, abwickelbar, herstellbar (wie im Fusion-Add-in)
+let umformLetzt = null; // letzter berechneter Zuschnitt für den DXF-Knopf
 let umformWerte = { fall: "scheibe", r: 100, h: 20, winkel: 90, r2: 50, verfahren: "auto", material: null };
 function umformDialog() {
   const w = umformWerte; w.material ||= neuMaterial();
@@ -4120,10 +4121,10 @@ function umformDialog() {
     return { e, b, z, zf };
   };
   const html = () => {
-    const r = rechne(); if (r.fehler) return `<p class="fehler">⚠ ${esc(r.fehler)}</p>`;
+    const r = rechne(); umformLetzt = r.z ? { z: r.z, fall: w.fall } : null; if (r.fehler) return `<p class="fehler">⚠ ${esc(r.fehler)}</p>`;
     const ja = (v) => v === true ? "ja" : v === false ? "nein" : "nicht beurteilbar", { e, b } = r;
     return `<table class="zeilen"><tbody><tr><td>konstruierbar</td><td><b>ja</b></td></tr><tr><td>abwickelbar</td><td><b>${ja(e.abwickelbar)}</b></td></tr><tr><td>herstellbar</td><td><b>${ja(b.herstellbar)}</b></td></tr></tbody></table>
-      ${r.z ? `<p>${esc(r.z.beschreibung)}</p>` : `<p class="hinweis">${esc(r.zf)}</p>`}<ul>${b.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>`;
+      ${r.z ? `<p>${esc(r.z.beschreibung)}</p><div class="reihe ohnerand"><button class="knopf" id="uDxf">Zuschnitt als DXF speichern</button></div>` : `<p class="hinweis">${esc(r.zf)}</p>`}<ul>${b.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>`;
   };
   const felder = () => [
       { id: "fall", label: "Fall", optionen: [["scheibe", "Scheibe mit aufgebogenem Rand"], ["kragen", "Kragen an rundem Ausschnitt"], ["kegel", "Kegelstumpf / Zylinder"]], wert: w.fall },
@@ -4142,6 +4143,7 @@ function umformDialog() {
     ok: () => {},
   });
 }
+$("dInhalt").addEventListener("click", (e) => { if (e.target.id === "uDxf" && umformLetzt) herunterladen(`Rundblech ${umformLetzt.fall} Zuschnitt.dxf`, zuschnittDxf(umformLetzt.z, "Rundblech " + umformLetzt.fall), "application/dxf"); });
 $("wUmform").onclick = () => { if (dlg) $("dAbbrechen").click(); umformDialog(); };
 $("wBlechAufFlaeche").onclick = () => blechAufFlaecheStart();
 $("wKehle").onclick = () => { if (dlg) $("dAbbrechen").click(); kehleDialog(); };
@@ -4258,6 +4260,7 @@ $("wOeffnen").onclick = projektOeffnen;
 // ------------------------------------------------------------ Konto & Cloud (Spengler-Digital-App)
 const cloud = cloudModul({
   esc, status, getEinst: () => einst, setEinst: (e) => { einst = e; if (entwurf) entwurf = JSON.parse(JSON.stringify(einst)); }, einstSpeichern, getDoc: () => doc, regen,
+  setzeAuftrag: ({ nr, objekt, appProjekt }) => { doc.nr = nr; doc.objekt = objekt; doc.appProjekt = appProjekt; $("aNr").value = nr; $("aObjekt").value = objekt; speichern(); },
   projektText: () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v)), ladeProjektText: (x) => ladeProjekt(x),
   neuZeichnen: () => { if (!$("einst").hidden && einstRegister === "konto") zeigeEinst(); },
   teile: () => blechteile().filter((f) => f._res).map((f) => ({ f, res: f._res, mat: material(f.material) })),

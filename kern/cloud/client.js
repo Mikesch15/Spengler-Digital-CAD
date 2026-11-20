@@ -68,6 +68,8 @@ export class CloudClient {
   // Speichern nur auf der erwarteten Version; null = jemand anderes war schneller (Konflikt)
   async projektSpeichern(id, erwartet, { name, auftrag, daten, geloescht = false }) { const r = await this._mitToken(`/rest/v1/cad_projekte?id=eq.${id}&version=eq.${erwartet}`, { methode: "PATCH", kopf: { Prefer: "return=representation" }, body: { name, auftrag, daten, version: erwartet + 1, geloescht } }); return r?.[0] || null; }
   // ---- Verbindung zur Spengler-Digital-App ----
+  // Projekte der App (Tabelle projects): Auftragsnummer = order_no
+  async appProjekte() { return this._mitToken("/rest/v1/projects?select=id,name,order_no,customer,object,status,updated_at&archived=eq.false&order=updated_at.desc&limit=300"); }
   // CAD → App: Zuschnittteile (Tabelle cad_teile); die App übernimmt sie in die Aufmasse des Projekts (Auftrag)
   async teileSenden(auftrag, teile) {
     // Spalten laut Tabelle cad_teile: Textspalten sind NOT NULL (leer statt null), Längen begrenzt, company_id kommt vom Server (my_company_id())

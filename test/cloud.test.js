@@ -36,6 +36,7 @@ function server({ darf = true, offline = false } = {}) {
       if (m === "POST") { const z = { id: "p" + (s.proj.length + 1), ...body, besitzer: "u1" }; s.proj.push(z); return antwort(201, [z]); }
       if (m === "PATCH") { const z = s.proj.find((x) => x.id === q.get("id").slice(3) && x.version === +q.get("version").slice(3)); if (!z) return antwort(200, []); Object.assign(z, body); return antwort(200, [z]); }
     }
+    if (p === "/rest/v1/projects") return antwort(200, [{ id: 7, name: "Dach Müller", order_no: "2026-114", customer: "Müller AG", object: "Haus 3", status: "offen", updated_at: "x" }]);
     if (p === "/rest/v1/cad_teile" && m === "POST") { s.teile = (s.teile || []).concat(body); return antwort(201, body); }
     if (p === "/rest/v1/cad_profil_auftraege") {
       s.pa = s.pa || [{ id: "a1", status: "offen", titel: "Ortbrett", laenge_mm: 3000, stueck: 2, project_id: "pr1", daten: { schenkel: [] } }];
@@ -101,6 +102,7 @@ ok((await cp.projektSpeichern(p1.id, 1, { name: "x", auftrag: null, daten: {} })
 ok((await cp.projektLaden(p1.id)).daten.teile.length === 3, "Konfliktversuch hat die Cloud-Fassung nicht verändert");
 await cp.projektSpeichern(p1.id, 2, { name: "Dach Müller", auftrag: "2026-114", daten: {}, geloescht: true }); ok((await cp.projekte()).length === 0, "Löschen = geloescht (verschwindet aus der Liste)");
 // App-Verbindung
+const ap = await cp.appProjekte(); ok(ap.length === 1 && ap[0].order_no === "2026-114" && ap[0].id === 7, "Projekte der App lesen (projects: id, name, order_no, customer)");
 const tr = await cp.teileSenden("2026-114", [{ name: "Ortbrett", material: "Zink 0.7", staerke: 0.7, breite: 333, laenge: 3000, stueck: 2, vorlage: "Freies Profil", appData: { schenkel: [] } }]);
 ok(sv.teile.length === 1 && sv.teile[0].auftrag === "2026-114" && sv.teile[0].zuschnitt_breite_mm === 333 && !("company_id" in sv.teile[0]) && sv.teile[0].teil_nr === 1 && sv.teile[0].dokument === "" && sv.teile[0].addin_version === "Spengler Digital CAD" && sv.teile[0].operationen.length === 0, "Teile an die App senden (cad_teile: Auftrag, Zuschnitt, Stück)");
 const pau = await cp.profilAuftraege(); ok(pau.length === 1 && pau[0].titel === "Ortbrett", "Offene Profilaufträge der App lesen");
