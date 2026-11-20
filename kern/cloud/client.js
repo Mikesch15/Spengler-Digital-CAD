@@ -55,4 +55,22 @@ export class CloudClient {
   async anlegen(typ, id, daten, schemaVersion) { const r = await this._mitToken("/rest/v1/cad_daten", { methode: "POST", kopf: { Prefer: "return=representation" }, body: { company_id: this.sitzung.firma, typ, record_id: id, daten, version: 1, schema_version: schemaVersion, geloescht: false } }); return r?.[0]; }
   // optimistische Sperre: nur wenn die Cloud noch die erwartete Version hat; [] = Konflikt
   async aendern(typ, id, erwartet, daten, schemaVersion, geloescht = false) { const r = await this._mitToken(`/rest/v1/cad_daten?company_id=eq.${this.sitzung.firma}&typ=eq.${typ}&record_id=eq.${encodeURIComponent(id)}&version=eq.${erwartet}`, { methode: "PATCH", kopf: { Prefer: "return=representation" }, body: { daten, version: erwartet + 1, schema_version: schemaVersion, geloescht } }); return r?.[0] || null; }
+  // ---- Cloud-Projekte (cad_projekte) ----
+  async projekte({ auftrag = null, nurMeine = false } = {}) {
+    const f = [`company_id=eq.${this.sitzung.firma}`, "geloescht=eq.false"]; if (auftrag) f.push(`auftrag=eq.${encodeURIComponent(auftrag)}`); if (nurMeine) f.push(`besitzer=eq.${this.sitzung.benutzerId}`);
+    return this._mitToken(`/rest/v1/cad_projekte?select=id,auftrag,name,version,besitzer,erstellt,geaendert,geaendert_von&${f.join("&")}&order=geaendert.desc`);
+  }
+  async projektLaden(id) { const r = await this._mitToken(`/rest/v1/cad_projekte?select=*&id=eq.${id}`); if (!r?.[0]) throw new CloudFehler("Projekt nicht gefunden.", 404, "server"); return r[0]; }
+  async projektAnlegen({ name, auftrag = null, daten }) { const r = await this._mitToken("/rest/v1/cad_projekte", { methode: "POST", kopf: { Prefer: "return=representation" }, body: { company_id: this.sitzung.firma, name, auftrag, daten, version: 1, schema_version: 1, geloescht: false } }); return r?.[0]; }
+  // Speichern nur auf der erwarteten Version; null = jemand anderes war schneller (Konflikt)
+  async projektSpeichern(id, erwartet, { name, auftrag, daten, geloescht = false }) { const r = await this._mitToken(`/rest/v1/cad_projekte?id=eq.${id}&version=eq.${erwartet}`, { methode: "PATCH", kopf: { Prefer: "return=representation" }, body: { name, auftrag, daten, version: erwartet + 1, geloescht } }); return r?.[0] || null; }
+  // ---- Verbindung zur Spengler-Digital-App ----
+  // CAD → App: Zuschnittteile (Tabelle cad_teile); die App übernimmt sie in die Aufmasse des Projekts (Auftrag)
+  async teileSenden(auftrag, teile) {
+    const zeilen = teile.map((t, i) => ({ company_id: this.sitzung.firma, auftrag, teil_nr: t.nr ?? i + 1, teil_label: t.label ?? null, name: t.name, material_name: t.material ?? null, staerke_mm: t.staerke ?? null, zuschnitt_breite_mm: t.breite ?? null, zuschnitt_laenge_mm: t.laenge ?? null, stueck: t.stueck ?? 1, vorlage_name: t.vorlage ?? null, dokument: t.dokument ?? null, project_id: t.projectId ?? null, app_data: t.appData ?? null }));
+    return this._mitToken("/rest/v1/cad_teile", { methode: "POST", kopf: { Prefer: "return=representation" }, body: zeilen });
+  }
+  // App → CAD: offene Profilaufträge (z. B. Aufmass-Profile, die im CAD gebaut werden sollen)
+  async profilAuftraege(projektId = null) { return this._mitToken(`/rest/v1/cad_profil_auftraege?select=*&status=eq.offen${projektId ? `&project_id=eq.${projektId}` : ""}&order=created_at.desc`); }
+  async profilAuftragGebaut(id) { const r = await this._mitToken(`/rest/v1/cad_profil_auftraege?id=eq.${id}&status=eq.offen`, { methode: "PATCH", kopf: { Prefer: "return=representation" }, body: { status: "gebaut", gebaut_am: new Date().toISOString() } }); return r?.[0] || null; }
 }

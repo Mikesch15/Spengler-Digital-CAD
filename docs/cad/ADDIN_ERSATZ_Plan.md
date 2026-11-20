@@ -39,3 +39,10 @@ Stand 20.11.2026. Grundlage: Repo `spengler-fusion-addin` (Version 0.4.7, nur ge
 ## Grenzen
 - Von der Sandbox aus ist die Supabase-Adresse **nicht erreichbar**: Anmeldung und Abgleich kann ich nur gegen einen Nachbau testen; echt testest du.
 - Das Add-in ist selbst nur teilweise in Fusion geprüft; was dort «TEIL/NEIN» ist, übernehme ich nicht als fertig.
+
+## Stand 20.11.2026 (Fortschritt)
+- **Phase 1 fertig:** `kern/vorlagen/` (Modelle, Kurzschrift mit Parametern, Wandler Baustein⇄Kantenvorlage, Material⇄Materialprofil), `test/vorlagen.test.js`.
+- **Phase 2 Kern fertig:** `kern/cloud/client.js` (Anmeldung Name/E-Mail, Refresh, Recht `vorlagen edit`, `cad_daten`), `kern/cloud/abgleich.js` (Verfahren wie Add-in: optimistische Sperre, Konfliktkopie, nie endgültig löschen, nur-lokal ohne Recht). Getestet nur gegen Server-Nachbau (`test/cloud.test.js`); echter Supabase-Test steht aus (Sandbox erreicht den Server nicht).
+- **Phase 3 Kern fertig:** `docs/cad/cad_projekte.sql` (vom Besitzer in Supabase auszuführen), Client für Cloud-Projekte, `cad_teile` (CAD→App) und `cad_profil_auftraege` (App→CAD, Projekt = Auftragsnummer).
+- **Noch offen:** Oberfläche (Konto, Abgleich, Projektliste, SPENGLER-Register im Add-in-Design), Add-in-Funktionen (Parameter-Vorlagen mit Vorschau, Sicherung/Papierkorb, Selbsttest, Rundblech-Beurteilung), 3D-Detailvorlagen als exakte Körper/STEP.
+- Nutzerentscheide: Standardbausteine/-materialien bleiben Startbestand; Cloud-Projekte über `cad_projekte`; App-Repo nur lesend.

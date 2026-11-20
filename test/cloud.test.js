@@ -25,6 +25,19 @@ function server({ darf = true, offline = false } = {}) {
       if (m === "POST") { if (!s.darf) return antwort(403, { message: "RLS" }); if (zeilen.some((z) => z.typ === body.typ && z.record_id === body.record_id)) return antwort(409, { message: "duplicate" }); const z = { ...body }; zeilen.push(z); return antwort(201, [z]); }
       if (m === "PATCH") { if (!s.darf) return antwort(403, { message: "RLS" }); const id = decodeURIComponent(q.get("record_id").slice(3)), v = +q.get("version").slice(3), z = zeilen.find((x) => x.record_id === id && x.typ === q.get("typ").slice(3) && x.version === v); if (!z) return antwort(200, []); Object.assign(z, body); return antwort(200, [z]); }
     }
+    if (p === "/rest/v1/cad_projekte") {
+      s.proj = s.proj || [];
+      if (m === "GET") { let r = s.proj.filter((x) => !x.geloescht); const id = q.get("id"); if (id) r = s.proj.filter((x) => x.id === id.slice(3)); const au = q.get("auftrag"); if (au) r = r.filter((x) => x.auftrag === decodeURIComponent(au.slice(3))); return antwort(200, r.map((x) => ({ ...x }))); }
+      if (!s.darf) return antwort(403, {});
+      if (m === "POST") { const z = { id: "p" + (s.proj.length + 1), ...body, besitzer: "u1" }; s.proj.push(z); return antwort(201, [z]); }
+      if (m === "PATCH") { const z = s.proj.find((x) => x.id === q.get("id").slice(3) && x.version === +q.get("version").slice(3)); if (!z) return antwort(200, []); Object.assign(z, body); return antwort(200, [z]); }
+    }
+    if (p === "/rest/v1/cad_teile" && m === "POST") { s.teile = (s.teile || []).concat(body); return antwort(201, body); }
+    if (p === "/rest/v1/cad_profil_auftraege") {
+      s.pa = s.pa || [{ id: "a1", status: "offen", titel: "Ortbrett", laenge_mm: 3000, stueck: 2, project_id: "pr1", daten: { schenkel: [] } }];
+      if (m === "GET") return antwort(200, s.pa.filter((x) => x.status === "offen"));
+      const z = s.pa.find((x) => x.id === q.get("id").slice(3) && x.status === "offen"); if (!z) return antwort(200, []); Object.assign(z, body); return antwort(200, [z]);
+    }
     return antwort(404, {});
   };
   return s;
@@ -71,6 +84,21 @@ let sp3 = speicher(); sp3.d.kantenvorlage.set(k1.id, k1);
 b = await abgleichen(c3, sp3); ok(b.nur_lokal && b.geladen === 1 && b.hochgeladen === 0 && sv.zeilen.length === 1 && sp3.d.materialprofil.get("mat-x").version === 3, "Ohne Recht «vorlagen edit»: nur herunterladen, nichts hochladen, Bericht «nur lokal»");
 // Offline
 sv.offline = true; fe = null; try { await abgleichen(c3, sp3); } catch (e) { fe = e; } ok(fe?.art === "netz" && sp3.d.kantenvorlage.size === 1, "Offline: Fehler «netz», lokale Daten unverändert");
+// Cloud-Projekte
+sv = server(); const cp = kunde(sv); await cp.anmelden("Max.Muster", "geheim");
+const p1 = await cp.projektAnlegen({ name: "Dach Müller", auftrag: "2026-114", daten: { teile: [1, 2] } });
+ok(p1.version === 1 && (await cp.projekte()).length === 1 && (await cp.projekte({ auftrag: "2026-114" })).length === 1 && (await cp.projekte({ auftrag: "x" })).length === 0, "Cloud-Projekt anlegen, nach Auftragsnummer filtern");
+ok((await cp.projektLaden(p1.id)).daten.teile.length === 2, "Cloud-Projekt laden");
+const s2 = await cp.projektSpeichern(p1.id, 1, { name: "Dach Müller", auftrag: "2026-114", daten: { teile: [1, 2, 3] } });
+ok(s2.version === 2, "Speichern erhöht die Version");
+ok((await cp.projektSpeichern(p1.id, 1, { name: "x", auftrag: null, daten: {} })) === null, "Veraltete Version → null (Konflikt erkannt, nichts überschrieben)");
+ok((await cp.projektLaden(p1.id)).daten.teile.length === 3, "Konfliktversuch hat die Cloud-Fassung nicht verändert");
+await cp.projektSpeichern(p1.id, 2, { name: "Dach Müller", auftrag: "2026-114", daten: {}, geloescht: true }); ok((await cp.projekte()).length === 0, "Löschen = geloescht (verschwindet aus der Liste)");
+// App-Verbindung
+const tr = await cp.teileSenden("2026-114", [{ name: "Ortbrett", material: "Zink 0.7", staerke: 0.7, breite: 333, laenge: 3000, stueck: 2, vorlage: "Freies Profil", appData: { schenkel: [] } }]);
+ok(sv.teile.length === 1 && sv.teile[0].auftrag === "2026-114" && sv.teile[0].zuschnitt_breite_mm === 333 && sv.teile[0].company_id === "f1" && sv.teile[0].teil_nr === 1, "Teile an die App senden (cad_teile: Auftrag, Zuschnitt, Stück)");
+const pau = await cp.profilAuftraege(); ok(pau.length === 1 && pau[0].titel === "Ortbrett", "Offene Profilaufträge der App lesen");
+ok((await cp.profilAuftragGebaut("a1")).status === "gebaut" && (await cp.profilAuftraege()).length === 0 && (await cp.profilAuftragGebaut("a1")) === null, "Profilauftrag als «gebaut» melden (nur einmal)");
 // Prüfsumme ignoriert version/modified/_-Felder
 const h1 = await pruefsumme({ a: 1, version: 1, modified: "x", _z: 5 }), h2 = await pruefsumme({ version: 9, a: 1, modified: "y" });
 ok(h1 === h2 && h1 !== (await pruefsumme({ a: 2 })), "Prüfsumme ignoriert version, modified und «_»-Felder");
