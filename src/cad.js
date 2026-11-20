@@ -9,6 +9,9 @@ import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../ke
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
+import { cadKlient } from "../kern/cad/klient.js";
+import { blechTeilKommando } from "../kern/cad/featureBau.js";
+import { zuschnittAusVolumen } from "../kern/cad/blech.js";
 import { dxfLesen } from "../kern/dxflesen.js";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
 import schriftDaten from "three/examples/fonts/droid/droid_sans_bold.typeface.json";
@@ -106,7 +109,7 @@ const standardEinst = () => JSON.parse(JSON.stringify({
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
   druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
   etiketten: { spalten: 3, zeilen: 8, breite: 70, hoehe: 37, oben: 0, links: 0, abstandX: 0, abstandY: 0 }, // mm
-  programm: { darstellung: "auto", updates: true, zuletzt: 8 },
+  programm: { darstellung: "auto", updates: true, zuletzt: 8, kern: "netz" },      // kern: "netz" (wie 0.2) | "occt" (exakter CAD-Kern, Beta)
 }));
 const GRUPPEN = ["neu", "skizze", "anzeige", "druck", "etiketten", "programm"];
 // Gespeicherte oder geladene Einstellungen über die Standardwerte legen (neue Werte bekommen ihren Standard)
@@ -753,13 +756,15 @@ function regen() {
         // Abrundung der Skizze → Radius auf der Blechmitte (Innenseite kleiner) → Innenradius der Biegung
         const riAn = (i) => (radien[i] > 0 ? Math.max(radien[i] - d * Math.sign(drehung(k, i)) - m.t / 2, 0) : null);
         f._res = blechAusKette(kk, m, riAn);
+        f._kernLage = { ebene: E_(s.ebene), versatz: kk[0] }; // für den exakten CAD-Kern (gleiche Lage wie das Anzeige-Netz)
         if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, kk[0])], s.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id));
       } else if (f.typ === "vorlage") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         const m = material(f.material), v = VORLAGE[f.vorlage];
         const { start, ops } = v.bau(f.params, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id));
+        f._kernLage = null;
+        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id)); }
       } else if (f.typ === "flaeche") {
         f._bleche = null; f._teile = null;
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
@@ -783,7 +788,8 @@ function regen() {
         if (f.zeilen.some((z) => !(z.L > 0))) throw new Error("Jeder Schenkel braucht eine Länge grösser als 0");
         const { start, ops } = freiesProfil(f.start, f.zeilen, m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, daneben(f._res))], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id));
+        f._kernLage = null;
+        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id)); }
       }
     } catch (e) { f._fehler = e.message; }
   }
@@ -1057,6 +1063,7 @@ function zeigeWerkstatt() {
     <div class="unter">${esc(f.name)} · ${r.biegungen.length} Biegungen${r.hatRundung ? "" : ` · Summe Schenkel ${r.summeSchenkel.toFixed(0)} mm`}</div>
     ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
     <div class="zeichnung">${profilSvg(r, { dicke: m.t, breite: 276, hoehe: 200, schrift: 11 })}${abwicklungSvg(r, { breite: 276, schrift: 10 })}</div>
+    ${kernAn() && f._kernLage ? '<div class="reihe ohnerand"><button class="knopf klein" id="k3D" title="Exakten 3D-Körper im CAD-Kern bauen und den Zuschnitt daraus mit der Abwicklung vergleichen">3D-Prüfung (exakt)</button><span id="k3DErg" class="hinweis"></span></div>' : ""}
     <div class="quelle">${q ? `Aus <b>${q.art} ${q.breite}${q.laenge ? " × " + q.laenge : ""} mm</b> · Rest ${f1(q.rest)} mm` : "Breiter als alle Lagerformate"}</div>
     <table class="liste"><thead><tr><th>Biegung</th><th class="num" title="Anschlag ab Kante A${abB ? ", darunter ab Kante B (Blech gewendet)" : ""}">Anschlag ${abB ? 'A<br><span class="abb">ab B</span>' : "ab A"}</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
     ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span> ${b.art === "Abkanten" ? "" : b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : `${f1(b.pos)}${abB ? `<br><span class="abb">${f1(r.zuschnitt - b.pos)}</span>` : ""}`}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
@@ -1070,6 +1077,7 @@ function zeigeWerkstatt() {
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, f.laenge, f.name), "application/dxf");
   $("kDruck").onclick = () => drucke([f]);
   $("kKopie").onclick = () => dupliziere(f.eltern || f);
+  if ($("k3D")) $("k3D").onclick = () => pruefe3D(f, $("k3DErg"));
   if ($("kZumDetail")) $("kZumDetail").onclick = () => waehle(f.eltern.id);
   if ($("kEigene")) $("kEigene").onclick = () => {
     const v = { name: f.name, start: f.start, zeilen: JSON.parse(JSON.stringify(f.zeilen)) }, i = einst.vorlagen.findIndex((x) => x.name === f.name);
@@ -2683,6 +2691,9 @@ function zeigeEinst() {
     programm: `
     <h4>Darstellung</h4>
     <div class="egitter">${einstFeld("programm.darstellung", "Farben", "wahl", [["auto", "Wie das Gerät"], ["hell", "Hell"], ["dunkel", "Dunkel"]])}</div>
+    <h4>Exakter CAD-Kern (Beta)</h4>
+    <div class="egitter">${einstFeld("programm.kern", "CAD-Kern", "wahl", [["netz", "Aus – wie Version 0.2"], ["occt", "Ein – OpenCascade 8.0 (Beta)"]])}</div>
+    <p class="hinweis">Ein: exakter STEP-Export (B-Rep, AP242) für Blechteile und 3D-Prüfung des Zuschnitts in der Werkstatt. Lädt beim ersten Gebrauch einmalig ~7 MB; braucht die Web-Version oder das PC-Programm (nicht als Datei per Doppelklick). Lizenz: OpenCascade LGPL 2.1, Hinweise im Ordner «cad/LIZENZEN».</p>
     <h4>PC-Programm</h4>
     ${pc ? `<div class="egitter">
       ${einstFeld("programm.updates", "Beim Start nach Updates suchen", "janein")}
@@ -2818,7 +2829,7 @@ $("eOk").onclick = () => {
   if (bFalsch) { einstRegister = "bausteine"; zeigeEinst(); return meldung(`Baustein «${bFalsch.name || "ohne Namen"}»: Name und gültige Abkantfolge nötig (z. B. «90 25 U+ 7»).`); }
   if (fehler) { einstRegister = fehler[0]; zeigeEinst(); return meldung(fehler[1]); }
   einst = entwurf; entwurf = null; $("einst").hidden = true;
-  einstSpeichern(); darstellung();
+  einstSpeichern(); darstellung(); kernAnzeige();
   regen(); status("Einstellungen gespeichert. Alle Teile neu berechnet.");
 };
 
@@ -4011,6 +4022,66 @@ async function projektOeffnen() {
 }
 $("wSpeichern").onclick = () => projektSpeichern();
 $("wOeffnen").onclick = projektOeffnen;
+// ------------------------------------------------------------ Exakter CAD-Kern (Beta): OpenCascade im Web Worker (kern/cad)
+// Schalter in den Einstellungen (Standard aus = Version 0.2). Die Anzeige bleibt vorerst das Netz; der Kern liefert exakte
+// Körper für STEP und Prüfungen. Fällt er aus, bleibt alles andere unverändert nutzbar.
+let cadK = null;
+const kernAn = () => einst.programm.kern === "occt";
+function kern() {
+  if (!cadK) {
+    cadK = cadKlient({ workerUrl: new URL("./cad/cad-worker.js", location.href).href, wasmUrl: new URL("./cad/replicad_single.wasm", location.href).href });
+    cadK.on("status", (s) => status(s.status === "laden" ? "Exakter CAD-Kern wird geladen (einmalig ~7 MB) …" : `Exakter CAD-Kern bereit (${(s.ms / 1000).toFixed(1)} s).`));
+  }
+  return cadK;
+}
+function kernAnzeige() {
+  const b = $("wStepExakt"); if (b) b.hidden = !kernAn();
+  if (!kernAn() && cadK) { cadK.beenden(); cadK = null; }
+}
+const kernFehlerText = (e) => e?.code === "NICHT_GELADEN" ? `Der CAD-Kern konnte nicht geladen werden (${e.message}). Web-Version oder PC-Programm verwenden; alles andere funktioniert weiter.` : `CAD-Kern: ${e?.message ?? e}`;
+// Exakter Körper eines Blechteils (Vorlage, freies Profil, Blech aus Linienzug) – gleiche Lage wie das Anzeige-Netz
+async function exaktKoerper(f) {
+  const m = material(f.material);
+  const { kommando, soll } = blechTeilKommando({ res: f._res, t: m.t, ebene: f._kernLage.ebene, laenge: f.laenge, richtung: f.richtung, versatz: f._kernLage.versatz });
+  const { id } = await kern().ausfuehren(kommando);
+  return { id, soll, m };
+}
+function exakteTeile() {
+  const teile = [], fehlen = [];
+  for (const f of doc.features) {
+    if (f._aus || f.versteckt || f._fehler) continue;
+    if (["vorlage", "profil", "blech"].includes(f.typ) && f._res && f._kernLage) { if (lageVon(f)) fehlen.push(`${f.name} (Komponentenlage)`); else teile.push(f); }
+    else if (["extrusion", "drehung", "sweep", "loft", "import", "flaeche", "kehle"].includes(f.typ)) fehlen.push(f.name);
+  }
+  return { teile, fehlen };
+}
+async function stepExakt() {
+  const { teile, fehlen } = exakteTeile();
+  if (!teile.length) return status(`STEP exakt: keine Blechteile mit exaktem Bauplan${fehlen.length ? ` (noch nicht exakt: ${fehlen.join(", ")})` : ""}.`);
+  status(`STEP exakt: ${teile.length} Blechteil(e) werden im CAD-Kern gebaut …`);
+  const ids = [];
+  try {
+    for (const f of teile) ids.push((await exaktKoerper(f)).id);
+    const { text } = await kern().ausfuehren({ op: "stepExport", ziele: ids, namen: teile.map((f) => f.name) });
+    herunterladen(dateiBasis() + " (exakt).step", text, "application/step");
+    status(`STEP exakt (B-Rep, AP242): ${teile.length} Blechteil(e)${fehlen.length ? ` · nicht enthalten, da noch kein exakter Bauplan: ${fehlen.join(", ")}` : ""}.`);
+  } catch (e) { status(kernFehlerText(e)); }
+  finally { if (ids.length) kern().ausfuehren({ op: "freigeben", ziele: ids }).catch(() => {}); }
+}
+// Werkstatt: Zuschnitt aus dem exakten 3D-Körper gegen die Abwicklung (V = t · L_Mitte · Länge)
+async function pruefe3D(f, aus) {
+  aus.textContent = "Exakter Körper wird gebaut …"; let id = null;
+  try {
+    const k = await exaktKoerper(f); id = k.id;
+    const e = await kern().ausfuehren({ op: "eigenschaften", ziel: id });
+    const z = zuschnittAusVolumen(e.volumen, k.m.t, f.laenge, k.m.k, k.soll.theta), d = z - f._res.zuschnitt;
+    const gut = e.gueltig && e.geschlossen && Math.abs(d) < 1e-3;
+    aus.textContent = `${gut ? "✓" : "⚠"} Körper ${e.gueltig ? "gültig" : "UNGÜLTIG"} · Zuschnitt aus 3D ${z.toFixed(3)} mm, Abwicklung ${f._res.zuschnitt.toFixed(3)} mm (Δ ${d.toFixed(4)})`;
+    aus.className = gut ? "hinweis" : "fehler";
+  } catch (e) { aus.textContent = kernFehlerText(e); aus.className = "fehler"; }
+  finally { if (id) kern().ausfuehren({ op: "freigeben", ziele: [id] }).catch(() => {}); }
+}
+
 // ------------------------------------------------------------ Austausch: STEP/STL exportieren, STEP/STL importieren
 function sichtbareKoerper() {
   modell.updateMatrixWorld(true);
@@ -4021,6 +4092,7 @@ function sichtbareKoerper() {
 }
 const dateiBasis = () => `${doc.nr || ""} ${doc.objekt || "Modell"}`.trim().replace(/[\\/:*?"<>|]+/g, "-");
 function exportiere(art) {
+  if (art === "stepExakt") return stepExakt();
   const k = sichtbareKoerper(); if (!k.length) return status("Keine sichtbaren Körper zum Exportieren.");
   if (art === "step") herunterladen(dateiBasis() + ".step", stepDatei(k, { name: doc.objekt || "Modell" }), "application/step");
   else herunterladen(dateiBasis() + ".stl", stlDatei(k, doc.objekt || "Modell"), "model/stl");
@@ -4115,6 +4187,7 @@ if (!doc.features.length) { // Beispiel: Traufblech als Vorlage
 regen();
 auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser(); zeigeWerkstatt();
 ansicht("iso");
+kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
 if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)

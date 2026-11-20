@@ -3,6 +3,7 @@
 import { readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { execFileSync } from "node:child_process";
 
 const url = (p) => new URL(p, import.meta.url);
 const lies = (p) => readFileSync(url(p), "utf8");
@@ -52,4 +53,7 @@ for (const d of ["occt-import-js.js", "occt-import-js.wasm", "license.occt-impor
 mkdirSync(url("./dist/pdfjs/"), { recursive: true });
 for (const d of ["pdf.min.mjs", "pdf.worker.min.mjs"]) cpSync(url(`./node_modules/pdfjs-dist/build/${d}`), url(`./dist/pdfjs/${d}`));
 cpSync(url("./node_modules/pdfjs-dist/LICENSE"), url("./dist/pdfjs/LICENSE"));
+// Exakter CAD-Kern (OpenCascade 8.0 als WebAssembly, Beta): eigener Worker + separate WASM-Datei (LGPL, austauschbar),
+// wird nur geladen, wenn er in den Einstellungen eingeschaltet ist
+execFileSync(process.execPath, [fileURLToPath(url("./kern/cad/bauen.mjs")), fileURLToPath(url("./dist/cad"))], { stdio: "ignore" });
 console.log("index.html gebaut,", (html.length / 1024).toFixed(0), "KB");
