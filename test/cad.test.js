@@ -238,6 +238,24 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   ok(c === CODES.UNGUELTIG || c === CODES.FEHLGESCHLAGEN, `Selbstüberschneidendes Profil → kein Körper (${c})`);
 }
 
+// ---------------------------------------------------------------- 10a App-Features → Kern (Vorbereitung C1)
+{
+  const { blechTeilKommando, kernEbene } = await import("../kern/cad/featureBau.js");
+  const { BASIS } = await import("../kern/ebenen.js");
+  const res = berechne(0, [sch(40), bg(90), sch(60)], zink.t, zink.ri, zink.k);
+  for (const [name, e] of Object.entries(BASIS)) for (const richtung of ["normal", "umgekehrt", "symmetrisch"]) {
+    const { kommando, soll } = blechTeilKommando({ res, t: zink.t, ebene: e, laenge: 500, richtung, versatz: [10, 0] });
+    const k = await eig((await x(kommando)).id);
+    const n = e.n, lo = Math.min(...[0, 1, 2].map((i) => n[i] ? k.grenzen.min[i] * n[i] : Infinity)), hi = Math.max(...[0, 1, 2].map((i) => n[i] ? k.grenzen.max[i] * n[i] : -Infinity));
+    const erw = richtung === "umgekehrt" ? [-500, 0] : richtung === "symmetrisch" ? [-250, 250] : [0, 500];
+    const lage = [0, 1, 2].filter((i) => n[i]).every((i) => nahe(n[i] > 0 ? k.grenzen.min[i] : -k.grenzen.max[i], erw[0], 1e-9, 1e-6));
+    if (!(k.gueltig && nahe(k.volumen, soll.volumen) && lage)) ok(false, `Blechteil Ebene ${name} ${richtung}: V ${k.volumen} / ${soll.volumen}, Grenzen ${JSON.stringify(k.grenzen)}`);
+  }
+  ok(true, "App-Blechteil → Kern: alle 3 Grundebenen × 3 Richtungen gültig, V exakt, Lage entlang der Normalen");
+  let fehlt = null; try { kernEbene({ o: [0, 0, 0], u: [1, 0, 0], v: [0, -1, 0], n: [0, 0, 1] }); } catch (e) { fehlt = e.message; }
+  ok(/rechtshändig/.test(fehlt ?? ""), "Linkshändige Ebene wird abgewiesen (keine gespiegelten Teile)");
+}
+
 // ---------------------------------------------------------------- 10 Speicher: Freigabe und Leckprüfung
 {
   const vorher = (await x({ op: "speicher" })).handles;
