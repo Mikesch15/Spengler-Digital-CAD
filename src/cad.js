@@ -1849,6 +1849,37 @@ function prisma(kont, L, k0, k1, e0 = 0, e1 = 0) { // e0/e1: an der Ecke zurück
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   return nachAussen(g);
 }
+// Gebogene Kante: Bausteinprofil als durchgehende, glatte Fläche entlang des Bogens (keine Einzelteile, keine Nähte)
+function sweepGlatt(kont, pts0, ek, seite) {
+  let q = kont.slice(); if (gleich(q[0], q.at(-1))) q.pop(); if (flaeche(q) < 0) q = q.reverse();
+  const pts = pts0.filter((p, i) => i === 0 || Math.hypot(p[0] - pts0[i - 1][0], p[1] - pts0[i - 1][1]) > 1e-6), n = pts.length, m = q.length;
+  const dirs = pts.slice(1).map((b, i) => { const a = pts[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; });
+  const ringe = pts.map((p, i) => {
+    let d, ofs = () => 0, mf = () => 1;
+    if (i === 0) { d = dirs[0]; ofs = (x) => -x * ek.k0 + (ek.e0 || 0); }
+    else if (i === n - 1) { d = dirs[n - 2]; ofs = (x) => x * ek.k1 - (ek.e1 || 0); }
+    else { const a = dirs[i - 1], b = dirs[i], t = [a[0] + b[0], a[1] + b[1]], L = Math.hypot(...t) || 1; d = [t[0] / L, t[1] / L]; mf = () => 1 / Math.max(0.2, d[0] * a[0] + d[1] * a[1]); }
+    const nx = [d[1], -d[0]];
+    return { d, nx, pos: q.map(([x, y]) => [p[0] + nx[0] * x * mf() + d[0] * ofs(x), p[1] + nx[1] * x * mf() + d[1] * ofs(x), seite * y]) };
+  });
+  const pos = [], nor = [];
+  const tri = (a, b, c, nm) => { // Reihenfolge so, dass die Dreiecksnormale zur vorgegebenen Normale passt
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]], g = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const [A, B, C] = g[0] * nm[0][0] + g[1] * nm[0][1] + g[2] * nm[0][2] < 0 ? [a, c, b] : [a, b, c], [NA, NB, NC] = g[0] * nm[0][0] + g[1] * nm[0][1] + g[2] * nm[0][2] < 0 ? [nm[0], nm[2], nm[1]] : nm;
+    pos.push(...A, ...B, ...C); nor.push(...NA, ...NB, ...NC);
+  };
+  const seitenN = (r, j) => { const [xa, ya] = q[j], [xb, yb] = q[(j + 1) % m], L = Math.hypot(xb - xa, yb - ya) || 1, ex = (yb - ya) / L, ey = -(xb - xa) / L; // 2D-Aussennormale (Profil ccw)
+    return [ex * r.nx[0], ex * r.nx[1], ey * seite]; };
+  for (let i = 0; i + 1 < n; i++) for (let j = 0; j < m; j++) {
+    const r0 = ringe[i], r1 = ringe[i + 1], a0 = r0.pos[j], b0 = r0.pos[(j + 1) % m], a1 = r1.pos[j], b1 = r1.pos[(j + 1) % m], n0 = seitenN(r0, j), n1 = seitenN(r1, j);
+    tri(a0, b0, b1, [n0, n0, n1]); tri(a0, b1, a1, [n0, n1, n1]);
+  }
+  const kappe = (r, vorn) => { const d = r.d, nn = vorn ? [-d[0], -d[1], 0] : [d[0], d[1], 0];
+    for (const [i, j, k] of THREE.ShapeUtils.triangulateShape(q.map(([x, y]) => new THREE.Vector2(x, y)), [])) tri(r.pos[i], r.pos[j], r.pos[k], [nn, nn, nn]); };
+  kappe(ringe[0], true); kappe(ringe[n - 1], false);
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
+  return g;
+}
 // Lage des Blechs zur Skizzenebene: Mitte (Standard), Skizze auf der Vorderseite (Blech dahinter) oder auf der Rückseite
 function blechEbene(id, f, m) {
   const e = E_(id), s = f.sichtseite === -1 ? -1 : 1, dz = f.lage === "vorne" ? -s * m.t / 2 : f.lage === "hinten" ? s * m.t / 2 : 0;
@@ -1874,6 +1905,14 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
       const d = richt(a, b);
       const k0 = i > 1 ? Math.tan(knick(richt(g.punkte[i - 2], a), d) / 2) : ek[k].k0, e0 = i > 1 ? 0 : ek[k].e0 || 0;
       const k1 = i < g.punkte.length - 1 ? Math.tan(knick(d, richt(b, g.punkte[i + 1])) / 2) : ek[k].k1, e1 = i < g.punkte.length - 1 ? 0 : ek[k].e1 || 0;
+      if (!g.gerade && g.punkte.length > 3) { // gebogene Kante: eine durchgehende glatte Fläche statt Einzelteilen
+        if (i === 1) {
+          const sw = sweepGlatt(k2, g.punkte, ek[k], seite); sw.applyMatrix4(B);
+          if (B.determinant() < 0) for (const nm of ["position", "normal"]) { const arr = sw.attributes[nm].array; for (let t = 0; t < arr.length; t += 9) for (let c = 0; c < 3; c++) { const x = arr[t + 3 + c]; arr[t + 3 + c] = arr[t + 6 + c]; arr[t + 6 + c] = x; } } // gespiegelte Basis: Umlaufsinn zurück
+          geos.push(sw);
+        }
+        continue;
+      }
       const geo = prisma(k2, L, k0, k1, e0, e1);
       geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
       geo.applyMatrix4(B); geos.push(nachAussen(geo)); // Basis kann gespiegelt sein: Dreiecke wieder nach aussen

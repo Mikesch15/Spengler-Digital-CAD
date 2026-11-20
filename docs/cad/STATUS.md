@@ -29,7 +29,7 @@ Sweep, Loft, STEP/STL-Import, Kehle/Grat, Skizzentext, Lupe/Detailansicht im Pla
 
 ## Tests (alle grün)
 - `npm test` – 12 Testdateien, darunter `test/cad.test.js` (über 130 Prüfungen) und `test/abwicklungRund.test.js`
-- `tests/app-kern/pruefen.mjs`, `rundblech.mjs`, `plan.mjs`, `cloud.mjs`, `bausteine.mjs` (Parameter-Bausteine, Sicherung), `flaechen.mjs` (Flächenwahl), `flaechen.mjs` prüft auch den Ziehpfeil, `teilen.mjs` (Teilen, Blech-Lage, Löschen-Knopf, Panel zuklappen), `umform.mjs` (Rundblech beurteilen), `detail3d.mjs` (3D-Details, STEP-Import exakt), `browser.mjs` (Browser durchscheinend, Auge), `bedienung.mjs` (Maus, Fang, Fangzeichen), `projekte.mjs` (Projekte der App), `flansch, flaechen.mjs` (Flansch/Umschlag), `bemassung.mjs` (Bemassung Linie zu Linie), `hover.mjs` (Aufleuchten beim Wählen) (Konto & Cloud gegen Server-Nachbau) – App in Chromium, Kern aus und ein
+- `tests/app-kern/pruefen.mjs`, `rundblech.mjs`, `plan.mjs`, `cloud.mjs`, `bausteine.mjs` (Parameter-Bausteine, Sicherung), `flaechen.mjs` (Flächenwahl), `flaechen.mjs` prüft auch den Ziehpfeil, `rundkante.mjs` (glatter Flansch an runder Kante), `teilen.mjs` (Teilen, Blech-Lage, Löschen-Knopf, Panel zuklappen), `umform.mjs` (Rundblech beurteilen), `detail3d.mjs` (3D-Details, STEP-Import exakt), `browser.mjs` (Browser durchscheinend, Auge), `bedienung.mjs` (Maus, Fang, Fangzeichen), `projekte.mjs` (Projekte der App), `flansch, flaechen.mjs` (Flansch/Umschlag), `bemassung.mjs` (Bemassung Linie zu Linie), `hover.mjs` (Aufleuchten beim Wählen) (Konto & Cloud gegen Server-Nachbau) – App in Chromium, Kern aus und ein
 - GitHub: Web-Version, Windows-Installer (Release auf `main`), «CAD-Kern Windows-Nachweis» (Node, Edge, Tauri/WebView2)
 
 ## Nicht getestet
