@@ -16,3 +16,16 @@ r = regionen([...rect(0, 0, 100, 100), [[0, 50], [100, 50]], [[50, 0], [50, 100]
 r = regionen([[[0, 0], [10, 0]], [[10, 0], [10, 10]]]); ok(r.length === 0, "Offener Linienzug: keine Fläche");
 r = regionen([...rect(0, 0, 100, 50), [[0, 0], [100, 50]]]); ok(r.length === 2 && r.every((x) => nah(x.flaeche, 2500)), "Diagonale durch das Rechteck: zwei Dreiecke");
 if (f) { console.error(f + " Fehler"); process.exit(1); } else console.log("Regionen: alle Tests bestanden");
+
+// Freies Linienende knapp neben einer Kreissehne (Vieleck) wird angeschlossen
+{
+  const kreis = (c, r, n = 72) => Array.from({ length: n + 1 }, (_, i) => [c[0] + r * Math.cos((2 * Math.PI * i) / n), c[1] + r * Math.sin((2 * Math.PI * i) / n)]);
+  const pl = (l) => l.slice(1).map((q, i) => [l[i], q]);
+  const quad = [[0, 0], [540, 60], [520, 300], [5, 200]], segs = [...quad.map((q, i) => [q, quad[(i + 1) % 4]]), ...pl(kreis([270, 200], 165))];
+  // Diagonale von der linken Kante bis genau auf den Kreis (echter Kreispunkt, bis ~0.16 mm ausserhalb der Sehne)
+  const ende = [270 + 165 * Math.cos((252.5 * Math.PI) / 180), 200 + 165 * Math.sin((252.5 * Math.PI) / 180)];
+  segs.push([[2.5, 100], ende]);
+  const ohne = regionen(segs, 1e-4).length, mit = regionen(segs, 1e-4, 0.5).length;
+  console.log(mit > ohne ? "✓" : "✗", `Linie endet auf dem Kreis: ohne Anschluss ${ohne} Flächen, mit Anschluss ${mit}`);
+  if (!(mit > ohne)) process.exitCode = 1;
+}

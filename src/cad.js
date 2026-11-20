@@ -294,7 +294,10 @@ function skizzenRegionen(sk) {
   const segs = [];
   for (const el of profilElemente(sk)) for (const l of elGeo(el).linien || []) for (let i = 0; i + 1 < l.length; i++) segs.push([l[i], l[i + 1]]);
   const key = JSON.stringify(segs); let r = REGIONEN.get(key);
-  if (!r) { r = regionen(segs, 1e-4); if (REGIONEN.size > 40) REGIONEN.clear(); REGIONEN.set(key, r); }
+  if (!r) {
+    const xs = segs.flatMap(([a, b]) => [a[0], b[0]]), ys = segs.flatMap(([a, b]) => [a[1], b[1]]), diag = xs.length ? Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) : 0;
+    // Linienenden knapp neben einer Kreis-/Bogensehne werden angeschlossen
+    r = regionen(segs, 1e-4, Math.max(0.05, diag * 1e-3)); if (REGIONEN.size > 40) REGIONEN.clear(); REGIONEN.set(key, r); }
   return r;
 }
 // gewählte Flächen eines Features (f.flaechen = Innenpunkte [u,v]); undefined = ältere Projekte: alle Profile der Skizze
@@ -818,6 +821,70 @@ function uebernimmWahl(e) {
   return true;
 }
 
+// ------------------------------------------------------------ Ziehpfeile (wie in Fusion): Masse im Dialog zusätzlich mit einem Pfeil in der Ansicht ziehen
+const griffGruppe = new THREE.Group(); szene.add(griffGruppe);
+let griffe = [], griffZug = null;
+function griffeFuer(f) {
+  const l = [], mitte = (ms) => { const bb = new THREE.Box3(); ms.forEach((m) => bb.expandByObject(m)); return bb.isEmpty() ? null : bb; };
+  if (f.typ === "extrusion") {
+    const sk = finde(f.skizze); if (!sk) return l;
+    const regs = gewaehlteRegionen(f, sk); let uv;
+    if (regs) { if (!regs.length) return l; uv = regs[0].innen; }
+    else { const p = schleifen(sk).sort((a, b) => Math.abs(flaeche(b)) - Math.abs(flaeche(a)))[0]; if (!p) return l; uv = [p.reduce((a, q) => a + q[0], 0) / p.length, p.reduce((a, q) => a + q[1], 0) / p.length]; }
+    const E = E_(sk.ebene), n = V(E.n).normalize(), a = +f.abstand || 0, sym = f.richtung === "symmetrisch", sg = f.richtung === "umgekehrt" ? -1 : 1;
+    l.push({ feld: "abstand", pos: zu3D(sk.ebene, uv).addScaledVector(n, sg * (sym ? a / 2 : a)), dir: n.clone().multiplyScalar(sg), faktor: sym ? 2 : 1, min: 0.1, farbe: 0xe0782b });
+  } else if (["blech", "vorlage", "profil"].includes(f.typ) && f.laenge > 0) {
+    const bb = mitte(modell.children.filter((o) => o.isMesh && o.userData.fid === f.id)); if (!bb) return l;
+    const E = E_(f.ebene), n = V(E.n).normalize(), sg = f.richtung === "umgekehrt" ? -1 : 1, d = n.clone().multiplyScalar(sg), c = bb.getCenter(new THREE.Vector3());
+    let ext = 0; for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) ext = Math.max(ext, new THREE.Vector3(x, y, z).sub(c).dot(d));
+    l.push({ feld: "laenge", pos: c.addScaledVector(d, ext), dir: d, faktor: f.richtung === "symmetrisch" ? 2 : 1, min: 0.1, farbe: 0xe0782b });
+  } else if (f.typ === "bewegen") {
+    const bb = mitte(modell.children.filter((o) => o.isMesh && (String(o.userData.fid) === f.ziel || String(o.userData.fid).startsWith(f.ziel + ":")))); if (!bb) return l;
+    const c = bb.getCenter(new THREE.Vector3());
+    [["dx", [1, 0, 0], 0xd23c3c], ["dy", [0, 1, 0], 0x3aa655], ["dz", [0, 0, 1], 0x2f7dd1]].forEach(([feld, d, farbe]) => l.push({ feld, pos: c.clone(), dir: V(d), faktor: 1, farbe }));
+  }
+  return l;
+}
+const griffLaenge = (pos) => kamera.position.distanceTo(pos) * 0.14;
+function zeichneGriffe() {
+  leeren(griffGruppe); griffe = [];
+  if (!dlg?.feature || skizze) return;
+  try { griffe = griffeFuer(dlg.feature).filter((g) => $("d_" + g.feld)); } catch { griffe = []; }
+  for (const g of griffe) {
+    const L = griffLaenge(g.pos), spitze = g.pos.clone().addScaledVector(g.dir, L), mat = new THREE.MeshBasicMaterial({ color: g.farbe, depthTest: false, transparent: true, opacity: 0.95 });
+    const schaft = new THREE.Line(new THREE.BufferGeometry().setFromPoints([g.pos, spitze]), new THREE.LineBasicMaterial({ color: g.farbe, depthTest: false })); schaft.renderOrder = 30;
+    const kopf = new THREE.Mesh(new THREE.ConeGeometry(L * 0.09, L * 0.28, 16), mat); kopf.renderOrder = 31;
+    kopf.position.copy(spitze); kopf.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), g.dir);
+    const kugel = new THREE.Mesh(new THREE.SphereGeometry(L * 0.045, 12, 8), mat); kugel.position.copy(g.pos); kugel.renderOrder = 31;
+    griffGruppe.add(schaft, kopf, kugel);
+  }
+}
+steuerung.addEventListener("change", () => { if (griffe.length && !griffZug) zeichneGriffe(); });
+function griffAn(e) { // Pfeil unter dem Zeiger (Abstand zur Strecke Fuss–Spitze am Bildschirm)
+  if (!griffe.length || skizze) return null;
+  const sm = smPos(e), r = e.pointerType === "touch" ? 30 : e.pointerType === "pen" ? 22 : 14; let best = null, bd = r;
+  for (const g of griffe) { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); if (A[2] > 1 || B[2] > 1) continue; const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = g; } }
+  return best;
+}
+leinwand.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0) return;
+  const g = griffAn(e); if (!g) return;
+  const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, 100).toArray()), dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy);
+  if (L < 0.5) return; // Pfeil zeigt genau auf die Kamera
+  e.stopImmediatePropagation(); e.preventDefault(); leinwand.setPointerCapture(e.pointerId);
+  griffZug = { g, m0: smPos(e), v0: zahlAus($("d_" + g.feld).value) || 0, d: [dx / L, dy / L], pxProMm: L / 100 };
+}, true);
+leinwand.addEventListener("pointermove", (e) => {
+  if (!griffZug) { leinwand.style.cursor = !e.buttons && griffAn(e) ? "grab" : ""; return; }
+  e.stopImmediatePropagation();
+  const { g, m0, v0, d, pxProMm } = griffZug, sm = smPos(e), delta = ((sm[0] - m0[0]) * d[0] + (sm[1] - m0[1]) * d[1]) / pxProMm;
+  let v = v0 + delta * g.faktor; v = Math.round(v * (e.shiftKey ? 100 : 2)) / (e.shiftKey ? 100 : 2); if (g.min != null) v = Math.max(g.min, v);
+  const el = $("d_" + g.feld); if (!el) return; el.value = String(v); el.dispatchEvent(new Event("input"));
+}, true);
+const griffEnde = (e) => { if (!griffZug) return; try { leinwand.releasePointerCapture(e.pointerId); } catch {} griffZug = null; zeichneGriffe(); leinwand.style.cursor = ""; };
+leinwand.addEventListener("pointerup", (e) => { if (griffZug) { e.stopImmediatePropagation(); griffEnde(e); } }, true);
+leinwand.addEventListener("pointercancel", griffEnde, true);
+
 // ------------------------------------------------------------ Neuaufbau (parametrisch, in Reihenfolge der Zeitleiste)
 function regen() {
   leeren(modell); bilder.clear(); try { kollisionen.children.forEach((o) => o.geometry.dispose()); kollisionen.clear(); } catch {}
@@ -986,7 +1053,7 @@ function regen() {
   zeigeBrowser(); zeigeZeit(); zeigeWerkstatt();
   speichern(); merke();
   if (dlg?.info) { const t = dlg.info(); $("dInfo").textContent = t; $("dInfo").className = t.startsWith("⚠") ? "fehler" : ""; }
-  dlg?.nachRegen?.();
+  dlg?.nachRegen?.(); zeichneGriffe();
   exaktPlanen(); // exakter CAD-Kern (nur wenn eingeschaltet): Netze durch exakte Körper ersetzen
 }
 
@@ -1444,7 +1511,7 @@ function merkeAusdruecke(f) {
 }
 function schliesse() {
   if (dlg?.felder.some((fd) => fd.wahl)) status(""); // Hinweis «… anklicken» gilt nur im Dialog
-  $("dialog").hidden = true; dlg = null; grundebenen.visible = false; hoverLoeschen(); setTimeout(leisteZustand);
+  $("dialog").hidden = true; dlg = null; grundebenen.visible = false; hoverLoeschen(); zeichneGriffe(); setTimeout(leisteZustand);
 }
 $("dOk").onclick = () => { const m = dlg?.pflicht?.(); if (m) return status(m); dlg?.ok?.(werte()); schliesse(); regen(); };
 $("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); if (typeof wendeSchnittAn === "function") wendeSchnittAn(); };
@@ -4920,7 +4987,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

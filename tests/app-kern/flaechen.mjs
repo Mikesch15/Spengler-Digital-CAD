@@ -35,8 +35,17 @@ await s.click("#dOk"); await s.waitForTimeout(400);
 ok(await s.evaluate(() => document.getElementById("dialog").hidden), "OK mit gewählter Fläche schliesst den Dialog");
 const gespeichert = await s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.id === "ex").flaechen);
 ok(gespeichert.length === 1 && gespeichert[0].length === 2, "Flächenwahl als Innenpunkt im Projekt gespeichert");
-// Flächenblech: nur die Überlappung
-await s.evaluate(() => window.sdcadTest.dok()); 
+// Ziehpfeil: Abstand der Extrusion mit dem Pfeil in der Ansicht ziehen
+await s.evaluate(() => window.sdcadTest.bearbeite("ex")); await s.waitForTimeout(500);
+const pf = (await s.evaluate(() => window.sdcadTest.griff())).find((g) => g.feld === "abstand");
+ok(!!pf, "Ziehpfeil für den Abstand erscheint im Extrusions-Dialog");
+if (pf) {
+  const a0 = parseFloat(await s.inputValue("#d_abstand")); await s.mouse.move(pf.x, pf.y); await s.waitForTimeout(100); await s.mouse.down(); await s.mouse.move(pf.x, pf.y - 60, { steps: 8 }); await s.mouse.up(); await s.waitForTimeout(300);
+  const a1 = parseFloat(await s.inputValue("#d_abstand"));
+  ok(Math.abs(a1 - a0) > 5, `Pfeil ziehen ändert den Abstand im Dialog (${a0} → ${a1})`);
+  await s.click("#dOk"); await s.waitForTimeout(300);
+  ok(await s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.id === "ex").abstand) === a1, "Gezogener Wert im Projekt gespeichert");
+}
 ok(probleme.length === 0, "keine Seitenfehler " + probleme.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Flächenwahl: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

@@ -33,8 +33,23 @@ function innenpunkt(aussen, loecher) {
 }
 
 // segs: [[ [x,y], [x,y] ], …] (Linien, Bogenstücke, Kreisstücke … bereits in Strecken zerlegt) → Regionen
-export function regionen(segs, tol = 1e-6) {
-  const S = segs.filter(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]) > tol);
+// snap > tol: freie Enden (kein anderes Ende in der Nähe), die bis auf snap an einer anderen Strecke liegen, werden auf diese gelegt
+// (z. B. Linie endet auf einem Kreis, dessen Vieleck-Sehne etwas innen liegt)
+export function regionen(segs, tol = 1e-6, snap = 0) {
+  const S = segs.filter(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1]) > tol).map(([a, b]) => [a.slice(), b.slice()]);
+  if (snap > tol) {
+    const frei = (p, i) => !S.some(([c, d], j) => j !== i && (Math.hypot(c[0] - p[0], c[1] - p[1]) <= tol * 10 || Math.hypot(d[0] - p[0], d[1] - p[1]) <= tol * 10));
+    S.forEach((sg, i) => [0, 1].forEach((k) => {
+      const p = sg[k]; if (!frei(p, i)) return;
+      let best = null, bd = snap;
+      S.forEach(([c, d], j) => {
+        if (j === i) return;
+        const dx = d[0] - c[0], dy = d[1] - c[1], l2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p[0] - c[0]) * dx + (p[1] - c[1]) * dy) / l2)), q = [c[0] + t * dx, c[1] + t * dy], dist = Math.hypot(p[0] - q[0], p[1] - q[1]);
+        if (dist < bd) { bd = dist; best = q; }
+      });
+      if (best) { sg[k] = best; }
+    }));
+  }
   const n = S.length, teile = S.map(() => [0, 1]);
   // 1) Schnittpunkte und Berührungen (T-Stösse, Überlappungen) bestimmen
   for (let i = 0; i < n; i++) {
