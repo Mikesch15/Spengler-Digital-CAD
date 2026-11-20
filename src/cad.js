@@ -7,6 +7,7 @@ import { werkzeugAuf, flanschStandard, werkzeugName } from "../kern/flansch.js";
 import { projekteModul } from "./projekte.js";
 import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern/vorlagen/detail3d.js";
 import { selbsttest } from "../kern/selbsttest.js";
+import { regionen, inRegion } from "../kern/regionen.js";
 import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
 import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
 import { kantenGeometrie, RICHTUNGEN as ANSICHT_RICHTUNGEN } from "./ansicht.js";
@@ -21,7 +22,7 @@ import { rundblechAbwicklung, rundblechSvg } from "../kern/abwicklungRund.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
 import { blechTeilKommando, extrusionKommandos, rotationKommandos, extrusionsHoehen, extrusionsKanten, extrusionsFlaechen, matrixZeilen, flaechenblechPlan, baueFlaechenblech, bausteinQuerschnitt } from "../kern/cad/featureBau.js";
-import { skizzenProfile, NichtExakt } from "../kern/cad/skizzeProfile.js";
+import { skizzenProfile, profilPolygon, NichtExakt } from "../kern/cad/skizzeProfile.js";
 import { ansichtAusProjektion, kameraAchsen, kettenAusKanten } from "../kern/cad/ansichtExakt.js";
 import { zuschnittAusVolumen } from "../kern/cad/blech.js";
 import { dxfLesen } from "../kern/dxflesen.js";
@@ -281,13 +282,45 @@ function innen(pt, poly) {
   }
   return drin;
 }
-function formen(f, { aussenFn = (p) => p, lochFn = (p) => p } = {}) {
+// Flächen (Regionen) einer Skizze wie in Fusion: Linien werden an Schnittpunkten getrennt, jede geschlossene Teilfläche ist wählbar
+const REGIONEN = new Map();
+function skizzenRegionen(sk) {
+  const segs = [];
+  for (const el of profilElemente(sk)) for (const l of elGeo(el).linien || []) for (let i = 0; i + 1 < l.length; i++) segs.push([l[i], l[i + 1]]);
+  const key = JSON.stringify(segs); let r = REGIONEN.get(key);
+  if (!r) { r = regionen(segs, 1e-4); if (REGIONEN.size > 40) REGIONEN.clear(); REGIONEN.set(key, r); }
+  return r;
+}
+// gewählte Flächen eines Features (f.flaechen = Innenpunkte [u,v]); undefined = ältere Projekte: alle Profile der Skizze
+function gewaehlteRegionen(f, sk) {
+  if (!Array.isArray(f?.flaechen)) return null;
+  const alle = skizzenRegionen(sk), out = [];
+  for (const p of f.flaechen) { const r = alle.find((x) => inRegion(x, p)); if (r && !out.includes(r)) out.push(r); }
+  return out;
+}
+// Exakte Profile für den Kern: gewählte Flächen = ganze Profile (exakt, mit Kreisen/Bögen) oder, bei Teilflächen, Polygone
+function exakteProfile(s, f) {
+  const alle = skizzenProfile(profilElemente(s)), gew = f.typ === "extrusion" ? gewaehlteRegionen(f, s) : null;
+  if (!gew) return alle;
+  if (!gew.length) throw new NichtExakt("keine Fläche gewählt");
+  return gew.map((r) => {
+    const t = alle.find((a) => a.loecher.length === r.loecher.length && Math.abs(a.flaeche - r.flaeche) <= 0.02 * r.flaeche && innen(r.innen, profilPolygon(a.profil)) && !a.loecher.some((h) => innen(r.innen, profilPolygon(h))));
+    if (t) return t;
+    const poly = (pts) => ({ start: pts[0], segmente: pts.slice(1).map((q) => ({ bis: q })) });
+    return { profil: poly(r.aussen), loecher: r.loecher.map(poly), flaeche: r.flaeche };
+  });
+}
+function formen(f, { aussenFn = (p) => p, lochFn = (p) => p } = {}, feat = null) {
   // Aussenkonturen mit Löchern (eine Ebene tief); aussenFn/lochFn bearbeiten die Konturen (gegen den Uhrzeiger)
-  const ls = schleifen(f).map((p) => ({ p, a: Math.abs(flaeche(p)) })).sort((x, y) => y.a - x.a);
+  const gew = gewaehlteRegionen(feat, f);
   const aussen = [];
-  for (const l of ls) {
-    const eltern = aussen.filter((o) => innen(l.p[0], o.p)).sort((x, y) => x.a - y.a)[0];
-    if (eltern && !eltern.loch) eltern.loecher.push(l.p); else aussen.push({ ...l, loecher: [] });
+  if (gew) for (const r of gew) aussen.push({ p: r.aussen, a: r.flaeche, loecher: r.loecher });
+  else {
+    const ls = schleifen(f).map((p) => ({ p, a: Math.abs(flaeche(p)) })).sort((x, y) => y.a - x.a);
+    for (const l of ls) {
+      const eltern = aussen.filter((o) => innen(l.p[0], o.p)).sort((x, y) => x.a - y.a)[0];
+      if (eltern && !eltern.loch) eltern.loecher.push(l.p); else aussen.push({ ...l, loecher: [] });
+    }
   }
   const ccw0 = (p) => (flaeche(p) < 0 ? p.slice().reverse() : p);
   for (const o of aussen) { o.p = aussenFn(ccw0(o.p)); o.loecher = o.loecher.map((h) => lochFn(ccw0(h))); }
@@ -606,6 +639,17 @@ function koerperKanten() { // Kanten aller sichtbaren Körper in Weltkoordinaten
 function waehleImRaum(art, e, f, feld) {
   const sm = smPos(e);
   strahl.setFromCamera(ndc(e), kamera);
+  if (art === "flaechen") { // Teilfläche einer Skizze (Regionen, auch Überlappungen und Inseln): innen anklicken
+    const erlaubt = new Set((feld?.optionen || []).map(([w]) => String(w)));
+    let best = null, tiefe = Infinity;
+    for (const sk of doc.features.filter((x) => x.typ === "skizze" && erlaubt.has(x.id) && !x._aus && !x.versteckt)) {
+      const t = strahl.ray.intersectPlane(ebenenEbene(sk.ebene), new THREE.Vector3()); if (!t) continue;
+      const d = t.distanceTo(strahl.ray.origin), uv = aufEbene(sk.ebene, t);
+      const r = skizzenRegionen(sk).find((x) => inRegion(x, uv));
+      if (r && d < tiefe) { tiefe = d; best = [sk.id, `${sk.name} · Fläche ${f1(r.flaeche)} mm²`, { _flaechen: r.innen }]; }
+    }
+    return best;
+  }
   if (art === "profil" || art === "kette") {
     // Skizzenprofil (Fläche innen anklicken oder Linie) bzw. offener Linienzug – wie in Fusion
     const erlaubt = new Set((feld?.optionen || []).map(([w]) => String(w)));
@@ -671,10 +715,10 @@ const aktiveWahl = () => { const pf = dlg?.felder.filter((fd) => fd.wahl); retur
 function zeigeWahl() {
   const a = aktiveWahl();
   document.querySelectorAll("#dInhalt .feld[data-wahl]").forEach((el) => el.classList.toggle("waehlt", el.dataset.feld === a?.id));
-  grundebenen.visible = a?.wahl === "ebene";
+  grundebenen.visible = a?.wahl === "ebene"; zeichneGewaehlt();
   if (a) status({ ebene: "Ebene, Konstruktionsebene oder ebene Körperfläche in der Ansicht anklicken – oder in der Liste wählen.", kante: "Kante anklicken: Skizzenlinie, Körperkante oder Achse.",
     punkt: "Punkt anklicken: Skizzenpunkt, Körperecke oder Ursprung.", zylinder: "Zylindrische Fläche anklicken (extrudierter Kreis).", pfad: "Linie, Kreis oder Körperkante als Pfad anklicken.",
-    profil: "Skizzenprofil anklicken – in die geschlossene Fläche oder auf ihre Linie.", kette: "Offenen Linienzug einer Skizze anklicken." }[a.wahl] + ` (Feld «${a.label}»)`);
+    profil: "Skizzenprofil anklicken – in die geschlossene Fläche oder auf ihre Linie.", flaechen: "Fläche(n) in der Skizze anklicken (jede Teilfläche einzeln, nochmals anklicken = abwählen).", kette: "Offenen Linienzug einer Skizze anklicken." }[a.wahl] + ` (Feld «${a.label}»)`);
 }
 // Vorschau beim Überfahren: was angeklickt würde, leuchtet orange auf (Fläche, Ebene, Kante, Punkt, Profil) – wie in Fusion
 const hoverGruppe = new THREE.Group(); szene.add(hoverGruppe);
@@ -694,12 +738,25 @@ function flaechenRegion(hit) { // alle zusammenhängenden, koplanaren Dreiecke d
   const out = []; for (const t of gesehen) for (let k = 0; k < 3; k++) out.push(P(t, k).addScaledVector(n0, 0.04));
   return new THREE.BufferGeometry().setFromPoints(out);
 }
+const waehlGruppe = new THREE.Group(); szene.add(waehlGruppe);
+function regionMesh(sk, r, farbe, deckkraft) {
+  const sh = new THREE.Shape(r.aussen.map(([u, v]) => new THREE.Vector2(u, v)));
+  for (const h of r.loecher) sh.holes.push(new THREE.Path(h.map(([u, v]) => new THREE.Vector2(u, v))));
+  const g = new THREE.ShapeGeometry(sh); g.applyMatrix4(basis(sk.ebene));
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: farbe, transparent: true, opacity: deckkraft, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+  m.renderOrder = 18; return m;
+}
+function zeichneGewaehlt() { // bereits gewählte Skizzenflächen des Dialog-Features bleiben blau eingefärbt
+  leeren(waehlGruppe);
+  const f = dlg?.feature, sk = f && finde(f.skizze); if (!sk || !Array.isArray(f.flaechen)) return;
+  for (const r of gewaehlteRegionen(f, sk) || []) waehlGruppe.add(regionMesh(sk, r, 0x2f7dd1, 0.55));
+}
 let hoverWartet = false;
 function hoverWahl(e) {
   if (hoverWartet) return; hoverWartet = true;
   requestAnimationFrame(() => { hoverWartet = false; hoverZeichnen(e); });
 }
-function hoverLoeschen() { leeren(hoverGruppe); fangZeigen(null); }
+function hoverLoeschen() { leeren(hoverGruppe); fangZeigen(null); if (!dlg) leeren(waehlGruppe); }
 function hoverZeichnen(e) {
   const a = aktiveWahl(); if (!a || skizze) return hoverLoeschen();
   leeren(hoverGruppe); const sm = smPos(e);
@@ -707,7 +764,8 @@ function hoverZeichnen(e) {
   if (!w) return fangZeigen(null);
   const ref = String(w[0]), linie = (pts) => { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: HOVERFARBE, depthTest: false, linewidth: 2 })); l.renderOrder = 20; hoverGruppe.add(l); };
   try {
-    if (ref.startsWith("F:")) { // Körperfläche: die ganze ebene Fläche aufleuchten lassen
+    if (a.wahl === "flaechen") { const sk = finde(w[0]), r = sk && skizzenRegionen(sk).find((x) => inRegion(x, w[2]._flaechen)); if (r) hoverGruppe.add(regionMesh(sk, r, HOVERFARBE, 0.55)); }
+    else if (ref.startsWith("F:")) { // Körperfläche: die ganze ebene Fläche aufleuchten lassen
       strahl.setFromCamera(ndc(e), kamera);
       const hit = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
       if (hit) { const g = flaechenRegion(hit), mesh = new THREE.Mesh(g, hoverMat()); mesh.renderOrder = 19; hoverGruppe.add(mesh); const rand = new THREE.LineSegments(new THREE.EdgesGeometry(g, 5), new THREE.LineBasicMaterial({ color: HOVERFARBE, depthTest: false })); rand.renderOrder = 20; hoverGruppe.add(rand); }
@@ -728,7 +786,17 @@ function uebernimmWahl(e) {
   const a = aktiveWahl(); if (!a) return false;
   let w = null;
   try { w = waehleImRaum(a.wahl, e, dlg.feature, a); } catch { w = null; }
-  if (!w) { status("Hier ist nichts Passendes – " + ({ profil: "ein geschlossenes Skizzenprofil (innen) oder seine Linie", kette: "einen offenen Linienzug einer Skizze", ebene: "eine Ebene oder Fläche", kante: "eine Kante", punkt: "einen Punkt", zylinder: "eine Zylinderfläche", pfad: "eine Linie" }[a.wahl]) + " anklicken."); return true; }
+  if (!w) { status("Hier ist nichts Passendes – " + ({ flaechen: "eine geschlossene Fläche einer Skizze (innen anklicken)", profil: "ein geschlossenes Skizzenprofil (innen) oder seine Linie", kette: "einen offenen Linienzug einer Skizze", ebene: "eine Ebene oder Fläche", kante: "eine Kante", punkt: "einen Punkt", zylinder: "eine Zylinderfläche", pfad: "eine Linie" }[a.wahl]) + " anklicken."); return true; }
+  if (a.wahl === "flaechen") { // Teilfläche wählen / abwählen (Mehrfachwahl, Klick auf gewählte Fläche hebt sie auf)
+    const f = dlg.feature, sel = $("d_" + a.id), p = w[2]._flaechen;
+    if (sel.value !== w[0]) { sel.value = w[0]; sel.dispatchEvent(new Event("change")); f.flaechen = []; }
+    const sk = finde(w[0]), alle = skizzenRegionen(sk), neu = alle.find((x) => inRegion(x, p));
+    const liste = Array.isArray(f.flaechen) ? f.flaechen.slice() : [], i = liste.findIndex((q) => neu && inRegion(neu, q));
+    if (i >= 0) liste.splice(i, 1); else liste.push(p);
+    f.flaechen = liste; dlg.aendern?.(werte(), "skizze"); zeichneGewaehlt(); hoverLoeschen();
+    status(liste.length ? `${liste.length} Fläche${liste.length === 1 ? "" : "n"} gewählt – weitere anklicken, nochmals anklicken = abwählen, dann OK.` : "Keine Fläche gewählt.");
+    return true;
+  }
   const sel = $("d_" + a.id);
   if (![...sel.options].some((o) => o.value === w[0])) sel.add(new Option(w[1], w[0]));
   sel.value = w[0];
@@ -793,7 +861,8 @@ function regen() {
         if (!f.versteckt && f !== skizze?.f) modell.add(skizzenObjekt(f));
       } else if (f.typ === "extrusion") {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
-        const fs = formen(s); if (!fs.length) throw new Error("Skizze hat kein geschlossenes Profil");
+        if (Array.isArray(f.flaechen) && !f.flaechen.length) throw new Error("Fläche in der Skizze anklicken");
+        const fs = formen(s, undefined, f); if (!fs.length) throw new Error(Array.isArray(f.flaechen) ? "Gewählte Fläche gibt es nicht mehr – neu anklicken" : "Skizze hat kein geschlossenes Profil");
         const kr = doc.features.filter((x) => x.typ === "kantenrund" && x.ziel === f.id && !x._aus);
         volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, f.abstand, f.richtung, (f.vorgang || "neu") === "neu" ? 0 : 0.01));
       } else if (f.typ === "bild") {
@@ -870,8 +939,9 @@ function regen() {
       } else if (f.typ === "flaeche") {
         f._bleche = null; f._teile = null;
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
-        const loops = schleifen(s); if (!loops.length) throw new Error("Skizze hat keine geschlossene Fläche");
-        const m = material(f.material), nr = f.profil === "alle" || f.profil == null ? loops.map((_, i) => i) : [+f.profil];
+        if (Array.isArray(f.flaechen) && !f.flaechen.length) throw new Error("Fläche in der Skizze anklicken");
+        const loops = gewaehlteRegionen(f, s)?.map((r) => r.aussen) ?? schleifen(s); if (!loops.length) throw new Error(Array.isArray(f.flaechen) ? "Gewählte Fläche gibt es nicht mehr – neu anklicken" : "Skizze hat keine geschlossene Fläche");
+        const m = material(f.material), nr = Array.isArray(f.flaechen) || f.profil === "alle" || f.profil == null ? loops.map((_, i) => i) : [+f.profil];
         f._bleche = nr.map((pi) => {
           if (!loops[pi]) throw new Error(`Fläche ${pi + 1} fehlt in der Skizze`);
           const n = kantenGruppen(gegenUhrzeiger(loops[pi])).length;
@@ -1363,7 +1433,7 @@ function schliesse() {
   if (dlg?.felder.some((fd) => fd.wahl)) status(""); // Hinweis «… anklicken» gilt nur im Dialog
   $("dialog").hidden = true; dlg = null; grundebenen.visible = false; hoverLoeschen(); setTimeout(leisteZustand);
 }
-$("dOk").onclick = () => { dlg?.ok?.(werte()); schliesse(); regen(); };
+$("dOk").onclick = () => { const m = dlg?.pflicht?.(); if (m) return status(m); dlg?.ok?.(werte()); schliesse(); regen(); };
 $("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); if (typeof wendeSchnittAn === "function") wendeSchnittAn(); };
 $("dLoeschen").onclick = () => { dlg?.loeschen?.(); schliesse(); regen(); };
 
@@ -1464,15 +1534,17 @@ function ebeneDialog(art, f) {
 
 function extrusionDialog(f) {
   const istNeu = !f;
-  const sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
+  const sk = doc.features.filter((x) => x.typ === "skizze" && (schleifen(x).length || skizzenRegionen(x).length));
   if (!sk.length) return status("Zuerst eine Skizze mit geschlossenem Profil zeichnen (Rechteck, Kreis oder geschlossener Linienzug).");
-  f ||= { id: neueId(), typ: "extrusion", name: "Extrusion " + (doc.features.filter((x) => x.typ === "extrusion").length + 1), skizze: sk.at(-1).id, abstand: 100, richtung: "eine", vorgang: "neu" };
+  f ||= { id: neueId(), typ: "extrusion", name: "Extrusion " + (doc.features.filter((x) => x.typ === "extrusion").length + 1), skizze: sk.at(-1).id, flaechen: [], abstand: 100, richtung: "eine", vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
-    { id: "skizze", label: "Profil aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
+    { id: "skizze", label: Array.isArray(f.flaechen) ? "Flächen in" : "Profil aus", wahl: Array.isArray(f.flaechen) ? "flaechen" : "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "abstand", label: "Abstand", einheit: "mm", wert: f.abstand },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
     ...vorgangFelder(f),
-  ], (f, w) => Object.assign(f, w), "Extrudieren", "Alle geschlossenen Profile der Skizze werden extrudiert, innere Profile werden zu Löchern. Vorgang wie in Fusion: neuer Körper, vereinigen, ausschneiden oder schneiden.");
+  ], (f, w) => { if (Array.isArray(f.flaechen) && w.skizze !== f.skizze) f.flaechen = []; Object.assign(f, w); }, "Extrudieren",
+  "Fläche(n) in der Skizze anklicken (jede Teilfläche einzeln, auch Überlappungen und Inseln; nochmals anklicken = abwählen). Vorgang wie in Fusion: neuer Körper, vereinigen, ausschneiden oder schneiden.",
+  { pflicht: () => (Array.isArray(f.flaechen) && !f.flaechen.length ? "Zuerst mindestens eine Fläche in der Skizze anklicken." : "") });
 }
 
 const VORGAENGE = [["neu", "Neuer Körper"], ["verbinden", "Vereinigen"], ["ausschneiden", "Ausschneiden"], ["schneiden", "Schneiden (Schnittmenge)"]];
@@ -1866,20 +1938,20 @@ function partnerKante(f, key) {
 }
 function flaecheDialog(f) {
   const istNeu = !f;
-  const sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
+  const sk = doc.features.filter((x) => x.typ === "skizze" && (schleifen(x).length || skizzenRegionen(x).length));
   if (!sk.length && !f) return status("Zuerst die Grundfläche des Blechs als geschlossenes Profil skizzieren (z. B. Rechteck oder Linienzug, Dachbahnen nebeneinander).");
-  f ||= { id: neueId(), typ: "flaeche", name: "Flächenblech " + (doc.features.filter((x) => x.typ === "flaeche").length + 1), skizze: sk.at(-1).id, profil: "alle",
+  f ||= { id: neueId(), typ: "flaeche", name: "Flächenblech " + (doc.features.filter((x) => x.typ === "flaeche").length + 1), skizze: sk.at(-1).id, flaechen: [],
     kanten: {}, material: neuMaterial(), stueck: einst.neu.stueck, sichtseite: 1 };
   const felder = (f) => [
-    { id: "skizze", label: "Grundfläche aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
-    { id: "profil", label: "Flächen", optionen: [["alle", "Alle Flächen (je ein Blech)"], ...schleifen(finde(f.skizze) || sk.at(-1)).map((_, i) => [i, `Fläche ${i + 1}`])], wert: f.profil ?? "alle" },
+    { id: "skizze", label: Array.isArray(f.flaechen) ? "Flächen in" : "Grundfläche aus", wahl: Array.isArray(f.flaechen) ? "flaechen" : "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
+    ...(Array.isArray(f.flaechen) ? [] : [{ id: "profil", label: "Flächen", optionen: [["alle", "Alle Flächen (je ein Blech)"], ...schleifen(finde(f.skizze) || sk.at(-1)).map((_, i) => [i, `Fläche ${i + 1}`])], wert: f.profil ?? "alle" }]),
     { id: "name", label: "Name", text: true, wert: f.name },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "sichtseite", label: "Sichtseite (Abkantungen + gehen dorthin)", optionen: [["1", "Vorne (Richtung Ebenen-Normale)"], ["-1", "Hinten"]], wert: String(f.sichtseite ?? 1) },
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
   ];
-  const setze = (f, w) => { Object.assign(f, { ...w, name: w.name?.trim() || f.name, sichtseite: +w.sichtseite || 1 }); };
+  const setze = (f, w) => { if (Array.isArray(f.flaechen) && w.skizze !== f.skizze) f.flaechen = []; Object.assign(f, { ...w, name: w.name?.trim() || f.name, sichtseite: +w.sichtseite || 1 }); };
   const optionen = (v) => {
     const g = [...new Set(alleBausteine().map((b) => b.gruppe || "Eigene"))];
     return `<option value="">– keine (Schnittkante)</option>${g.map((gr) => `<optgroup label="${esc(gr)}">${alleBausteine().filter((b) => (b.gruppe || "Eigene") === gr).map((b) => `<option value="${esc(b.id)}" ${v === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}</optgroup>`).join("")}
@@ -1927,7 +1999,8 @@ function flaecheDialog(f) {
   };
   featureDialog(f, istNeu, felder, setze, "Flächenblech",
     "Grundfläche des Blechs in einer Skizze zeichnen (Masse = Achsen der Falze bzw. fertige Kanten). Dann je Kante den Spenglerbaustein wählen – Zuschnitt, Ausklinkungen, Biegelinien und Abkantliste rechnet das Programm.",
-    { zusatz: tabelle, binden, wahlNr: -1, aktiveKante: null,
+    { zusatz: tabelle, binden, wahlNr: Array.isArray(f.flaechen) && !f.flaechen.length ? 0 : -1, aktiveKante: null,
+      pflicht: () => (Array.isArray(f.flaechen) && !f.flaechen.length ? "Zuerst mindestens eine Fläche in der Skizze anklicken." : ""),
       kantenWahl: (e) => { const k = kanteUnterMaus(f, e); if (!k) return false; waehleKanteImDialog(k, e.clientX, e.clientY); return true; },
       nachRegen: () => { for (const bl of f._bleche || []) bl.gruppen.forEach((_, k) => { const c = document.querySelector(`#dInhalt [data-z="${bl.pi}:${k}"]`); if (c) c.innerHTML = (bl.profile[k] ? f1(bl.profile[k].zugabe) : "0") + kantenWarn(`${bl.pi}:${k}`, f.kanten?.[`${bl.pi}:${k}`], bl.gruppen[k]); }); },
       info: () => (f._fehler ? "⚠ " + f._fehler : f._teile ? f._teile.map((t) => `${t.name}: ${f1(t._blech.abw.breite)} × ${f1(t._blech.abw.laenge)}`).join(" · ") : "") });
@@ -2163,11 +2236,11 @@ function eckenBearbeiten(p, { r = 0, fase = 0 }) {
 function gerundeteExtrusion(s, f, kr) {
   const senk = kr.find((k) => k.kanten !== "quer"), quer = kr.find((k) => k.kanten !== "senkrecht");
   const opt = (k) => (k ? (k.art === "fase" ? { fase: k.mass } : { r: k.mass }) : {});
-  let fs = formen(s, { aussenFn: (p) => eckenBearbeiten(p, opt(senk)), lochFn: (p) => eckenBearbeiten(p, opt(senk)) });
+  let fs = formen(s, { aussenFn: (p) => eckenBearbeiten(p, opt(senk)), lochFn: (p) => eckenBearbeiten(p, opt(senk)) }, f);
   if (!quer) return koerperGeometrie(fs, s.ebene, f.abstand, f.richtung);
   const m = Math.min(quer.mass, Math.abs(f.abstand) / 2 - 0.01); if (!(m > 0)) return koerperGeometrie(fs, s.ebene, f.abstand, f.richtung);
   // Oben/unten: Kontur um m einziehen, dann mit Fase bzw. Rundung (Bevel) wieder auf die volle Grösse
-  fs = formen(s, { aussenFn: (p) => versatzPolylinie(eckenBearbeiten(p, opt(senk)), m, true), lochFn: (p) => versatzPolylinie(eckenBearbeiten(p, opt(senk)), -m, true) });
+  fs = formen(s, { aussenFn: (p) => versatzPolylinie(eckenBearbeiten(p, opt(senk)), m, true), lochFn: (p) => versatzPolylinie(eckenBearbeiten(p, opt(senk)), -m, true) }, f);
   const geo = new THREE.ExtrudeGeometry(fs, { depth: Math.abs(f.abstand) - 2 * m, bevelEnabled: true, bevelThickness: m, bevelSize: m, bevelOffset: 0, bevelSegments: quer.art === "fase" ? 1 : 6, curveSegments: 48 });
   geo.translate(0, 0, m);
   const t = Math.abs(f.abstand); if (f.richtung === "umgekehrt") geo.translate(0, 0, -t); else if (f.richtung === "symmetrisch") geo.translate(0, 0, -t / 2);
@@ -2176,7 +2249,7 @@ function gerundeteExtrusion(s, f, kr) {
 // Schale: Innenraum = Kontur um die Wanddicke eingezogen (Löcher erweitert), Boden/Deckel bleiben je nach «offen»
 function schalenWerkzeug(z, f) {
   const s = finde(z.skizze), d = f.dicke > 0 ? f.dicke : 2, t = Math.abs(z.abstand);
-  const fs = formen(s, { aussenFn: (p) => versatzPolylinie(p, d, true), lochFn: (p) => versatzPolylinie(p, -d, true) });
+  const fs = formen(s, { aussenFn: (p) => versatzPolylinie(p, d, true), lochFn: (p) => versatzPolylinie(p, -d, true) }, z);
   let z0 = d, z1 = t - d;
   if (f.offen === "oben" || f.offen === "beide") z1 = t + 1;
   if (f.offen === "unten" || f.offen === "beide") z0 = -1;
@@ -4562,7 +4635,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         const s = finde(f.skizze), op = f.vorgang || "neu";
         let kmd;
         try {
-          const profile = skizzenProfile(profilElemente(s));
+          const profile = exakteProfile(s, f);
           if (!profile.length) throw new NichtExakt("kein geschlossenes Profil");
           if (f.typ === "extrusion") kmd = extrusionKommandos({ profile, ebene: E_(s.ebene), abstand: f.abstand, richtung: f.richtung });
           else { const [a, d] = drehAchse(s, f.achse); kmd = rotationKommandos({ profile, ebene: E_(s.ebene), a, d, winkel: f.winkel ?? 360 }); }
@@ -4799,7 +4872,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
