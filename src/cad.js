@@ -264,7 +264,7 @@ function elGeo(el) {
       return el.geschlossen ? { linien: [[...pts, pts[0]]], kontur: pts } : { linien: [pts], offen: pts };
     }
     case "rechteck": { const c = [el.a, [el.b[0], el.a[1]], el.b, [el.a[0], el.b[1]]]; return { linien: [[...c, c[0]]], kontur: c }; }
-    case "kreis": { const k = kreisPunkte(el.c, el.r, 72); return { linien: [[...k, k[0]]], kontur: k }; }
+    case "kreis": { const k = kreisPunkte(el.c, el.r, Math.min(720, Math.max(72, Math.ceil((2 * Math.PI * el.r) / 2.5)))); return { linien: [[...k, k[0]]], kontur: k }; }
     case "bogen": { const b = bogenPunkte(el); return { linien: [b], offen: b }; }
     case "langloch": { const k = langlochPunkte(el.a, el.b, el.r); return { linien: [[...k, k[0]]], kontur: k }; }
     case "spline": { const q = splinePunkte(el.pts, !!el.geschlossen); return el.geschlossen ? { linien: [[...q, q[0]]], kontur: q } : { linien: [q], offen: q }; }
@@ -426,7 +426,27 @@ function wuerfelUV(geo, mm = 400) {
   }
   geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
 }
+// Glatte Schattierung runder Flächen: Normalen über Dreiecke mit nahezu gleicher Richtung (< grad) mitteln, scharfe Kanten bleiben hart
+function glatteNormalen(geo, grad = 32) {
+  if (!geo || geo.index || !geo.attributes.position || geo.userData.glatt) return geo;
+  const pos = geo.attributes.position, n = pos.count; if (n % 3 || n > 600000) return geo;
+  const nt = n / 3, fn = new Float32Array(nt * 3), A = new Float32Array(nt), tab = new Map(), key = (i) => `${Math.round(pos.getX(i) * 1000)},${Math.round(pos.getY(i) * 1000)},${Math.round(pos.getZ(i) * 1000)}`;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), nv = new THREE.Vector3();
+  for (let t = 0; t < nt; t++) {
+    a.fromBufferAttribute(pos, t * 3); b.fromBufferAttribute(pos, t * 3 + 1); c.fromBufferAttribute(pos, t * 3 + 2);
+    nv.crossVectors(b.sub(a), c.sub(a)); const l = nv.length(); A[t] = l; if (l > 0) nv.divideScalar(l); fn.set([nv.x, nv.y, nv.z], t * 3);
+    for (let k = 0; k < 3; k++) { const kk = key(t * 3 + k); (tab.get(kk) || tab.set(kk, []).get(kk)).push(t); }
+  }
+  const cos = Math.cos((grad * Math.PI) / 180), out = new Float32Array(n * 3);
+  for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) {
+    let x = 0, y = 0, z = 0; const nx = fn[t * 3], ny = fn[t * 3 + 1], nz = fn[t * 3 + 2];
+    for (const u of tab.get(key(t * 3 + k))) if (fn[u * 3] * nx + fn[u * 3 + 1] * ny + fn[u * 3 + 2] * nz > cos) { x += fn[u * 3] * A[u]; y += fn[u * 3 + 1] * A[u]; z += fn[u * 3 + 2] * A[u]; }
+    const l = Math.hypot(x, y, z) || 1; out.set([x / l, y / l, z / l], (t * 3 + k) * 3);
+  }
+  geo.setAttribute("normal", new THREE.BufferAttribute(out, 3)); geo.userData.glatt = true; return geo;
+}
 function oberflaechenMaterial(art, geo) {
+  glatteNormalen(geo);
   if (typeof art === "number") return new THREE.MeshStandardMaterial({ color: art, metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   const o = OBERFLAECHEN[art] || OBERFLAECHEN.grau;
   if (o.textur && geo) wuerfelUV(geo, o.textur === "holz" ? 600 : 400);
@@ -445,7 +465,7 @@ function verknuepfe(ziel, werkzeug, op) {
   const a = new Brush(nurPos(ziel.geometry)), b = new Brush(nurPos(werkzeug));
   a.updateMatrixWorld(); b.updateMatrixWorld();
   const r = csg.evaluate(a, b, { verbinden: ADDITION, ausschneiden: SUBTRACTION, schneiden: INTERSECTION }[op]).geometry;
-  ziel.geometry.dispose(); ziel.geometry = r;
+  ziel.geometry.dispose(); ziel.geometry = glatteNormalen(r);
   const kante = ziel.children[0]; kante.geometry.dispose(); kante.geometry = kantenGeometrie(r); // ohne Nähte der Booleschen Rechnung
 }
 const nurPos = (g) => { const n = g.index ? g.toNonIndexed() : g.clone(); for (const k of Object.keys(n.attributes)) if (k !== "position" && k !== "normal") n.deleteAttribute(k); if (!n.attributes.normal) n.computeVertexNormals(); return n; };
@@ -494,7 +514,7 @@ function nachAussen(geo) {
   const p = geo.attributes.position.array; let v = 0;
   for (let i = 0; i < p.length; i += 9) v += p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6]);
   if (v < 0) for (let i = 0; i < p.length; i += 9) for (let k = 0; k < 3; k++) { const t = p[i + 3 + k]; p[i + 3 + k] = p[i + 6 + k]; p[i + 6 + k] = t; }
-  geo.attributes.position.needsUpdate = true; geo.computeVertexNormals();
+  geo.attributes.position.needsUpdate = true; geo.computeVertexNormals(); geo.userData.glatt = false;
   return geo;
 }
 function koerper(formen_, ebene, tiefe, richtung, farbe, fid) {
@@ -954,8 +974,12 @@ function regen() {
     const op = f.vorgang || "neu";
     if (op === "neu") { const m = koerperMesh(geo, darstellungVon(f), f.id); volumen.set(f.id, m); if (!f.versteckt) modell.add(m); return; }
     const ziele = f.ziel && f.ziel !== "alle" ? [volumen.get(f.ziel)].filter(Boolean) : [...volumen.values()];
-    if (!ziele.length) throw new Error("Kein Körper zum " + ({ verbinden: "Vereinigen", ausschneiden: "Ausschneiden", schneiden: "Schneiden" })[op]);
+    // Ausschneiden trifft auch Blechkörper (Flächenblech, Blechprofil, Vorlagen): alle bzw. das gewählte Blech
+    const bleche = op !== "ausschneiden" ? [] : modell.children.filter((o) => { if (!o.isMesh || o.userData.fid == null) return false; const hid = String(o.userData.fid).split(":")[0], x = finde(hid); return x && ["flaeche", "blech", "vorlage", "profil"].includes(x.typ) && !x.versteckt && (!f.ziel || f.ziel === "alle" || hid === f.ziel); });
+    if (!ziele.length && !bleche.length) throw new Error("Kein Körper zum " + ({ verbinden: "Vereinigen", ausschneiden: "Ausschneiden", schneiden: "Schneiden" })[op]);
     for (const z of op === "verbinden" ? ziele.slice(0, 1) : ziele) verknuepfe(z, geo, op);
+    let nicht = 0; for (const z of bleche) { try { verknuepfe(z, geo, "ausschneiden"); } catch { nicht++; } }
+    if (nicht) throw new Error(`${nicht} Blechteil${nicht === 1 ? "" : "e"} lie${nicht === 1 ? "ss" : "ssen"} sich nicht ausschneiden`);
   };
   doc.features.forEach((f) => (f._faktor = 1));
   let platz = 0; // Vorlagen und freie Profile haben keine Lage: nebeneinander aufreihen statt übereinander
@@ -1187,7 +1211,7 @@ const NAMEN = { detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Ke
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
-  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
+  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft"].includes(f.typ) && (f.vorgang || "neu") !== "neu")); // Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
   const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span></li>`;
   $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, f.typ === "ebene" ? "ebene" : f.typ)).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
     <li class="kopf">Körper</li>${kp.filter((f) => !f.komponente).map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech")).join("") || (kp.length ? "" : '<li class="hinweis">Noch keine</li>')}` +
@@ -1685,7 +1709,7 @@ function extrusionDialog(f) {
 const VORGAENGE = [["neu", "Neuer Körper"], ["verbinden", "Vereinigen"], ["ausschneiden", "Ausschneiden"], ["schneiden", "Schneiden (Schnittmenge)"]];
 const vorgangFelder = (f) => [
   { id: "vorgang", label: "Vorgang", optionen: VORGAENGE, wert: f.vorgang || "neu" },
-  ...((f.vorgang || "neu") === "neu" ? [] : [{ id: "ziel", label: "Körper", optionen: [["alle", f.vorgang === "verbinden" ? "Erster Körper" : "Alle Körper"], ...vorher(f).filter((x) => ["extrusion", "drehung", "sweep", "loft"].includes(x.typ) && (x.vorgang || "neu") === "neu").map((x) => [x.id, x.name])], wert: f.ziel || "alle" }]),
+  ...((f.vorgang || "neu") === "neu" ? [] : [{ id: "ziel", label: "Körper", optionen: [["alle", f.vorgang === "verbinden" ? "Erster Körper" : "Alle Körper"], ...vorher(f).filter((x) => (["extrusion", "drehung", "sweep", "loft"].includes(x.typ) || (f.vorgang === "ausschneiden" && ["flaeche", "blech", "vorlage", "profil"].includes(x.typ))) && (x.vorgang || "neu") === "neu").map((x) => [x.id, x.name])], wert: f.ziel || "alle" }]),
 ];
 // Drehachse: «U»/«V» (Skizzenachsen durch den Ursprung) oder «Element-ID:Kante» einer geraden Linie der Skizze
 function drehAchse(sk, achse) {
@@ -4911,6 +4935,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         const kr = f.typ === "extrusion" ? doc.features.filter((k) => k.typ === "kantenrund" && k.ziel === f.id && !k._aus) : [];
         if (kr.length) try { w = await kantenRunden(w, kr, f, s); } catch (e) { if (op === "neu") nicht.set(f.id, `Abrunden/Fasen: ${e.message}`); else markiereZiel(f, `${f.name} Abrunden/Fasen: ${e.message}`); continue; }
         if (op === "neu") { koerper.set(f.id, w); continue; }
+        if (op === "ausschneiden") for (const k of blech.keys()) if (!f.ziel || f.ziel === "alle" || k.split(":")[0] === f.ziel) nicht.set(k, `${f.name} (Ausschneiden) an Blech noch nicht exakt`);
         const ziele = f.ziel && f.ziel !== "alle" ? [f.ziel].filter((z) => koerper.has(z)) : [...koerper.keys()];
         for (const z of op === "verbinden" ? ziele.slice(0, 1) : ziele) {
           if (nicht.has(z)) continue;
