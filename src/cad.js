@@ -8,6 +8,7 @@ import { selbsttest } from "../kern/selbsttest.js";
 import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
 import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
 import { kantenGeometrie, RICHTUNGEN as ANSICHT_RICHTUNGEN } from "./ansicht.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
@@ -161,13 +162,37 @@ const szene = new THREE.Scene();
 const kamera = new THREE.PerspectiveCamera(35, 1, 1, 100000);
 const steuerung = new OrbitControls(kamera, leinwand);
 steuerung.enableDamping = true;
-szene.add(new THREE.HemisphereLight(0xffffff, 0x66727a, 1.5));
-const licht = new THREE.DirectionalLight(0xffffff, 1.7); licht.position.set(1, 2, 3); szene.add(licht);
-const licht2 = new THREE.DirectionalLight(0xffffff, 0.5); licht2.position.set(-2, -1, -1); szene.add(licht2);
-const boden = new THREE.GridHelper(2000, 40, 0x8a969e, 0xb7c0c6); boden.material.transparent = true; boden.material.opacity = 0.5; szene.add(boden);
+szene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; // Studiolicht: Spiegelungen wie im CAD-Programm
+szene.add(new THREE.HemisphereLight(0xffffff, 0x66727a, 0.55));
+const licht = new THREE.DirectionalLight(0xffffff, 1.15); licht.position.set(1, 2, 3); szene.add(licht);
+const licht2 = new THREE.DirectionalLight(0xffffff, 0.3); licht2.position.set(-2, -1, -1); szene.add(licht2);
+const boden = new THREE.GridHelper(2000, 40, 0x9aa6b0, 0xc3ccd4); boden.material.transparent = true; boden.material.opacity = 0.55; szene.add(boden);
 szene.add(new THREE.AxesHelper(80));
 const modell = new THREE.Group(), live = new THREE.Group(); szene.add(modell, live);
 let skizzenRaster = null;
+// Ansichtswürfel (wie ViewCube): spiegelt die Blickrichtung, Fläche anklicken = Normalansicht
+const WUERFEL = ["rechts", "links", "oben", "unten", "vorne", "hinten"], WUERFELNAME = { rechts: "Rechts", links: "Links", oben: "Oben", unten: "Unten", vorne: "Vorne", hinten: "Hinten" };
+const wuerfelSzene = new THREE.Scene(), wuerfelKamera = new THREE.OrthographicCamera(-1.55, 1.55, 1.55, -1.55, 0.1, 20), wuerfelRay = new THREE.Raycaster();
+const wuerfelMat = WUERFEL.map((n) => { const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
+  const gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, "#ffffff"); gr.addColorStop(1, "#e3e8ee"); g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  g.strokeStyle = "#9aa6b2"; g.lineWidth = 6; g.strokeRect(3, 3, 122, 122); g.fillStyle = "#1d4f7a"; g.font = '600 26px "Segoe UI", Arial, sans-serif'; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(WUERFELNAME[n].toUpperCase(), 64, 66);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return new THREE.MeshBasicMaterial({ map: t }); });
+const wuerfel = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), wuerfelMat); wuerfelSzene.add(wuerfel);
+wuerfel.add(new THREE.LineSegments(new THREE.EdgesGeometry(wuerfel.geometry), new THREE.LineBasicMaterial({ color: 0x5b6672 })));
+const wuerfelHit = $("wuerfelHit");
+function wuerfelTreffer(e) {
+  const r = wuerfelHit.getBoundingClientRect(); wuerfelRay.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1)), wuerfelKamera);
+  return wuerfelRay.intersectObject(wuerfel, false)[0]?.face?.materialIndex ?? -1;
+}
+wuerfelHit.addEventListener("pointermove", (e) => { const i = wuerfelTreffer(e); wuerfelMat.forEach((m, k) => m.color.set(k === i ? 0xcfe2f5 : 0xffffff)); wuerfelHit.style.cursor = i >= 0 ? "pointer" : "default"; });
+wuerfelHit.addEventListener("pointerleave", () => wuerfelMat.forEach((m) => m.color.set(0xffffff)));
+wuerfelHit.addEventListener("click", (e) => { const i = wuerfelTreffer(e); if (i >= 0) ansicht(WUERFEL[i]); });
+function zeichneWuerfel() {
+  const r = wuerfelHit.getBoundingClientRect(), c = leinwand.getBoundingClientRect(); if (!r.width || !c.width) return;
+  wuerfelKamera.position.copy(kamera.position).sub(steuerung.target).normalize().multiplyScalar(6); wuerfelKamera.up.copy(kamera.up); wuerfelKamera.lookAt(0, 0, 0);
+  const x = r.left - c.left, y = c.bottom - r.bottom; renderer.setScissorTest(true); renderer.setViewport(x, y, r.width, r.height); renderer.setScissor(x, y, r.width, r.height);
+  renderer.autoClear = false; renderer.clearDepth(); renderer.render(wuerfelSzene, wuerfelKamera); renderer.autoClear = true; renderer.setScissorTest(false); renderer.setViewport(0, 0, c.width, c.height);
+}
 
 function groesse() {
   const w = leinwand.clientWidth, h = leinwand.clientHeight;
@@ -291,9 +316,9 @@ function blechAusKette(pts, m, riAn = () => null) {
 // ------------------------------------------------------------ Darstellung (wie «Erscheinungsbild» in Fusion): Metalle der Spenglerei, Holz, Beton
 const OBERFLAECHEN = {
   grau: { name: "Standard grau", farbe: 0x9aa5ad, metall: 0.5, rauh: 0.45 },
-  titanzink: { name: "Titanzink walzblank", farbe: 0x9aa4ab, metall: 0.75, rauh: 0.38, textur: "fleck" },
-  titanzink_vb: { name: "Titanzink vorbewittert (blaugrau)", farbe: 0x7b8790, metall: 0.35, rauh: 0.7, textur: "fleck" },
-  titanzink_sw: { name: "Titanzink vorbewittert (schiefergrau)", farbe: 0x5c656c, metall: 0.3, rauh: 0.72, textur: "fleck" },
+  titanzink: { name: "Titanzink walzblank", farbe: 0xb3bdc5, metall: 0.8, rauh: 0.36 },
+  titanzink_vb: { name: "Titanzink vorbewittert (blaugrau)", farbe: 0x8795a0, metall: 0.45, rauh: 0.55, textur: "fleck" },
+  titanzink_sw: { name: "Titanzink vorbewittert (schiefergrau)", farbe: 0x66717a, metall: 0.45, rauh: 0.55, textur: "fleck" },
   kupfer: { name: "Kupfer blank", farbe: 0xc4774a, metall: 0.9, rauh: 0.3 },
   kupfer_braun: { name: "Kupfer brüniert", farbe: 0x7a4a33, metall: 0.6, rauh: 0.55, textur: "fleck" },
   kupfer_patina: { name: "Kupfer Patina", farbe: 0x6fae96, metall: 0.15, rauh: 0.8, textur: "fleck" },
@@ -317,7 +342,7 @@ function textur(art) { // kleine Kacheln aus Zufallsmustern (keine Bilddateien n
   if (art === "holz") for (let y = 0; y < 256; y++) { const v = 200 + 40 * Math.sin(y * 0.35 + Math.sin(y * 0.05) * 4) + 15 * rnd(); g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, 256, 1); }
   else if (art === "schliff") for (let y = 0; y < 256; y++) { const v = 225 + 30 * rnd(); g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, 256, 1); }
   else if (art === "zinkblume") for (let i = 0; i < 90; i++) { const v = 200 + 55 * rnd(); g.fillStyle = `rgb(${v},${v},${v})`; g.beginPath(); const x = rnd() * 256, y = rnd() * 256; for (let k = 0; k < 6; k++) { const w = k * Math.PI / 3 + rnd() * 0.5, r = 12 + 22 * rnd(); g.lineTo(x + Math.cos(w) * r, y + Math.sin(w) * r); } g.fill(); }
-  else for (let i = 0; i < 2500; i++) { const v = 205 + 50 * rnd(); g.fillStyle = `rgba(${v},${v},${v},0.5)`; g.beginPath(); g.arc(rnd() * 256, rnd() * 256, 2 + 9 * rnd(), 0, 7); g.fill(); }
+  else for (let i = 0; i < 5000; i++) { const v = 232 + 23 * rnd(); g.fillStyle = `rgba(${v},${v},${v},0.35)`; g.beginPath(); g.arc(rnd() * 256, rnd() * 256, 0.6 + 1.6 * rnd(), 0, 7); g.fill(); } // feines Korn statt Flecken
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
   return (TEXTUREN[art] = t);
 }
@@ -336,14 +361,14 @@ function oberflaechenMaterial(art, geo) {
   if (typeof art === "number") return new THREE.MeshStandardMaterial({ color: art, metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
   const o = OBERFLAECHEN[art] || OBERFLAECHEN.grau;
   if (o.textur && geo) wuerfelUV(geo, o.textur === "holz" ? 600 : 400);
-  return new THREE.MeshStandardMaterial({ color: o.farbe, metalness: o.metall, roughness: o.rauh, map: o.textur && geo ? textur(o.textur) : null,
+  return new THREE.MeshStandardMaterial({ color: o.farbe, metalness: o.metall, roughness: o.rauh, envMapIntensity: 1, map: o.textur && geo ? textur(o.textur) : null,
     side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
 }
 const darstellungVon = (f, m) => f?.darstellung || (m ? oberflaecheFuer(m) : "grau");
 const csg = new Evaluator(); csg.attributes = ["position", "normal"]; csg.useGroups = false;
 function koerperMesh(geo, farbe, fid) {
   const mesh = new THREE.Mesh(geo, oberflaechenMaterial(farbe, geo)); mesh.userData.art = farbe;
-  mesh.add(new THREE.LineSegments(kantenGeometrie(geo), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.6 })));
+  mesh.add(new THREE.LineSegments(kantenGeometrie(geo), new THREE.LineBasicMaterial({ color: 0x2c3a46, transparent: true, opacity: 0.45 })));
   mesh.userData.fid = fid; return mesh;
 }
 // Vereinigen, Ausschneiden, Schneiden (wie in Fusion) – Geometrie des Zielkörpers wird ersetzt
@@ -3025,7 +3050,7 @@ function fitte(box) {
 }
 const alleBox = () => { const b = new THREE.Box3(); modell.children.forEach((o) => { if (!o.userData.konstruktion) b.expandByObject(o); }); b.union(new THREE.Box3().setFromObject(live)); if (bilder.children.length) b.union(new THREE.Box3().setFromObject(bilder)); return b; }; // Achsen sind «unendlich» lang
 function ansicht(name) {
-  const d = { oben: [0, 1, 0.0001], vorne: [0, 0, 1], rechts: [1, 0, 0], iso: [0.7, 0.5, 0.8] }[name];
+  const d = { oben: [0, 1, 0.0001], unten: [0, -1, 0.0001], vorne: [0, 0, 1], hinten: [0, 0, -1], rechts: [1, 0, 0], links: [-1, 0, 0], iso: [0.7, 0.5, 0.8] }[name];
   kamera.position.copy(steuerung.target.clone().add(V(d).normalize()));
   fitte(alleBox());
 }
@@ -4626,7 +4651,7 @@ regen();
 auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser(); zeigeWerkstatt();
 ansicht("iso");
 kernAnzeige();
-(function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
+(function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
 if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;

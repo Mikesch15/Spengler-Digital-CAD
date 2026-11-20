@@ -14,7 +14,7 @@
 :root {
   /* Design wie die Palette des Fusion-Add-ins: Blau #1d4f7a, Grau #5b6672, Rand #c8ced6, Segoe UI */
   --bg: #eceff3; --panel: #ffffff; --panel-2: #f7f8fa; --line: #c8ced6; --fg: #1b1f24; --muted: #5b6672;
-  --accent: #1d4f7a; --accent-soft: #e6eef6; --bend: #a3221b; --view: #e3e8ee; --sketch: #1f5fbf; --ok: #2d6a2d; --fehler: #a3221b;
+  --accent: #1d4f7a; --accent-soft: #e6eef6; --bend: #a3221b; --view: #dfe5eb; --sketch: #1f5fbf; --ok: #2d6a2d; --fehler: #a3221b;
   --font-body: "Segoe UI", Arial, system-ui, sans-serif; --font-label: "Segoe UI", Arial, system-ui, sans-serif;
   --font-num: "Segoe UI", Arial, system-ui, sans-serif;
 }
@@ -351,6 +351,27 @@ table.zeilen th { font: 600 12px var(--font-body); letter-spacing: 0; text-trans
 fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-weight: 600; }
 .leer { color: var(--muted); padding: 16px; text-align: center; border: 1px dashed var(--line); margin: 8px 0; }
 .meldung { padding: 6px 8px; margin: 6px 0; border-radius: 3px; background: #eef2f6; white-space: pre-wrap; } .fehler { color: var(--fehler); }
+
+/* ---- Professioneller Durchgang: Symbole, Werkzeugleiste, Ansicht ---- */
+.wz svg { stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; width: 26px; height: 26px; }
+.wz svg .f { fill: color-mix(in srgb, var(--accent) 16%, transparent); }
+.wz:hover:not(:disabled) svg .f, .wz[aria-pressed="true"] svg .f { fill: color-mix(in srgb, var(--accent) 30%, transparent); }
+.klappmenue .wz svg { width: 22px; height: 22px; }
+.leiste { padding: 5px 12px; gap: 2px; align-items: center; box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 1px 2px rgba(20,35,50,.06); background: linear-gradient(#ffffff, #f4f6f9); }
+.leiste > .gruppe, .leiste .knoepfe { gap: 1px; align-items: center; }
+.wz { min-width: 58px; padding: 5px 7px 4px; gap: 2px; font: 500 11.5px var(--font-body); color: var(--fg); border-radius: 4px; letter-spacing: 0; }
+.kz { display: inline-flex; align-items: center; gap: 2px; } .kz .kpfeil { font-size: 8px; opacity: .6; margin: 0; }
+.klappmenue .wz { flex-direction: row; justify-content: flex-start; gap: 10px; font-size: 13px; padding: 6px 12px; min-width: 0; width: 100%; }
+.leiste .trenner { width: 1px; align-self: stretch; margin: 6px 8px; background: var(--line); flex: none; }
+.marke { gap: 9px; padding-right: 14px; margin-right: 6px; border-right: 1px solid var(--line); font: 700 15px var(--font-label); letter-spacing: -.01em; }
+.marke img { width: 30px; height: 30px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
+.panel { box-shadow: 0 1px 2px rgba(20,35,50,.05); }
+.ansicht { background: radial-gradient(120% 100% at 50% 0%, #f5f8fb 0%, #dde4eb 60%, #cdd6df 100%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.6); }
+#wuerfelHit { position: absolute; top: 10px; right: 10px; width: 96px; height: 96px; z-index: 3; cursor: pointer; }
+.ansichtsknoepfe { top: 112px; right: 10px; flex-direction: column; width: 96px; gap: 4px; z-index: 3; }
+.ansichtsknoepfe button { text-align: center; text-transform: none; letter-spacing: 0; font: 500 12px var(--font-body); background: rgba(255,255,255,.85); }
+.ansichtsknoepfe button[data-ansicht="oben"], .ansichtsknoepfe button[data-ansicht="vorne"], .ansichtsknoepfe button[data-ansicht="rechts"] { display: none; }
+.baum li button, .baum li { font-size: 13px; }
 </style>
 
 <div class="app">
@@ -358,53 +379,55 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <div class="marke"><img src="logo.png" alt="" width="32" height="32">Spengler Digital <span>CAD</span></div>
     <div class="aktivwz" id="aktivWz" hidden></div>
     <div class="gruppe" id="gHaupt"><div class="knoepfe">
-      <button class="wz" id="wSkizze"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 16l4-8 3 5 3-3"/></svg>Skizze</button>
-    <div class="klapp" data-klapp="koerper"><button class="wz klappknopf" aria-haspopup="true" title="Extrudieren, Drehen, Sweep, Übergang"><svg viewBox="0 0 24 24"><path d="M4 16l8 4 8-4M4 16V9l8-4 8 4v7M12 13v7M4 9l8 4 8-4"/></svg><span class="kl">Körper</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
-      <button class="wz" id="wExtrusion"><svg viewBox="0 0 24 24"><path d="M4 16l8 4 8-4M4 16V9l8-4 8 4v7M12 13v7M4 9l8 4 8-4"/></svg>Extrudieren</button>
-      <button class="wz" id="wDrehung" title="Drehen: Profil um eine Achse drehen (Rohr, Kugel, Kegel …)"><svg viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M8 6a6 3 0 1 0 8 0"/><path d="M8 18a6 3 0 0 0 8 0M6 7v10M18 7v10"/></svg>Drehen</button>
-      <button class="wz" id="wSweep" title="Sweep: Profil entlang eines Pfads"><svg viewBox="0 0 24 24"><path d="M4 18c4 0 6-12 16-12" stroke-dasharray="2 2"/><rect x="2" y="15" width="5" height="6"/><rect x="17" y="3" width="5" height="6"/></svg>Sweep</button>
-      <button class="wz" id="wLoft" title="Übergang (Loft) zwischen zwei Profilen"><svg viewBox="0 0 24 24"><rect x="4" y="16" width="16" height="5"/><ellipse cx="12" cy="5" rx="5" ry="2"/><path d="M4 16L7 5M20 16l-3-11"/></svg>Übergang</button>
-    </div></div>
-    <div class="klapp" data-klapp="blech"><button class="wz klappknopf" aria-haspopup="true" title="Blechprofil, Vorlage, Flächenblech, Kehle/Grat"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg><span class="kl">Blech</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
-      <button class="wz" id="wBlech"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg>Blechprofil</button>
-      <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path d="M3 6h10l-3 12h11"/><circle cx="3" cy="6" r="1.5"/></svg>Spengler-Vorlage</button>
-      <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14"/></svg>Freies Profil</button>
-      <button class="wz" id="wRund" title="Zylinder- oder Kegelmantel (Rohr, Kaminhut, Trichter, Rinnenstutzen …) mit exakter Abwicklung und DXF"><svg viewBox="0 0 24 24"><path d="M7 5h10l3 14H4z"/><ellipse cx="12" cy="5" rx="5" ry="1.5"/></svg>Rund-/Kegelblech</button>
-      <button class="wz" id="wDetail3d" title="Körper einer 3D-Detailvorlage (STEP) an eine Kante setzen"><svg viewBox="0 0 24 24"><path d="M4 18h16M6 18V9l6-4 6 4v9"/></svg>3D-Detail</button>
-      <button class="wz" id="wUmform" title="Scheibe mit Rand, Kragen oder Kegel beurteilen: konstruierbar, abwickelbar, herstellbar (wie im Fusion-Add-in)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/></svg>Rundblech beurteilen</button>
-      <button class="wz" id="wFlaeche" title="Blech als Grundfläche aus der Skizze; Kanten anklicken und Spenglerbaustein zuweisen (Falz, Traufe, Ortgang …)"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg>Flächenblech</button>
-      <button class="wz" id="wBlechAufFlaeche"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg><span><b>Blech auf Körperfläche</b><small>Fläche anklicken – Umriss wird übernommen</small></span></button>
-      <button class="wz" id="wKehle"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg><span><b>Kehle / Grat</b><small>zwei Flächen anklicken</small></span></button>
-    </div></div>
-      <button class="wz" id="wEbene" title="Konstruktionsebene: versetzt, unter Winkel, Mitte, zwei Kanten, drei Punkte, tangential, entlang Pfad"><svg viewBox="0 0 24 24"><path d="M3 15l6-6h12l-6 6z"/><path d="M12 9V3M12 3l-2 2M12 3l2 2" /></svg>Ebene<span class="kpfeil">▾</span></button>
-    <div class="klapp" data-klapp="aendern"><button class="wz klappknopf" aria-haspopup="true" title="Abrunden, Schale, Muster, Spiegeln, Parameter"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span class="kl">Ändern</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
-      <button class="wz" data-kwz="kanten3d"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Kanten abrunden / fasen</b><small>einzelne Kanten anklicken</small></span></button>
-      <button class="wz" data-kwz="kantenrund"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Extrusion ringsum abrunden</b><small>alle Kanten einer Extrusion</small></span></button>
-      <button class="wz" data-kwz="schale"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Schale</b><small>aushöhlen mit Wanddicke</small></span></button>
-      <button class="wz" data-kwz="kmuster"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Muster</b><small>rechteckig oder kreisförmig</small></span></button>
-      <button class="wz" data-kwz="kspiegel"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Spiegeln</b><small>an einer Ebene</small></span></button>
-      <button class="wz" data-kwz="bewegen"><svg viewBox="0 0 24 24"><path d="M4 9l8-5 8 5v8l-8 4-8-4z"/><path d="M4 9l8 4 8-4M12 13v8"/></svg><span><b>Verschieben / Kopieren</b><small>Körper bewegen</small></span></button>
-      <button class="wz" id="wParameter" title="Parameter ändern: benannte Werte und Formeln für alle Masse"><svg viewBox="0 0 24 24"><path d="M4 7h9M4 17h5M17 7h3M13 17h7"/><circle cx="15" cy="7" r="2"/><circle cx="11" cy="17" r="2"/></svg>Parameter</button>
-    </div></div>
-    <div class="klapp" data-klapp="pruefen"><button class="wz klappknopf" aria-haspopup="true" title="Messen, Kollision, Schnitt"><svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg><span class="kl">Prüfen</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
-      <button class="wz" id="wMessen" title="Messen: Abstand zwischen zwei Punkten (Ecken, Kantenmitten, Flächen)"><svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg>Messen</button>
-      <button class="wz" id="wEigenschaften" title="Volumen, Oberfläche, Schwerpunkt, Masse und Gültigkeit aus dem exakten CAD-Kern" hidden><svg viewBox="0 0 24 24"><path d="M4 20h16M6 20V9l6-5 6 5v11"/><path d="M10 14h4"/></svg>Eigenschaften (exakt)</button>
-      <button class="wz" id="wKollision" title="Kollision: durchdringende Körper und Bleche verschiedener Teile finden (rot)"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="10" height="10"/><rect x="11" y="4" width="10" height="10"/><path d="M11 7h2v7h-2z" fill="currentColor"/></svg>Kollision</button>
-      <button class="wz" id="wSchnitt" title="Schnittanalyse: Modell an einer Ebene aufschneiden"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 12h16" stroke-dasharray="2 2"/></svg>Schnitt</button>
-    </div></div>
-      <button class="wz" id="wPlan" title="Planblatt: Ansichten des Modells, Bausteinschnitte, Bemassung, Schriftfeld – A3/A4 drucken oder als PDF/SVG"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M13 15h8M13 20v-5M6 8h5v5H6z"/></svg>Plan</button>
+      <button class="wz" id="wSkizze"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3.5-6 3 4 3.5-5"/><circle cx="7" cy="15" r="1" fill="currentColor"/><circle cx="17" cy="8" r="1" fill="currentColor"/></svg>Skizze</button>
       <span class="trenner" aria-hidden="true"></span>
-    <div class="klapp" data-klapp="datei"><button class="wz klappknopf" aria-haspopup="true" title="Speichern, Öffnen, Austausch, Drucken"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><span class="kl">Datei</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
-      <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
-      <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Öffnen</button>
-      <button class="wz" id="wZuletzt" title="Zuletzt geöffnete Projekte" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Zuletzt</button>
-      <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M12 10v6M9 13h6"/></svg>Neu</button>
-      <button class="wz" id="wDrucken" title="Stückliste und Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6M7 17H4v-8h16v8h-3"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
-      <button class="wz" data-aus="step"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>STEP exportieren</b><small>aus dem Anzeige-Netz (facettiert)</small></span></button>
-      <button class="wz" data-aus="stepExakt" id="wStepExakt" hidden><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>STEP exakt (B-Rep)</b><small>alle exakten Körper aus dem CAD-Kern, AP242</small></span></button>
-      <button class="wz" data-aus="stl"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>STL exportieren</b><small>3D-Druck, Visualisierung</small></span></button>
-      <button class="wz" data-aus="import"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>STEP / STL importieren</b><small>als Körper ins Modell</small></span></button>
-      <button class="wz" data-aus="bild"><svg viewBox="0 0 24 24"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg><span><b>Bild / PDF-Plan als Hintergrund</b><small>auf Ebene legen, kalibrieren</small></span></button>
+    <div class="klapp" data-klapp="koerper"><button class="wz klappknopf" aria-haspopup="true" title="Extrudieren, Drehen, Sweep, Übergang"><svg viewBox="0 0 24 24"><path class="f" d="M4 14l8 4 8-4-8-4z"/><path d="M4 14v3l8 4 8-4v-3M12 18v3"/><path d="M12 8V2M9 5l3-3 3 3"/></svg><span class="kz"><span class="kl">Körper</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
+      <button class="wz" id="wExtrusion"><svg viewBox="0 0 24 24"><path class="f" d="M4 14l8 4 8-4-8-4z"/><path d="M4 14v3l8 4 8-4v-3M12 18v3"/><path d="M12 8V2M9 5l3-3 3 3"/></svg>Extrudieren</button>
+      <button class="wz" id="wDrehung" title="Drehen: Profil um eine Achse drehen (Rohr, Kugel, Kegel …)"><svg viewBox="0 0 24 24"><path d="M12 2v20" stroke-dasharray="2 2.5"/><path class="f" d="M12 6h5c1.4 4 1.4 8 0 12h-5z"/><path d="M4.5 9.5C6 6.5 9 5 12 5"/><path d="M4 6.5l.5 3 3-.8"/></svg>Drehen</button>
+      <button class="wz" id="wSweep" title="Sweep: Profil entlang eines Pfads"><svg viewBox="0 0 24 24"><path d="M5 18c0-7 5-10 14-12" stroke-dasharray="2 2.5"/><rect class="f" x="2.5" y="16" width="5.5" height="5.5" rx=".8"/><path class="f" d="M16 2.5h5.5V8H16z"/></svg>Sweep</button>
+      <button class="wz" id="wLoft" title="Übergang (Loft) zwischen zwei Profilen"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="16" width="18" height="5" rx="1"/><ellipse class="f" cx="12" cy="6" rx="5" ry="2.5"/><path d="M3 16l4-9.5M21 16l-4-9.5"/></svg>Übergang</button>
+    </div></div>
+    <div class="klapp" data-klapp="blech"><button class="wz klappknopf" aria-haspopup="true" title="Blechprofil, Vorlage, Flächenblech, Kehle/Grat"><svg viewBox="0 0 24 24"><path class="f" d="M3 17h5.5l5-9H21v3h-5.5l-5 9H3z"/></svg><span class="kz"><span class="kl">Blech</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
+      <button class="wz" id="wBlech"><svg viewBox="0 0 24 24"><path class="f" d="M3 17h5.5l5-9H21v3h-5.5l-5 9H3z"/></svg>Blechprofil</button>
+      <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path class="f" d="M6 3h12v18l-6-4-6 4z"/><path d="M9.5 8h5M9.5 11.5h5"/></svg>Spengler-Vorlage</button>
+      <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9.3h18M3 14.7h18M9 4v16"/></svg>Freies Profil</button>
+      <button class="wz" id="wRund" title="Zylinder- oder Kegelmantel (Rohr, Kaminhut, Trichter, Rinnenstutzen …) mit exakter Abwicklung und DXF"><svg viewBox="0 0 24 24"><path class="f" d="M7 6h10l3 13H4z"/><ellipse cx="12" cy="6" rx="5" ry="1.8"/><path d="M4 19c0 1.4 3.6 2.4 8 2.4s8-1 8-2.4"/></svg>Rund-/Kegelblech</button>
+      <button class="wz" id="wDetail3d" title="Körper einer 3D-Detailvorlage (STEP) an eine Kante setzen"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><path class="f" d="M6 20v-8l6-5 6 5v8z"/><path d="M10 20v-4.5h4V20"/></svg>3D-Detail</button>
+      <button class="wz" id="wUmform" title="Scheibe mit Rand, Kragen oder Kegel beurteilen: konstruierbar, abwickelbar, herstellbar (wie im Fusion-Add-in)"><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 4V2M20 12h2M12 20v2M4 12H2"/></svg>Rundblech beurteilen</button>
+      <button class="wz" id="wFlaeche" title="Blech als Grundfläche aus der Skizze; Kanten anklicken und Spenglerbaustein zuweisen (Falz, Traufe, Ortgang …)"><svg viewBox="0 0 24 24"><path class="f" d="M4 17l3-9h11l-3 9z"/><path d="M7 8V5M18 8V5M4 17v3M15 17v3"/></svg>Flächenblech</button>
+      <button class="wz" id="wBlechAufFlaeche"><svg viewBox="0 0 24 24"><path d="M4 12l8 4 8-4v5l-8 4-8-4z"/><path class="f" d="M4 12l8-4 8 4-8 4z"/></svg><span><b>Blech auf Körperfläche</b><small>Fläche anklicken – Umriss wird übernommen</small></span></button>
+      <button class="wz" id="wKehle"><svg viewBox="0 0 24 24"><path class="f" d="M3 8l9 7 9-7v3l-9 7-9-7z"/><path d="M12 15v6"/></svg><span><b>Kehle / Grat</b><small>zwei Flächen anklicken</small></span></button>
+    </div></div>
+      <button class="wz" id="wEbene" title="Konstruktionsebene: versetzt, unter Winkel, Mitte, zwei Kanten, drei Punkte, tangential, entlang Pfad"><svg viewBox="0 0 24 24"><path class="f" d="M3 16l6-6h12l-6 6z"/><path d="M12 10V3M9.5 5.5L12 3l2.5 2.5"/></svg><span class="kz">Ebene<span class="kpfeil">▾</span></span></button>
+    <div class="klapp" data-klapp="aendern"><button class="wz klappknopf" aria-haspopup="true" title="Abrunden, Schale, Muster, Spiegeln, Parameter"><svg viewBox="0 0 24 24"><rect class="f" x="3.5" y="5" width="17" height="14" rx="5.5"/></svg><span class="kz"><span class="kl">Ändern</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
+      <button class="wz" data-kwz="kanten3d"><svg viewBox="0 0 24 24"><path class="f" d="M4 19V10a6 6 0 0 1 6-6h10v15z"/></svg><span><b>Kanten abrunden / fasen</b><small>einzelne Kanten anklicken</small></span></button>
+      <button class="wz" data-kwz="kantenrund"><svg viewBox="0 0 24 24"><rect class="f" x="3.5" y="5" width="17" height="14" rx="5.5"/></svg><span><b>Extrusion ringsum abrunden</b><small>alle Kanten einer Extrusion</small></span></button>
+      <button class="wz" data-kwz="schale"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path class="f" d="M8 10.2l4-2 4 2v3.6l-4 2-4-2z"/></svg><span><b>Schale</b><small>aushöhlen mit Wanddicke</small></span></button>
+      <button class="wz" data-kwz="kmuster"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="3" width="7.5" height="7.5" rx="1"/><rect class="f" x="13.5" y="3" width="7.5" height="7.5" rx="1"/><rect class="f" x="3" y="13.5" width="7.5" height="7.5" rx="1"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1" stroke-dasharray="2 2"/></svg><span><b>Muster</b><small>rechteckig oder kreisförmig</small></span></button>
+      <button class="wz" data-kwz="kspiegel"><svg viewBox="0 0 24 24"><path class="f" d="M3 5l7 7-7 7z"/><path d="M21 5l-7 7 7 7z"/><path d="M12 2v20" stroke-dasharray="2 2.5"/></svg><span><b>Spiegeln</b><small>an einer Ebene</small></span></button>
+      <button class="wz" data-kwz="bewegen"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><span><b>Verschieben / Kopieren</b><small>Körper bewegen</small></span></button>
+      <button class="wz" id="wParameter" title="Parameter ändern: benannte Werte und Formeln für alle Masse"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/><circle class="f" cx="9" cy="7" r="2.2"/><circle class="f" cx="15" cy="12" r="2.2"/><circle class="f" cx="8" cy="17" r="2.2"/></svg>Parameter</button>
+    </div></div>
+      <span class="trenner" aria-hidden="true"></span>
+    <div class="klapp" data-klapp="pruefen"><button class="wz klappknopf" aria-haspopup="true" title="Messen, Kollision, Schnitt"><svg viewBox="0 0 24 24"><path class="f" d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg><span class="kz"><span class="kl">Prüfen</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
+      <button class="wz" id="wMessen" title="Messen: Abstand zwischen zwei Punkten (Ecken, Kantenmitten, Flächen)"><svg viewBox="0 0 24 24"><path class="f" d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg>Messen</button>
+      <button class="wz" id="wEigenschaften" title="Volumen, Oberfläche, Schwerpunkt, Masse und Gültigkeit aus dem exakten CAD-Kern" hidden><svg viewBox="0 0 24 24"><rect class="f" x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Eigenschaften (exakt)</button>
+      <button class="wz" id="wKollision" title="Kollision: durchdringende Körper und Bleche verschiedener Teile finden (rot)"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="3" width="12.5" height="12.5" rx="1.5"/><rect x="8.5" y="8.5" width="12.5" height="12.5" rx="1.5"/></svg>Kollision</button>
+      <button class="wz" id="wSchnitt" title="Schnittanalyse: Modell an einer Ebene aufschneiden"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path class="f" d="M3 13.5l9-5 9 5-9 5z"/></svg>Schnitt</button>
+    </div></div>
+      <button class="wz" id="wPlan" title="Planblatt: Ansichten des Modells, Bausteinschnitte, Bemassung, Schriftfeld – A3/A4 drucken oder als PDF/SVG"><svg viewBox="0 0 24 24"><rect class="f" x="4" y="3" width="16" height="18" rx="1.5"/><rect x="7" y="6" width="10" height="7"/><path d="M7 17h10"/></svg>Plan</button>
+      <span class="trenner" aria-hidden="true"></span>
+    <div class="klapp" data-klapp="datei"><button class="wz klappknopf" aria-haspopup="true" title="Speichern, Öffnen, Austausch, Drucken"><svg viewBox="0 0 24 24"><path class="f" d="M4 4h13l3 3v13H4z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><span class="kz"><span class="kl">Datei</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
+      <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path class="f" d="M4 4h13l3 3v13H4z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
+      <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path class="f" d="M3 6.5h6l2 2.5h10V19H3z"/></svg>Öffnen</button>
+      <button class="wz" id="wZuletzt" title="Zuletzt geöffnete Projekte" hidden><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>Zuletzt</button>
+      <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path class="f" d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M12 11v6M9 14h6"/></svg>Neu</button>
+      <button class="wz" id="wDrucken" title="Stückliste und Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6"/><rect class="f" x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
+      <button class="wz" data-aus="step"><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><span><b>STEP exportieren</b><small>aus dem Anzeige-Netz (facettiert)</small></span></button>
+      <button class="wz" data-aus="stepExakt" id="wStepExakt" hidden><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><span><b>STEP exakt (B-Rep)</b><small>alle exakten Körper aus dem CAD-Kern, AP242</small></span></button>
+      <button class="wz" data-aus="stl"><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><span><b>STL exportieren</b><small>3D-Druck, Visualisierung</small></span></button>
+      <button class="wz" data-aus="import"><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 17v-6M9 14l3-3 3 3"/></svg><span><b>STEP / STL importieren</b><small>als Körper ins Modell</small></span></button>
+      <button class="wz" data-aus="bild"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg><span><b>Bild / PDF-Plan als Hintergrund</b><small>auf Ebene legen, kalibrieren</small></span></button>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
       <input type="file" id="importDatei" accept=".step,.stp,.stl" hidden>
       <input type="file" id="detailDatei" accept=".step,.stp" hidden>
@@ -412,15 +435,15 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <input type="file" id="dxfDatei" accept=".dxf" hidden>
       <input type="file" id="einstDatei" accept=".json,application/json" hidden>
     </div></div>
-    <div class="klapp" data-klapp="werkstatt"><button class="wz klappknopf" aria-haspopup="true" title="Einstellungen, Hilfe"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg><span class="kl">Werkstatt</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
-      <button class="wz" id="wEinst" title="Materialien kalibrieren, Lagerformate"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Einstellungen</button>
-      <button class="wz" id="wHilfe" title="Kurzanleitung und Tastenkürzel (F1)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></svg>Hilfe</button>
+    <div class="klapp" data-klapp="werkstatt"><button class="wz klappknopf" aria-haspopup="true" title="Einstellungen, Hilfe"><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg><span class="kz"><span class="kl">Werkstatt</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
+      <button class="wz" id="wEinst" title="Materialien kalibrieren, Lagerformate"><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>Einstellungen</button>
+      <button class="wz" id="wHilfe" title="Kurzanleitung und Tastenkürzel (F1)"><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="9"/><path d="M9.5 9.6a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.7M12 17v.2"/></svg>Hilfe</button>
     </div></div>
     </div></div>
     <div class="gruppe skizzengruppe" id="gSkizze" hidden><div class="knoepfe">
       <button class="wz" id="tAuswahl"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-2 6z"/></svg>Auswahl</button>
       <button class="wz" id="tLinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><circle cx="4" cy="20" r="1.8"/><circle cx="20" cy="4" r="1.8"/></svg>Linie</button>
-    <div class="klapp" data-klapp="formen"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg><span class="kl">Formen</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
+    <div class="klapp" data-klapp="formen"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg><span class="kz"><span class="kl">Formen</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
       <button class="wz" id="tRechteck"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg><span>Rechteck <span class="pfeil" title="Varianten">▾</span></span></button>
       <button class="wz" id="tKreis"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 12h8"/></svg><span>Kreis <span class="pfeil" title="Varianten">▾</span></span></button>
       <button class="wz" id="tBogen"><svg viewBox="0 0 24 24"><path d="M4 18A9 9 0 0 1 20 18"/><circle cx="4" cy="18" r="1.6"/><circle cx="20" cy="18" r="1.6"/></svg><span>Bogen <span class="pfeil" title="Varianten">▾</span></span></button>
@@ -431,7 +454,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <button class="wz" id="tText" title="Text in die Skizze – extrudiert als Gravur oder Prägung"><svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg>Text</button>
       <button class="wz" id="tPunkt"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="currentColor"/><path d="M12 4v4M12 16v4M4 12h4M16 12h4"/></svg>Punkt</button>
     </div></div>
-    <div class="klapp" data-klapp="skaendern"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><path d="M4 20V12a8 8 0 0 1 8-8h8"/></svg><span class="kl">Ändern</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
+    <div class="klapp" data-klapp="skaendern"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><path d="M4 20V12a8 8 0 0 1 8-8h8"/></svg><span class="kz"><span class="kl">Ändern</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
       <button class="wz" id="tAbrunden"><svg viewBox="0 0 24 24"><path d="M4 20V12a8 8 0 0 1 8-8h8"/></svg>Abrunden</button>
       <button class="wz" id="tVersatz"><svg viewBox="0 0 24 24"><path d="M4 20V8h12"/><path d="M8 20v-8h12" opacity=".6"/></svg>Versatz</button>
       <button class="wz" id="tSpiegeln"><svg viewBox="0 0 24 24"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L4 17h5zM15 7l5 10h-5z"/></svg>Spiegeln</button>
@@ -442,7 +465,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <button class="wz" id="tMuster" title="Rechteckiges oder kreisförmiges Muster"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><rect x="15" y="15" width="6" height="6"/></svg><span>Muster <span class="pfeil" title="Varianten">▾</span></span></button>
       <button class="wz" id="tHilfslinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4" stroke-dasharray="3 2.5"/></svg>Hilfslinie</button>
     </div></div>
-    <div class="klapp" data-klapp="einfuegen"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><path d="M4 18l8 3 8-3"/><path d="M8 4h8v6H8z"/><path d="M8 10l-4 8M16 10l4 8" stroke-dasharray="2 2"/></svg><span class="kl">Einfügen</span><span class="kpfeil">▾</span></button><div class="klappmenue" hidden>
+    <div class="klapp" data-klapp="einfuegen"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><path d="M4 18l8 3 8-3"/><path d="M8 4h8v6H8z"/><path d="M8 10l-4 8M16 10l4 8" stroke-dasharray="2 2"/></svg><span class="kz"><span class="kl">Einfügen</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
       <button class="wz" id="tProjizieren" title="Körperkanten und andere Skizzen projizieren"><svg viewBox="0 0 24 24"><path d="M4 18l8 3 8-3"/><path d="M8 4h8v6H8z"/><path d="M8 10l-4 8M16 10l4 8" stroke-dasharray="2 2"/></svg>Projizieren</button>
       <button class="wz" id="tDxf" title="DXF-Datei (Plan, Kontur) in diese Skizze einfügen"><svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M9 14h6M12 11v6"/></svg>DXF</button>
     </div></div>
@@ -460,9 +483,10 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <section class="ansicht" id="ansicht">
       <canvas id="leinwand" aria-label="3D-Ansicht"></canvas>
       <div id="labels"></div>
+      <div id="wuerfelHit" title="Ansichtswürfel: Fläche anklicken"></div>
       <div class="ansichtsknoepfe">
         <button data-ansicht="oben">Oben</button><button data-ansicht="vorne">Vorne</button>
-        <button data-ansicht="rechts">Rechts</button><button data-ansicht="iso">Iso</button><button id="zoomAlles">Alles</button>
+        <button data-ansicht="rechts">Rechts</button><button data-ansicht="iso" title="Isometrische Ansicht">Iso</button><button id="zoomAlles" title="Alles einpassen">Alles</button>
       </div>
       <div class="eingabe" id="eingabe" hidden>
         <label>L <input id="eLaenge" type="number" step="any"></label><label>∠ <input id="eWinkel" type="number" step="any"></label>
