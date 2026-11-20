@@ -33,7 +33,8 @@ export function materialZuProfil(m, bestehend = null) {
   if (bestehend) p.version = bestehend.version;
   if (!bestehend && m.id) p.id = String(m.id).startsWith("mat-") ? m.id : `mat-${String(m.id).replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 70)}`;
   p.sheets = m.tafeln ?? p.sheets; p.coils = m.coils ?? p.coils;
+  if (m.umform) p.formingLimits = { shrinkMaxPercent: m.umform.schrumpfMaxProzent ?? null, stretchMaxPercent: m.umform.streckMaxProzent ?? null, source: m.umform.quelle || "" };
   return p;
 }
-export const profilZuMaterial = (p) => ({ id: p.id, name: p.name, t: +p.thickness, ri: p.innerRadius ?? 1, k: p.kFactor ?? 0.4, dichte: p.density ?? 0, tafeln: p.sheets || [], coils: p.coils || [] });
+export const profilZuMaterial = (p) => ({ id: p.id, name: p.name, t: +p.thickness, ri: p.innerRadius ?? 1, k: p.kFactor ?? 0.4, dichte: p.density ?? 0, tafeln: p.sheets || [], coils: p.coils || [], ...(p.formingLimits && (p.formingLimits.shrinkMaxPercent != null || p.formingLimits.stretchMaxPercent != null) ? { umform: { schrumpfMaxProzent: p.formingLimits.shrinkMaxPercent, streckMaxProzent: p.formingLimits.stretchMaxPercent, quelle: p.formingLimits.source || "" } } : {}) });
 export { parameter };

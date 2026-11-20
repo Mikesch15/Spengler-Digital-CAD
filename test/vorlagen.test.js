@@ -53,6 +53,8 @@ const rt = bausteinZuVorlage(bt); ok(rt.parameters.length === 2 && rt.constraint
 // Material
 const mz = MATERIALIEN[0], mp = materialZuProfil(mz), zur = profilZuMaterial(mp);
 ok(mp.thickness === mz.t && mp.kFactor === mz.k && mp.density === mz.dichte && zur.t === mz.t && zur.k === mz.k && zur.dichte === mz.dichte && zur.ri === mz.ri, "Material ⇄ Materialprofil: Dicke, Ri, K, Dichte unverändert");
+const mu = { ...MATERIALIEN[0], umform: { schrumpfMaxProzent: 12, streckMaxProzent: 8, quelle: "Probe" } }, pu = materialZuProfil(mu), zu = profilZuMaterial(pu);
+ok(pu.formingLimits.shrinkMaxPercent === 12 && pu.formingLimits.source === "Probe" && zu.umform.streckMaxProzent === 8 && !("umform" in profilZuMaterial(materialZuProfil(MATERIALIEN[0]))), "Umformgrenzen ⇄ formingLimits des Add-ins (nur wenn eingetragen)");
 // Unbekannte (neuere) Felder gehen beim Wandeln nicht verloren
 const neuer = Object.assign(kopie(dsf), { zukunft: { x: 1 }, version: 5 }), rueck = bausteinZuVorlage({ id: "dsf-o", name: "Neuer Name", gruppe: "Falze", folge: "90 25", versatz: 0 }, neuer);
 ok(rueck.zukunft?.x === 1 && rueck.version === 5 && rueck.name === "Neuer Name" && rueck.operations.length === 1, "Aktualisieren einer bestehenden Vorlage: neuere Felder und Versionsstand bleiben erhalten");

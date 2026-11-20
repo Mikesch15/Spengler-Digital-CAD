@@ -11,6 +11,7 @@ import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geom
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf, rundblechDxf } from "../kern/dxf.js";
+import { scheibeMitRand, kragen, kegelstumpf, beurteilen, zuschnitt, VERFAHREN } from "../kern/umformung.js";
 import { rundblechAbwicklung, rundblechSvg } from "../kern/abwicklungRund.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
@@ -2735,8 +2736,8 @@ function zeigeEinst() {
   const inhalt = {
     material: `
     <h4>Materialien</h4>
-    <div class="tabwrap"><table class="zeilen mat"><thead><tr><th>Name</th><th>Dicke mm</th><th>Innenradius mm</th><th>K-Faktor</th><th>Dichte kg/dm³</th><th></th></tr></thead><tbody>
-    ${e.materialien.map((m, i) => `<tr><td>${feld(i, "name", m.name)}</td><td>${feld(i, "t", m.t)}</td><td>${feld(i, "ri", m.ri)}</td><td>${feld(i, "k", m.k)}</td><td>${feld(i, "dichte", m.dichte ?? "")}</td>
+    <div class="tabwrap"><table class="zeilen mat"><thead><tr><th>Name</th><th>Dicke mm</th><th>Innenradius mm</th><th>K-Faktor</th><th>Dichte kg/dm³</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand stauchen">Stauchen max %</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand strecken">Strecken max %</th><th></th></tr></thead><tbody>
+    ${e.materialien.map((m, i) => `<tr><td>${feld(i, "name", m.name)}</td><td>${feld(i, "t", m.t)}</td><td>${feld(i, "ri", m.ri)}</td><td>${feld(i, "k", m.k)}</td><td>${feld(i, "dichte", m.dichte ?? "")}</td><td>${feld(i, "umSchr", m.umform?.schrumpfMaxProzent ?? "")}</td><td>${feld(i, "umStr", m.umform?.streckMaxProzent ?? "")}</td>
       <td>${e.materialien.length > 1 ? `<button class="weg" data-weg="${i}" aria-label="${esc(m.name)} entfernen">×</button>` : ""}</td></tr>`).join("")}
     </tbody></table></div>
     <button class="knopf" id="eNeuMat">+ Material</button>
@@ -2865,6 +2866,7 @@ $("eInhalt").addEventListener("input", (ev) => {
   const t = ev.target;
   if (t.dataset.bk) { const b = entwurf.bausteine[+t.closest("tr").dataset.bi], k = t.dataset.bk; b[k] = k === "versatz" ? parseFloat(t.value) || 0 : t.value;
     if (k === "folge") { try { folge("100 " + bausteinFolge({ ...entwurf.bausteine[+t.closest("tr").dataset.bi], folge: t.value }, entwurf.materialien[0])); t.classList.remove("ungueltig"); } catch (err) { t.classList.add("ungueltig"); meldung(err.message); } } }
+  else if (t.dataset.k === "umSchr" || t.dataset.k === "umStr") { const m = entwurf.materialien[+t.dataset.i], v = t.value === "" ? null : parseFloat(t.value); m.umform = { ...(m.umform || {}), quelle: "Eigener Wert (Einstellungen)", [t.dataset.k === "umSchr" ? "schrumpfMaxProzent" : "streckMaxProzent"]: v }; }
   else if (t.dataset.k) { const m = entwurf.materialien[+t.dataset.i]; m[t.dataset.k] = t.dataset.k === "name" ? t.value : parseFloat(t.value); }
   else if (t.id === "lBand") entwurf.spaltbaender = zahlen(t.value);
   else if (t.id === "lCoil") entwurf.coil = parseFloat(t.value) || 0;
@@ -4037,6 +4039,40 @@ $("wDrehung").onclick = () => { if (dlg) $("dAbbrechen").click(); drehungDialog(
 $("wSweep").onclick = () => { if (dlg) $("dAbbrechen").click(); sweepDialog(); };
 $("wFlaeche").onclick = () => { if (dlg) $("dAbbrechen").click(); flaecheDialog(); };
 $("wRund").onclick = () => { if (dlg) $("dAbbrechen").click(); rundDialog(); };
+// Rundblech beurteilen: Scheibe mit Rand / Kragen / Kegel – konstruierbar, abwickelbar, herstellbar (wie im Fusion-Add-in)
+let umformWerte = { fall: "scheibe", r: 100, h: 20, winkel: 90, r2: 50, verfahren: "auto", material: null };
+function umformDialog() {
+  const w = umformWerte; w.material ||= neuMaterial();
+  const rechne = () => {
+    const m = material(w.material); let e;
+    try { e = w.fall === "scheibe" ? scheibeMitRand(+w.r, +w.h, +w.winkel) : w.fall === "kragen" ? kragen(+w.r, +w.h, +w.winkel) : kegelstumpf(+w.r, +w.r2, +w.h); } catch (err) { return { fehler: err.message }; }
+    const b = beurteilen(e, w.verfahren, m); let z = null, zf = ""; try { z = zuschnitt(e); } catch (err) { zf = err.message; }
+    return { e, b, z, zf };
+  };
+  const html = () => {
+    const r = rechne(); if (r.fehler) return `<p class="fehler">⚠ ${esc(r.fehler)}</p>`;
+    const ja = (v) => v === true ? "ja" : v === false ? "nein" : "nicht beurteilbar", { e, b } = r;
+    return `<table class="zeilen"><tbody><tr><td>konstruierbar</td><td><b>ja</b></td></tr><tr><td>abwickelbar</td><td><b>${ja(e.abwickelbar)}</b></td></tr><tr><td>herstellbar</td><td><b>${ja(b.herstellbar)}</b></td></tr></tbody></table>
+      ${r.z ? `<p>${esc(r.z.beschreibung)}</p>` : `<p class="hinweis">${esc(r.zf)}</p>`}<ul>${b.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>`;
+  };
+  const felder = () => [
+      { id: "fall", label: "Fall", optionen: [["scheibe", "Scheibe mit aufgebogenem Rand"], ["kragen", "Kragen an rundem Ausschnitt"], ["kegel", "Kegelstumpf / Zylinder"]], wert: w.fall },
+      { id: "r", label: w.fall === "kegel" ? "Radius unten (Blechmitte)" : w.fall === "kragen" ? "Fertiger Lochradius" : "Radius bis zur Biegung", einheit: "mm", wert: w.r },
+      ...(w.fall === "kegel" ? [{ id: "r2", label: "Radius oben", einheit: "mm", wert: w.r2 }] : []),
+      { id: "h", label: w.fall === "kegel" ? "Höhe" : w.fall === "kragen" ? "Kragenhöhe" : "Randhöhe", einheit: "mm", wert: w.h },
+      ...(w.fall === "kegel" ? [] : [{ id: "winkel", label: "Randwinkel", einheit: "°", wert: w.winkel }]),
+      { id: "verfahren", label: "Verfahren", optionen: Object.entries(VERFAHREN), wert: w.verfahren },
+      { id: "material", label: "Material", optionen: matOpt(), wert: w.material },
+    ];
+  dialog({
+    titel: "Rundblech beurteilen", hinweis: "Theoretische Beurteilung wie im Fusion-Add-in. «Herstellbar» gibt es nur mit eigenem Erfahrungswert im Material (Einstellungen › Materialien, Stauchen/Strecken max %). Es werden nie Einschnitte erzeugt.",
+    felder: felder(),
+    zusatz: html,
+    aendern: (v, feld) => { const alt = w.fall; Object.assign(w, v); if (alt !== w.fall) { const d = dlg; return setTimeout(() => dialog({ ...d, felder: felder() })); } $("dZusatz").innerHTML = html(); },
+    ok: () => {},
+  });
+}
+$("wUmform").onclick = () => { if (dlg) $("dAbbrechen").click(); umformDialog(); };
 $("wBlechAufFlaeche").onclick = () => blechAufFlaecheStart();
 $("wKehle").onclick = () => { if (dlg) $("dAbbrechen").click(); kehleDialog(); };
 // ------------------------------------------------------------ Werkzeugleiste: Klappmenüs (fest positioniert, die Leiste rollt seitlich)
