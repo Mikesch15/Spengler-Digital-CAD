@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/kern.test.js && node test/ebenen.test.js && node test/skizze.test.js && node test/loeser.test.js && node test/skizzenloeser.test.js && node test/details.test.js && node test/flaechenblech.test.js && node test/ausdruck.test.js && node test/step.test.js && node test/dxflesen.test.js && node test/abwicklungRund.test.js && node --expose-gc test/cad.test.js",
+    "test": "node test/kern.test.js && node test/vorlagen.test.js && node test/ebenen.test.js && node test/skizze.test.js && node test/loeser.test.js && node test/skizzenloeser.test.js && node test/details.test.js && node test/flaechenblech.test.js && node test/ausdruck.test.js && node test/step.test.js && node test/dxflesen.test.js && node test/abwicklungRund.test.js && node --expose-gc test/cad.test.js",
     "build": "node build.mjs",
     "tauri": "tauri"
   },
