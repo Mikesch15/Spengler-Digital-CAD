@@ -28,6 +28,9 @@ for (const kern of [null, "occt"]) {
   const [dl] = await Promise.all([s.waitForEvent("download"), s.click("#kRundDxf")]);
   const dx = readFileSync(await dl.path(), "utf8");
   ok((dx.match(/\nARC\n/g) || []).length === 2 && /\nNAHT\n/.test(dx), `${name}: Werkstatt → DXF mit 2 Bögen und Nahtlinie`);
+  await s.click('[data-register="auftrag"]');
+  const auftrag = await s.textContent("#werkstatt");
+  ok(/Rundblech 1/.test(auftrag) && /431\.9/.test(auftrag), `${name}: Rundblech in der Stückliste (Zuschnitt 431.9 mm)`);
   ok(probleme.length === 0, `${name}: keine Seitenfehler ${probleme.join(" | ")}`);
   await s.close();
 }

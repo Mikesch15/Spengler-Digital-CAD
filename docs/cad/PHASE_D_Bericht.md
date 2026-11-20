@@ -30,6 +30,8 @@ Neues Werkzeug **Blech ▾ → Rund-/Kegelblech** für Zylinder- und Kegelmänte
   - Lage auf der XZ-Grundfläche, Achse Y.
   - DXF aus der Werkstatt, keine Seitenfehler.
 
+**D1b:** Rundbleche stehen jetzt in **Stückliste, CSV und Materialbedarf** (Materialverbrauch = Rechteck um die Abwicklung, so in der Notiz vermerkt). App-Test 12/12.
+
 **Noch nicht:**
-- Rundbleche erscheinen noch nicht in Stückliste und Werkstattblatt-Druck (dort nur Profil- und Flächenbleche).
+- Rundbleche sind nicht im gedruckten Werkstattblatt und nicht in «Alle als DXF»; die Einzel-DXF in der Werkstatt gibt es.
 - Schräg abgeschnittene Rohre (Rohr an Dachneigung) und Übergänge rund ↔ eckig fehlen noch; das wäre der nächste Schritt in Phase D.

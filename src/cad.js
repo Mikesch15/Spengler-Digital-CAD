@@ -1006,12 +1006,17 @@ const f1 = (v) => v.toFixed(1);
 let register = "teil"; // Werkstatt: «teil» oder «auftrag»
 document.querySelectorAll("[data-register]").forEach((b) => (b.onclick = () => { register = b.dataset.register; zeigeWerkstatt(); }));
 const blechteile = () => doc.features.filter((f) => !f.versteckt && !f._aus).flatMap((f) => (f._teile || (f._res ? [f] : [])).map((t) => (f._faktor > 1 ? { ...t, stueck: (t.stueck ?? 1) * f._faktor, notiz: [t.notiz, `${f._faktor}× durch Muster`].filter(Boolean).join(" · ") } : t)));
+// Rundbleche (Zylinder/Kegel): Materialverbrauch = Rechteck um die Abwicklung (schmale Seite als Zuschnitt, lange als Länge)
+const rundteile = () => doc.features.filter((f) => f.typ === "rundblech" && !f.versteckt && !f._aus && f._rund).map((f) => {
+  const [a, b] = f._rund.masse.zuschnitt;
+  return { name: f.name, notiz: [f.notiz, "Rundblech: Rechteck um die Abwicklung"].filter(Boolean).join(" · "), material: material(f.material), zuschnitt: Math.min(a, b), laenge: +Math.max(a, b).toFixed(1), stueck: (f.stueck ?? 1) * (f._faktor || 1) };
+});
 function auftrag() {
-  return stueckliste(blechteile().map((f) => ({ name: f.name, notiz: f.notiz, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: f.laenge, stueck: f.stueck ?? 1 })));
+  return stueckliste([...blechteile().map((f) => ({ name: f.name, notiz: f.notiz, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: f.laenge, stueck: f.stueck ?? 1 })), ...rundteile()]);
 }
 const f2 = (v) => v.toFixed(2);
 // Materialbedarf: Spaltband/Coil in Laufmetern, Tafeln als Stückzahl (Schätzung)
-const bedarf = () => materialbedarf(blechteile().map((f) => ({ name: f.name, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: f.laenge, stueck: f.stueck ?? 1 })), einst);
+const bedarf = () => materialbedarf([...blechteile().map((f) => ({ name: f.name, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: f.laenge, stueck: f.stueck ?? 1 })), ...rundteile()], einst);
 function bedarfCsv() {
   const zeilen = bedarf().flatMap((e) => [
     ...e.baender.map((b) => [e.material, `Spaltband ${b.breite}`, +b.laufmeter.toFixed(2), "lfm", b.stueck]),
