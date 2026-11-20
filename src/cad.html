@@ -367,6 +367,9 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .marke img { width: 30px; height: 30px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
 .panel { box-shadow: 0 1px 2px rgba(20,35,50,.05); }
 .ansicht { background: radial-gradient(120% 100% at 50% 0%, #f5f8fb 0%, #dde4eb 60%, #cdd6df 100%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.6); }
+#fangZeichen { position: absolute; z-index: 4; pointer-events: none; width: 0; height: 0; }
+#fangZeichen svg { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; overflow: visible; fill: none; stroke: #e0782b; stroke-width: 2; }
+#fangZeichen span { position: absolute; left: 14px; top: 10px; background: rgba(28, 38, 48, .9); color: #fff; font: 500 12px var(--font-body); padding: 1px 7px; border-radius: 3px; white-space: nowrap; }
 #wuerfelHit { position: absolute; top: 10px; right: 10px; width: 96px; height: 96px; z-index: 3; cursor: pointer; }
 .ansichtsknoepfe { top: 112px; right: 10px; flex-direction: column; width: 96px; gap: 4px; z-index: 3; }
 .ansichtsknoepfe button { text-align: center; text-transform: none; letter-spacing: 0; font: 500 12px var(--font-body); background: rgba(255,255,255,.85); }
@@ -505,6 +508,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <section class="ansicht" id="ansicht">
       <canvas id="leinwand" aria-label="3D-Ansicht"></canvas>
       <div id="labels"></div>
+      <div id="fangZeichen" hidden><svg viewBox="-12 -12 24 24" aria-hidden="true"><g></g></svg><span></span></div>
       <div id="wuerfelHit" title="Ansichtswürfel: Fläche anklicken"></div>
       <div class="ansichtsknoepfe">
         <button data-ansicht="oben">Oben</button><button data-ansicht="vorne">Vorne</button>

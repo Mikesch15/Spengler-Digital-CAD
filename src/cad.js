@@ -115,7 +115,7 @@ const EINST = "sdcad-einstellungen";
 const standardEinst = () => JSON.parse(JSON.stringify({
   materialien: MATERIALIEN, ...LAGER, vorlagen: [], bausteine: BAUSTEINE_STANDARD, eigeneDetails: [], detailvorlagen: [],
   neu: { laenge: 1000, stueck: 1, material: MATERIALIEN[0].id, ebene: "XY", lage: "mitte" }, // Vorgaben für neue Teile
-  skizze: { raster: 5, abstand: 80 },                                                 // Fangraster mm, Abstand der Teile in 3D mm
+  skizze: { raster: 0, abstand: 80 },                                                 // Fangraster mm (0 = aus), Abstand der Teile in 3D mm
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
   druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
   etiketten: { spalten: 3, zeilen: 8, breite: 70, hoehe: 37, oben: 0, links: 0, abstandX: 0, abstandY: 0 }, // mm
@@ -134,6 +134,8 @@ function mitStandard(e) {
 }
 let einst = standardEinst();
 try { const e = JSON.parse(localStorage.getItem(EINST) || "null"); if (e?.materialien?.length) einst = mitStandard(e); } catch {}
+if (einst.skizze && !einst.skizze.rasterAus) { if (einst.skizze.raster === 5) einst.skizze.raster = 0; einst.skizze.rasterAus = true; } // einmalig: das alte 5-mm-Raster ist jetzt aus
+const rastern = (x) => (einst.skizze.raster > 0 ? Math.round(x / einst.skizze.raster) * einst.skizze.raster : x);
 // Darstellung hell/dunkel/automatisch
 const darstellung = () => {
   const d = einst.programm.darstellung;
@@ -161,7 +163,10 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const szene = new THREE.Scene();
 const kamera = new THREE.PerspectiveCamera(35, 1, 1, 100000);
 const steuerung = new OrbitControls(kamera, leinwand);
-steuerung.enableDamping = true;
+steuerung.enableDamping = false; // keine Nachlaufzeit: Drehen und Verschieben folgen der Maus sofort
+steuerung.rotateSpeed = 1.1; steuerung.panSpeed = 1.2; steuerung.zoomSpeed = 1.2; steuerung.zoomToCursor = true;
+// Wie Fusion: Mausrad gedrückt = Verschieben, Umschalt + Mausrad gedrückt = Drehen, Rad = Zoom zum Zeiger (OrbitControls tauscht Verschieben/Drehen bei Umschalt)
+steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
 szene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; // Studiolicht: Spiegelungen wie im CAD-Programm
 szene.add(new THREE.HemisphereLight(0xffffff, 0x66727a, 0.55));
 const licht = new THREE.DirectionalLight(0xffffff, 1.15); licht.position.set(1, 2, 3); szene.add(licht);
@@ -2635,13 +2640,11 @@ let messen = null; // { a: Punkt | null }
 const messGruppe = new THREE.Group(); szene.add(messGruppe);
 // Messpunkt: Körperecke oder Kantenmitte in der Nähe (Fang), sonst Treffpunkt auf der Körperfläche
 function messPunkt(e) {
-  const sm = smPos(e); let best = null, bd = 12, art = "";
-  const nimm = (q, a) => { const S = aufSchirm(q); if (S[2] < 1) { const d = Math.hypot(S[0] - sm[0], S[1] - sm[1]); if (d < bd) { bd = d; best = q; art = a; } } };
-  for (const [a, b] of koerperKanten()) { nimm(a, "Ecke"); nimm(b, "Ecke"); nimm(a.map((v, i) => (v + b[i]) / 2), "Kantenmitte"); }
-  if (best) return { p: best, art };
+  const sm = smPos(e), k = koerperFang(sm);
+  if (k) return { p: k.p, art: FANGNAME[k.art], fa: k.art, s: k.s };
   strahl.setFromCamera(ndc(e), kamera);
-  const t = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
-  return t ? { p: t.point.toArray(), art: "Fläche" } : null;
+  const hit = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
+  return hit ? { p: hit.point.toArray(), art: "Fläche", fa: "flaeche", s: sm } : null;
 }
 function messMarke(p, farbe = 0xe0782b) {
   const k = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: farbe, depthTest: false }));
@@ -2830,7 +2833,7 @@ function zeigeEinst() {
     </div>
     <h4>Skizze und 3D-Ansicht</h4>
     <div class="egitter">
-      ${einstFeld("skizze.raster", "Fangraster mm", "zahl", null, "Punkte rasten auf dieses Mass ein (Umschalt hält das Raster aus)")}
+      ${einstFeld("skizze.raster", "Fangraster mm", "zahl", null, "0 = aus (Standard): es wird nur an Punkten, Mitten und Linien gefangen. Mit einem Wert rasten Punkte zusätzlich auf dieses Mass ein (Umschalt hält das Raster aus)")}
       ${einstFeld("skizze.abstand", "Abstand der Teile mm", "zahl", null, "Vorlagen und freie Profile stehen in 3D nebeneinander")}
     </div>
     <h4>Abkantliste</h4>
@@ -3016,7 +3019,7 @@ $("eOk").onclick = () => {
   const ganz = (v) => Number.isInteger(v) && v >= 1;
   const fehler = !(n.laenge > 0) ? ["neu", "Länge für neue Teile muss grösser als 0 sein."]
     : !ganz(n.stueck) ? ["neu", "Stück für neue Teile: ganze Zahl ab 1."]
-    : !(sk.raster > 0) ? ["neu", "Fangraster muss grösser als 0 sein."]
+    : !(sk.raster >= 0) ? ["neu", "Fangraster: 0 (aus) oder grösser."]
     : !(sk.abstand >= 0) ? ["neu", "Abstand der Teile darf nicht negativ sein."]
     : !(ganz(et.spalten) && ganz(et.zeilen)) ? ["etiketten", "Spalten und Zeilen: ganze Zahlen ab 1."]
     : !(et.breite > 0 && et.hoehe > 0) ? ["etiketten", "Etikettgrösse muss grösser als 0 sein."]
@@ -3168,7 +3171,7 @@ function beendeSkizze() {
   if (!f.elemente.length) entferneFeature(f);
   $("gSkizze").hidden = true; setTimeout(leisteZustand);
   ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
-  steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+  steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   szene.remove(skizzenRaster); skizzenRaster = null; boden.visible = true;
   $("eingabe").hidden = true; leeren(live); labels = []; document.querySelectorAll(".massbox").forEach((b) => b.remove()); $("fgAnzeige").textContent = "";
@@ -3181,16 +3184,60 @@ const strahl = new THREE.Raycaster();
 function ndc(e) { const r = leinwand.getBoundingClientRect(); return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); }
 function bildschirm(p) { const v = zu3D(skizze.f.ebene, p).project(kamera), r = leinwand.getBoundingClientRect(); return [(v.x + 1) / 2 * r.width, (1 - v.y) / 2 * r.height]; }
 function fangPunkte() { // Punkte mit Bezug (für automatische Koinzidenz); Punkte des laufenden Linienzugs ohne
-  return skizzenPunkte(skizze.f).map((q) => ({ uv: q.uv, ref: q.ref })).concat(skizze.pkt.map((uv) => ({ uv, ref: null })));
+  return skizzenPunkte(skizze.f).map((q) => ({ uv: q.uv, ref: q.ref, el: q.el })).concat(skizze.pkt.map((uv) => ({ uv, ref: null })));
+}
+// Objektfang: Endpunkte, Mittelpunkte, Kreismitten, Punkte auf Linien und auf Körperkanten; liefert das Fangzeichen mit
+const FANGNAME = { endpunkt: "Endpunkt", zentrum: "Mitte", mitte: "Mittelpunkt", linie: "Auf Linie", kecke: "Körperecke", kmitte: "Körperkante · Mitte", kkante: "Auf Körperkante", flaeche: "Auf Fläche" };
+let kantenCache = { key: "", segs: [] };
+function koerperKantenCache() { // Kanten aller Körper in Weltkoordinaten, nur neu berechnet, wenn sich die Körper ändern
+  const ms = modell.children.filter((o) => o.isMesh), key = ms.map((m) => m.uuid + ":" + (m.children[0]?.geometry.uuid || "")).join("|");
+  if (kantenCache.key !== key) kantenCache = { key, segs: koerperKanten() };
+  return kantenCache.segs;
+}
+function koerperFang(sm, radius = 12) { // → { p: [x,y,z], art, s: [x,y] } oder null
+  const r = leinwand.getBoundingClientRect(), v = new THREE.Vector3(), proj = (q) => { v.set(q[0], q[1], q[2]).project(kamera); return [(v.x + 1) / 2 * r.width, (1 - v.y) / 2 * r.height, v.z]; };
+  let best = null, bd = radius;
+  const nimm = (q, art, bonus, S) => { if (S[2] >= 1) return; const d = Math.hypot(S[0] - sm[0], S[1] - sm[1]) - bonus; if (d < bd) { bd = d; best = { p: q, art, s: [S[0], S[1]] }; } };
+  for (const [a, b] of koerperKantenCache()) {
+    const A = proj(a), B = proj(b); if (A[2] >= 1 && B[2] >= 1) continue;
+    nimm(a, "kecke", 5, A); nimm(b, "kecke", 5, B); nimm([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], "kmitte", 3, proj([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]));
+    const dx = B[0] - A[0], dy = B[1] - A[1], l2 = dx * dx + dy * dy; if (l2 < 1) continue;
+    const tt = Math.max(0, Math.min(1, ((sm[0] - A[0]) * dx + (sm[1] - A[1]) * dy) / l2)), d = Math.hypot(sm[0] - (A[0] + tt * dx), sm[1] - (A[1] + tt * dy));
+    if (d < Math.min(bd, 8) && tt > 0 && tt < 1) { bd = d; best = { p: [0, 1, 2].map((i) => a[i] + tt * (b[i] - a[i])), art: "kkante", s: [A[0] + tt * dx, A[1] + tt * dy] }; }
+  }
+  return best;
+}
+function skizzenFang(sm) { // → { uv, art, ref, s } oder null (Bildschirmabstand < 12 px)
+  let best = null, bd = 12;
+  const kand = (uv, art, ref, bonus, S) => { const s = S || bildschirm(uv), d = Math.hypot(s[0] - sm[0], s[1] - sm[1]) - bonus; if (d < bd) { bd = d; best = { uv: uv.slice(), art, ref, s }; } };
+  for (const q of fangPunkte()) kand(q.uv, q.ref?.k === "c" ? "zentrum" : "endpunkt", q.ref, 5);
+  for (const el of skizze.f.elemente) for (const [a, b] of elementKanten(el)) {
+    kand([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], "mitte", null, 3);
+    const A = bildschirm(a), B = bildschirm(b), dx = B[0] - A[0], dy = B[1] - A[1], l2 = dx * dx + dy * dy; if (l2 < 1) continue;
+    const tt = Math.max(0, Math.min(1, ((sm[0] - A[0]) * dx + (sm[1] - A[1]) * dy) / l2)), d = Math.hypot(sm[0] - (A[0] + tt * dx), sm[1] - (A[1] + tt * dy));
+    if (d < Math.min(bd, 8) && tt > 0 && tt < 1) { bd = d; best = { uv: [a[0] + tt * (b[0] - a[0]), a[1] + tt * (b[1] - a[1])], art: "linie", ref: null, s: [A[0] + tt * dx, A[1] + tt * dy] }; }
+  }
+  const k = koerperFang(sm); // Körper unter der Skizze: Punkt auf die Skizzenebene projiziert
+  if (k) { const uv = aufEbene(skizze.f.ebene, new THREE.Vector3(...k.p)), d = Math.hypot(k.s[0] - sm[0], k.s[1] - sm[1]); if (d - (k.art === "kecke" ? 4 : 0) < bd) { bd = d; best = { uv, art: k.art, ref: null, s: k.s }; } }
+  return best;
+}
+const FANGGLYPHE = { endpunkt: '<rect x="-6" y="-6" width="12" height="12"/>', zentrum: '<circle r="6"/><circle r="1.4"/>', mitte: '<path d="M0 -7L7 6H-7Z"/>', linie: '<path d="M-6 -6L6 6M-6 6L6 -6"/>',
+  kecke: '<path d="M0 -7L7 0L0 7L-7 0Z"/>', kmitte: '<path d="M0 -7L7 0L0 7L-7 0Z"/><circle r="1.4"/>', kkante: '<path d="M-7 0H7M0 -7V7"/>', flaeche: '<circle r="5"/>' };
+let fangArtZuletzt = "";
+function fangZeigen(f) { // Fangzeichen mit Beschriftung an der Mausposition
+  const z = $("fangZeichen"); if (!z) return;
+  if (!f) { z.hidden = true; fangArtZuletzt = ""; return; }
+  z.hidden = false; z.style.left = f.s[0] + "px"; z.style.top = f.s[1] + "px";
+  if (f.art !== fangArtZuletzt) { fangArtZuletzt = f.art; z.querySelector("g").innerHTML = FANGGLYPHE[f.art] || ""; z.querySelector("span").textContent = FANGNAME[f.art] || f.art; }
 }
 function ebenenPunkt(e) {
   strahl.setFromCamera(ndc(e), kamera);
   const p = strahl.ray.intersectPlane(ebenenEbene(skizze.f.ebene), new THREE.Vector3());
   if (!p) return null;
   let uv = aufEbene(skizze.f.ebene, p);
-  const r = leinwand.getBoundingClientRect(), sm = [e.clientX - r.left, e.clientY - r.top];
-  for (const q of fangPunkte()) { const s = bildschirm(q.uv); if (Math.hypot(s[0] - sm[0], s[1] - sm[1]) < 10) return { uv: q.uv.slice(), fang: true, ref: q.ref }; }
-  if (!e.shiftKey) uv = uv.map((x) => Math.round(x / einst.skizze.raster) * einst.skizze.raster);
+  const sm = smPos(e), fg = skizzenFang(sm);
+  if (fg) return { uv: fg.uv, fang: fg.art === "endpunkt" || fg.art === "zentrum", ref: fg.ref, art: fg.art, s: fg.s };
+  if (!e.shiftKey) uv = uv.map(rastern);
   const letzt = skizze.pkt.at(-1);
   if (letzt) { // waagrecht / senkrecht ausrichten
     const sl = bildschirm(letzt);
@@ -3321,7 +3368,7 @@ function abrunden(sm) {
 // Versatz-Vorschau: Seite (und Abstand, wenn nicht eingetippt) aus der Mausposition
 function versatzVorschau(uv, betrag) {
   const q = skizze.quelle; if (!q || !uv) return null;
-  const rund = (x) => Math.round(x / einst.skizze.raster) * einst.skizze.raster || x;
+  const rund = (x) => rastern(x) || x;
   const mitSeite = (seite) => (betrag != null ? Math.sign(seite || 1) * betrag : rund(seite)); // seite > 0: aussen bzw. links
   const neu = (x) => (q.hilfs ? { ...x, hilfs: true } : x);
   if (q.art === "kreis") { const d = mitSeite(abst(uv, q.c) - q.r); return q.r + d > 0 ? neu({ art: "kreis", c: q.c.slice(), r: q.r + d }) : null; }
@@ -4010,6 +4057,7 @@ function zeigeLabels() {
 // ------------------------------------------------------------ Maus und Tastatur
 let runter = null;
 leinwand.addEventListener("contextmenu", (e) => e.preventDefault());
+leinwand.addEventListener("mousedown", (e) => { if (e.button === 1) e.preventDefault(); }); // kein Windows-Autoscroll beim Drücken des Mausrads
 const planUV = (e) => { strahl.setFromCamera(ndc(e), kamera); const p = strahl.ray.intersectPlane(ebenenEbene(skizze.f.ebene), new THREE.Vector3()); return p && aufEbene(skizze.f.ebene, p); };
 const smPos = (e) => { const r = leinwand.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
 leinwand.addEventListener("pointerdown", (e) => {
@@ -4021,22 +4069,23 @@ leinwand.addEventListener("pointerdown", (e) => {
     if (skizze.zug && start) leinwand.setPointerCapture(e.pointerId); else skizze.zug = null;
   }
 });
+leinwand.addEventListener("pointerleave", () => fangZeigen(null));
 leinwand.addEventListener("pointermove", (e) => {
-  if (!skizze) return;
+  if (!skizze) { if (messen) { const q = messPunkt(e); fangZeigen(q ? { art: q.fa, s: q.s } : null); } else fangZeigen(null); return; }
   if (skizze.zug) {
     const uv = planUV(e); if (!uv) return;
-    const z = skizze.zug, rund = (v) => (e.shiftKey ? v : Math.round(v / einst.skizze.raster) * einst.skizze.raster);
+    const z = skizze.zug, rund = (v) => (e.shiftKey ? v : rastern(v));
     if (!z.bewegt) { const a = bildschirm(z.start), b = bildschirm(uv); if (Math.hypot(a[0] - b[0], a[1] - b[1]) < 4) return; }
     const ziel = z.punkt ? [{ ref: z.ziele[0].ref, uv: uv.map(rund) }]
-      : z.kreis ? [{ r: z.kreis.id, wert: Math.max(rund(abst(z.kreis.c, uv)), einst.skizze.raster / 10) }]
+      : z.kreis ? [{ r: z.kreis.id, wert: Math.max(rund(abst(z.kreis.c, uv)), (einst.skizze.raster || 1) / 10) }]
       : z.ziele.map((q) => ({ ref: q.ref, uv: [q.uv0[0] + rund(uv[0] - z.start[0]), q.uv0[1] + rund(uv[1] - z.start[1])] }));
     const key = JSON.stringify(ziel); if (key === z.letzt) return;
     z.letzt = key; z.bewegt = true;
     loeseSkizze(skizze.f, { ziel }); zeichneLive();
     return;
   }
-  const r = ebenenPunkt(e); if (!r) return;
-  skizze.maus = r.uv; zeichneLive();
+  const r = ebenenPunkt(e); if (!r) return fangZeigen(null);
+  fangZeigen(r.art ? r : null); skizze.maus = r.uv; zeichneLive();
   if (braucheEingabe(skizze)) {
     const rr = leinwand.getBoundingClientRect(), ein = $("eingabe");
     ein.hidden = false; ein.style.left = Math.min(e.clientX - rr.left + 16, rr.width - 170) + "px"; ein.style.top = (e.clientY - rr.top + 16) + "px";
@@ -4658,7 +4707,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
