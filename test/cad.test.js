@@ -256,6 +256,23 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   ok(/rechtshändig/.test(fehlt ?? ""), "Linkshändige Ebene wird abgewiesen (keine gespiegelten Teile)");
 }
 
+// ---------------------------------------------------------------- 10b Skizzenelemente → exakte Profile (Vorbereitung C2)
+{
+  const { skizzenProfile, NichtExakt } = await import("../kern/cad/skizzeProfile.js");
+  const ex = async (els, h = 10) => { const ps = skizzenProfile(els); let V = 0; for (const p of ps) V += (await eig((await x({ op: "extrusion", profil: p.profil, loecher: p.loecher, hoehe: h })).id)).volumen; return { V, ps }; };
+  // Rechteck 100×50 mit Kreisloch r10 und Langloch (Länge 30 zwischen den Mittelpunkten, r 5)
+  const a = await ex([{ art: "rechteck", a: [0, 0], b: [100, 50] }, { art: "kreis", c: [25, 25], r: 10 }, { art: "langloch", a: [55, 25], b: [85, 25], r: 5 }]);
+  ok(a.ps.length === 1 && a.ps[0].loecher.length === 2 && nahe(a.V, (5000 - PI * 100 - (30 * 10 + PI * 25)) * 10), "Skizze: Rechteck mit Kreis- und Langloch → exakter Körper mit 2 Löchern");
+  // Geschlossener Linienzug mit Eckradius 10 an allen 4 Ecken (Quadrat 60)
+  const r = await ex([{ art: "linie", pts: [[0, 0], [60, 0], [60, 60], [0, 60]], geschlossen: true, radien: { 0: 10, 1: 10, 2: 10, 3: 10 } }]);
+  ok(nahe(r.V, (3600 - 4 * (100 - PI * 25)) * 10), "Skizze: Linienzug mit 4 Eckradien r10 – exakte Rundungen");
+  // Kette aus Linien und Bogen (Halbkreis-Deckel), ein Stück umgekehrt gezeichnet
+  const k = await ex([{ art: "linie", pts: [[0, 0], [40, 0]] }, { art: "linie", pts: [[40, 30], [40, 0]] }, { art: "bogen", a: [40, 30], b: [0, 30], m: [20, 50] }, { art: "linie", pts: [[0, 30], [0, 0]] }]);
+  ok(k.ps.length === 1 && nahe(k.V, (40 * 30 + PI * 400 / 2) * 10), "Skizze: Kette Linie–Linie(umgekehrt)–Bogen–Linie → exakt");
+  let f = null; try { skizzenProfile([{ art: "ellipse", c: [0, 0], a: [10, 0], r2: 5 }]); } catch (e) { f = e instanceof NichtExakt ? e.message : "anderer Fehler"; }
+  ok(f === "Ellipse", "Skizze: Ellipse wird als «noch nicht exakt» gemeldet, nicht angenähert");
+}
+
 // ---------------------------------------------------------------- 10 Speicher: Freigabe und Leckprüfung
 {
   const vorher = (await x({ op: "speicher" })).handles;
