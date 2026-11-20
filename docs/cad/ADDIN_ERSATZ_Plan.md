@@ -46,3 +46,6 @@ Stand 20.11.2026. Grundlage: Repo `spengler-fusion-addin` (Version 0.4.7, nur ge
 - **Phase 3 Kern fertig:** `docs/cad/cad_projekte.sql` (vom Besitzer in Supabase auszuführen), Client für Cloud-Projekte, `cad_teile` (CAD→App) und `cad_profil_auftraege` (App→CAD, Projekt = Auftragsnummer).
 - **Noch offen:** Oberfläche (Konto, Abgleich, Projektliste, SPENGLER-Register im Add-in-Design), Add-in-Funktionen (Parameter-Vorlagen mit Vorschau, Sicherung/Papierkorb, Selbsttest, Rundblech-Beurteilung), 3D-Detailvorlagen als exakte Körper/STEP.
 - Nutzerentscheide: Standardbausteine/-materialien bleiben Startbestand; Cloud-Projekte über `cad_projekte`; App-Repo nur lesend.
+
+## Entscheid 20.11.2026: kein eigenes SPENGLER-Register
+Das gesamte CAD ersetzt das Add-in; ein Nachbau der Fusion-Leiste «SPENGLER» ist nicht nötig. Die Funktionen leben in den bestehenden Bereichen (Einstellungen › Konto & Cloud, Bausteine, Werkstatt). Phase 4 entfällt; offen bleiben nur Add-in-Funktionen ohne CAD-Gegenstück (Parameter-Vorlagen, Sicherung/Papierkorb, Selbsttest, Rundblech-Beurteilung, 3D-Detailvorlagen als exakte Körper).
