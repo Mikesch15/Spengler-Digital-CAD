@@ -3196,6 +3196,44 @@ $("wSchnitt").onclick = () => {
 };
 
 // ------------------------------------------------------------ Planblatt (Zeichnung): Ansichten, Details, Bemassung, Schriftfeld
+// Abwicklung eines Blechteils im Plan: Umriss (mit Ausklinkungen und Löchern) und Biegelinien, längste Kante waagrecht
+function abwicklungPlanAnsicht(ref, k) {
+  const x = blechteile().find((b) => String(b.id) === ref); if (!x) return null;
+  let aussen = [], loecher = [], biegen = [];
+  if (x._blech?.abw) { const A = x._blech.abw, R = (p) => A.dreh(p); aussen = A.umriss.map(R); loecher = (A.loecher || []).map((l) => l.map(R)); biegen = (A.linien || []).map((l) => l.punkte.map(R)); }
+  else if (x._res) { const W = x._res.zuschnitt, H = +x.laenge || 100; aussen = [[0, 0], [W, 0], [W, H], [0, H]]; biegen = (x._res.biegungen || []).map((b) => [[b.pos, 0], [b.pos, H]]); }
+  if (!aussen.length) return null;
+  const xs = aussen.map((p) => p[0]), ys = aussen.map((p) => p[1]), x0 = Math.min(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), x1 = Math.max(...xs);
+  const T = (p) => [(p[0] - x0) * k, (y1 - p[1]) * k], seg = (poly, zu) => poly.map((p, i) => (i + 1 < poly.length || zu ? [...T(p), ...T(poly[(i + 1) % poly.length])] : null)).filter(Boolean);
+  const layer = [{ farbe: "#000000", strich: "", linien: [...seg(aussen, true), ...loecher.flatMap((l) => seg(l, true))] }];
+  if (biegen.length) layer.push({ farbe: "#e02424", strich: "8 1.5 1.5 1.5", linien: biegen.flatMap((l) => seg(l, false)) });
+  const punkte = [...aussen, ...loecher.flat()].map((p) => { const [px, py] = T(p); return { x: px, y: py, w: [p[0], p[1], 0] }; });
+  return { breite: (x1 - x0) * k, hoehe: (y1 - y0) * k, layer, sichtbar: layer.flatMap((l) => l.linien), verdeckt: [], flaechen: [], massstab: 1 / k, abbild: (w) => T(w), punkte, kreise: [] };
+}
+// Skizzen als Zeichnung im Plan: Linien je Layer (Farbe, Linienart), Eckpunkte/Mittelpunkte zum Bemassen, Kreise für Ø/R; Papier-mm = Skizzen-mm · k
+function skizzenPlanAnsicht(id, k) {
+  const sks = id === "alle" ? doc.features.filter((x) => x.typ === "skizze" && !x.versteckt && !x._aus) : [finde(id)].filter((x) => x?.typ === "skizze");
+  const gruppen = new Map(), punkte = [], kreise = [], strich = { gestrichelt: "3 1.5", strichpunkt: "4 1.2 0.4 1.2", mittellinie: "8 1.5 1.5 1.5", verdeckt: "1.5 1", gepunktet: "0.3 1.2" };
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const pkt = (p) => punkte.push(p), erw = (p) => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); };
+  for (const sk of sks) for (const el of sk.elemente) {
+    if (el.hilfs || el.projiziert || el.art === "punkt") continue;
+    const ly = layerVon(el); if (ly.sichtbar === false) continue;
+    const g = gruppen.get(ly.id) || gruppen.set(ly.id, { ly, segs: [] }).get(ly.id);
+    for (const pts of elGeo(el).linien) for (let i = 0; i + 1 < pts.length; i++) { g.segs.push([pts[i], pts[i + 1]]); erw(pts[i]); erw(pts[i + 1]); }
+    if (el.art === "linie") el.pts.forEach(pkt); else if (el.art === "rechteck") [el.a, [el.b[0], el.a[1]], el.b, [el.a[0], el.b[1]]].forEach(pkt);
+    else if (el.art === "kreis") { pkt(el.c); kreise.push({ c: el.c, r: el.r, voll: true }); }
+    else if (el.art === "bogen") { pkt(el.a); pkt(el.b); const d = bogenDaten(el); if (d) { pkt(d.c); kreise.push({ c: d.c, r: d.r, voll: false }); } }
+    else if (el.art === "langloch") { pkt(el.a); pkt(el.b); }
+  }
+  if (!isFinite(x0)) return null;
+  const T = (p) => [(p[0] - x0) * k, (y1 - p[1]) * k], farbe = (ly) => "#" + (ly.aci == null || ly.aci === 7 ? 0x000000 : farbeHex(ly.aci)).toString(16).padStart(6, "0");
+  const layer = [...gruppen.values()].map((g) => ({ farbe: farbe(g.ly), strich: strich[g.ly.art] || "", linien: g.segs.map(([a, b]) => [...T(a), ...T(b)]) }));
+  const doppelt = new Set();
+  return { breite: (x1 - x0) * k, hoehe: (y1 - y0) * k, layer, sichtbar: layer.flatMap((l) => l.linien), verdeckt: [], flaechen: [], massstab: 1 / k, abbild: (w) => T(w),
+    punkte: punkte.filter((p) => { const key = `${Math.round(p[0] * 100)},${Math.round(p[1] * 100)}`; if (doppelt.has(key)) return false; doppelt.add(key); return true; }).map((p) => { const [x, y] = T(p); return { x, y, w: [p[0], p[1], 0] }; }),
+    kreise: kreise.map((c) => ({ w: [c.c[0], c.c[1], 0], r: c.r, voll: c.voll })) };
+}
 const plaene = planModul({
   renderer, status, herunterladen, einst: () => einst, doc: () => doc, signatur: () => zustand(), speichern: () => { speichern(); },
   meshes: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.visible); },
@@ -3209,6 +3247,10 @@ const plaene = planModul({
     const { w, h } = bausteinGrenzen(p), rand = 5, b = w / M + 2 * rand, hh = h / M + 2 * rand;
     return { svg: bausteinSvg(p, material(f.material).t, { breite: b, hoehe: hh, rand, schrift: 2.5, massstab: 1 / M, papier: true }), b, h: hh, name: `Schnitt ${kantenName(f, k)} · ${p.name}` };
   },
+  abwicklungen: () => blechteile().filter((x) => x._blech?.abw || x._res).map((x) => [String(x.id), x.name]),
+  abwicklungAnsicht: (ref, k) => abwicklungPlanAnsicht(ref, k),
+  skizzen: () => doc.features.filter((x) => x.typ === "skizze" && !x._aus && x.elemente.some((el) => !el.hilfs && el.art !== "punkt")).map((x) => [x.id, x.name]),
+  skizzenAnsicht: (id, k) => skizzenPlanAnsicht(id, k),
   drucken: (html) => { $("druck").innerHTML = html; window.print(); },
   fertig: () => { merke(); status("Pläne gespeichert – sie gehören zum Projekt."); },
 });

@@ -324,9 +324,13 @@ ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--be
 @page quer { size: A4 landscape; margin: 10mm; }
 @page planA3 { size: A3 landscape; margin: 0; }
 @page planA4 { size: A4 landscape; margin: 0; }
+@page planA2 { size: A2 landscape; margin: 0; }
+@page planA1 { size: A1 landscape; margin: 0; }
+@page planA0 { size: A0 landscape; margin: 0; }
 @media print {
   .planblatt { page: planA3; break-after: page; } .planblatt.planA4 { page: planA4; } .planblatt:last-child { break-after: auto; }
   .planblatt svg { width: 420mm; height: 297mm; display: block; } .planblatt.planA4 svg { width: 297mm; height: 210mm; }
+  .planblatt.planA2 { page: planA2; } .planblatt.planA2 svg { width: 594mm; height: 420mm; } .planblatt.planA1 { page: planA1; } .planblatt.planA1 svg { width: 841mm; height: 594mm; } .planblatt.planA0 { page: planA0; } .planblatt.planA0 svg { width: 1189mm; height: 841mm; }
 }
 @media print {
   .detailblatt { page: quer; }
@@ -593,7 +597,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   <h3 id="plTitel">Planblatt</h3>
   <div class="plleiste">
     <select id="plBlatt" aria-label="Plan"></select><button class="knopf" id="plNeu">+ Blatt</button><button class="knopf" id="plUmbenennen">Umbenennen</button><button class="knopf weg" id="plWeg">Blatt löschen</button>
-    <select id="plFormat" aria-label="Format"><option value="A3">A3 quer</option><option value="A4">A4 quer</option></select>
+    <select id="plFormat" aria-label="Format"><option value="A4">A4 quer</option><option value="A3">A3 quer</option><option value="A2">A2 quer</option><option value="A1">A1 quer</option><option value="A0">A0 quer</option></select>
     <span class="trenner"></span>
     <button class="knopf" data-modus="auswahl">Auswahl</button><button class="knopf" data-modus="mass">Bemassen</button><button class="knopf" data-modus="text">Text / Hinweis</button>
     <span class="trenner"></span>
@@ -605,6 +609,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <button class="knopf" id="plAutoMass" title="Gesamt- und Kettenmasse für die gewählte Ansicht">Auto-Masse</button>
     <span class="menuewrap"><button class="knopf" id="plNeuDetail" title="Querschnitt eines Kantenbausteins (Flächenblech) massstäblich aufs Blatt">+ Bausteinschnitt ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
     <span class="trenner"></span>
+    <span class="trenner"></span><button class="knopf klein" id="plZoomMinus" title="Verkleinern (Mausrad)" aria-label="Verkleinern">－</button><button class="knopf klein" id="plZoomAlles" title="Ganzes Blatt zeigen">Blatt</button><button class="knopf klein" id="plZoomPlus" title="Vergrössern (Mausrad)" aria-label="Vergrössern">＋</button>
     <button class="knopf" id="plDruck" title="Alle Blätter drucken oder als PDF speichern">Drucken / PDF</button><button class="knopf" id="plSvg">SVG speichern</button><button class="knopf haupt" id="plZu">Fertig</button>
   </div>
   <div class="plinhalt"><div id="plFlaeche"></div><aside id="plEigen"></aside></div>
@@ -659,6 +664,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <li><b>Kanten abrunden / fasen</b> (Ändern ▾): einzelne gerade Kanten eines beliebigen Volumenkörpers anklicken – Aussenkanten werden gerundet bzw. gefast, Innenkanten als Kehle ausgefüllt. Ecken mit drei gerundeten Kanten werden nicht kugelig verschliffen.</li>
       <li><b>Teilen</b> (Ändern ▾): Körper oder Blechteil an einer Ebene in zwei Teile schneiden. <b>Komponente</b>: Rechtsklick/langes Antippen auf ein Teil → «Eigene Komponente aus diesem Teil». <b>Flächenblech</b>: «Skizze liegt …» (Mitte/Vorderseite/Rückseite) und Abkantrichtung wählbar. Tablet: Skizze-Knöpfe «Löschen» und «Hilfslinie»; Stift dreht das Modell; rechtes Feld mit » zuklappen.</li>
       <li><b>2D-Modus</b> (Knopf «2D»): nur zeichnen, Körper ausgeblendet. Leiste «Layer»: je Layer Farbe und Linienart (durchgezogen, gestrichelt, Strich-Punkt, Mittellinie, verdeckt, gepunktet), ein-/ausblenden, aktiver Layer für neue Linien, «Element → Layer» legt das gewählte Element um. «DXF» speichert die Zeichnung mit Layern, Farben und Linienarten.</li>
+      <li><b>Skizze im Plan</b>: Planblatt (Formate A4–A0; Abwicklung als Ansicht; beim Bemassen rastet eine orange Marke an Punkten ein; Mausrad zoomt, Mausrad gedrückt/leere Fläche ziehen/zwei Finger verschieben, «Blatt» = Gesamtansicht) › «+ Ansicht» › «Skizze: …» (oder «Alle Skizzen») setzt die Zeichnung mit Layern (Farben, Linienarten) massstäblich aufs Blatt; «Auto-Masse» bemasst Gesamt-, Ketten- und Kreismasse, «Bemassen» einzelne Punkte. «Drucken / PDF» speichert das Blatt als PDF.</li>
       <li><b>Kanten</b> (Feld «Kanten» oben): Flansch, Umschlag oder Kantenbaustein wählen, dann <b>zuerst das Flächenblech, danach die Kante</b> anklicken. Liegt an der Kante schon ein Baustein oder Flansch, wird der neue <b>angehängt</b> (Flansch an Flansch). In der Leiste oben: Winkel, Länge und «Richtung» (Sichtseite ⇄ hinten); bestehende Kanten kehrt «⇅ Richtung» im Blech-Dialog um. Esc oder «Fertig» beendet.</li>
       <li><b>Abwickeln / Falten</b> (wie Unfold/Refold in Fusion): Flächenblech im Browser rechtsklicken › «Abwickeln» – das Blech liegt flach, mit Biegelinien; in der neuen Skizze die Ausschnitte (Löcher, Schlitze) in der Abwicklung zeichnen, «Skizze beenden», Rechtsklick › «Falten»: die Ausschnitte erscheinen im gekanteten Blech, auch in Flanschen. Auch im Dialog wählbar (Ansicht, Ausschnitte aus Skizze). Grenzen: gerade Kanten mit Baustein, nicht über Ecken hinweg.</li>
       <li><b>Ziehpfeil</b>: im Dialog erscheint bei Extrusion (Abstand), Blechlänge, Schale (Wanddicke), Abrunden/Fasen, Verschieben (X/Y/Z), Muster (Abstand), versetzter Ebene und Rundblech (Höhe) ein Pfeil in der Ansicht – anfassen und ziehen ändert das Mass (Umschalt = fein). Das Zahlenfeld bleibt gültig.</li>

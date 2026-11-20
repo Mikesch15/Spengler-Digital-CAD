@@ -3,8 +3,8 @@ import * as THREE from "three";
 import { Brush, Evaluator, INTERSECTION } from "three-bvh-csg";
 import { rechneAnsicht, RICHTUNGEN } from "./ansicht.js";
 
-export const FORMATE = { A3: { b: 420, h: 297 }, A4: { b: 297, h: 210 } };
-export const PLAN_MASSSTAEBE = [1, 2, 5, 10, 20, 25, 50, 100];
+export const FORMATE = { A4: { b: 297, h: 210 }, A3: { b: 420, h: 297 }, A2: { b: 594, h: 420 }, A1: { b: 841, h: 594 }, A0: { b: 1189, h: 841 } };
+export const PLAN_MASSSTAEBE = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500];
 const z = (v) => +(+v).toFixed(2);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
@@ -66,6 +66,8 @@ export function planModul(ctx) {
   const cache = new Map();
   const ansicht = (a) => {
     if (a.lupe) return lupenAnsicht(a);
+    if (a.skizze) return ctx.skizzenAnsicht(a.skizze, 1 / a.massstab); // Zeichnung aus Skizzen (mit Layern)
+    if (a.abwicklung) return ctx.abwicklungAnsicht(a.abwicklung, 1 / a.massstab); // Zuschnitt mit Biegelinien (Blechteil)
     // Exaktes Modell (CAD-Kern ein): Ansicht aus exakter Projektion, verdeckte Kanten ohne Doppelungen; Schnitte: Halbraum-Schnitt und Schnittflächen aus dem Kern
     const ex = ctx.exaktAnsicht ? ctx.exaktAnsicht(a.art, 1 / a.massstab, a.verdeckt !== false, () => aktualisiere(), a.schnitt ? +a.schnitt.lage || 0 : null) : null;
     if (ex?.r) return ex.r;
@@ -107,11 +109,11 @@ export function planModul(ctx) {
     for (const a of plan.ansichten) {
       const r = ansicht(a);
       if (!r) { out.push(`<text x="${a.x}" y="${a.y}" class="t3">(${a.lupe ? "Ausgangsansicht fehlt" : a.schnitt ? "Schnittebene trifft keinen Körper" : "kein Körper sichtbar"})</text>`); continue; }
-      const sel = auswahl === a.id, titel = a.titel || (a.schnitt ? `Schnitt ${a.schnitt.buchstabe || "A"}–${a.schnitt.buchstabe || "A"}` : a.lupe ? `Detail ${a.lupe.buchstabe || "B"}` : RICHTUNGEN[a.art]?.name);
+      const sel = auswahl === a.id, titel = a.titel || (a.abwicklung ? "Abwicklung" : a.skizze ? "Zeichnung" : a.schnitt ? `Schnitt ${a.schnitt.buchstabe || "A"}–${a.schnitt.buchstabe || "A"}` : a.lupe ? `Detail ${a.lupe.buchstabe || "B"}` : RICHTUNGEN[a.art]?.name);
       const clipId = `lc${a.id}`, fl = r.flaechen?.length ? `<path d="${r.flaechen.map((zug) => "M" + zug.map(([x, y]) => `${z(x)} ${z(y)}`).join("L") + "Z").join("")}" class="schnittflaeche"${r.rund ? ` clip-path="url(#${clipId})"` : ""}/>` : "";
       out.push(`<g transform="translate(${z(a.x)} ${z(a.y)})" data-id="${a.id}">${r.rund ? `<clipPath id="${clipId}"><circle cx="${z(r.rund)}" cy="${z(r.rund)}" r="${z(r.rund)}"/></clipPath>` : ""}${bildschirm ? `<rect width="${z(r.breite)}" height="${z(r.hoehe)}" class="treffer${sel ? " sel" : ""}"/>` : ""}
         ${fl}${r.verdeckt.length ? `<path d="${r.verdeckt.map(([x1, y1, x2, y2]) => `M${z(x1)} ${z(y1)}L${z(x2)} ${z(y2)}`).join("")}" class="verdeckt"/>` : ""}
-        <path d="${r.sichtbar.map(([x1, y1, x2, y2]) => `M${z(x1)} ${z(y1)}L${z(x2)} ${z(y2)}`).join("")}" class="sichtbar"/>
+        ${r.layer ? r.layer.map((l) => `<path d="${l.linien.map(([x1, y1, x2, y2]) => `M${z(x1)} ${z(y1)}L${z(x2)} ${z(y2)}`).join("")}" class="sichtbar" style="stroke:${l.farbe}${l.strich ? `;stroke-dasharray:${l.strich}` : ""}"/>`).join("") : `<path d="${r.sichtbar.map(([x1, y1, x2, y2]) => `M${z(x1)} ${z(y1)}L${z(x2)} ${z(y2)}`).join("")}" class="sichtbar"/>`}
         ${r.rund ? `<circle cx="${z(r.rund)}" cy="${z(r.rund)}" r="${z(r.rund)}" class="lupenrand"/>` : ""}
         <text x="0" y="${z(r.hoehe + 6)}" class="t35" style="text-anchor:start">${esc(titel)} 1:${+massstabVon(a).toFixed(2)}</text></g>`);
       // Lupe: Kreis und Buchstabe in der Ausgangsansicht
@@ -193,7 +195,15 @@ ${out.join("\n")}
   }
 
   // ---------------------------------------------------------- Editor
-  let plan = null, modus = "auswahl", sel = null, mass = null, zug = null;
+  let plan = null, modus = "auswahl", sel = null, mass = null, zug = null, plLeer = false;
+  // Zoomen und Verschieben des Blatts (nur Anzeige): Ausschnitt in Blatt-mm; null = ganzes Blatt
+  let box = null, schwenk = null; const finger = new Map();
+  const wendeBox = () => { const svg = document.getElementById("plFlaeche")?.querySelector("svg"); if (svg && box) svg.setAttribute("viewBox", `${z(box.x)} ${z(box.y)} ${z(box.w)} ${z(box.h)}`); };
+  const aktBox = () => { const F = FORMATE[plan.format] || FORMATE.A3; return box || { x: 0, y: 0, w: F.b, h: F.h }; };
+  const zoomUm = (q, f) => { // Faktor f > 1 vergrössert; Punkt q (Blatt-mm) bleibt an seiner Stelle
+    const F = FORMATE[plan.format] || FORMATE.A3, b = aktBox(), w = Math.min(F.b * 1.6, Math.max(F.b / 25, b.w / f)), k = w / b.w;
+    box = { x: q[0] - (q[0] - b.x) * k, y: q[1] - (q[1] - b.y) * k, w, h: b.h * k }; wendeBox();
+  };
   const $ = (id) => document.getElementById(id);
   const plaene = () => (ctx.doc().plaene ||= []);
   function neuerPlan() {
@@ -201,7 +211,7 @@ ${out.join("\n")}
     plaene().push(p); return p;
   }
   function oeffnen() {
-    plan = plaene()[0] || neuerPlan(); sel = null; modus = "auswahl";
+    plan = plaene()[0] || neuerPlan(); sel = null; modus = "auswahl"; box = null;
     $("planEditor").hidden = false; zeige();
   }
   const element = (id) => [...plan.ansichten, ...plan.details, ...plan.masse, ...plan.texte].find((x) => x.id === id);
@@ -212,7 +222,7 @@ ${out.join("\n")}
     $("plBlatt").innerHTML = p.map((x, k) => `<option value="${k}" ${k === i ? "selected" : ""}>${esc(x.name)}</option>`).join("");
     $("plFormat").value = plan.format;
     document.querySelectorAll("#planEditor [data-modus]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.modus === modus));
-    $("plFlaeche").innerHTML = blattSvg(plan, { auswahl: sel, nr: i + 1, von: p.length, bildschirm: true });
+    $("plFlaeche").innerHTML = blattSvg(plan, { auswahl: sel, nr: i + 1, von: p.length, bildschirm: true }); wendeBox();
     eigenschaften(); ctx.speichern();
   }
   function eigenschaften() {
@@ -237,8 +247,9 @@ ${out.join("\n")}
     box.insertAdjacentHTML("beforeend", `<div class="reihe ohnerand"><button class="knopf weg" data-pl="loeschen">Entfernen</button></div>`);
   }
   const blattPunkt = (ev) => { const svg = $("plFlaeche").querySelector("svg"), pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; const q = pt.matrixTransform(svg.getScreenCTM().inverse()); return [q.x, q.y]; };
-  function fang(q) { // nächster Eckpunkt einer Ansicht (3 mm)
-    let best = null, bd = 3;
+  function fang(q, px = 12) { // nächster Fangpunkt einer Ansicht (Radius in Bildschirmpixeln, Finger/Stift grösser)
+    const svg = $("plFlaeche").querySelector("svg"), k = svg?.getScreenCTM()?.a || 1;
+    let best = null, bd = px / k;
     for (const a of plan.ansichten) { const r = ansicht(a); if (!r) continue; for (const p of r.punkte) { const d = Math.hypot(p.x + a.x - q[0], p.y + a.y - q[1]); if (d < bd) { bd = d; best = { a, w: p.w, q: [p.x + a.x, p.y + a.y] }; } } }
     return best;
   }
@@ -250,9 +261,14 @@ ${out.join("\n")}
     return null;
   }
   function binden() {
+    // Zoom: Mausrad / Zwei-Finger-Geste; Verschieben: Mausrad gedrückt, Leertaste + ziehen, Zwei Finger oder leere Fläche ziehen
+    const schwenkStart = (ev) => { schwenk = { x: ev.clientX, y: ev.clientY, id: ev.pointerId }; $("plFlaeche").setPointerCapture?.(ev.pointerId); $("plFlaeche").style.cursor = "grabbing"; };
+    $("plFlaeche").addEventListener("wheel", (ev) => { ev.preventDefault(); if (!plan) return; zoomUm(blattPunkt(ev), Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0018))); }, { passive: false });
     $("plFlaeche").addEventListener("pointerdown", (ev) => {
+      if (ev.pointerType === "touch") { finger.set(ev.pointerId, [ev.clientX, ev.clientY]); if (finger.size === 2) { zug = null; schwenk = null; const [a, b] = [...finger.values()]; finger.gestur = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; return; } }
+      if (ev.button === 1 || (ev.button === 0 && plLeer)) { ev.preventDefault(); return schwenkStart(ev); }
       const q = blattPunkt(ev);
-      if (modus === "auswahl") { const t = treffer(q); sel = t?.id || null; if (t) zug = { e: t, von: q, x: t.x ?? t.lage?.[0], y: t.y ?? t.lage?.[1] }; zeige(); return; }
+      if (modus === "auswahl") { const t = treffer(q); sel = t?.id || null; if (t) zug = { e: t, von: q, x: t.x ?? t.lage?.[0], y: t.y ?? t.lage?.[1] }; zeige(); if (!t && ev.button === 0) schwenkStart(ev); return; }
       if (modus === "lupe") {
         const q0 = plan.ansichten.find((a) => { const r = ansicht(a); return !a.lupe && r && q[0] > a.x && q[0] < a.x + r.breite && q[1] > a.y && q[1] < a.y + r.hoehe; });
         if (!q0) return ctx.status("In eine Ansicht klicken – dort, wo vergrössert werden soll.");
@@ -262,22 +278,35 @@ ${out.join("\n")}
       }
       if (modus === "text") { const text = prompt("Text (z. B. Detailbuchstabe)", "A"); if (!text) return; const t = { id: neuId(), x: q[0], y: q[1], text, groesse: 5 }; plan.texte.push(t); sel = t.id; zug = { e: t, pfeil: true }; zeige(); return; }
       if (modus === "mass") {
-        if (!mass) { const f = fang(q); if (!f) return ctx.status("Eckpunkt einer Ansicht anklicken (Fang 3 mm)."); mass = { a: f }; ctx.status("Zweiten Punkt anklicken."); return; }
-        if (!mass.b) { const f = fang(q); if (!f || f.a !== mass.a.a) return ctx.status("Zweiten Punkt in derselben Ansicht anklicken."); mass.b = f; ctx.status("Lage des Masses anklicken."); return; }
+        const px = ev.pointerType === "touch" ? 26 : ev.pointerType === "pen" ? 20 : 12;
+        if (!mass) { const f = fang(q, px); if (!f) return ctx.status("Zeiger auf einen Punkt der Ansicht (orange Marke) – dort anklicken."); mass = { a: f }; ctx.status("Zweiten Punkt anklicken."); return; }
+        if (!mass.b) { const f = fang(q, px); if (!f || f.a !== mass.a.a) return ctx.status("Zweiten Punkt in derselben Ansicht anklicken (orange Marke)."); mass.b = f; ctx.status("Lage des Masses anklicken."); return; }
         const A = mass.a.q, B = mass.b.q, mx = (A[0] + B[0]) / 2, my = (A[1] + B[1]) / 2;
         const art = Math.abs(q[1] - my) >= Math.abs(q[0] - mx) ? "h" : "v";
         const m = { id: neuId(), ansicht: mass.a.a.id, a: mass.a.w, b: mass.b.w, art, lage: q };
         plan.masse.push(m); mass = null; sel = m.id; zeige(); ctx.status("Mass gesetzt.");
       }
     });
+    const fangZeichen = (f) => { // Fangmarke (Kreis + Text) im Blatt
+      const svg = $("plFlaeche").querySelector("svg"); if (!svg) return; svg.querySelector("#plFangZ")?.remove(); if (!f) return;
+      const k = svg.getScreenCTM().a, r = 6 / k;
+      svg.insertAdjacentHTML("beforeend", `<g id="plFangZ" pointer-events="none"><circle cx="${z(f.q[0])}" cy="${z(f.q[1])}" r="${z(r)}" fill="none" stroke="#e0782b" stroke-width="${z(2 / k)}"/><circle cx="${z(f.q[0])}" cy="${z(f.q[1])}" r="${z(r / 4)}" fill="#e0782b"/><text x="${z(f.q[0] + r * 1.4)}" y="${z(f.q[1] - r * 1.2)}" font-size="${z(11 / k)}" fill="#e0782b" style="paint-order:stroke;stroke:#fff;stroke-width:${z(3 / k)}px">Punkt</text></g>`);
+    };
     $("plFlaeche").addEventListener("pointermove", (ev) => {
+      if (modus === "mass" && !zug && !schwenk && ev.buttons === 0 || (modus === "mass" && ev.pointerType !== "mouse" && !zug && !schwenk)) fangZeichen(fang(blattPunkt(ev), ev.pointerType === "touch" ? 26 : ev.pointerType === "pen" ? 20 : 12));
+      if (ev.pointerType === "touch" && finger.has(ev.pointerId)) { finger.set(ev.pointerId, [ev.clientX, ev.clientY]);
+        if (finger.size === 2 && finger.gestur) { const [a, b] = [...finger.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], svg = $("plFlaeche").querySelector("svg"), k = svg.getScreenCTM().a;
+          const g = finger.gestur, bx = aktBox(); box = { ...bx, x: bx.x - (m[0] - g.m[0]) / k, y: bx.y - (m[1] - g.m[1]) / k }; zoomUm(blattPunkt({ clientX: m[0], clientY: m[1] }), d / g.d || 1); finger.gestur = { d, m }; } return; }
+      if (schwenk && ev.pointerId === schwenk.id) { const svg = $("plFlaeche").querySelector("svg"), k = svg.getScreenCTM().a, b = aktBox(); box = { ...b, x: b.x - (ev.clientX - schwenk.x) / k, y: b.y - (ev.clientY - schwenk.y) / k }; schwenk.x = ev.clientX; schwenk.y = ev.clientY; wendeBox(); return; }
       if (!zug) return; const q = blattPunkt(ev);
       if (zug.pfeil) { if (Math.hypot(q[0] - zug.e.x, q[1] - zug.e.y) > 3) zug.e.pfeil = q; }
       else if (zug.e.lage) zug.e.lage = [zug.x + q[0] - zug.von[0], zug.y + q[1] - zug.von[1]];
       else { zug.e.x = zug.x + q[0] - zug.von[0]; zug.e.y = zug.y + q[1] - zug.von[1]; }
-      $("plFlaeche").innerHTML = blattSvg(plan, { auswahl: sel, bildschirm: true, nr: plaene().indexOf(plan) + 1, von: plaene().length });
+      $("plFlaeche").innerHTML = blattSvg(plan, { auswahl: sel, bildschirm: true, nr: plaene().indexOf(plan) + 1, von: plaene().length }); wendeBox();
     });
-    addEventListener("pointerup", () => { if (zug) { zug = null; zeige(); } });
+    addEventListener("pointerup", (ev) => { finger.delete(ev.pointerId); if (finger.size < 2) delete finger.gestur; if (schwenk) { schwenk = null; $("plFlaeche").style.cursor = ""; } if (zug) { zug = null; zeige(); } });
+    addEventListener("keydown", (e) => { if (e.code === "Space" && !$("planEditor").hidden && !e.target.closest?.("input,select,textarea")) { plLeer = true; $("plFlaeche").style.cursor = "grab"; e.preventDefault(); } });
+    addEventListener("keyup", (e) => { if (e.code === "Space") { plLeer = false; if (!schwenk) $("plFlaeche").style.cursor = ""; } });
     $("plEigen").addEventListener("change", (ev) => {
       const e = element(sel), k = ev.target.dataset.e; if (!e || !k) return;
       if (e.lupe && ["faktor", "r", "cx", "cy", "buchstabe"].includes(k)) { e.lupe[k] = k === "buchstabe" ? ev.target.value : +ev.target.value; return zeige(); }
@@ -300,9 +329,29 @@ ${out.join("\n")}
         if (vorige) { const r = ansicht(vorige); a.x = vorige.x + (r?.breite || 50) + 35; a.y = vorige.y; }
         plan.ansichten.push(a); sel = a.id; $("plAnsichtMenue").hidden = true; zeige();
       } else if (b.dataset.detail) { plan.details.push({ id: neuId(), fid: b.dataset.detail, massstab: 1, x: 40, y: 150 }); $("plDetailMenue").hidden = true; zeige(); }
-      else if (b.id === "plNeuAnsicht") { $("plAnsichtMenue").hidden = !$("plAnsichtMenue").hidden; }
+      else if (b.dataset.plskizze) { // Zeichnung aus einer Skizze (oder allen) mit Layern; Massstab passend zum Blatt
+        const F = FORMATE[plan.format], vorige = plan.ansichten.filter((x) => !x.lupe).at(-1), r1 = ctx.skizzenAnsicht(b.dataset.plskizze, 1);
+        if (!r1) { $("plAnsichtMenue").hidden = true; return ctx.status("Die Skizze ist leer."); }
+        const platz = Math.min(F.b - 70, F.h - 70), M = PLAN_MASSSTAEBE.find((m) => Math.max(r1.breite, r1.hoehe) / m <= platz) || PLAN_MASSSTAEBE.at(-1);
+        const a = { id: neuId(), art: "oben", skizze: b.dataset.plskizze, titel: b.textContent.replace(/^Skizze: /, ""), massstab: M, verdeckt: false, x: 30, y: 25 };
+        if (vorige) { const r = ansicht(vorige); a.x = vorige.x + (r?.breite || 50) + 35; a.y = vorige.y; }
+        plan.ansichten.push(a); sel = a.id; $("plAnsichtMenue").hidden = true; zeige();
+      }
+      else if (b.dataset.plabw) { // Abwicklung (Zuschnitt mit Biegelinien) eines Blechteils
+        const F = FORMATE[plan.format], vorige = plan.ansichten.filter((x) => !x.lupe).at(-1), r1 = ctx.abwicklungAnsicht(b.dataset.plabw, 1);
+        if (!r1) { $("plAnsichtMenue").hidden = true; return ctx.status("Keine Abwicklung für dieses Teil."); }
+        const platz = Math.min(F.b - 70, F.h - 70), M = PLAN_MASSSTAEBE.find((m) => Math.max(r1.breite, r1.hoehe) / m <= platz) || PLAN_MASSSTAEBE.at(-1);
+        const a = { id: neuId(), art: "oben", abwicklung: b.dataset.plabw, titel: "Abwicklung " + b.textContent.replace(/^Abwicklung: /, ""), massstab: M, verdeckt: false, x: 30, y: 25 };
+        if (vorige) { const r = ansicht(vorige); a.x = vorige.x + (r?.breite || 50) + 35; a.y = vorige.y; }
+        plan.ansichten.push(a); sel = a.id; $("plAnsichtMenue").hidden = true; zeige();
+      }
+      else if (b.id === "plNeuAnsicht") { const m = $("plAnsichtMenue"); m.querySelectorAll("[data-plskizze],[data-plabw],.plsk").forEach((x) => x.remove());
+        const ab = ctx.abwicklungen(); if (ab.length) m.insertAdjacentHTML("beforeend", `<div class="kmgruppe plsk">Abwicklung (Zuschnitt, Biegelinien)</div>` + ab.map(([id, n]) => `<button data-plabw="${esc(id)}">Abwicklung: ${esc(n)}</button>`).join("")); const sk = ctx.skizzen(); if (sk.length) m.insertAdjacentHTML("beforeend", `<div class="kmgruppe plsk">Zeichnung aus Skizze (mit Layern)</div>` + [["alle", "Alle Skizzen"], ...sk].map(([id, n]) => `<button data-plskizze="${esc(id)}">Skizze: ${esc(n)}</button>`).join("")); m.hidden = !m.hidden; }
       else if (b.id === "plNeuDetail") { const d = ctx.details(); $("plDetailMenue").innerHTML = d.length ? d.map(([id, n]) => `<button data-detail="${id}">${esc(n)}</button>`).join("") : '<p class="hinweis">Noch keine Kanten mit Baustein – Flächenblech wählen und Kanten antippen.</p>'; $("plDetailMenue").hidden = !$("plDetailMenue").hidden; }
-      else if (b.id === "plNeu") { plan = neuerPlan(); sel = null; zeige(); }
+      else if (b.id === "plNeu") { plan = neuerPlan(); sel = null; box = null; zeige(); }
+      else if (b.id === "plZoomPlus") { const bx = aktBox(); zoomUm([bx.x + bx.w / 2, bx.y + bx.h / 2], 1.4); }
+      else if (b.id === "plZoomMinus") { const bx = aktBox(); zoomUm([bx.x + bx.w / 2, bx.y + bx.h / 2], 1 / 1.4); }
+      else if (b.id === "plZoomAlles") { box = null; zeige(); }
       else if (b.id === "plAutoMass") autoMasse();
       else if (b.id === "plUmbenennen") { const n = prompt("Name des Plans", plan.name); if (n?.trim()) { plan.name = n.trim(); zeige(); } }
       else if (b.id === "plWeg") { if (!confirm(`«${plan.name}» löschen?`)) return; plaene().splice(plaene().indexOf(plan), 1); plan = plaene()[0] || neuerPlan(); zeige(); }
@@ -310,8 +359,8 @@ ${out.join("\n")}
       else if (b.id === "plSvg") ctx.herunterladen(`${ctx.doc().nr} ${plan.name}.svg`, blattSvg(plan, { nr: plaene().indexOf(plan) + 1, von: plaene().length }), "image/svg+xml");
       else if (b.id === "plZu") { $("planEditor").hidden = true; ctx.fertig(); }
     });
-    $("plBlatt").onchange = (e) => { plan = plaene()[+e.target.value]; sel = null; zeige(); };
-    $("plFormat").onchange = (e) => { plan.format = e.target.value; zeige(); };
+    $("plBlatt").onchange = (e) => { plan = plaene()[+e.target.value]; sel = null; box = null; zeige(); };
+    $("plFormat").onchange = (e) => { plan.format = e.target.value; box = null; zeige(); };
     addEventListener("keydown", (e) => {
       if ($("planEditor").hidden || e.target.closest?.("input,select")) return;
       if ((e.key === "Delete" || e.key === "Backspace") && sel) { e.preventDefault(); $("plEigen").querySelector('[data-pl="loeschen"]')?.click(); }
