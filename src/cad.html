@@ -29,7 +29,7 @@ html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font-body); font-variant-numeric: tabular-nums;
   padding-left: max(8px, env(safe-area-inset-left, 0px)); padding-right: max(8px, env(safe-area-inset-right, 0px)); padding-block: 8px; }
 .app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; }
-.mitte { display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 8px; min-height: 0; }
+.mitte { position: relative; display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 8px; min-height: 0; }
 @media (max-width: 1000px) { .mitte { grid-template-columns: minmax(0, 1fr); grid-template-rows: 60vh auto auto; } .browser { order: 2; } .werkstatt { order: 3; } .app { height: auto; } }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; min-width: 0; overflow: auto; }
 .ptitel { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--line); font: 600 12px var(--font-label); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
@@ -387,8 +387,12 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .browser .ptitel { cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
 .browser .ptitel::after { content: "▾"; font-size: 10px; opacity: .6; transition: transform .15s; } .browser.zu .ptitel::after { transform: rotate(-90deg); }
 .browser.zu .baum { display: none; }
+.mitte.werkzu { grid-template-columns: minmax(0, 1fr) 0 !important; column-gap: 0; } .mitte.werkzu .werkstatt { display: none; }
+#werkAuf { display: none; position: absolute; right: 8px; top: 8px; z-index: 6; } .mitte.werkzu #werkAuf { display: block; }
+.register { position: relative; } #werkZu { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); padding: 2px 8px; }
+@media (max-width: 1000px) { .mitte.werkzu { grid-template-rows: 60vh auto; } }
 @media (min-width: 1001px) {
-  .mitte { position: relative; grid-template-columns: minmax(0, 1fr) 300px; }
+  .mitte { grid-template-columns: minmax(0, 1fr) 300px; }
   .browser { position: absolute; left: 10px; top: 10px; z-index: 5; width: 236px; max-height: calc(100% - 20px); border-radius: 6px;
     background: color-mix(in srgb, var(--panel) 58%, transparent); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1);
     border: 1px solid color-mix(in srgb, var(--line) 75%, transparent); box-shadow: 0 4px 18px rgba(20, 35, 50, .14); }
@@ -439,6 +443,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <button class="wz" data-kwz="kantenrund"><svg viewBox="0 0 24 24"><rect class="f" x="3.5" y="5" width="17" height="14" rx="5.5"/></svg><span><b>Extrusion ringsum abrunden</b><small>alle Kanten einer Extrusion</small></span></button>
       <button class="wz" data-kwz="schale"><svg viewBox="0 0 24 24"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path class="f" d="M8 10.2l4-2 4 2v3.6l-4 2-4-2z"/></svg><span><b>Schale</b><small>aushöhlen mit Wanddicke</small></span></button>
       <button class="wz" data-kwz="kmuster"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="3" width="7.5" height="7.5" rx="1"/><rect class="f" x="13.5" y="3" width="7.5" height="7.5" rx="1"/><rect class="f" x="3" y="13.5" width="7.5" height="7.5" rx="1"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1" stroke-dasharray="2 2"/></svg><span><b>Muster</b><small>rechteckig oder kreisförmig</small></span></button>
+      <button class="wz" data-kwz="teilen"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="6" width="7" height="12"/><rect class="f" x="14" y="6" width="7" height="12"/><path d="M12 2v20" stroke-dasharray="2 2.5"/></svg><span><b>Teilen</b><small>Körper/Blech an Ebene</small></span></button>
       <button class="wz" data-kwz="kspiegel"><svg viewBox="0 0 24 24"><path class="f" d="M3 5l7 7-7 7z"/><path d="M21 5l-7 7 7 7z"/><path d="M12 2v20" stroke-dasharray="2 2.5"/></svg><span><b>Spiegeln</b><small>an einer Ebene</small></span></button>
       <button class="wz" data-kwz="bewegen"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg><span><b>Verschieben / Kopieren</b><small>Körper bewegen</small></span></button>
       <button class="wz" id="wParameter" title="Parameter ändern: benannte Werte und Formeln für alle Masse"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/><circle class="f" cx="9" cy="7" r="2.2"/><circle class="f" cx="15" cy="12" r="2.2"/><circle class="f" cx="8" cy="17" r="2.2"/></svg>Parameter</button>
@@ -478,6 +483,8 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     </div></div>
     <div class="gruppe skizzengruppe" id="gSkizze" hidden><div class="knoepfe">
       <button class="wz" id="tAuswahl"><svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 2-2 6z"/></svg>Auswahl</button>
+      <button class="wz" id="tEntf" title="Gewähltes Element bzw. gewählte Abhängigkeit löschen (Tablet: ersetzt Entf)"><svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></svg>Löschen</button>
+      <button class="wz" id="tHilfs" title="Gewähltes Element zur Hilfslinie machen bzw. zurück (Tablet: ersetzt X)"><svg viewBox="0 0 24 24"><path d="M4 20L20 4" stroke-dasharray="3 3"/></svg>Hilfslinie</button>
       <button class="wz" id="tLinie"><svg viewBox="0 0 24 24"><path d="M4 20L20 4"/><circle cx="4" cy="20" r="1.8"/><circle cx="20" cy="4" r="1.8"/></svg>Linie</button>
     <div class="klapp" data-klapp="formen"><button class="wz klappknopf" aria-haspopup="true" title=""><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg><span class="kz"><span class="kl">Formen</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
       <button class="wz" id="tRechteck"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12"/></svg><span>Rechteck <span class="pfeil" title="Varianten">▾</span></span></button>
@@ -533,8 +540,9 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <div id="messAnzeige" hidden></div>
       <div id="status"></div>
     </section>
+    <button class="knopf klein" id="werkAuf" title="Teil/Auftrag wieder aufklappen" aria-label="Teil und Auftrag aufklappen">« Teil / Auftrag</button>
     <aside class="panel werkstatt"><div class="register" role="tablist" aria-label="Werkstatt">
-      <button role="tab" data-register="teil" aria-selected="true">Teil</button><button role="tab" data-register="auftrag" aria-selected="false">Auftrag</button></div><div id="werkstatt"></div>
+      <button role="tab" data-register="teil" aria-selected="true">Teil</button><button role="tab" data-register="auftrag" aria-selected="false">Auftrag</button><button class="knopf klein" id="werkZu" title="Teil/Auftrag zuklappen – mehr Platz für die Ansicht" aria-label="Teil und Auftrag zuklappen">»</button></div><div id="werkstatt"></div>
       <div class="auftrag">
         <div class="feld"><label>App-Projekt</label><div class="projzeile"><span id="aProjektName" class="hinweis">nicht zugeordnet</span><button class="knopf klein" id="aProjektWahl">Projekt …</button></div></div>
         <div class="feld"><label for="aObjekt">Objekt</label><input id="aObjekt"></div>
@@ -627,6 +635,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <li><b>Profil anklicken</b>: Bei Extrudieren, Drehen, Sweep, Übergang und Flächenblech einfach in die geschlossene Skizzenfläche (oder auf ihre Linie) tippen, beim Blechprofil auf den Linienzug – wie in Fusion.</li>
       <li><b>Sweep</b> (Profil entlang Pfad) und <b>Übergang</b> (Loft zwischen zwei Profilen).</li>
       <li><b>Kanten abrunden / fasen</b> (Ändern ▾): einzelne gerade Kanten eines beliebigen Volumenkörpers anklicken – Aussenkanten werden gerundet bzw. gefast, Innenkanten als Kehle ausgefüllt. Ecken mit drei gerundeten Kanten werden nicht kugelig verschliffen.</li>
+      <li><b>Teilen</b> (Ändern ▾): Körper oder Blechteil an einer Ebene in zwei Teile schneiden. <b>Komponente</b>: Rechtsklick/langes Antippen auf ein Teil → «Eigene Komponente aus diesem Teil». <b>Flächenblech</b>: «Skizze liegt …» (Mitte/Vorderseite/Rückseite) und Abkantrichtung wählbar. Tablet: Skizze-Knöpfe «Löschen» und «Hilfslinie»; Stift dreht das Modell; rechtes Feld mit » zuklappen.</li>
       <li><b>Flächen wählen</b>: bei Extrudieren und Flächenblech die Skizze anklicken – jede Teilfläche (auch Überlappungen, Inseln, durchzogene Rechtecke) einzeln, mehrere nacheinander, nochmals anklicken = abwählen; gewählte Flächen sind blau, die Fläche unter dem Zeiger orange.</li>
       <li><b>Ändern ▾</b>: Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
       <li><b>Text</b> (Skizze): Stelle anklicken, Text und Höhe eingeben (Umlaute, °, € gehen). Extrudieren mit «Ausschneiden» = Gravur, mit «Vereinigen» = Prägung. Doppelklick (Auswahl) ändert Text, Höhe und Winkel.</li>

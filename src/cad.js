@@ -56,7 +56,7 @@ const V = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const ebene = (id) => EBENEN[id] || finde(id)?._ebene || null;
 const E_ = (id) => ebene(id) || EBENEN.XY; // Ersatz, damit eine fehlende Ebene nichts zum Absturz bringt
 const ebenenName = (id) => EBENEN[id]?.name || finde(id)?.name || "Ebene fehlt";
-const basis = (id) => { const e = E_(id); return new THREE.Matrix4().makeBasis(V(e.u), V(e.v), V(e.n)).setPosition(V(e.o)); };
+const basis = (id) => { const e = typeof id === "object" ? id : E_(id); return new THREE.Matrix4().makeBasis(V(e.u), V(e.v), V(e.n)).setPosition(V(e.o)); };
 const zu3D = (id, p) => V(zuWelt(E_(id), p));
 const ebenenEbene = (id) => { const e = E_(id); return new THREE.Plane().setFromNormalAndCoplanarPoint(V(e.n), V(e.o)); };
 const aufEbene = (id, p) => zuLokal(E_(id), [p.x, p.y, p.z]);
@@ -170,6 +170,8 @@ steuerung.enableDamping = false; // keine Nachlaufzeit: Drehen und Verschieben f
 steuerung.rotateSpeed = 1.1; steuerung.panSpeed = 1.2; steuerung.zoomSpeed = 1.2; steuerung.zoomToCursor = true;
 // Wie Fusion: Mausrad gedrückt = Verschieben, Umschalt + Mausrad gedrückt = Drehen, Rad = Zoom zum Zeiger (OrbitControls tauscht Verschieben/Drehen bei Umschalt)
 steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null }; // linke und rechte Taste bewegen die Ansicht nicht; Finger/Stift (Touch) drehen und verschieben weiter
+// Stift (Tablet) bewegt das Modell wie der Finger (drehen), ausser in der Skizze – dort zeichnet er; die Maus bleibt unberührt
+addEventListener("pointerdown", (e) => { steuerung.mouseButtons.LEFT = e.pointerType === "pen" && !skizze && e.target === leinwand ? THREE.MOUSE.ROTATE : null; }, true);
 szene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; // Studiolicht: Spiegelungen wie im CAD-Programm
 szene.add(new THREE.HemisphereLight(0xffffff, 0x66727a, 0.55));
 const licht = new THREE.DirectionalLight(0xffffff, 1.15); licht.position.set(1, 2, 3); szene.add(licht);
@@ -208,6 +210,10 @@ function groesse() {
   renderer.setSize(w, h, false); kamera.aspect = w / h; kamera.updateProjectionMatrix();
 }
 new ResizeObserver(groesse).observe(leinwand);
+// Rechtes Feld (Teil / Auftrag) zuklappen für mehr Platz; Zustand wird gemerkt
+{ const mitte = document.querySelector(".mitte"), setze = (zu) => { mitte.classList.toggle("werkzu", zu); try { localStorage.setItem("sdcad-werkzu", zu ? "1" : "0"); } catch {} };
+  try { if (localStorage.getItem("sdcad-werkzu") === "1") mitte.classList.add("werkzu"); } catch {}
+  $("werkZu").onclick = () => setze(true); $("werkAuf").onclick = () => setze(false); }
 kamera.position.set(600, 450, 700);
 
 const leeren = (g) => g.children.slice().forEach((c) => { g.remove(c); c.traverse?.((o) => { o.geometry?.dispose(); o.material?.dispose?.(); }); });
@@ -898,6 +904,8 @@ function regen() {
         verknuepfe(m, schalenWerkzeug(z, f), "ausschneiden");
       } else if (f.typ === "kmuster" || f.typ === "kspiegel" || f.typ === "bewegen") {
         koerperTransform(f, volumen);
+      } else if (f.typ === "teilen") {
+        koerperTeilen(f, volumen);
       } else if (f.typ === "drehung") {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
         const loops = schleifen(s); if (!loops.length) throw new Error("Skizze hat kein geschlossenes Profil");
@@ -951,7 +959,7 @@ function regen() {
         f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
           laenge: +bl.abw.laenge.toFixed(1), stueck: f.stueck ?? 1, notiz: f.notiz, _blech: bl,
           _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
-        if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, s.ebene, m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
+        if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, blechEbene(s.ebene, f, m), m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
       } else if (f.typ === "rundblech") { // Zylinder-/Kegelmantel: exakte Abwicklung (kern/abwicklungRund.js), 3D als Drehkörper
         const m = material(f.material), kegel = f.art !== "zylinder";
         if (!(f.d1 > m.t && f.h > 0) || (kegel && !(f.d2 >= 0)) || !(f.winkel > 0 && f.winkel <= 360)) throw new Error("Durchmesser, Höhe und Winkel prüfen (Winkel 1–360°)");
@@ -1053,7 +1061,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
@@ -1117,7 +1125,7 @@ function featureMenue(f, x, y) {
   const punkte = [["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
     ["zurueck", "Bis hier zurückrollen (danach aus)"], ["ende", "Alle aktivieren (Marke ans Ende)"], ["links", "Nach vorne verschieben"], ["rechts", "Nach hinten verschieben"],
     ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["darst", "Darstellung …"]]),
-    ["komp", f.komponente ? `Komponente «${esc(f.komponente)}» ändern …` : "In Komponente …"], ["kopie", "Duplizieren"], ["weg", "Löschen"]];
+    ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["kompNeu", "Eigene Komponente aus diesem Teil"], ["komp", f.komponente ? `Komponente «${esc(f.komponente)}» ändern …` : "In Komponente …"], ...(f.komponente ? [["kompAus", "Aus Komponente herauslösen"]] : [])]), ["kopie", "Duplizieren"], ["weg", "Löschen"]];
   m.innerHTML = punkte.map(([k, t]) => `<button data-fm="${k}" ${(k === "links" && i === 0) || (k === "rechts" && i === doc.features.length - 1) || (k === "ende" && doc.marke == null) ? "disabled" : ""}>${t}</button>`).join("");
   m.dataset.id = f.id; m.hidden = false;
   Object.assign(m.style, { left: Math.min(x, innerWidth - 240) + "px", top: Math.min(y, innerHeight - 330) + "px" });
@@ -1157,6 +1165,11 @@ $("featureMenue").onclick = (e) => {
       `<button data-darst="${id}" class="${f.darstellung === id ? "an" : ""}"><span class="farbfeld" style="background:${hex(o.farbe)}"></span>${esc(o.name)}</button>`).join("");
     m.dataset.id = f.id; m.hidden = false; return;
   }
+  else if (k === "kompNeu") { // jedes Teil kann seine eigene Komponente werden (verschieben/drehen, ein-/ausblenden)
+    const vorhanden = new Set(doc.features.map((x) => x.komponente).filter(Boolean)); let n = f.name, i = 2; while (vorhanden.has(n)) n = `${f.name} ${i++}`;
+    f.komponente = n; regen(); status(`«${f.name}» ist jetzt eine eigene Komponente (im Browser: Doppelklick = umbenennen, Rechtsklick = verschieben/drehen).`);
+  }
+  else if (k === "kompAus") { delete f.komponente; regen(); status(`«${f.name}» ist nicht mehr in einer Komponente.`); }
   else if (k === "komp") {
     const da = [...new Set(doc.features.map((x) => x.komponente).filter(Boolean))];
     const n = prompt(`Komponente (Baugruppe) für «${f.name}»${da.length ? " – vorhanden: " + da.join(", ") : ""}. Leer = keine.`, f.komponente || da[0] || "Komponente 1");
@@ -1769,6 +1782,11 @@ function prisma(kont, L, k0, k1, e0 = 0, e1 = 0) { // e0/e1: an der Ecke zurück
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   return nachAussen(g);
 }
+// Lage des Blechs zur Skizzenebene: Mitte (Standard), Skizze auf der Vorderseite (Blech dahinter) oder auf der Rückseite
+function blechEbene(id, f, m) {
+  const e = E_(id), s = f.sichtseite === -1 ? -1 : 1, dz = f.lage === "vorne" ? -s * m.t / 2 : f.lage === "hinten" ? s * m.t / 2 : 0;
+  return dz ? { ...e, o: e.o.map((v, i) => v + e.n[i] * dz) } : e;
+}
 function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   const B = basis(ebene), teile = [];
   // Platte endet am Biegebeginn jeder Kante mit Baustein (wie im exakten Kern), nicht an der gezeichneten Kante
@@ -1947,7 +1965,8 @@ function flaecheDialog(f) {
     ...(Array.isArray(f.flaechen) ? [] : [{ id: "profil", label: "Flächen", optionen: [["alle", "Alle Flächen (je ein Blech)"], ...schleifen(finde(f.skizze) || sk.at(-1)).map((_, i) => [i, `Fläche ${i + 1}`])], wert: f.profil ?? "alle" }]),
     { id: "name", label: "Name", text: true, wert: f.name },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
-    { id: "sichtseite", label: "Sichtseite (Abkantungen + gehen dorthin)", optionen: [["1", "Vorne (Richtung Ebenen-Normale)"], ["-1", "Hinten"]], wert: String(f.sichtseite ?? 1) },
+    { id: "sichtseite", label: "Richtung der Abkantungen / Sichtseite", optionen: [["1", "Vorne (Richtung Ebenen-Normale)"], ["-1", "Hinten (gegen die Normale)"]], wert: String(f.sichtseite ?? 1) },
+    { id: "lage", label: "Skizze liegt …", optionen: [["mitte", "in der Blechmitte"], ["vorne", "auf der Vorderseite (Blech dahinter)"], ["hinten", "auf der Rückseite (Blech davor)"]], wert: f.lage || "mitte" },
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
   ];
@@ -2279,6 +2298,24 @@ function transformAus(f, k) {
   if (f.anzahl2 > 1) v.add(V(bezugKante(f.richtung2 || "A:Z").d).normalize().multiplyScalar((f.abstand2 || 0) * j));
   return M.makeTranslation(v.x, v.y, v.z);
 }
+// Teilen: Körper oder Blech (Netz) an einer Ebene in zwei Teile schneiden; behalten = beide / nur die Seite der Ebenen-Normale / nur die Gegenseite
+function koerperTeilen(f, volumen) {
+  const quellen = koerperVon(f.ziel, volumen); if (!quellen.length && finde(f.ziel)?.versteckt) return;
+  if (!quellen.length) throw new Error("Körper fehlt (ausgeblendet, unterdrückt oder noch nicht da)");
+  const e = bezugEbene(f.ebene), S = 20000, M = new THREE.Matrix4().makeBasis(V(e.u), V(e.v), V(e.n)).setPosition(V(e.o));
+  const seite = (s) => { const g = new THREE.BoxGeometry(S, S, S); g.translate(0, 0, s * S / 2); g.applyMatrix4(M); return g; };
+  const wo = f.behalten === "oben" ? [1] : f.behalten === "unten" ? [-1] : [1, -1];
+  quellen.forEach((q, n) => {
+    const a = new Brush(nurPos(q.geometry)); a.updateMatrixWorld();
+    const teile = wo.map((s) => { const b = new Brush(seite(s)); b.updateMatrixWorld(); return csg.evaluate(a, b, INTERSECTION).geometry; });
+    if (teile.some((g) => !g.attributes.position?.count)) { if (teile.length === 1) throw new Error("Auf dieser Seite der Ebene ist nichts vom Körper"); }
+    const ok = teile.filter((g) => g.attributes.position?.count);
+    if (!ok.length) throw new Error("Die Ebene schneidet den Körper nicht");
+    if (ok.length < teile.length && wo.length === 2) { status("Die Ebene liegt ausserhalb des Körpers – nichts geteilt."); return; }
+    q.geometry.dispose(); q.geometry = ok[0]; const k0 = q.children[0]; if (k0) { k0.geometry.dispose(); k0.geometry = kantenGeometrie(ok[0]); }
+    if (ok[1]) { const m = koerperMesh(ok[1], q.userData.art ?? q.material.color.getHex(), `${f.id}:${n}`); if (volumen.get(f.ziel) === q) volumen.set(`${f.id}`, m); if (!f.versteckt) modell.add(m); }
+  });
+}
 function koerperTransform(f, volumen) {
   const quellen = koerperVon(f.ziel, volumen); if (!quellen.length && finde(f.ziel)?.versteckt) return; // ausgeblendet: Kopien auch
   if (!quellen.length) throw new Error("Körper fehlt (ausgeblendet, unterdrückt oder noch nicht da)");
@@ -2300,7 +2337,7 @@ function koerperTransform(f, volumen) {
 }
 const koerperOpt = (f) => vorher(f).filter((x) => ["extrusion", "drehung", "sweep", "loft", "blech", "vorlage", "profil", "flaeche"].includes(x.typ) && (x.vorgang || "neu") === "neu").map((x) => [x.id, x.name]);
 const KOERPER_WZ = {
-  kantenrund: "Abrunden / Fasen", schale: "Schale", kmuster: "Muster (Körper)", kspiegel: "Spiegeln (Körper)", bewegen: "Verschieben / Kopieren",
+  kantenrund: "Abrunden / Fasen", schale: "Schale", kmuster: "Muster (Körper)", kspiegel: "Spiegeln (Körper)", teilen: "Körper teilen", bewegen: "Verschieben / Kopieren",
 };
 function koerperDialog(typ, f) {
   const istNeu = !f, opt = typ === "kantenrund" || typ === "schale" ? vorher(f).filter((x) => x.typ === "extrusion" && (x.vorgang || "neu") === "neu").map((x) => [x.id, x.name]) : koerperOpt(f);
@@ -2308,7 +2345,7 @@ function koerperDialog(typ, f) {
   const ziel = finde(auswahl)?.id && opt.some(([id]) => id === auswahl) ? auswahl : opt.at(-1)[0];
   f ||= { id: neueId(), typ, name: KOERPER_WZ[typ] + " " + (doc.features.filter((x) => x.typ === typ).length + 1), ziel,
     ...({ kantenrund: { art: "rund", mass: 5, kanten: "alle" }, schale: { dicke: 2, offen: "oben" }, kmuster: { art: "rechteck", richtung1: "A:X", anzahl: 3, abstand: 200, richtung2: "A:Z", anzahl2: 1, abstand2: 200, achse: "A:Y", winkel: 360 },
-      kspiegel: { ebene: "YZ" }, bewegen: { dx: 0, dy: 0, dz: 0, achse: "A:Y", winkel: 0, kopie: false } })[typ] };
+      kspiegel: { ebene: "YZ" }, teilen: { ebene: "YZ", behalten: "beide" }, bewegen: { dx: 0, dy: 0, dz: 0, achse: "A:Y", winkel: 0, kopie: false } })[typ] };
   const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "ziel", label: "Körper", optionen: opt, wert: f.ziel }, ...({
     kantenrund: () => [{ id: "art", label: "Art", optionen: [["rund", "Abrunden (Radius)"], ["fase", "Fasen (Abstand)"]], wert: f.art }, { id: "mass", label: f.art === "fase" ? "Fase" : "Radius", einheit: "mm", wert: f.mass },
       { id: "kanten", label: "Kanten", optionen: [["alle", "Alle Kanten"], ["senkrecht", "Kanten in Extrusionsrichtung"], ["quer", "Kanten oben und unten"]], wert: f.kanten }],
@@ -2318,12 +2355,15 @@ function koerperDialog(typ, f) {
         : [{ id: "richtung1", label: "Richtung 1", wahl: "kante", optionen: mitWert(kantenListe(f), f.richtung1), wert: f.richtung1 }, { id: "anzahl", label: "Anzahl 1", wert: f.anzahl }, { id: "abstand", label: "Abstand 1", einheit: "mm", wert: f.abstand },
           { id: "richtung2", label: "Richtung 2", wahl: "kante", optionen: mitWert(kantenListe(f), f.richtung2), wert: f.richtung2 }, { id: "anzahl2", label: "Anzahl 2", wert: f.anzahl2 }, { id: "abstand2", label: "Abstand 2", einheit: "mm", wert: f.abstand2 }])],
     kspiegel: () => [{ id: "ebene", label: "Spiegelebene", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene }],
+    teilen: () => [{ id: "ebene", label: "Teilen mit Ebene", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
+      { id: "behalten", label: "Behalten", optionen: [["beide", "Beide Teile"], ["oben", "Nur Seite der Ebenen-Normale"], ["unten", "Nur Gegenseite"]], wert: f.behalten || "beide" }],
     bewegen: () => [{ id: "dx", label: "Verschieben X", einheit: "mm", wert: f.dx }, { id: "dy", label: "Verschieben Y", einheit: "mm", wert: f.dy }, { id: "dz", label: "Verschieben Z", einheit: "mm", wert: f.dz },
       { id: "achse", label: "Drehachse", wahl: "kante", optionen: mitWert(kantenListe(f), f.achse), wert: f.achse }, { id: "winkel", label: "Drehwinkel", einheit: "°", wert: f.winkel },
       { id: "kopie", label: "Kopie erstellen", optionen: [["", "Nein – Körper verschieben"], ["1", "Ja – Kopie"]], wert: f.kopie ? "1" : "" }],
   }[typ])()];
   const hinweise = { kantenrund: "Rundet bzw. fast die Kanten einer Extrusion – in Extrusionsrichtung (Ecken der Skizze) und/oder oben/unten.", schale: "Höhlt eine Extrusion aus: Wanddicke nach innen, eine Seite bleibt offen (z. B. Kasten, Rinne).",
     kmuster: "Kopiert Körper oder Blechteile in einer oder zwei Richtungen bzw. um eine Achse. Gemusterte Blechteile zählen mehrfach in der Stückliste.", kspiegel: "Spiegelt einen Körper oder ein Blechteil an einer Ebene (Kopie).",
+    teilen: "Schneidet einen Körper oder ein Blechteil an einer Ebene (Konstruktionsebene, Grundebene oder ebene Körperfläche anklicken) in zwei Teile. Zwei Teile bleiben getrennt, einzeln gewählt und ein-/ausblendbar. Hinweis: bei Blechteilen wird das 3D-Modell geteilt; die Abwicklung bleibt die des ganzen Blechs – ein Blech in der Fläche trennt man besser mit einer Linie in der Skizze.",
     bewegen: "Verschiebt und dreht einen Körper – oder legt eine Kopie an." };
   featureDialog(f, istNeu, felder, (f, w) => Object.assign(f, w, { name: w.name?.trim() || f.name, ...(typ === "bewegen" ? { kopie: !!w.kopie } : {}) }), KOERPER_WZ[typ], hinweise[typ],
     { wahlNr: -1 });
@@ -3277,6 +3317,15 @@ function setzeWerkzeug(w) {
   status(WERKZEUGE[w].text);
   zeichneLive();
 }
+// Löschen / Hilfslinie auch per Knopf (Tablet ohne Tastatur)
+function loescheSkizzenAuswahl() {
+  if (!skizze) return;
+  if (skizze.bsel) return entferneBed(skizze.bsel);
+  if (skizze.sel) { const i = skizze.f.elemente.indexOf(skizze.sel); if (i >= 0) skizze.f.elemente.splice(i, 1); skizze.sel = null; bereinige(skizze.f); zeichneLive(); }
+  else status("Zuerst ein Element anklicken (Werkzeug Auswahl).");
+}
+$("tEntf").onclick = () => { if (skizze && !skizze.sel && !skizze.bsel && skizze.werkzeug !== "auswahl") setzeWerkzeug("auswahl"); loescheSkizzenAuswahl(); };
+$("tHilfs").onclick = () => { if (!skizze?.sel) return status("Zuerst ein Element anklicken (Werkzeug Auswahl)."); skizze.sel.hilfs = !skizze.sel.hilfs; status(skizze.sel.hilfs ? "Hilfslinie." : "Normale Linie."); zeichneLive(); };
 function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
@@ -4274,10 +4323,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && (skizze.picks.length || skizze.bsel)) { skizze.picks = []; skizze.bsel = null; document.querySelectorAll(".massbox").forEach((b) => b.remove()); zeichneLive(); e.preventDefault(); return; }
   if (e.key === "Escape") { if (skizze.pkt.length || skizze.quelle) { abschliessenLinie(); skizze.pkt = []; skizze.quelle = null; zeichneLive(); } else if (skizze.werkzeug !== "auswahl") setzeWerkzeug("auswahl"); else { skizze.sel = null; zeichneLive(); } e.preventDefault(); return; }
   if ((e.key === "x" || e.key === "X") && skizze.sel && !e.target.closest?.("input,select")) { skizze.sel.hilfs = !skizze.sel.hilfs; status(skizze.sel.hilfs ? "Hilfslinie." : "Normale Linie."); zeichneLive(); e.preventDefault(); return; }
-  if ((e.key === "Delete" || e.key === "Backspace") && skizze.bsel && !e.target.closest?.("input,select")) { entferneBed(skizze.bsel); e.preventDefault(); return; }
-  if ((e.key === "Delete" || e.key === "Backspace") && skizze.sel && !e.target.closest?.("input,select")) {
-    skizze.f.elemente.splice(skizze.f.elemente.indexOf(skizze.sel), 1); skizze.sel = null; bereinige(skizze.f); zeichneLive(); e.preventDefault(); return;
-  }
+  if ((e.key === "Delete" || e.key === "Backspace") && (skizze.bsel || skizze.sel) && !e.target.closest?.("input,select")) { loescheSkizzenAuswahl(); e.preventDefault(); return; }
   // Tastenkürzel wie in Fusion: L Linie, R Rechteck, C Kreis, D Bemassung
   const kurz = { l: "linie", r: "rechteck", c: "kreis", d: "mass" }[e.key];
   if (kurz && !e.ctrlKey && !e.metaKey && !e.altKey && !e.target.closest?.("input,select,textarea")) { abschliessenLinie(); setzeWerkzeug(kurz); e.preventDefault(); return; }
@@ -4663,6 +4709,8 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
           const offen = extrusionsFlaechen(await K.ausfuehren({ op: "topologie", ziel: koerper.get(f.ziel) }), lage, f.offen);
           koerper.set(f.ziel, (await x({ op: "schale", ziel: koerper.get(f.ziel), dicke: f.dicke > 0 ? f.dicke : 2, offen })).id);
         } catch (e) { nicht.set(f.ziel, `${f.name}: ${e.message}`); }
+      } else if (f.typ === "teilen") { // im Netz-Pfad gerechnet; der exakte Kern teilt noch nicht
+        if (koerper.has(f.ziel) || blech.has(f.ziel)) nicht.set(f.ziel, `${f.name} noch nicht exakt`);
       } else if (["kmuster", "kspiegel", "bewegen"].includes(f.typ)) { // wie koerperTransform(): Kopien «id:k» oder Lage ändern
         const z = f.ziel;
         if (blech.has(z)) { nicht.set(z, `${f.name} an Blechteil noch nicht exakt`); continue; }
@@ -4680,7 +4728,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         } catch (e) { nicht.set(z, `${f.name}: ${e.message}`); }
       } else if (f.typ === "flaeche") { // Flächenblech: Fläche bis Biegebeginn, Bausteinprofile exakt mit derselben Eckregel wie die Abwicklung
         if (f.versteckt || !f._bleche) continue;
-        const ebene = E_(finde(f.skizze).ebene), m = material(f.material);
+        const m = material(f.material), ebene = blechEbene(finde(f.skizze).ebene, f, m);
         for (const [i, bl] of f._bleche.entries()) {
           try { blech.set(`${f.id}:${i}`, await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1))); }
           catch (e) { nicht.set(`${f.id}:${i}`, e.message); }
