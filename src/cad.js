@@ -989,7 +989,7 @@ function regen() {
     for (const hid of new Set(bleche.map((o) => String(o.userData.fid).split(":")[0]))) { // abgewickelte Bleche: Umriss des Ausschnitts für «Falten» merken
       const st = flachStand.get(hid); if (!st) continue;
       if (!aktSchnitt || aktSchnitt.ebene !== finde(finde(hid).skizze).ebene) throw new Error("Ausschneiden an der Abwicklung: die Skizze muss auf derselben Ebene wie das Blech liegen");
-      st.schnitte.push(...aktSchnitt.loops);
+      st.schnitte.push(...aktSchnitt.loops); finde(hid)._bleche?.forEach((bl) => { bl.abw.loecher = st.schnitte.filter((l) => boxUeberlappt(l, bl.abw.umriss)); });
     }
     if (nicht) throw new Error(`${nicht} Blechteil${nicht === 1 ? "" : "e"} lie${nicht === 1 ? "ss" : "ssen"} sich nicht ausschneiden`);
   };
@@ -1138,7 +1138,7 @@ function regen() {
         for (const o of modell.children.filter((o) => o.isMesh && String(o.userData.fid).startsWith(z.id + ":"))) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); }
         flachStand.delete(z.id);
         z._bleche.forEach((bl, i) => {
-          bl.abw.loecher = st.schnitte.filter((l) => innen(l[0], bl.abw.umriss));
+          bl.abw.loecher = st.schnitte.filter((l) => boxUeberlappt(l, bl.abw.umriss));
           if (z.versteckt) return;
           const eb = blechEbene(s0.ebene, z, m), teile = flaechenKoerper(bl, eb, m, seite, `${z.id}:${i}`, darstellungVon(z, m));
           let hinweis = null; if (bl.abw.loecher.length) try { schneideAus(teile, bl, bl.abw.loecher, eb, m, seite); } catch (e) { hinweis = e.message; }
@@ -1303,6 +1303,20 @@ function verschiebeFeature(f, ziel) {
   if (frueher) return status(`«${frueher.name}» verwendet «${f.name}» – es muss davor bleiben.`);
   doc.features = liste; regen(); status(`«${f.name}» verschoben.`);
 }
+// Abwickeln / Falten wie Unfold / Refold in Fusion: Abwickeln · Skizze auf dem flachen Blech · Extrusion «Ausschneiden» · Falten
+function abwickelnSchalten(f) {
+  if (!f) { const fl = doc.features.filter((x) => x.typ === "flaeche" && !x._aus); f = hauptVon(auswahl); if (f?.typ !== "flaeche") f = fl.length === 1 ? fl[0] : null; }
+  if (!f) return status("Zuerst das Flächenblech im Browser oder in der Ansicht anwählen, dann «Abwickeln / Falten».");
+  if (skizze) return status("Erst die Skizze beenden.");
+  if (dlg) $("dAbbrechen").click();
+  const flach = istAbgewickelt(f);
+  einfuegen({ id: neueId(), typ: flach ? "falten" : "abwickeln", name: `${flach ? "Falten" : "Abwickeln"} ${f.name}`, ziel: f.id }); regen();
+  if (!flach) { const sk0 = finde(f.skizze), sk = { id: neueId(), typ: "skizze", name: `Skizze auf Abwicklung ${f.name}`, ebene: sk0.ebene, elemente: [] }; einfuegen(sk); regen();
+    status("Abgewickelt: Skizze auf dem flachen Blech zeichnen, dann «Extrudieren › Ausschneiden» (Richtung symmetrisch oder Abstand > Blechdicke) und zuletzt «Abwickeln / Falten» erneut (Falten)."); return starteSkizze(sk); }
+  status("Gefaltet: die Ausschnitte der Abwicklung sind im gekanteten Blech.");
+}
+$("wAbwickeln").onclick = () => abwickelnSchalten();
+$("wTeilMenue").onclick = () => { const f = hauptVon(auswahl); if (!f) return status("Zuerst ein Teil im Browser, in der Zeitleiste oder in der Ansicht anwählen."); const r = $("wTeilMenue").getBoundingClientRect(); featureMenue(f, r.left, r.bottom + 6); };
 // Ist das Flächenblech gerade abgewickelt? (letzter Abwickeln/Falten-Schritt für dieses Blech ist «Abwickeln»)
 const istAbgewickelt = (f) => doc.features.filter((x) => (x.typ === "abwickeln" || x.typ === "falten") && x.ziel === f.id && !x.unterdrueckt).at(-1)?.typ === "abwickeln";
 // Kontextmenü (Rechtsklick oder langes Antippen) in Zeitleiste und Browser
@@ -1311,7 +1325,7 @@ function featureMenue(f, x, y) {
   const punkte = [...(f.typ === "kante" ? [["kumk", "Richtung umkehren"]] : []), ...(f.typ === "flaeche" ? [["abw", istAbgewickelt(f) ? "Falten (zurück in Form)" : "Abwickeln (flach bearbeiten) …"]] : []), ["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
     ["zurueck", "Bis hier zurückrollen (danach aus)"], ["ende", "Alle aktivieren (Marke ans Ende)"], ["links", "Nach vorne verschieben"], ["rechts", "Nach hinten verschieben"],
     ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["darst", "Darstellung …"]]),
-    ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["kompNeu", "Eigene Komponente aus diesem Teil"], ["komp", f.komponente ? `Komponente «${esc(f.komponente)}» ändern …` : "In Komponente …"], ...(f.komponente ? [["kompAus", "Aus Komponente herauslösen"]] : [])]), ["kopie", "Duplizieren"], ["weg", "Löschen"]];
+    ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["kompNeu", "Eigene Komponente aus diesem Teil"], ["komp", f.komponente ? `Komponente «${esc(f.komponente)}» ändern …` : "In Komponente …"], ...(f.komponente ? [["kompAus", "Aus Komponente herauslösen"], ["kompLage", `Komponente «${esc(f.komponente)}» verschieben / drehen …`], ["kompName", "Komponente umbenennen …"], ["kompLoesen", "Komponente auflösen"]] : [])]), ["kopie", "Duplizieren"], ["weg", "Löschen"]];
   m.innerHTML = punkte.map(([k, t]) => `<button data-fm="${k}" ${(k === "links" && i === 0) || (k === "rechts" && i === doc.features.length - 1) || (k === "ende" && doc.marke == null) ? "disabled" : ""}>${t}</button>`).join("");
   m.dataset.id = f.id; m.hidden = false;
   Object.assign(m.style, { left: Math.min(x, innerWidth - 240) + "px", top: Math.min(y, innerHeight - 330) + "px" });
@@ -1352,18 +1366,14 @@ $("featureMenue").onclick = (e) => {
     m.dataset.id = f.id; m.hidden = false; return;
   }
   else if (k === "kumk") { kanteUmkehren(f, f.key); status("Richtung umgekehrt."); }
-  else if (k === "abw") { // Unfold / Refold wie in Fusion: Abwickeln · Skizze auf dem flachen Blech · Extrusion «Ausschneiden» · Falten
-    const flach = istAbgewickelt(f);
-    const n = { id: neueId(), typ: flach ? "falten" : "abwickeln", name: `${flach ? "Falten" : "Abwickeln"} ${f.name}`, ziel: f.id };
-    einfuegen(n); regen();
-    if (!flach) { const sk0 = finde(f.skizze), sk = { id: neueId(), typ: "skizze", name: `Skizze auf Abwicklung ${f.name}`, ebene: sk0.ebene, elemente: [] }; einfuegen(sk); regen();
-      status("Abgewickelt: Skizze auf dem flachen Blech zeichnen, dann «Extrudieren › Ausschneiden» (Richtung symmetrisch oder Abstand > Blechdicke) und zuletzt Rechtsklick auf das Blech › «Falten»."); return starteSkizze(sk); }
-    status("Gefaltet: die Ausschnitte der Abwicklung sind im gekanteten Blech.");
-  }
+  else if (k === "abw") abwickelnSchalten(f);
   else if (k === "kompNeu") { // jedes Teil kann seine eigene Komponente werden (verschieben/drehen, ein-/ausblenden)
     const vorhanden = new Set(doc.features.map((x) => x.komponente).filter(Boolean)); let n = f.name, i = 2; while (vorhanden.has(n)) n = `${f.name} ${i++}`;
     f.komponente = n; regen(); status(`«${f.name}» ist jetzt eine eigene Komponente (im Browser: Doppelklick = umbenennen, Rechtsklick = verschieben/drehen).`);
   }
+  else if (k === "kompLage") komponenteDialog(f.komponente);
+  else if (k === "kompName") { const alt = f.komponente, n = prompt("Komponente umbenennen", alt)?.trim(); if (n) { doc.features.forEach((x) => { if (x.komponente === alt) x.komponente = n; }); if (doc.komponentenLage?.[alt]) { doc.komponentenLage[n] = doc.komponentenLage[alt]; delete doc.komponentenLage[alt]; } regen(); } }
+  else if (k === "kompLoesen") { const alt = f.komponente; doc.features.forEach((x) => { if (x.komponente === alt) delete x.komponente; }); if (doc.komponentenLage) delete doc.komponentenLage[alt]; regen(); status(`Komponente «${alt}» aufgelöst – Körper bleiben.`); }
   else if (k === "kompAus") { delete f.komponente; regen(); status(`«${f.name}» ist nicht mehr in einer Komponente.`); }
   else if (k === "komp") {
     const da = [...new Set(doc.features.map((x) => x.komponente).filter(Boolean))];
@@ -2010,6 +2020,8 @@ function sweepGlatt(kont, pts0, ek, seite) {
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));
   return g;
 }
+// Liegt (teilweise) ein Ausschnitt-Umriss im Umriss des Blechs? (Rand-Ausklinkungen beginnen ausserhalb) – Boxvergleich genügt, die Werkzeuge schneiden nur dort, wo Material ist
+const boxUeberlappt = (a, b) => { const bx = (p) => [Math.min(...p.map((q) => q[0])), Math.max(...p.map((q) => q[0])), Math.min(...p.map((q) => q[1])), Math.max(...p.map((q) => q[1]))], A = bx(a), B = bx(b); return A[0] <= B[1] && A[1] >= B[0] && A[2] <= B[3] && A[3] >= B[2]; };
 // Abgewickelter Zustand (Unfold): das flache Blech mit allen Ausschnitten als Löcher und den Biegelinien
 function flachKoerper(bl, ebene, m, fid, art) {
   const sh = new THREE.Shape(bl.abw.umriss.map(([u, v]) => new THREE.Vector2(u, v)));
@@ -3312,11 +3324,19 @@ function abwicklungPlanAnsicht(ref, k) {
   if (x._blech?.abw) { const A = x._blech.abw, R = (p) => A.dreh(p); aussen = A.umriss.map(R); loecher = (A.loecher || []).map((l) => l.map(R)); biegen = (A.linien || []).map((l) => l.punkte.map(R)); }
   else if (x._res) { const W = x._res.zuschnitt, H = +x.laenge || 100; aussen = [[0, 0], [W, 0], [W, H], [0, H]]; biegen = (x._res.biegungen || []).map((b) => [[b.pos, 0], [b.pos, H]]); }
   if (!aussen.length) return null;
+  const polySeg = (p) => p.map((q, i) => [q, p[(i + 1) % p.length]]);
+  let konturen = [aussen];
+  if (loecher.length) { // zugeschnitten: Ausschnitte vom Umriss abziehen (auch Ausklinkungen am Rand) – übrig bleibt die Fläche im Umriss ausserhalb der Ausschnitte
+    const rest = regionen([...polySeg(aussen), ...loecher.flatMap(polySeg)], 1e-4, 0.05).filter((r) => innen(r.innen, aussen) && !loecher.some((l) => innen(r.innen, l)));
+    if (rest.length) konturen = rest.flatMap((r) => [r.aussen, ...r.loecher]);
+  }
+  const imLoch = (p) => loecher.some((l) => innen(p, l));
+  const biegeStuecke = biegen.flatMap((l) => l.slice(1).flatMap((q, i) => { const a = l[i], n = Math.max(1, Math.ceil(Math.hypot(q[0] - a[0], q[1] - a[1]) / 1)), st = []; for (let t = 0; t < n; t++) { const p0 = [a[0] + ((q[0] - a[0]) * t) / n, a[1] + ((q[1] - a[1]) * t) / n], p1 = [a[0] + ((q[0] - a[0]) * (t + 1)) / n, a[1] + ((q[1] - a[1]) * (t + 1)) / n]; if (!imLoch([(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2])) st.push([p0, p1]); } return st; }));
   const xs = aussen.map((p) => p[0]), ys = aussen.map((p) => p[1]), x0 = Math.min(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), x1 = Math.max(...xs);
-  const T = (p) => [(p[0] - x0) * k, (y1 - p[1]) * k], seg = (poly, zu) => poly.map((p, i) => (i + 1 < poly.length || zu ? [...T(p), ...T(poly[(i + 1) % poly.length])] : null)).filter(Boolean);
-  const layer = [{ farbe: "#000000", strich: "", linien: [...seg(aussen, true), ...loecher.flatMap((l) => seg(l, true))] }];
-  if (biegen.length) layer.push({ farbe: "#e02424", strich: "8 1.5 1.5 1.5", linien: biegen.flatMap((l) => seg(l, false)) });
-  const punkte = [...aussen, ...loecher.flat()].map((p) => { const [px, py] = T(p); return { x: px, y: py, w: [p[0], p[1], 0] }; });
+  const T = (p) => [(p[0] - x0) * k, (y1 - p[1]) * k];
+  const layer = [{ farbe: "#000000", strich: "", linien: konturen.flatMap((c) => polySeg(c).map(([a, b]) => [...T(a), ...T(b)])) }];
+  if (biegeStuecke.length) layer.push({ farbe: "#e02424", strich: "8 1.5 1.5 1.5", linien: biegeStuecke.map(([a, b]) => [...T(a), ...T(b)]) });
+  const punkte = konturen.flat().map((p) => { const [px, py] = T(p); return { x: px, y: py, w: [p[0], p[1], 0] }; });
   return { breite: (x1 - x0) * k, hoehe: (y1 - y0) * k, layer, sichtbar: layer.flatMap((l) => l.linien), verdeckt: [], flaechen: [], massstab: 1 / k, abbild: (w) => T(w), punkte, kreise: [] };
 }
 // Skizzen als Zeichnung im Plan: Linien je Layer (Farbe, Linienart), Eckpunkte/Mittelpunkte zum Bemassen, Kreise für Ø/R; Papier-mm = Skizzen-mm · k
@@ -3345,8 +3365,10 @@ function skizzenPlanAnsicht(id, k) {
 }
 const plaene = planModul({
   renderer, status, herunterladen, einst: () => einst, doc: () => doc, signatur: () => zustand(), speichern: () => { speichern(); },
-  meshes: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.visible); },
-  exaktAnsicht: (art, massstab, verdeckt, bereit, lage) => exakteAnsicht(art, massstab, verdeckt, bereit, lage),
+  meshes: (aus) => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.visible && !planAus(aus, o.userData.fid)); },
+  exaktAnsicht: (art, massstab, verdeckt, bereit, lage, aus) => exakteAnsicht(art, massstab, verdeckt, bereit, lage, aus),
+  // Browser im Plan: sichtbare Körper (ohne Ausschnitte) nach Komponenten
+  koerperBaum: () => { const ids = new Set(); for (const o of modell.children) if (o.isMesh && o.userData.fid != null) { const h = hauptVon(o.userData.fid); if (h) ids.add(h.id); } return [...ids].map((id) => finde(id)).filter(Boolean).map((f) => ({ id: f.id, name: f.name, komp: f.komponente || "" })); },
   groesse: () => { const b = alleBox(); return b.isEmpty() ? 1000 : Math.max(...b.getSize(new THREE.Vector3()).toArray()); },
   // Schnitte = Querschnitte der Kantenbausteine an Flächenblechen («fid|Blech:Kante»), massstäblich
   details: () => doc.features.filter((f) => f.typ === "flaeche" && f._bleche && !f._aus).flatMap((f) => Object.keys(f.kanten || {}).filter((k) => kantenProfil(f, k))
@@ -5106,23 +5128,26 @@ async function pruefe3D(f, aus) {
 // Was noch nicht exakt geht (Abrunden/Fasen, Schale, Muster, Sweep, Loft, Import, Splines …), bleibt als Netz und wird genannt.
 let exaktLauf = 0, exaktTimer = null, exaktEig = new Map(), exaktNicht = new Map(); // fid → Eigenschaften aus dem Kern / Grund «nicht exakt»
 // Zeichnungsansichten aus dem exakten Modell: Körper in Weltlage bleiben im Kern, bis das nächste Modell fertig ist
-let regenStand = 0, exaktFuer = -1, exaktAnsichtIds = [], exaktVollstaendig = false, exaktBeschaeftigt = 0, exaktAnsichtCache = new Map();
+let regenStand = 0, exaktFuer = -1, exaktAnsichtIds = [], exaktAnsichtFids = [], exaktVollstaendig = false, exaktBeschaeftigt = 0, exaktAnsichtCache = new Map();
 const exaktPlanen = () => { if (!kernAn()) return; regenStand++; clearTimeout(exaktTimer); exaktTimer = setTimeout(() => exaktesModell().catch((e) => status(kernFehlerText(e))), 250); };
 // Rückgabe { stand: "aus" | "mesh" | "warte" | "fertig", r? } – für das Planblatt (src/plan.js); «bereit» wird nach der Rechnung aufgerufen
-function exakteAnsicht(art, massstab, verdeckt, bereit, schnittLage = null) {
+// Im Plan ausgeblendete Körper/Komponenten (plan.aus = { ids, komp }) – unabhängig vom Modell
+const planAus = (aus, fid) => { if (!aus) return false; const h = hauptVon(fid); return !!h && (!!aus.ids?.includes(h.id) || !!(h.komponente && aus.komp?.includes(h.komponente))); };
+function exakteAnsicht(art, massstab, verdeckt, bereit, schnittLage = null, aus = null) {
   if (!kernAn()) return { stand: "aus" };
   if (exaktFuer !== regenStand || !exaktAnsichtIds.length || !exaktVollstaendig) return { stand: exaktBeschaeftigt || exaktTimer ? "warte" : "mesh" };
-  const key = `${art}|${massstab}|${verdeckt}|${schnittLage ?? ""}`, c = exaktAnsichtCache.get(key), R = ANSICHT_RICHTUNGEN[art];
+  const sichtIds = aus ? exaktAnsichtIds.filter((_, i) => !planAus(aus, exaktAnsichtFids[i])) : exaktAnsichtIds; if (!sichtIds.length) return { stand: "mesh" };
+  const key = `${art}|${massstab}|${verdeckt}|${schnittLage ?? ""}|${aus ? JSON.stringify(aus) : ""}`, c = exaktAnsichtCache.get(key), R = ANSICHT_RICHTUNGEN[art];
   if (c?.r) return { stand: "fertig", r: c.r };
   if (c?.fehler || !R) return { stand: "mesh" };
   if (!c) {
     exaktAnsichtCache.set(key, {});
     const gen = exaktFuer, d = R.d, oben = R.oben, ach = kameraAchsen(d, oben), K = kern(), temp = [];
     (async () => {
-      let ziele = exaktAnsichtIds, loops = [];
+      let ziele = sichtIds, loops = [];
       if (schnittLage != null) { // Schnitt: alles mit d·p > lage entfernen, Schnittflächen aus den Schnittkanten verketten
         const dn = ach.n, punkt = dn.map((v) => v * schnittLage); ziele = [];
-        for (const id of exaktAnsichtIds) {
+        for (const id of sichtIds) {
           try {
             const g = (await K.ausfuehren({ op: "halbraum", ziel: id, punkt, normale: dn })).id; temp.push(g); ziele.push(g);
             const sn = await K.ausfuehren({ op: "schnitt", ziel: id, ebene: { punkt, normale: dn } }); loops.push(...kettenAusKanten(sn.kanten));
@@ -5264,7 +5289,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       herunterladen(dateiBasis() + " (exakt).step", text, "application/step");
       return status(`STEP exakt (B-Rep, AP242): ${ziele.length} Körper${rest.length ? ` · nicht enthalten, da noch nicht exakt: ${rest.join(", ")}` : ""}.`);
     }
-    let n = 0; const eig = new Map(), ansichtIds = [];
+    let n = 0; const eig = new Map(), ansichtIds = [], ansichtFids = [];
     for (const [schl, id] of [...koerper, ...blech]) {
       if (nicht.has(schl) || nicht.has(schl.split(":")[0]) && schl.includes(":")) continue;
       const fid = netzVon.get(schl) ?? schl;
@@ -5272,14 +5297,14 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       const netz = await K.ausfuehren({ op: "tessellieren", ziel: id }), e = await K.ausfuehren({ op: "eigenschaften", ziel: id });
       if (!step && lauf !== exaktLauf) return;
       ersetzeNetz(mesh, netz, lageVon(hauptVon(fid))); n++;
-      if (mesh.visible) { const L = lageVon(hauptVon(fid)); ansichtIds.push(L ? (await x({ op: "matrix", ziel: id, m: matrixZeilen(L.elements) })).id : id); }
+      if (mesh.visible) { const L = lageVon(hauptVon(fid)); ansichtIds.push(L ? (await x({ op: "matrix", ziel: id, m: matrixZeilen(L.elements) })).id : id); ansichtFids.push(fid); }
       for (const o of netze.slice(1)) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); } // Flächenblech: Platte + Profile → ein exakter Körper
       eig.set(fid, { ...e, verschoben: !!lageVon(hauptVon(fid)) });
     }
     exaktEig = eig; exaktNicht = nicht;
     // Zeichnungsansichten: Körper in Weltlage behalten (die der vorigen Runde werden frei), nur wenn alle sichtbaren Körper exakt sind
     const alte = exaktAnsichtIds; ansichtIds.forEach((i) => uebernommen.add(i));
-    exaktAnsichtIds = ansichtIds; exaktFuer = stand; exaktAnsichtCache = new Map();
+    exaktAnsichtIds = ansichtIds; exaktAnsichtFids = ansichtFids; exaktFuer = stand; exaktAnsichtCache = new Map();
     exaktVollstaendig = modell.children.filter((o) => o.isMesh && o.visible && o.userData.fid).every((o) => o.userData.exakt);
     if (alte.length) K.ausfuehren({ op: "freigeben", ziele: alte }).catch(() => {});
     document.dispatchEvent(new Event("sdcad-exakt")); // Planblatt: Ansichten jetzt aus dem exakten Modell
@@ -5417,7 +5442,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

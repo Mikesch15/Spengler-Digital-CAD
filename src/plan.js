@@ -64,24 +64,25 @@ function imKreis([x1, y1, x2, y2], cx, cy, r) {
 
 export function planModul(ctx) {
   const cache = new Map();
+  const planAusBlatt = () => (plan?.aus && (plan.aus.ids?.length || plan.aus.komp?.length) ? plan.aus : null); // nur im Plan ausgeblendet
   const ansicht = (a) => {
     if (a.lupe) return lupenAnsicht(a);
     if (a.skizze) return ctx.skizzenAnsicht(a.skizze, 1 / a.massstab); // Zeichnung aus Skizzen (mit Layern)
     if (a.abwicklung) return ctx.abwicklungAnsicht(a.abwicklung, 1 / a.massstab); // Zuschnitt mit Biegelinien (Blechteil)
     // Exaktes Modell (CAD-Kern ein): Ansicht aus exakter Projektion, verdeckte Kanten ohne Doppelungen; Schnitte: Halbraum-Schnitt und Schnittflächen aus dem Kern
-    const ex = ctx.exaktAnsicht ? ctx.exaktAnsicht(a.art, 1 / a.massstab, a.verdeckt !== false, () => aktualisiere(), a.schnitt ? +a.schnitt.lage || 0 : null) : null;
+    const ex = ctx.exaktAnsicht ? ctx.exaktAnsicht(a.art, 1 / a.massstab, a.verdeckt !== false, () => aktualisiere(), a.schnitt ? +a.schnitt.lage || 0 : null, planAusBlatt()) : null;
     if (ex?.r) return ex.r;
-    const key = `${a.art}|${a.massstab}|${a.verdeckt !== false}|${a.schnitt ? a.schnitt.lage : ""}|${ex?.stand ?? ""}|${ctx.signatur()}`;
+    const key = `${a.art}|${a.massstab}|${a.verdeckt !== false}|${a.schnitt ? a.schnitt.lage : ""}|${ex?.stand ?? ""}|${ctx.signatur()}|${JSON.stringify(planAusBlatt() || "")}`;
     if (!cache.has(key)) {
       if (cache.size > 40) cache.clear();
       let r;
       if (a.schnitt) { // Schnittansicht: nur was hinter der Ebene liegt, Schnittflächen schraffiert
-        const d = new THREE.Vector3(...(RICHTUNGEN[a.art] || RICHTUNGEN.vorne).d).normalize(), alle = ctx.meshes();
+        const d = new THREE.Vector3(...(RICHTUNGEN[a.art] || RICHTUNGEN.vorne).d).normalize(), alle = ctx.meshes(planAusBlatt());
         const teile = geschnitten(alle, d, +a.schnitt.lage || 0);
         r = teile.length ? rechneAnsicht(ctx.renderer, teile, a.art, 1 / a.massstab, { verdeckte: a.verdeckt !== false }) : null;
         if (r) r.flaechen = schnittFlaechen(alle, d, +a.schnitt.lage || 0).map((zug) => zug.map((w) => r.abbild(w.toArray())));
         teile.forEach((m) => m.geometry.dispose());
-      } else r = rechneAnsicht(ctx.renderer, ctx.meshes(), a.art, 1 / a.massstab, { verdeckte: a.verdeckt !== false });
+      } else r = rechneAnsicht(ctx.renderer, ctx.meshes(planAusBlatt()), a.art, 1 / a.massstab, { verdeckte: a.verdeckt !== false });
       cache.set(key, r);
     }
     return cache.get(key);
@@ -225,7 +226,16 @@ ${out.join("\n")}
     $("plFlaeche").innerHTML = blattSvg(plan, { auswahl: sel, nr: i + 1, von: p.length, bildschirm: true }); wendeBox();
     eigenschaften(); ctx.speichern();
   }
-  function eigenschaften() {
+  function planBaum() { // Sichtbarkeit einzelner Körper/Komponenten nur auf diesem Plan (wie der Browser im Modell)
+    const l = ctx.koerperBaum(); if (!l.length) return "";
+    const aus = plan.aus || {}, ausId = (id) => aus.ids?.includes(id), ausK = (k) => aus.komp?.includes(k);
+    const auge = (zu) => `<span class="plauge${zu ? " zu" : ""}">${zu ? "◌" : "◉"}</span>`;
+    const zeile = (f, ein) => `<button class="plzeile${ausId(f.id) ? " verborgen" : ""}" data-plaug="${esc(f.id)}" style="padding-left:${ein}px" title="Im Plan ein-/ausblenden (das Modell bleibt unverändert)">${auge(ausId(f.id))}${esc(f.name)}</button>`;
+    const komps = [...new Set(l.map((f) => f.komp).filter(Boolean))];
+    return `<div class="plbaum"><div class="plbt">Sichtbarkeit im Plan</div>${l.filter((f) => !f.komp).map((f) => zeile(f, 6)).join("")}${komps.map((k) => `<button class="plzeile plkomp${ausK(k) ? " verborgen" : ""}" data-plkomp="${esc(k)}" title="Komponente im Plan ein-/ausblenden">${auge(ausK(k))}▸ ${esc(k)}</button>${l.filter((f) => f.komp === k).map((f) => zeile(f, 22)).join("")}`).join("")}</div>`;
+  }
+  function eigenschaften() { eigenschaften0(); $("plEigen").insertAdjacentHTML("afterbegin", planBaum()); }
+  function eigenschaften0() {
     const e = sel && element(sel), box = $("plEigen");
     if (!e) { box.innerHTML = `<p class="hinweis">${{ auswahl: "Element anklicken und ziehen. «+ Ansicht» (auch Schnitte) oder «+ Bausteinschnitt» platziert eine Zeichnung; «Auto-Masse» bemasst die gewählte Ansicht.", mass: "Bemassen: zwei Eckpunkte einer Ansicht anklicken, dann die Lage des Masses (oben/unten = waagrecht, seitlich = senkrecht).", text: "Text: Stelle anklicken, Text eingeben. Mit gedrückter Maus ziehen = Hinweispfeil.", lupe: "Detail (Lupe): in einer Ansicht die Stelle anklicken, die vergrössert werden soll." }[modus]}</p>`; return; }
     const ms = (v) => PLAN_MASSSTAEBE.map((m) => `<option value="${m}" ${+v === m ? "selected" : ""}>1:${m}</option>`).join("");
@@ -314,6 +324,8 @@ ${out.join("\n")}
       e[k] = k === "massstab" || k === "groesse" ? +ev.target.value : k === "verdeckt" ? !!ev.target.value : ev.target.value; zeige();
     });
     $("plEigen").addEventListener("click", (ev) => {
+      const ag = ev.target.closest("[data-plaug],[data-plkomp]");
+      if (ag) { plan.aus ||= { ids: [], komp: [] }; const liste = ag.dataset.plaug ? (plan.aus.ids ||= []) : (plan.aus.komp ||= []), id = ag.dataset.plaug || ag.dataset.plkomp, i = liste.indexOf(id); if (i >= 0) liste.splice(i, 1); else liste.push(id); zeige(); return; }
       if (ev.target.dataset.pl !== "loeschen") return;
       for (const k of ["ansichten", "details", "masse", "texte"]) plan[k] = plan[k].filter((x) => x.id !== sel);
       plan.masse = plan.masse.filter((m) => plan.ansichten.some((a) => a.id === m.ansicht)); sel = null; zeige();
