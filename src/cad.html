@@ -398,6 +398,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   .baum li.kopf { padding-top: 8px; }
 }
 
+.masshinweis { display: block; margin-top: 3px; max-width: 230px; font-size: 11px; color: var(--muted); white-space: normal; }
 /* ---- Projekte der App ---- */
 .projbox { width: min(980px, 100%); } .pjgitter { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; } @media (max-width: 820px) { .pjgitter { grid-template-columns: minmax(0, 1fr); } }
 .pjliste { list-style: none; margin: 6px 0; padding: 0; max-height: 44vh; overflow: auto; border: 1px solid var(--line); border-radius: 3px; }
@@ -594,6 +595,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <li>Das Programm rechnet Zugabe je Kante, Zuschnitt mit Eckausklinkungen, Biegelinien, Abkantliste (Anschlag ab Schnittkante), m² für die Stückliste, DXF und Werkstattblatt.</li>
       <li><b>Blech ▾</b>: Flächenblech aus Skizze, <b>auf Körperfläche</b> (Fläche anklicken – Umriss wird übernommen, Blech liegt aussen auf) oder <b>Kehle / Grat</b> (zwei Flächen anklicken – gekantetes Blech entlang der Kehl- bzw. Gratlinie, Länge automatisch, an den Enden Kantenbausteine wie Saum; mit Zuschnitt und Abkantliste).</li>
       <li><b>Kante antippen</b>: Flächenblech wählen (oder öffnen) – jede Kante trägt ein Schild (K1, K2 …; grün = belegt). Kante oder Schild antippen öffnet die Bausteinliste direkt an der Stelle; Gegenstück (Ober-/Unterfalz) kommt automatisch. Auf dem Handy klappt ▾ den Dialog ein, damit die Ansicht frei ist.</li>
+      <li><b>Bemassung (D)</b>: Linie → Länge. Danach <b>gleich ein zweites Objekt anklicken</b>: Linie → Abstand (parallel) oder Winkel bzw. Abstand eines Endpunkts (nicht parallel); Punkt → Abstand; Kreis/Bogen → Mittelpunktabstand zu Linie, Kreis oder Punkt. Wert eintippen, Enter.</li>
       <li><b>Flansch und Umschlag wie in Fusion</b>: in der Kantenliste oder im Menü an der Kante «Flansch …» bzw. «Umschlag …» wählen und Winkel, Länge, Radius, Richtung (zur Sichtseite / nach hinten) eingeben, bei Flansch auch «Mass bis» Mittellinie, Aussenkante oder Innenkante. Das Blech endet immer am Biegebeginn; der Versatz der Kante (Aussen-/Innenmass) kürzt oder verlängert die Platte automatisch. Funktioniert auch an runden Kanten (Bogen, Kreis) – dort als Näherung aus kurzen Geraden, die Abwicklung ist rein theoretisch (der Rand muss gestaucht bzw. gestreckt werden).</li>
       <li><b>Bausteine erstellen</b>: im Flächenblech-Dialog «+ Neuer Baustein …» (wird gleich an die gewählte Kante gesetzt) oder «✎ Baustein der gewählten Kante»; ebenso unter Einstellungen → Bausteine. Der Editor zeigt den Querschnitt live mit Zugabe und Anschlagmassen; Biegungen als Tabelle (Abkanten oder Umschlag, Winkel, Radius, Schenkel) oder als Kurzschrift. Verwendete Bausteine werden im Projekt mitgespeichert.</li>
     </ul>

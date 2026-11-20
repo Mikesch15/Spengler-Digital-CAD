@@ -3123,7 +3123,7 @@ const WERKZEUGE = {
   abhKonzentrisch: { knopf: "tAbh", muster: ["KK"], text: "Konzentrisch: zwei Kreise/Bögen anklicken." },
   abhKollinear: { knopf: "tAbh", muster: ["LL"], text: "Kollinear: zwei Linien anklicken – sie liegen auf einer Geraden." },
   abhSymmetrisch: { knopf: "tAbh", muster: ["PPL", "KKL"], text: "Symmetrisch: zwei Punkte (oder zwei Kreise), dann die Symmetrielinie anklicken." },
-  mass: { knopf: "tMass", muster: ["L", "K", "PP", "PL", "LP", "LL"], text: "Bemassung (D): Linie → Länge, Kreis → Ø, Bogen → R, zwei Punkte → Abstand, Punkt + Linie → Abstand, zwei Linien → Winkel. Wert eintippen, Enter." },
+  mass: { knopf: "tMass", muster: ["L", "K", "PP", "PL", "LP", "LL", "KL", "LK", "KK", "KP", "PK"], text: "Bemassung (D): Linie → Länge, Kreis → Ø, Bogen → R, zwei Punkte → Abstand, Punkt + Linie → Abstand, zwei Linien → Abstand (parallel) oder Winkel, Kreis + Linie/Kreis/Punkt → Abstand der Mitte. Zweites Objekt gleich anklicken, dann Wert eintippen, Enter." },
 };
 const ABH_NAME = { horizontal: "Horizontal", vertikal: "Vertikal", koinzident: "Koinzident", aufKurve: "Koinzident (auf Kurve)", tangential: "Tangential", gleich: "Gleich", parallel: "Parallel",
   senkrecht: "Senkrecht", fix: "Fixiert", mittelpunkt: "Mittelpunkt", konzentrisch: "Konzentrisch", kollinear: "Kollinear", symmetrisch: "Symmetrisch" };
@@ -3857,6 +3857,16 @@ function massFuerWahl(sm) {
     if (Math.abs(dy) < 1e-9) optionen.unshift(optionen.splice(1, 1)[0]); else if (Math.abs(dx) < 1e-9) optionen.unshift(optionen.splice(2, 1)[0]);
     wert = optionen[0][2];
     fertig = (w, typ) => ({ typ, a: p1.ref, b: p2.ref, w, ...(typ === "abstandH" ? { s: dx < 0 ? -1 : 1 } : typ === "abstandV" ? { s: dy < 0 ? -1 : 1 } : {}) });
+  } else if (art === "KL" || art === "LK") { // Mitte eines Kreises/Bogens zur Linie
+    const [kk, ll] = art === "KL" ? [p1, p2] : [p2, p1], k = B.K(kk.ref);
+    if (k.el.art === "langloch") { s.picks = []; return status("Langloch: bitte Punkt oder Linie wählen."); }
+    const d = abstandGerade(k.c, ...B.L(ll.ref)); wert = Math.abs(d); fertig = (w) => ({ typ: "punktLinie", p: { e: kk.ref.e, k: "c" }, l: ll.ref, w, s: d < 0 ? -1 : 1 });
+  } else if (art === "KK") { // Mittelpunktabstand zweier Kreise/Bögen
+    const a = B.K(p1.ref), b = B.K(p2.ref); if (a.el.art === "langloch" || b.el.art === "langloch") { s.picks = []; return status("Langloch: bitte Punkt oder Linie wählen."); }
+    wert = abst(a.c, b.c); fertig = (w) => ({ typ: "abstand", a: { e: p1.ref.e, k: "c" }, b: { e: p2.ref.e, k: "c" }, w });
+  } else if (art === "KP" || art === "PK") { // Mitte eines Kreises/Bogens zu einem Punkt
+    const [kk, pp] = art === "KP" ? [p1, p2] : [p2, p1], k = B.K(kk.ref); if (k.el.art === "langloch") { s.picks = []; return status("Langloch: bitte Punkt oder Linie wählen."); }
+    wert = abst(k.c, B.P(pp.ref)); fertig = (w) => ({ typ: "abstand", a: { e: kk.ref.e, k: "c" }, b: pp.ref, w });
   } else if (art === "PL" || art === "LP") {
     const [pp, ll] = art === "PL" ? [p1, p2] : [p2, p1], d = abstandGerade(B.P(pp.ref), ...B.L(ll.ref));
     wert = Math.abs(d); fertig = (w) => ({ typ: "punktLinie", p: pp.ref, l: ll.ref, w, s: d < 0 ? -1 : 1 });
@@ -3868,20 +3878,24 @@ function massFuerWahl(sm) {
       if (istAchse(l2)) { s.picks = []; return status("Zwei parallele Achsen lassen sich nicht bemassen."); }
       const p = { e: l2.e, k: "p" + l2.s }, d = abstandGerade(b[0], ...a);
       wert = Math.abs(d); fertig = (w) => ({ typ: "punktLinie", p, l: l1, w, s: d < 0 ? -1 : 1 });
-    } else { wert = Math.abs(w0) / RAD; fertig = (w) => (w < 180 ? { typ: "winkel", l1, l2, w: Math.sign(w0) * w * RAD } : null); }
+    } else { // nicht parallel: Winkel – oder Abstand eines Endpunkts der zweiten Linie zur ersten
+      const n = B.els.get(l2.e)?.pts.length || 2, pA = { e: l2.e, k: "p" + l2.s }, pB = { e: l2.e, k: "p" + ((l2.s + 1) % n) }, dA = abstandGerade(b[0], ...a), dB = abstandGerade(b[1], ...a);
+      optionen = [["winkel", "Winkel", Math.abs(w0) / RAD], ["pl1", "Abstand Anfang → Linie", Math.abs(dA)], ["pl2", "Abstand Ende → Linie", Math.abs(dB)]]; wert = optionen[0][2];
+      fertig = (w, typ) => typ === "pl1" ? { typ: "punktLinie", p: pA, l: l1, w, s: dA < 0 ? -1 : 1 } : typ === "pl2" ? { typ: "punktLinie", p: pB, l: l1, w, s: dB < 0 ? -1 : 1 } : (w < 180 ? { typ: "winkel", l1, l2, w: Math.sign(w0) * w * RAD } : null);
+    }
   }
   massEingabe(sm[0] + "px", sm[1] + "px", wert, (w, typ, ausdruck) => {
     s.picks = [];
     if (!(w > 0)) return status("Bitte einen Wert grösser als 0 eingeben.");
     const b = fertig(w, typ); if (b) { if (ausdruck) b.ausdruck = ausdruck; uebernimm(b); } else status("Winkel kleiner als 180° eingeben.");
-  }, optionen);
+  }, optionen, s.picks.length === 1 ? "Weiter: zweite Linie, Punkt oder Kreis anklicken → Abstand oder Winkel" : "");
   zeichneLive();
 }
 // Eingabefeld für ein Mass an der Stelle left/top (CSS); ok(wert | null, option)
-function massEingabe(left, top, wert, ok, optionen = null) {
+function massEingabe(left, top, wert, ok, optionen = null, hinweis = "") {
   document.querySelectorAll(".massbox").forEach((b) => b.remove());
   const box = document.createElement("div"); box.className = "massbox"; box.style.left = left; box.style.top = top;
-  box.innerHTML = `<input type="number" step="any" class="massfeld">` + (optionen ? `<select>${optionen.map(([k, t]) => `<option value="${k}">${t}</option>`).join("")}</select>` : "");
+  box.innerHTML = `<input type="number" step="any" class="massfeld">` + (optionen ? `<select>${optionen.map(([k, t]) => `<option value="${k}">${t}</option>`).join("")}</select>` : "") + (hinweis ? `<small class="masshinweis">${esc(hinweis)}</small>` : "");
   $("ansicht").appendChild(box);
   const inp = box.querySelector("input"), sel = box.querySelector("select");
   inp.type = "text"; inp.setAttribute("inputmode", (doc.parameter || []).length ? "text" : "decimal");
