@@ -2,3 +2,4 @@ node_modules/
 dist/occt/
 dist/pdfjs/
 fusion/*.zip
+tests/cad-kernel-comparison/vorschau/dist/

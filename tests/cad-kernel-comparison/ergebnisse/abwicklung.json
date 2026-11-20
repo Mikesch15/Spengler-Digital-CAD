@@ -1,0 +1,152 @@
+{
+ "material": {
+  "name": "Titanzink 0.70",
+  "t": 0.7,
+  "ri": 1,
+  "k": 0.4,
+  "biegeparameter": "K-Faktor (Startwert, nicht kalibriert)"
+ },
+ "teile": [
+  {
+   "id": "abgekantet",
+   "name": "Einfach abgekantet (Winkel 40/60, 90°)",
+   "biegungen": [
+    "90° ri 1"
+   ],
+   "soll": {
+    "zuschnitt": 99.31061929829747,
+    "breite": 200
+   },
+   "quelle": "kern/geometrie.js berechne()",
+   "kerne": {
+    "OpenCascade (replicad)": {
+     "mittellaenge": 99.4206,
+     "zuschnitt": 99.3106,
+     "abweichung_mm": 0,
+     "schranke_mm": 0,
+     "status": "ok"
+    },
+    "OpenGeometry": {
+     "mittellaenge": 99.4201,
+     "zuschnitt": 99.3101,
+     "abweichung_mm": -0.0005,
+     "schranke_mm": 1.1482,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "id": "umschlag",
+   "name": "Blech mit Umschlag (50 + U 10)",
+   "biegungen": [
+    "180° ri 1"
+   ],
+   "soll": {
+    "zuschnitt": 60.621238596594935,
+    "breite": 200
+   },
+   "quelle": "kern/geometrie.js berechne()",
+   "kerne": {
+    "OpenCascade (replicad)": {
+     "mittellaenge": 60.8412,
+     "zuschnitt": 60.6212,
+     "abweichung_mm": 0,
+     "schranke_mm": 0,
+     "status": "ok"
+    },
+    "OpenGeometry": {
+     "mittellaenge": 60.8401,
+     "zuschnitt": 60.6202,
+     "abweichung_mm": -0.001,
+     "schranke_mm": 0.7058,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "id": "mehrfach",
+   "name": "Mehrfach gekantet (Ortgang 30/50/80/50/15)",
+   "biegungen": [
+    "90° ri 1",
+    "90° ri 1",
+    "-90° ri 1",
+    "-135° ri 1"
+   ],
+   "soll": {
+    "zuschnitt": 219.42941022393123,
+    "breite": 200
+   },
+   "quelle": "kern/geometrie.js berechne()",
+   "kerne": {
+    "OpenCascade (replicad)": {
+     "mittellaenge": 219.9242,
+     "zuschnitt": 219.4294,
+     "abweichung_mm": 0,
+     "schranke_mm": 0,
+     "status": "ok"
+    },
+    "OpenGeometry": {
+     "mittellaenge": 219.922,
+     "zuschnitt": 219.4272,
+     "abweichung_mm": -0.0023,
+     "schranke_mm": 2.5302,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "id": "zylinder",
+   "name": "Zylindrisches Segment Rm 200, 90°, h 300",
+   "biegungen": [
+    "90° ri 199.65 (Rundung)"
+   ],
+   "soll": {
+    "zuschnitt": 314.0493096161037,
+    "breite": 300
+   },
+   "quelle": "kern/geometrie.js berechne(), Modus «tangent»",
+   "kerne": {
+    "OpenCascade (replicad)": {
+     "mittellaenge": 314.1593,
+     "zuschnitt": 314.0493,
+     "abweichung_mm": 0,
+     "schranke_mm": 0,
+     "status": "ok"
+    },
+    "OpenGeometry": {
+     "mittellaenge": 314.1089,
+     "zuschnitt": 313.9989,
+     "abweichung_mm": -0.0504,
+     "schranke_mm": 3.6068,
+     "status": "ok"
+    }
+   }
+  },
+  {
+   "id": "kegel",
+   "name": "Kegelsegment r 200→100, h 150, 90°",
+   "biegungen": [
+    "Kegelmantel, Mittelfläche"
+   ],
+   "soll": {
+    "flaeche": 42476.90024677117,
+    "R_aussen": 360.5551275463989,
+    "R_innen": 180.27756377319946,
+    "oeffnung_grad": 49.92301766027062
+   },
+   "quelle": "Formel im Test – im Produkt (kern/) gibt es keine Kegelabwicklung",
+   "kerne": {
+    "OpenCascade (replicad)": {
+     "mittelflaeche": 42476.9002,
+     "abweichung_mm2": 0,
+     "schranke_mm2": 0,
+     "status": "ok"
+    },
+    "OpenGeometry": {
+     "status": "fehler",
+     "hinweis": "CoverageGap { families: [\"generic analytic solid\", \"intersecting analytic solid\"] }"
+    }
+   }
+  }
+ ]
+}

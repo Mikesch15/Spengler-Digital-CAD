@@ -1,0 +1,898 @@
+{
+ "datum": "2026-11-20T09:37:44.977Z",
+ "node": "v22.22.0",
+ "zeilen": [
+  {
+   "kern": "occt",
+   "test": "0 Laden",
+   "teil": "replicad 1.2.1, replicad-opencascadejs 1.2.1",
+   "status": "ok",
+   "ms": 277.3,
+   "hinweis": "WASM geladen (Node), Lizenz replicad MIT, OCCT-Build LGPL-2.1-only"
+  },
+  {
+   "kern": "occt",
+   "test": "1 Grundkörper",
+   "teil": "Quader 100×50×20",
+   "status": "ok",
+   "ms": 3.3,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 100000,
+   "erwartet": 100000,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     100,
+     50,
+     20
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid"
+  },
+  {
+   "kern": "occt",
+   "test": "1 Grundkörper",
+   "teil": "Zylinder r20 h50",
+   "status": "ok",
+   "ms": 2.4,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 62831.8531,
+   "erwartet": 62831.8531,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     -20,
+     -20,
+     0
+    ],
+    "max": [
+     20,
+     20,
+     50
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid"
+  },
+  {
+   "kern": "occt",
+   "test": "1 Grundkörper",
+   "teil": "Kegelstumpf r30/r10 h40 (Kegelfläche)",
+   "status": "ok",
+   "ms": 16.9,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 54454.2727,
+   "erwartet": 54454.2727,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     -30,
+     -30,
+     0
+    ],
+    "max": [
+     30,
+     30,
+     40
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid"
+  },
+  {
+   "kern": "occt",
+   "test": "2 Boolesch",
+   "teil": "Quader − Zylinder (Loch r10 durch)",
+   "status": "ok",
+   "ms": 74.3,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 93716.8147,
+   "erwartet": 93716.8147,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     100,
+     50,
+     20
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Compound"
+  },
+  {
+   "kern": "occt",
+   "test": "2 Boolesch",
+   "teil": "Vereinigung zweier Quader (Überlappung 10)",
+   "status": "ok",
+   "ms": 28.1,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 190000,
+   "erwartet": 190000,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     190,
+     50,
+     20
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Compound"
+  },
+  {
+   "kern": "occt",
+   "test": "2 Boolesch",
+   "teil": "Schnitt Quader ∩ Zylinder",
+   "status": "ok",
+   "ms": 21,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 14137.1669,
+   "erwartet": 14137.1669,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     30,
+     30,
+     20
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Compound"
+  },
+  {
+   "kern": "occt",
+   "test": "3 Verrundung/Fase",
+   "teil": "Kante verrunden r2",
+   "status": "ok",
+   "ms": 25.8,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 99982.8319,
+   "erwartet": 99982.8319,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     100,
+     50,
+     20
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Compound"
+  },
+  {
+   "kern": "occt",
+   "test": "3 Verrundung/Fase",
+   "teil": "Kante fasen 3 mm",
+   "status": "ok",
+   "ms": 4.4,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 99910,
+   "erwartet": 99910,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     100,
+     50,
+     20
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Compound"
+  },
+  {
+   "kern": "occt",
+   "test": "4 Flächen",
+   "teil": "Sweep Kreis r5 entlang Gerade+Bogen",
+   "status": "ok",
+   "ms": 20.9,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 14022.4844,
+   "erwartet": 14022.4844,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     -5,
+     -5,
+     0
+    ],
+    "max": [
+     50,
+     5,
+     155
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid"
+  },
+  {
+   "kern": "occt",
+   "test": "4 Flächen",
+   "teil": "Loft Quadrat 40 → Quadrat 20 (h 50)",
+   "status": "ok",
+   "ms": 26.9,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 46666.6667,
+   "erwartet": 46666.6667,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     -20,
+     -20,
+     0
+    ],
+    "max": [
+     20,
+     20,
+     50
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid"
+  },
+  {
+   "kern": "occt",
+   "test": "4 Flächen",
+   "teil": "NURBS-Fläche aus 3×4 Punkten",
+   "status": "ok",
+   "ms": 6.6,
+   "gueltig": true,
+   "hinweis": "BRepCheck_Analyzer, Typ Face"
+  },
+  {
+   "kern": "occt",
+   "test": "4 Flächen",
+   "teil": "Schnittkurve Zylinder r20 × Quader-Deckfläche",
+   "status": "ok",
+   "ms": 3.4,
+   "hinweis": "1 Kante(n), Länge 125.6637 (soll 125.6637)",
+   "relAbweichung": 0
+  },
+  {
+   "kern": "occt",
+   "test": "5 Spengler",
+   "teil": "Einfach abgekantet (Winkel 40/60, 90°)",
+   "status": "ok",
+   "ms": 4,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 13918.8805,
+   "erwartet": 13918.8805,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     -0.35,
+     0
+    ],
+    "max": [
+     40.35,
+     60,
+     200
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid",
+   "abwicklung": {
+    "mitteKern": 99.4206,
+    "mitteAusVolumen": 99.4206,
+    "zuschnittKern": 99.3106,
+    "zuschnittAusVolumen": 99.3106
+   }
+  },
+  {
+   "kern": "occt",
+   "test": "5 Spengler",
+   "teil": "Blech mit Umschlag (50 + U 10)",
+   "status": "ok",
+   "ms": 2.5,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 8517.761,
+   "erwartet": 8517.761,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     -0.35,
+     0
+    ],
+    "max": [
+     50,
+     3.05,
+     200
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid",
+   "abwicklung": {
+    "mitteKern": 60.8412,
+    "mitteAusVolumen": 60.8412,
+    "zuschnittKern": 60.6212,
+    "zuschnittAusVolumen": 60.6212
+   }
+  },
+  {
+   "kern": "occt",
+   "test": "5 Spengler",
+   "teil": "Mehrfach gekantet (Ortgang 30/50/80/50/15)",
+   "status": "ok",
+   "ms": 4,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 30789.3895,
+   "erwartet": 30789.3895,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     -50.35,
+     -0.35,
+     0
+    ],
+    "max": [
+     30.35,
+     98.4408,
+     200
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid",
+   "abwicklung": {
+    "mitteKern": 219.9242,
+    "mitteAusVolumen": 219.9242,
+    "zuschnittKern": 219.4294,
+    "zuschnittAusVolumen": 219.4294
+   }
+  },
+  {
+   "kern": "occt",
+   "test": "5 Spengler",
+   "teil": "Zylindrisches Blechsegment Rm 200, 90°, h 300",
+   "status": "ok",
+   "ms": 1.9,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 65973.4457,
+   "erwartet": 65973.4457,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     200.35,
+     200.35,
+     300
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid"
+  },
+  {
+   "kern": "occt",
+   "test": "5 Spengler",
+   "teil": "Konisches Blechsegment r 200→100, h 150, 90°",
+   "status": "ok",
+   "ms": 2,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 29733.8302,
+   "erwartet": 29733.8302,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     -0.1941
+    ],
+    "max": [
+     200.2912,
+     200.2912,
+     150.1941
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Solid"
+  },
+  {
+   "kern": "occt",
+   "test": "5 Spengler",
+   "teil": "Gehrung: 2 Winkelprofile 90°-Ecke, verschnitten + vereinigt",
+   "status": "ok",
+   "ms": 643,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 79470.0417,
+   "erwartet": 79470.0417,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     -300,
+     -98.4408
+    ],
+    "max": [
+     300,
+     0,
+     0.35
+    ]
+   },
+   "hinweis": "BRepCheck_Analyzer, Typ Compound · {\"vA\":39735.0208,\"vB\":39735.0208,\"ueberlappung_mm3\":0,\"gehrungOk\":true}"
+  },
+  {
+   "kern": "occt",
+   "test": "6 STEP",
+   "teil": "Export Quader mit Loch",
+   "status": "ok",
+   "ms": 46.4,
+   "hinweis": "19086 Zeichen, 7 Flächen, exakte Zylinderfläche"
+  },
+  {
+   "kern": "occt",
+   "test": "6 STEP",
+   "teil": "Re-Import und Vergleich",
+   "status": "ok",
+   "ms": 95.6,
+   "gueltig": true,
+   "volumen": 93716.8147,
+   "erwartet": 93716.8147,
+   "relAbweichung": 0,
+   "hinweis": "BBox-Abweichung max 0 mm"
+  },
+  {
+   "kern": "occt",
+   "test": "7 Three.js",
+   "teil": "Netz Quader − Zylinder (Loch r10 durch)",
+   "status": "ok",
+   "ms": 18.8,
+   "volumen": 93737.2102,
+   "erwartet": 93716.8147,
+   "relAbweichung": 0.000218,
+   "hinweis": "196 Dreiecke, BBox-Abw. 0 mm, Normalen gegen Umlauf: 0, Flächengruppen: 7 (Picking → Fläche zuordenbar)"
+  },
+  {
+   "kern": "occt",
+   "test": "7 Three.js",
+   "teil": "Netz Einfach abgekantet (Winkel 40/60, 90°)",
+   "status": "ok",
+   "ms": 2.7,
+   "volumen": 13917.8365,
+   "erwartet": 13918.8805,
+   "relAbweichung": 0.000075,
+   "hinweis": "108 Dreiecke, BBox-Abw. 0 mm, Normalen gegen Umlauf: 0, Flächengruppen: 10 (Picking → Fläche zuordenbar)"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "0 Laden",
+   "teil": "opengeometry 3.0.1",
+   "status": "ok",
+   "ms": 99.5,
+   "hinweis": "WASM geladen (Node), Lizenz MPL-2.0"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "1 Grundkörper",
+   "teil": "Quader 100×50×20",
+   "status": "ok",
+   "ms": 19.1,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 100000,
+   "erwartet": 100000,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     100,
+     50,
+     20
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±0.1 mm³"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "1 Grundkörper",
+   "teil": "Zylinder r20 h50",
+   "status": "ok",
+   "ms": 3,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 62829.7747,
+   "erwartet": 62831.8531,
+   "relAbweichung": 0.000033078,
+   "bbox": {
+    "min": [
+     -20,
+     -20,
+     0
+    ],
+    "max": [
+     20,
+     20,
+     50
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±35.1853 mm³"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "1 Grundkörper",
+   "teil": "Kegelstumpf r30/r10 h40 (Kegelfläche)",
+   "status": "ok",
+   "ms": 1.1,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 54453.0708,
+   "erwartet": 54454.2727,
+   "relAbweichung": 0.000022071,
+   "bbox": {
+    "min": [
+     -30,
+     -30,
+     0
+    ],
+    "max": [
+     30,
+     30,
+     40
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±35.0453 mm³"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "2 Boolesch",
+   "teil": "Quader − Zylinder (Loch r10 durch)",
+   "status": "ok",
+   "ms": 26.6,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 93717.2287,
+   "erwartet": 93716.8147,
+   "relAbweichung": 0.000004418,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     100,
+     50,
+     20
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±66.5134 mm³"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "2 Boolesch",
+   "teil": "Vereinigung zweier Quader (Überlappung 10)",
+   "status": "ok",
+   "ms": 8.2,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 190000,
+   "erwartet": 190000,
+   "relAbweichung": 0,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     190,
+     50,
+     20
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±0.1 mm³"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "2 Boolesch",
+   "teil": "Schnitt Quader ∩ Zylinder",
+   "status": "ok",
+   "ms": 85.8,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 14136.8572,
+   "erwartet": 14137.1669,
+   "relAbweichung": 0.00002191,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     30,
+     30,
+     20
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±14.2246 mm³"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "3 Verrundung/Fase",
+   "teil": "Kante verrunden r2",
+   "status": "nicht_unterstuetzt",
+   "ms": 1.3,
+   "hinweis": "Verrundung: 3.x hat keine Fillets (README: «You need … fillets … 3.0 does not have them»); nur ROUNDED_BOX als Grundkörper"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "3 Verrundung/Fase",
+   "teil": "Kante fasen 3 mm",
+   "status": "nicht_unterstuetzt",
+   "ms": 1,
+   "hinweis": "Fase: 3.x hat keine Chamfer-Operation"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "4 Flächen",
+   "teil": "Sweep Kreis r5 entlang Gerade+Bogen",
+   "status": "ok",
+   "ms": 7.7,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 14021.6454,
+   "erwartet": 14022.4844,
+   "relAbweichung": 0.000059829,
+   "bbox": {
+    "min": [
+     -5,
+     -5,
+     0
+    ],
+    "max": [
+     50,
+     5,
+     155
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±23.0639 mm³"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "4 Flächen",
+   "teil": "Loft Quadrat 40 → Quadrat 20 (h 50)",
+   "status": "nicht_unterstuetzt",
+   "ms": 0.2,
+   "hinweis": "Loft: in OpenGeometry 3.x nicht vorhanden (README: «What does not exist … loft»)"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "4 Flächen",
+   "teil": "NURBS-Fläche aus 3×4 Punkten",
+   "status": "nicht_unterstuetzt",
+   "ms": 0,
+   "hinweis": "NURBS-Fläche: 3.x kennt nur Linien, Kreise, Bögen, Polylinien – keine Splines/NURBS"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "4 Flächen",
+   "teil": "Schnittkurve Zylinder r20 × Quader-Deckfläche",
+   "status": "nicht_unterstuetzt",
+   "ms": 2.1,
+   "hinweis": "Schnittkurve: keine öffentliche Flächen-/Körper-Schnittkurve in 3.x (nur 2D-Regionen)"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "5 Spengler",
+   "teil": "Einfach abgekantet (Winkel 40/60, 90°)",
+   "status": "ok",
+   "ms": 3.4,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 13918.8124,
+   "erwartet": 13918.8805,
+   "relAbweichung": 0.000004891,
+   "bbox": {
+    "min": [
+     0,
+     -0.35,
+     0
+    ],
+    "max": [
+     40.35,
+     60,
+     200
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±160.7493 mm³",
+   "abwicklung": {
+    "mitteKern": 99.4206,
+    "mitteAusVolumen": 99.4201,
+    "zuschnittKern": 99.3106,
+    "zuschnittAusVolumen": 99.3101
+   }
+  },
+  {
+   "kern": "opengeometry",
+   "test": "5 Spengler",
+   "teil": "Blech mit Umschlag (50 + U 10)",
+   "status": "ok",
+   "ms": 1.3,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 8517.6142,
+   "erwartet": 8517.761,
+   "relAbweichung": 0.000017232,
+   "bbox": {
+    "min": [
+     0,
+     -0.35,
+     0
+    ],
+    "max": [
+     50,
+     3.05,
+     200
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±98.8057 mm³",
+   "abwicklung": {
+    "mitteKern": 60.8412,
+    "mitteAusVolumen": 60.8401,
+    "zuschnittKern": 60.6212,
+    "zuschnittAusVolumen": 60.6202
+   }
+  },
+  {
+   "kern": "opengeometry",
+   "test": "5 Spengler",
+   "teil": "Mehrfach gekantet (Ortgang 30/50/80/50/15)",
+   "status": "ok",
+   "ms": 2.4,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 30789.0739,
+   "erwartet": 30789.3895,
+   "relAbweichung": 0.000010252,
+   "bbox": {
+    "min": [
+     -50.35,
+     -0.35,
+     0
+    ],
+    "max": [
+     30.35,
+     98.4408,
+     200
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±354.2285 mm³",
+   "abwicklung": {
+    "mitteKern": 219.9242,
+    "mitteAusVolumen": 219.922,
+    "zuschnittKern": 219.4294,
+    "zuschnittAusVolumen": 219.4272
+   }
+  },
+  {
+   "kern": "opengeometry",
+   "test": "5 Spengler",
+   "teil": "Zylindrisches Blechsegment Rm 200, 90°, h 300",
+   "status": "ok",
+   "ms": 13.4,
+   "gueltig": true,
+   "geschlossen": true,
+   "volumen": 65962.866,
+   "erwartet": 65973.4457,
+   "relAbweichung": 0.000160364,
+   "bbox": {
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "max": [
+     200.35,
+     200.35,
+     300
+    ]
+   },
+   "hinweis": "validity(): Solid · Fehlerschranke Kern ±757.4211 mm³"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "5 Spengler",
+   "teil": "Konisches Blechsegment r 200→100, h 150, 90°",
+   "status": "fehler",
+   "ms": 34,
+   "hinweis": "CoverageGap { families: [\"generic analytic solid\", \"intersecting analytic solid\"] }"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "5 Spengler",
+   "teil": "Gehrung: 2 Winkelprofile 90°-Ecke, verschnitten + vereinigt",
+   "status": "fehler",
+   "ms": 50.5,
+   "hinweis": "Differenz: CoverageGap CoverageGap { families: [\"generic analytic solid\", \"intersecting analytic solid\"] }"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "6 STEP",
+   "teil": "Export Quader mit Loch",
+   "status": "ok",
+   "ms": 4.8,
+   "hinweis": "20955 Zeichen, 7 Flächen, exakte Zylinderfläche"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "6 STEP",
+   "teil": "Re-Import und Vergleich",
+   "status": "nicht_unterstuetzt",
+   "hinweis": "STEP-Import: OpenGeometry 3.x exportiert STEP nur; kein Import"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "7 Three.js",
+   "teil": "Netz Quader − Zylinder (Loch r10 durch)",
+   "status": "ok",
+   "ms": 5.7,
+   "volumen": 93752.5173,
+   "erwartet": 93717.2287,
+   "relAbweichung": 0.000377,
+   "hinweis": "152 Dreiecke, BBox-Abw. 0 mm, Normalen gegen Umlauf: 0, Flächengruppen: 0 (Picking → Fläche nur über Kern-Picking)"
+  },
+  {
+   "kern": "opengeometry",
+   "test": "7 Three.js",
+   "teil": "Netz Einfach abgekantet (Winkel 40/60, 90°)",
+   "status": "ok",
+   "ms": 2.3,
+   "volumen": 13911.0659,
+   "erwartet": 13918.8124,
+   "relAbweichung": 0.000557,
+   "hinweis": "56 Dreiecke, BBox-Abw. 0 mm, Normalen gegen Umlauf: 0, Flächengruppen: 0 (Picking → Fläche nur über Kern-Picking)"
+  },
+  {
+   "kern": "opengeometry→occt",
+   "test": "6 STEP",
+   "teil": "OpenGeometry-Export in OpenCascade eingelesen",
+   "status": "ok",
+   "ms": 9.4,
+   "gueltig": true,
+   "volumen": 93716.8147,
+   "erwartet": 93716.8147,
+   "relAbweichung": 0,
+   "hinweis": "BRepCheck_Analyzer, Typ Solid"
+  }
+ ]
+}

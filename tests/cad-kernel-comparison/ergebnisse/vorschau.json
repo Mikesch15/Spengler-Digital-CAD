@@ -1,0 +1,40 @@
+{
+ "seite_bis_fertig_ms": 1042,
+ "erg": [
+  {
+   "kern": "OpenCascade (replicad)",
+   "laden_ms": 238,
+   "bauen_ms": 208,
+   "netz_ms": 48,
+   "dreiecke": 608,
+   "gueltig": true,
+   "volumen": 30710,
+   "treffer": [
+    10,
+    50.35,
+    60
+   ],
+   "flaeche": 866758408
+  },
+  {
+   "kern": "OpenGeometry",
+   "laden_ms": 54,
+   "bauen_ms": 116,
+   "netz_ms": 18,
+   "dreiecke": 304,
+   "gueltig": true,
+   "volumen": 30710,
+   "treffer": [
+    230,
+    50.35,
+    60
+   ],
+   "flaeche": {
+    "ogId": "solid-5",
+    "shapeRevision": 1,
+    "faceId": 7
+   }
+  }
+ ],
+ "fehler": []
+}

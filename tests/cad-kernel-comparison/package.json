@@ -1,0 +1,16 @@
+{
+  "name": "cad-kernel-comparison",
+  "private": true,
+  "type": "module",
+  "description": "Isolierter Machbarkeitstest: OpenCascade (replicad) vs. OpenGeometry – unabhängig von der Anwendung",
+  "scripts": {
+    "test": "node run.mjs && node abwicklung.mjs",
+    "vorschau": "node vorschau/bauen.mjs && node vorschau/pruefen.mjs"
+  },
+  "dependencies": {
+    "opengeometry": "3.0.1",
+    "replicad": "1.2.1",
+    "replicad-opencascadejs": "1.2.1",
+    "three": "0.184.0"
+  }
+}
