@@ -44,7 +44,7 @@ const c1 = await s.evaluate(() => window.sdcadTest.kamera()), d = (a, b) => Math
 ok(d(c0.ziel, c1.ziel) > 1, `Mausrad gedrückt verschiebt die Ansicht (Ziel bewegt um ${d(c0.ziel, c1.ziel).toFixed(1)} mm)`);
 await s.keyboard.down("Shift"); await s.mouse.move(px, py); await s.mouse.down({ button: "middle" }); await s.mouse.move(px + 120, py + 40, { steps: 6 }); await s.mouse.up({ button: "middle" }); await s.keyboard.up("Shift"); await s.waitForTimeout(150);
 const c2 = await s.evaluate(() => window.sdcadTest.kamera());
-ok(d(c1.ziel, c2.ziel) < 1e-6 && d(c1.pos, c2.pos) > 1, `Umschalt + Mausrad gedrückt dreht um das Ziel (Kamera bewegt um ${d(c1.pos, c2.pos).toFixed(1)} mm, Ziel fest)`);
+ok(d(c1.pos, c2.pos) > 1, `Umschalt + Mausrad gedrückt dreht die Ansicht (Kamera bewegt um ${d(c1.pos, c2.pos).toFixed(1)} mm; Drehpunkt = Stelle unter dem Zeiger, siehe drehpunkt.mjs)`);
 const cfg = await s.evaluate(() => window.sdcadTest.steuerung());
 ok(cfg.damping === false && cfg.mitte === 2 && cfg.links === null && cfg.rechts === null && cfg.zoomZeiger === true, `Steuerung: keine Dämpfung, Mausrad = Verschieben, Umschalt tauscht auf Drehen, Zoom zum Zeiger (${JSON.stringify(cfg)})`);
 ok(probleme.length === 0, "keine Seitenfehler " + probleme.join(" | "));

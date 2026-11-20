@@ -170,6 +170,25 @@ steuerung.enableDamping = false; // keine Nachlaufzeit: Drehen und Verschieben f
 steuerung.rotateSpeed = 1.1; steuerung.panSpeed = 1.2; steuerung.zoomSpeed = 1.2; steuerung.zoomToCursor = true;
 // Wie Fusion: Mausrad gedrückt = Verschieben, Umschalt + Mausrad gedrückt = Drehen, Rad = Zoom zum Zeiger (OrbitControls tauscht Verschieben/Drehen bei Umschalt)
 steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null }; // linke und rechte Taste bewegen die Ansicht nicht; Finger/Stift (Touch) drehen und verschieben weiter
+// Drehpunkt: beim Drehen (Umschalt + Mausrad, Stift, ein Finger) dreht das Modell um die Stelle unter dem Zeiger bei Beginn der Drehung
+let drehPivot = null, drehQ = null;
+addEventListener("pointerdown", (e) => {
+  if (!e.isPrimary) { drehPivot = null; return; }
+  drehPivot = null; if (skizze || e.target !== leinwand) return;
+  const rot = (e.pointerType === "pen" && e.button === 0) || (e.pointerType === "touch" && steuerung.touches.ONE === THREE.TOUCH.ROTATE) || (e.pointerType === "mouse" && e.button === 1 && e.shiftKey);
+  if (!rot) return;
+  strahl.setFromCamera(ndc(e), kamera);
+  const hit = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
+  let P = hit?.point; // sonst: Punkt unter dem Zeiger in der Tiefe des bisherigen Drehpunkts
+  if (!P) P = strahl.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(kamera.getWorldDirection(new THREE.Vector3()), steuerung.target), new THREE.Vector3());
+  if (P) { drehPivot = P.clone(); drehQ = kamera.quaternion.clone(); }
+}, true);
+for (const t of ["pointerup", "pointercancel"]) addEventListener(t, () => { drehPivot = null; }, true);
+steuerung.addEventListener("change", () => { // OrbitControls dreht um sein Ziel; hier um den gemerkten Punkt korrigiert (Kamera und Ziel um dieselbe Verschiebung)
+  if (!drehPivot) return;
+  const R = kamera.quaternion.clone().multiply(drehQ.clone().invert()), d = drehPivot.clone().sub(steuerung.target), sh = d.clone().sub(d.clone().applyQuaternion(R));
+  kamera.position.add(sh); steuerung.target.add(sh); drehQ.copy(kamera.quaternion);
+});
 // Stift (Tablet) bewegt das Modell wie der Finger (drehen), ausser in der Skizze – dort zeichnet er; die Maus bleibt unberührt
 addEventListener("pointerdown", (e) => { steuerung.mouseButtons.LEFT = e.pointerType === "pen" && !skizze && e.target === leinwand ? THREE.MOUSE.ROTATE : null; }, true);
 szene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; // Studiolicht: Spiegelungen wie im CAD-Programm
@@ -5026,7 +5045,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
