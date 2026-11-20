@@ -15,7 +15,7 @@
 - **`npm test`:** 11 Testdateien, darunter `test/cad.test.js` mit Tests für App-Feature → Kern (3 Ebenen × 3 Richtungen) und dem Abweisen linkshändiger Ebenen.
 - **`node tests/app-kern/pruefen.mjs`** (App in Chromium, nach `node build.mjs`), 10/10:
   - **Aus:** Knopf verborgen, kein Kern-Download, keine 3D-Prüfung, keine Konsolenfehler
-  - **Ein:** Knopf sichtbar, Kern wird erst bei Gebrauch geladen, 3D-Prüfung Traufblech Δ 0,0000 mm, STEP exakt (AP242, Volumenkörper, Biegezylinder), Statusmeldung, keine Konsolenfehler
+  - **Ein:** Knopf sichtbar (seit C2b lädt der Kern, sobald er eingeschaltet ist), 3D-Prüfung Traufblech Δ 0,0000 mm, STEP exakt (AP242, Volumenkörper, Biegezylinder), Statusmeldung, keine Konsolenfehler
 - Nicht in CI: Der App-Test braucht Playwright und läuft bisher nur lokal. Eine Aufnahme in CI ist offen.
 
 **Geänderte Dateien:** `build.mjs` (+ Kernbündel), `src/cad.js` (Imports, Einstellung `programm.kern`, `_kernLage` in `regen()` für Vorlage, Profil und Blech, Abschnitt «Exakter CAD-Kern», Export-Verteilung, Werkstatt-Knopf), `src/cad.html` (Menüeintrag), `.gitignore` (`dist/cad/`), `tests/app-kern/pruefen.mjs`, `index.html`, `dist/index.html`.
