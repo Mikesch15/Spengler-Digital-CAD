@@ -298,6 +298,31 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   ok(dr.gueltig && nahe(dr.volumen, 100000) && nahe(dr.grenzen.min[2], 5), "Matrix: Drehung 30° + Verschiebung");
 }
 
+// ---------------------------------------------------------------- 10d Flächenblech mit Kantenbausteinen exakt
+{
+  const { flaechenblechPlan, baueFlaechenblech } = await import("../kern/cad/featureBau.js");
+  const { flaechenblech } = await import("../kern/flaechenblech.js"), { BASIS } = await import("../kern/ebenen.js");
+  const B = (id) => BAUSTEINE_STANDARD.find((b) => b.id === id), pts = [[0, 0], [1000, 0], [1000, 500], [0, 500]];
+  const gruppeVon = (bl, a, b) => bl.gruppen.findIndex((g) => g.punkte[0].join() === a.join() && g.punkte.at(-1).join() === b.join());
+  // 1 Eine Kante mit Ortgang-Aufkantung «90 25», Nachbarkanten ohne Baustein: Zuschnitt aus 3D = Abwicklung (500 + Zugabe)
+  const leer = flaechenblech(pts, [null, null, null, null], zink), gu = gruppeVon(leer, [0, 0], [1000, 0]);
+  const kanten = [null, null, null, null]; kanten[gu] = B("ortgang");
+  const bl = flaechenblech(pts, kanten, zink), plan = flaechenblechPlan(bl, BASIS.XY, zink, 1);
+  const id = await baueFlaechenblech(x, plan), e = await eig(id);
+  const zus = (e.volumen / (zink.t * 1000)) + (zink.k - 0.5) * zink.t * PI / 2, soll = 500 + bl.profile[gu].zugabe;
+  ok(e.gueltig && e.anzahl.koerper === 1 && Math.abs(zus - soll) < 1e-6, `Flächenblech, eine Aufkantung: gültig, Zuschnitt aus 3D ${zus.toFixed(4)} = Abwicklung ${soll.toFixed(4)} mm`);
+  ok(Math.abs(e.grenzen.max[2] - (25 - 0.35)) < 0.5 && Math.abs(e.grenzen.min[1]) < 1e-6 + 0.0 + 0.36, `Flächenblech: Aufkantung steht zur Sichtseite (z max ${e.grenzen.max[2].toFixed(2)})`);
+  // 2 Alle vier Kanten mit Aufkantung: Gehrungen an allen Ecken, Profile durchdringen sich nicht
+  const bl4 = flaechenblech(pts, [B("ortgang"), B("ortgang"), B("ortgang"), B("ortgang")], zink), p4 = flaechenblechPlan(bl4, BASIS.XY, zink, 1);
+  const e4 = await eig(await baueFlaechenblech(x, p4));
+  const prism = []; for (const p of p4.prismen) { let z = (await x(p.extrusion)).id; for (const h of p.halbraeume) z = (await x({ op: "halbraum", ziel: z, ...h })).id; prism.push((await x({ op: "matrix", ziel: z, m: p.m })).id); }
+  let ue = 0; for (let i = 0; i < prism.length; i++) ue += (await x({ op: "ueberschneidung", a: prism[i], b: prism[(i + 1) % prism.length] })).volumen;
+  ok(e4.gueltig && e4.anzahl.koerper === 1 && ue < 1e-6, `Flächenblech, 4 Aufkantungen auf Gehrung: ein gültiger Körper, Überschneidung der Profile ${ue.toExponential(1)} mm³`);
+  // 3 Doppelstehfalz (Umschlag) und Traufe-Einhang gemischt: schräg angeschnittene Säume, gültig
+  const bl3 = flaechenblech(pts, [B("dsf-u"), B("trauf"), B("dsf-o"), B("ortgang")], zink), e3 = await eig(await baueFlaechenblech(x, flaechenblechPlan(bl3, BASIS.XY, zink, -1)));
+  ok(e3.gueltig && e3.anzahl.koerper === 1 && e3.volumen > 0, `Flächenblech gemischt (Doppelstehfalz, Traufe, Ortgang, Sichtseite −1): ein gültiger Körper (V ${(e3.volumen / 1000).toFixed(1)} cm³)`);
+}
+
 // ---------------------------------------------------------------- 10 Speicher: Freigabe und Leckprüfung
 {
   const vorher = (await x({ op: "speicher" })).handles;

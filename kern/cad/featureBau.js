@@ -2,6 +2,10 @@
 // Damit die Oberfläche keine OCCT-Details kennt: sie liefert die Daten, die sie ohnehin hat
 // (Rechenergebnis aus kern/geometrie.js, Material, Ebene {o,u,v,n}, Länge, Richtung, Versatz), hier entstehen Kommandos.
 import { blechQuerschnitt, verschiebeProfil } from "./blech.js";
+import { berechne } from "../geometrie.js";
+import { freiesProfil } from "../profile.js";
+import { folge } from "../details.js";
+import { eckFaktoren } from "../flaechenblech.js";
 
 const kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -64,3 +68,70 @@ export function extrusionsFlaechen(topo, { n, h0, h1 }, offen) {
 }
 // THREE.Matrix4 (spaltenweise elements) → 3×4 zeilenweise für { op: "matrix" }
 export const matrixZeilen = (te) => [te[0], te[4], te[8], te[12], te[1], te[5], te[9], te[13], te[2], te[6], te[10], te[14]];
+
+// ---------------------------------------------------------------- Flächenblech mit Kantenbausteinen (exakt)
+// Querschnitt eines Bausteins wie bausteinKontur() in der App (kurzer Anlauf L auf der Fläche), aber mit exakten Bögen.
+// xFlach: wo der Anlauf in die erste Biegung übergeht (x nach aussen ab der gezeichneten Kante) – bis dorthin ist es Fläche.
+export function bausteinQuerschnitt(b, m) {
+  for (const L of [1, 2, 4, 8, 16, 30]) {
+    try {
+      const { start, ops } = freiesProfil(0, folge(`${L} ${b.folge}`), m), res = berechne(start, ops, m.t, m.ri, m.k), v = +b.versatz || 0;
+      const q = blechQuerschnitt(res, m.t), g = res.pfad[0];
+      const xs = [q.profil.start, ...q.profil.segmente.flatMap((x) => [x.bis, x.bogenMitte].filter(Boolean))].map((p) => p[0] - L + v);
+      return { profil: verschiebeProfil(q.profil, -L + v, 0), xFlach: (g?.typ === "linie" ? g.p2[0] : 0) - L + v, xmin: Math.min(...xs), xmax: Math.max(...xs) };
+    } catch {}
+  }
+  return null;
+}
+const mal = (A, B) => { // 3×4-Matrizen (zeilenweise) verketten: A · B
+  const r = [];
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 4; j++) r.push(A[i * 4] * B[j] + A[i * 4 + 1] * B[4 + j] + A[i * 4 + 2] * B[8 + j] + (j === 3 ? A[i * 4 + 3] : 0));
+  return r;
+};
+const basisMatrix = (e) => [e.u[0], e.v[0], e.n[0], e.o[0], e.u[1], e.v[1], e.n[1], e.o[1], e.u[2], e.v[2], e.n[2], e.o[2]];
+// Bauplan eines Blechs aus flaechenblech() (bl: { pts, gruppen, profile }) in der Ebene der Skizze, seite ±1 (Sichtseite).
+// Korrekt gegenüber dem Anzeige-Netz: die Fläche endet an jeder Bausteinkante dort, wo die erste Biegung beginnt (xFlach),
+// statt bis zur gezeichneten Kante zu laufen – sonst stünde unter der Biegung eine scharfe Plattenecke über.
+// Ecken: dieselben Faktoren (Gehrung / bündig / schräg) wie Abwicklung und Netz (eckFaktoren).
+export function flaechenblechPlan(bl, ebene, m, seite = 1) {
+  const B = basisMatrix(ebene), t = m.t, s = seite === -1 ? -1 : 1;
+  const richt = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
+  const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]);
+  const plan = { platte: { op: "extrusion", profil: { start: bl.pts[0], segmente: bl.pts.slice(1).map((p) => ({ bis: p })) }, ebene: kernEbene(ebene, -t / 2), hoehe: t }, schnitte: [], prismen: [] };
+  const ek = eckFaktoren(bl.gruppen, bl.profile);
+  bl.gruppen.forEach((g, k) => {
+    const p = bl.profile[k]; if (!p?.baustein) return;
+    const bq = bausteinQuerschnitt(p.baustein, m); if (!bq) throw new Error(`Baustein «${p.baustein.name ?? p.baustein.folge}» lässt sich nicht rechnen`);
+    for (let i = 1; i < g.punkte.length; i++) {
+      const a = g.punkte[i - 1], b = g.punkte[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
+      const d = richt(a, b);
+      const k0 = i > 1 ? Math.tan(knick(richt(g.punkte[i - 2], a), d) / 2) : ek[k].k0, e0 = i > 1 ? 0 : ek[k].e0 || 0;
+      const k1 = i < g.punkte.length - 1 ? Math.tan(knick(d, richt(b, g.punkte[i + 1])) / 2) : ek[k].k1, e1 = i < g.punkte.length - 1 ? 0 : ek[k].e1 || 0;
+      // lokal: x nach aussen (d rechtwinklig), y = Sichtseite, z entlang der Kante ab a
+      const lokal = [d[1], 0, d[0], a[0], -d[0], 0, d[1], a[1], 0, s, 0, 0], M = mal(B, lokal);
+      const zs = [bq.xmin, bq.xmax], z0 = Math.min(...zs.map((x) => -x * k0)) + e0 - 1, z1 = L + Math.max(...zs.map((x) => x * k1)) - e1 + 1;
+      plan.prismen.push({
+        extrusion: { op: "extrusion", profil: bq.profil, ebene: { ursprung: [0, 0, z0], x: [1, 0, 0], n: [0, 0, 1] }, hoehe: z1 - z0 },
+        halbraeume: [{ punkt: [0, 0, e0], normale: [-k0, 0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, 0, 1] }],
+        m: M,
+      });
+      if (bq.xFlach < -1e-9) plan.schnitte.push({ quader: { min: [bq.xFlach, -t, 0], max: [1, t, L] }, m: M }); // Fläche bis zum Biegebeginn kürzen
+    }
+  });
+  return plan;
+}
+// Plan ausführen (x = Kommando-Funktion des Kerns): Fläche kürzen, Profile auf Länge/Gehrung schneiden, alles vereinigen
+export async function baueFlaechenblech(x, plan) {
+  let k = (await x(plan.platte)).id;
+  for (const s of plan.schnitte) {
+    const q = (await x({ op: "quader", ...s.quader })).id, w = (await x({ op: "matrix", ziel: q, m: s.m })).id;
+    k = (await x({ op: "boolesch", art: "abziehen", a: k, b: w })).id;
+  }
+  for (const p of plan.prismen) {
+    let z = (await x(p.extrusion)).id;
+    for (const h of p.halbraeume) z = (await x({ op: "halbraum", ziel: z, ...h })).id;
+    z = (await x({ op: "matrix", ziel: z, m: p.m })).id;
+    k = (await x({ op: "boolesch", art: "vereinigen", a: k, b: z })).id;
+  }
+  return k;
+}

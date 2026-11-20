@@ -141,5 +141,19 @@ async function seite(kern) {
   ok(erg.step.koerper === 10 && erg.step.ap242 && /10 Körper/.test(erg.step.status), `Ein: STEP exakt mit allen 10 Körpern (gerundet, Schale, Muster, Spiegelkopie …) – ${erg.step.status}`);
   ok(!/als Netz/.test(ex.st) && ex.probleme.length === 0 && nz.probleme.length === 0, `Ein: alles exakt, keine Seitenfehler – ${ex.st}`);
 }
+{ // 5 Flächenblech mit Kantenbausteinen exakt (Gehrungen, Fläche bis Biegebeginn)
+  const projekt = { objekt: "Kerntest 3", nr: "T-3", zaehler: 10, features: [
+    { id: "sf", typ: "skizze", name: "Umriss", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [1000, 500] }] },
+    { id: "fl", typ: "flaeche", name: "Abdeckung", skizze: "sf", material: "zink07", profil: "alle", kanten: { "0:0": "ortgang", "0:1": "ortgang", "0:2": "ortgang", "0:3": "ortgang" } },
+  ] };
+  const s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
+  await s.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: "occt" } })); }, projekt);
+  await s.goto("http://localhost:8767/index.html?test");
+  await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 90000 });
+  const k = (await s.evaluate(() => window.sdcadTest.koerperInfo())).filter((o) => String(o.fid).startsWith("fl")), st = await s.textContent("#status");
+  const t = 0.7, Vmin = t * 1000 * 500, Vmax = t * (1000 * 500 + 2 * 1500 * 26);
+  ok(k.length === 1 && k[0].exakt && k[0].volumen > Vmin && k[0].volumen < Vmax && !/als Netz/.test(st) && probleme.length === 0, `Ein: Flächenblech mit 4 Ortgängen als ein exakter Körper (V ${(k[0]?.volumen / 1000).toFixed(1)} cm³, ${k.length} Netz) – ${st}`);
+  await s.close();
+}
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "App mit CAD-Kern: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

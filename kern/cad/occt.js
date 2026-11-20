@@ -172,6 +172,16 @@ export async function occtKern({ wasmUrl } = {}) {
       if (k.verschieben) f = f.translate(k.verschieben);
       return ergebnis(f, "Transformieren");
     }),
+    // Halbraum abschneiden: entfernt alles auf der Seite, in die «normale» zeigt (Ebene durch «punkt»)
+    halbraum: (k) => versuch("Halbraum", () => {
+      const f = kopie(k.ziel), g = f.boundingBox.bounds, S = Math.hypot(...[0, 1, 2].map((i) => g[1][i] - g[0][i])) + Math.hypot(...[0, 1, 2].map((i) => Math.max(Math.abs(g[0][i] - k.punkt[i]), Math.abs(g[1][i] - k.punkt[i])))) + 10;
+      const n = norm(k.normale), x = norm(Math.abs(n[2]) < 0.9 ? kreuz([0, 0, 1], n) : kreuz([1, 0, 0], n)), y = kreuz(n, x), p = k.punkt;
+      const box = R.makeBox([-S, -S, 0], [S, S, 2 * S]), t = new oc.gp_Trsf();
+      t.SetValues(x[0], y[0], n[0], p[0], x[1], y[1], n[1], p[1], x[2], y[2], n[2], p[2]);
+      const b = new oc.BRepBuilderAPI_Transform(box.wrapped, t, true, false), wz = R.cast(b.Shape());
+      const r = f.cut(wz); weg(f, wz, box); t.delete(); b.delete();
+      return ergebnis(r, "Halbraum");
+    }),
     // Allgemeine Lage (Zeilen einer 3×4-Matrix, auch Spiegelung): für Muster/Spiegeln/Bewegen der App
     matrix: (k) => versuch("Matrix", () => {
       if (!(k.m?.length === 12)) throw fehl(CODES.EINGABE, "matrix: m = 12 Werte (3 Zeilen × 4)");

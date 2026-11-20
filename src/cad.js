@@ -10,7 +10,7 @@ import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
-import { blechTeilKommando, extrusionKommandos, rotationKommandos, extrusionsHoehen, extrusionsKanten, extrusionsFlaechen, matrixZeilen } from "../kern/cad/featureBau.js";
+import { blechTeilKommando, extrusionKommandos, rotationKommandos, extrusionsHoehen, extrusionsKanten, extrusionsFlaechen, matrixZeilen, flaechenblechPlan, baueFlaechenblech } from "../kern/cad/featureBau.js";
 import { skizzenProfile, NichtExakt } from "../kern/cad/skizzeProfile.js";
 import { zuschnittAusVolumen } from "../kern/cad/blech.js";
 import { dxfLesen } from "../kern/dxflesen.js";
@@ -4150,7 +4150,14 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
           }
           if (!kopie) koerper.set(z, id);
         } catch (e) { nicht.set(z, `${f.name}: ${e.message}`); }
-      } else if (["sweep", "loft", "import", "kehle", "flaeche"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
+      } else if (f.typ === "flaeche") { // Flächenblech: Fläche bis Biegebeginn, Bausteinprofile exakt mit derselben Eckregel wie die Abwicklung
+        if (f.versteckt || !f._bleche) continue;
+        const ebene = E_(finde(f.skizze).ebene), m = material(f.material);
+        for (const [i, bl] of f._bleche.entries()) {
+          try { blech.set(`${f.id}:${i}`, await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1))); }
+          catch (e) { nicht.set(`${f.id}:${i}`, e.message); }
+        }
+      } else if (["sweep", "loft", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
     if (step) { // alle sichtbaren exakten Körper (mit Komponentenlage) in eine STEP-Datei
       const ziele = [], namen = [];
@@ -4171,16 +4178,17 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
     for (const [schl, id] of [...koerper, ...blech]) {
       if (nicht.has(schl) || nicht.has(schl.split(":")[0]) && schl.includes(":")) continue;
       const fid = netzVon.get(schl) ?? schl;
-      const mesh = modell.children.find((o) => o.isMesh && o.userData.fid === fid); if (!mesh) continue;
+      const netze = modell.children.filter((o) => o.isMesh && o.userData.fid === fid), mesh = netze[0]; if (!mesh) continue;
       const netz = await K.ausfuehren({ op: "tessellieren", ziel: id }), e = await K.ausfuehren({ op: "eigenschaften", ziel: id });
       if (!step && lauf !== exaktLauf) return;
       ersetzeNetz(mesh, netz, lageVon(hauptVon(fid))); n++;
+      for (const o of netze.slice(1)) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); } // Flächenblech: Platte + Profile → ein exakter Körper
       eig.set(fid, { ...e, verschoben: !!lageVon(hauptVon(fid)) });
     }
     exaktEig = eig; exaktNicht = nicht;
     if (register === "eigenschaften") zeigeWerkstatt();
     zeigeKanten?.();
-    const rest = [...nicht].map(([fid, g]) => `${finde(fid)?.name ?? fid} (${g})`);
+    const rest = [...nicht].map(([fid, g]) => `${hauptVon(fid)?.name ?? fid}${fid.includes(":") ? " " + (+fid.split(":")[1] + 1) : ""} (${g})`);
     status(`Exakt aus dem CAD-Kern: ${n} Körper${rest.length ? ` · als Netz: ${rest.join(", ")}` : ""}`);
   } finally { if (ids.length) K.ausfuehren({ op: "freigeben", ziele: ids }).catch(() => {}); }
 }

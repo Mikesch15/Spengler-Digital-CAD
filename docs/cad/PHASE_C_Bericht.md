@@ -71,7 +71,20 @@
 - Nicht exakte Teile werden weiterhin nur genannt und nicht facettiert in die Datei geschrieben.
 - **Test:** STEP mit 10 Volumenkörpern, AP242.
 
-## Nächste Schritte (C3b …)
+## C3b – Flächenblech mit Kantenbausteinen exakt (erledigt, 20.11.2026)
+- **Befund im Netzmodell (Version 0.2):** Die Grundplatte reicht bis zur gezeichneten Kante, die Biegung beginnt aber um den Rückversatz früher (Zink 0,7 / ri 1: 1,35 mm). Unter jeder Biegung steht dadurch eine scharfe Plattenecke einige Zehntel mm über die gerundete Aussenfläche. Die **Abwicklung war nie betroffen**, nur die 3D-Anzeige.
+- **Exakt (`flaechenblechPlan`, `baueFlaechenblech`):**
+  - Die Fläche endet an jeder Bausteinkante beim Biegebeginn.
+  - Die Bausteinprofile werden aus der Kurzschrift exakt gerechnet und über die Kantenlänge extrudiert.
+  - An den Ecken wird mit Halbraum-Schnitten geschnitten (Gehrung, bündig, schräg), mit **denselben Faktoren wie Abwicklung und Netz** (`eckFaktoren`).
+  - Alles wird zu einem Körper vereinigt. Neues Kernkommando: `halbraum`.
+- **Tests (Kern):**
+  - Eine Ortgang-Aufkantung: Zuschnitt aus dem 3D-Volumen 524,3106 mm = Abwicklung (500 + Zugabe), auf 1e-6 mm.
+  - Vier Aufkantungen auf Gehrung: ein gültiger Körper, Überschneidung der Profile 0.
+  - Gemischt (Doppelstehfalz Unter-/Oberfalz, Traufe-Einhang, Ortgang, Sichtseite −1): ein gültiger Körper.
+- **App (Kern ein):** Das Flächenblech wird ein exakter Körper (statt Platte und Profilnetzen). Es ist in «STEP exakt» und in «Eigenschaften» enthalten. App-Test 31/31.
+
+## Nächste Schritte (C3c …)
 1. **Splines und Ellipsen exakt** (B-Spline- und Ellipsenkurven im Profilformat)
 3. **Abrunden/Fasen und Schale** über Kanten- und Flächenreferenzen (`topologie.js`) statt über Koordinaten am Netz.
 4. **Feature-Fehler** aus dem Kern (`KernFehler.code`) direkt in der Zeitleiste anzeigen.

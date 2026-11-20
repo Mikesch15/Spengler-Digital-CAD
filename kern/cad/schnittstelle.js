@@ -32,6 +32,7 @@
 //   bohrung     ziel, punkt, richtung, d, tiefe? | durch?, senkung? { d, winkel } → { id }
 //   schale      ziel, dicke, offen: [Referenz]            → { id }
 //   transformieren ziel, verschieben?, drehen? { winkel, punkt, achse }, spiegeln? { punkt, normale } → { id }
+//   halbraum    ziel, punkt, normale  → { id }   (entfernt die Seite, in die die Normale zeigt)
 //   matrix      ziel, m: [12] (3×4, zeilenweise; Drehung, Verschiebung, Spiegelung) → { id }
 //   muster      ziel, linear? { richtung, anzahl, abstand } | kreis? { punkt, achse, anzahl, winkel } → { id }
 //   eigenschaften ziel  → { volumen, flaeche, schwerpunkt, grenzen, gueltig, geschlossen, anzahl }
