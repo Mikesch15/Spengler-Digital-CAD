@@ -51,3 +51,22 @@ export function ansichtAusProjektion(p, { d, oben, massstab, verdeckte = true })
   for (const pt of punkte) pt.w = [0, 1, 2].map((i) => pt.q[0] * xa[i] + pt.q[1] * ya[i]);
   return { breite, hoehe, sichtbar: sicht.filter(lang), verdeckt: verd.filter(lang), punkte: punkte.map(({ x, y, w }) => ({ x, y, w })), abbild, exakt: true };
 }
+
+// Geschnittene Kanten (3D-Polylinien je Kante, aus { op: "schnitt" }) zu geschlossenen Linienzügen verketten
+export function kettenAusKanten(kanten, tol = 1e-4) {
+  const key = (p) => p.map((v) => Math.round(v / tol)).join(","), frei = kanten.filter((k) => k.length >= 2).map((k) => k.slice()), loops = [];
+  const an = new Map();
+  frei.forEach((k, i) => { for (const e of [k[0], k.at(-1)]) { const s = key(e); if (!an.has(s)) an.set(s, []); an.get(s).push(i); } });
+  const benutzt = new Set();
+  for (let i = 0; i < frei.length; i++) {
+    if (benutzt.has(i)) continue; benutzt.add(i);
+    let zug = frei[i].slice(), ok = true;
+    for (let n = 0; n < frei.length; n++) {
+      const ende = key(zug.at(-1)); if (ende === key(zug[0]) && zug.length > 2) break;
+      const j = (an.get(ende) || []).find((x) => !benutzt.has(x)); if (j == null) { ok = false; break; }
+      benutzt.add(j); const k = frei[j]; zug = zug.concat(key(k[0]) === ende ? k.slice(1) : k.slice(0, -1).reverse());
+    }
+    if (ok && zug.length > 3) { zug.pop(); loops.push(zug); }
+  }
+  return loops;
+}

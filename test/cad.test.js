@@ -344,6 +344,29 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   ok(ar.verdeckt.length === 0 && Math.abs(ar.breite - 21) < 1e-6 && Math.abs(ar.hoehe - 51) < 1e-6, `Seitenansicht ohne verdeckte Kanten: ${ar.breite.toFixed(1)} × ${ar.hoehe.toFixed(1)} mm`);
 }
 
+// ---------------------------------------------------------------- 10f Schnittansicht aus dem Kern (Phase E2)
+{
+  const { kettenAusKanten, ansichtAusProjektion, kameraAchsen } = await import("../kern/cad/ansichtExakt.js");
+  const q = (await x({ op: "quader", min: [0, 0, 0], max: [100, 50, 20] })).id, kb = (await x({ op: "bohrung", ziel: q, punkt: [50, 25, 20], richtung: [0, 0, -1], d: 20, durch: true })).id;
+  // Schnitt in der Ebene y = 25 (Blick von +y auf die Schnittfläche): x 0…100, z 0…20 mit Bohrung x 40…60 ausgespart
+  const d = [0, 1, 0], oben = [0, 0, -1], lage = 25, a = kameraAchsen(d, oben);
+  const geschnitten = (await x({ op: "halbraum", ziel: kb, punkt: [0, lage, 0], normale: d })).id;
+  const sn = await x({ op: "schnitt", ziel: kb, ebene: { punkt: [0, lage, 0], normale: d } });
+  const loops = kettenAusKanten(sn.kanten);
+  ok(Math.abs(sn.flaeche - (100 * 20 - 20 * 20)) < 1e-6, `Schnittfläche ${sn.flaeche.toFixed(1)} mm² = 100·20 − 20·20 (Bohrung)`);
+  ok(loops.length === 2, `Kanten zu ${loops.length} geschlossenen Linienzügen verkettet (die Bohrung teilt den Schnitt in zwei Stücke)`);
+  { const g = await eig(geschnitten); ok(g.gueltig && nahe(g.volumen, (100 * 25 * 20) - PI * 100 * 20 / 2, 1e-9), `Halbraumschnitt: gültig, V ${g.volumen.toFixed(1)} = halbe Platte − halbe Bohrung`); }
+  const ansicht = ansichtAusProjektion(await x({ op: "projektion", ziele: [geschnitten], richtung: a.n, xAchse: a.x }), { d, oben, massstab: 1 });
+  const flaechen = loops.map((l) => l.map((w) => ansicht.abbild(w)));
+  const flaeche = (p) => Math.abs(p.reduce((s, [x1, y1], i) => { const [x2, y2] = p[(i + 1) % p.length]; return s + x1 * y2 - x2 * y1; }, 0) / 2), fl = flaechen.map(flaeche).sort((m, n) => n - m);
+  ok(Math.abs(fl[0] - 800) < 1e-6 && Math.abs(fl[1] - 800) < 1e-6, `Schnittflächen im Blatt: 2 Stücke zu ${fl[0].toFixed(1)} und ${fl[1].toFixed(1)} mm² (je 40 × 20)`);
+  const minx = Math.min(...flaechen.flat().map((p) => p[0])), maxx = Math.max(...flaechen.flat().map((p) => p[0]));
+  ok(Math.abs(maxx - minx - 100) < 1e-6 && ansicht.sichtbar.length > 0, "Schnittansicht: Schnittflächen liegen deckungsgleich auf den Kanten der Ansicht (100 mm breit)");
+  // Körper vollständig auf der abgeschnittenen Seite: Fehler statt leerem Körper
+  let leer = null; try { await x({ op: "halbraum", ziel: q, punkt: [0, -10, 0], normale: d }); } catch (e) { leer = e.code; }
+  ok(leer === CODES.FEHLGESCHLAGEN || leer === CODES.UNGUELTIG, `Halbraum ausserhalb des Körpers → sauberer Fehler (${leer})`);
+}
+
 // ---------------------------------------------------------------- 10 Speicher: Freigabe und Leckprüfung
 {
   const vorher = (await x({ op: "speicher" })).handles;

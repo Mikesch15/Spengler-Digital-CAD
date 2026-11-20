@@ -40,6 +40,14 @@ async function seite(kern) {
   ok(Math.abs(e.breite - 102) < 1e-6 && Math.abs(e.hoehe - 52) < 1e-6, `Ein: Blattgrösse ${e.breite.toFixed(1)} × ${e.hoehe.toFixed(1)} mm`);
   let o; for (let i = 0; i < 100; i++) { o = await s.evaluate(() => window.sdcadTest.exaktAnsicht("oben", 1)); if (o.stand === "fertig") break; await s.waitForTimeout(200); }
   ok(o.stand === "fertig" && o.verdeckt.length > 0 && Math.abs(o.breite - 102) < 1e-6 && Math.abs(o.hoehe - 22) < 1e-6, `Ein: Draufsicht ${o.breite.toFixed(1)} × ${o.hoehe.toFixed(1)} mm mit verdecktem Lochmantel (${o.verdeckt.length} Segmente)`);
+  // Schnittansicht (Blick von vorne, Ebene z = 10): halbe Plattenhöhe, Loch Ø20 durch die Schnittfläche
+  let sc; for (let i = 0; i < 100; i++) { sc = await s.evaluate(() => window.sdcadTest.exaktAnsicht("vorne", 1, true, 10)); if (sc.stand === "fertig") break; await s.waitForTimeout(200); }
+  const fl = (p) => Math.abs(p.reduce((a, [x1, y1], i) => { const [x2, y2] = p[(i + 1) % p.length]; return a + x1 * y2 - x2 * y1; }, 0) / 2);
+  const fa = sc.flaechen?.map(fl).sort((m, n) => n - m) ?? [], summe = fa.length === 2 ? fa[0] - fa[1] : null; // aussen − Loch (evenodd-Füllung)
+  ok(sc.stand === "fertig" && sc.exakt && sc.flaechen?.length === 2 && Math.abs(summe - (5000 - PI * 100)) < 2, `Ein: Schnittansicht aus dem Kern – ${sc.flaechen?.length} Schnittflächen (aussen + Loch), Fläche ${summe?.toFixed(1)} mm² ≈ ${(5000 - PI * 100).toFixed(1)}`);
+  await s.evaluate(() => document.getElementById("wPlan").click()); await s.click("#plNeuAnsicht"); await s.click('[data-plansicht="schnitt:vorne"]'); await s.waitForTimeout(800);
+  ok(await s.$eval("#plFlaeche", (el) => !!el.querySelector(".schnittflaeche")), "Ein: Planblatt zeigt die Schnittansicht mit schraffierter Schnittfläche");
+  await s.evaluate(() => document.getElementById("plZu").click());
   await s.evaluate(() => document.getElementById("wPlan").click()); await s.click("#plNeuAnsicht"); await s.click('[data-plansicht="vorne"]'); await s.waitForTimeout(500);
   ok(await s.$eval("#plFlaeche", (el) => el.querySelectorAll("line,path,polyline").length > 3), "Ein: Planblatt zeigt die exakte Vorderansicht");
   // Modelländerung: Ansicht fällt auf das Netz zurück und wird danach wieder exakt

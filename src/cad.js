@@ -13,7 +13,7 @@ import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
 import { blechTeilKommando, extrusionKommandos, rotationKommandos, extrusionsHoehen, extrusionsKanten, extrusionsFlaechen, matrixZeilen, flaechenblechPlan, baueFlaechenblech } from "../kern/cad/featureBau.js";
 import { skizzenProfile, NichtExakt } from "../kern/cad/skizzeProfile.js";
-import { ansichtAusProjektion, kameraAchsen } from "../kern/cad/ansichtExakt.js";
+import { ansichtAusProjektion, kameraAchsen, kettenAusKanten } from "../kern/cad/ansichtExakt.js";
 import { zuschnittAusVolumen } from "../kern/cad/blech.js";
 import { dxfLesen } from "../kern/dxflesen.js";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
@@ -2658,7 +2658,7 @@ $("wSchnitt").onclick = () => {
 const plaene = planModul({
   renderer, status, herunterladen, einst: () => einst, doc: () => doc, signatur: () => zustand(), speichern: () => { speichern(); },
   meshes: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.visible); },
-  exaktAnsicht: (art, massstab, verdeckt, bereit) => exakteAnsicht(art, massstab, verdeckt, bereit),
+  exaktAnsicht: (art, massstab, verdeckt, bereit, lage) => exakteAnsicht(art, massstab, verdeckt, bereit, lage),
   groesse: () => { const b = alleBox(); return b.isEmpty() ? 1000 : Math.max(...b.getSize(new THREE.Vector3()).toArray()); },
   // Schnitte = Querschnitte der Kantenbausteine an Flächenblechen («fid|Blech:Kante»), massstäblich
   details: () => doc.features.filter((f) => f.typ === "flaeche" && f._bleche && !f._aus).flatMap((f) => Object.keys(f.kanten || {}).filter((k) => kantenProfil(f, k))
@@ -4163,22 +4163,38 @@ let exaktLauf = 0, exaktTimer = null, exaktEig = new Map(), exaktNicht = new Map
 let regenStand = 0, exaktFuer = -1, exaktAnsichtIds = [], exaktVollstaendig = false, exaktBeschaeftigt = 0, exaktAnsichtCache = new Map();
 const exaktPlanen = () => { if (!kernAn()) return; regenStand++; clearTimeout(exaktTimer); exaktTimer = setTimeout(() => exaktesModell().catch((e) => status(kernFehlerText(e))), 250); };
 // Rückgabe { stand: "aus" | "mesh" | "warte" | "fertig", r? } – für das Planblatt (src/plan.js); «bereit» wird nach der Rechnung aufgerufen
-function exakteAnsicht(art, massstab, verdeckt, bereit) {
+function exakteAnsicht(art, massstab, verdeckt, bereit, schnittLage = null) {
   if (!kernAn()) return { stand: "aus" };
   if (exaktFuer !== regenStand || !exaktAnsichtIds.length || !exaktVollstaendig) return { stand: exaktBeschaeftigt || exaktTimer ? "warte" : "mesh" };
-  const key = `${art}|${massstab}|${verdeckt}`, c = exaktAnsichtCache.get(key), R = ANSICHT_RICHTUNGEN[art];
+  const key = `${art}|${massstab}|${verdeckt}|${schnittLage ?? ""}`, c = exaktAnsichtCache.get(key), R = ANSICHT_RICHTUNGEN[art];
   if (c?.r) return { stand: "fertig", r: c.r };
   if (c?.fehler || !R) return { stand: "mesh" };
   if (!c) {
     exaktAnsichtCache.set(key, {});
-    const gen = exaktFuer, d = R.d, oben = R.oben;
-    kern().ausfuehren({ op: "projektion", ziele: exaktAnsichtIds, richtung: kameraAchsen(d, oben).n, xAchse: kameraAchsen(d, oben).x, verdeckt })
-      .then((p) => { if (gen !== exaktFuer) return; exaktAnsichtCache.set(key, { r: ansichtAusProjektion(p, { d, oben, massstab, verdeckt }) }); bereit(); })
-      .catch((e) => { if (gen === exaktFuer) { exaktAnsichtCache.set(key, { fehler: e.message }); bereit(); } });
+    const gen = exaktFuer, d = R.d, oben = R.oben, ach = kameraAchsen(d, oben), K = kern(), temp = [];
+    (async () => {
+      let ziele = exaktAnsichtIds, loops = [];
+      if (schnittLage != null) { // Schnitt: alles mit d·p > lage entfernen, Schnittflächen aus den Schnittkanten verketten
+        const dn = ach.n, punkt = dn.map((v) => v * schnittLage); ziele = [];
+        for (const id of exaktAnsichtIds) {
+          try {
+            const g = (await K.ausfuehren({ op: "halbraum", ziel: id, punkt, normale: dn })).id; temp.push(g); ziele.push(g);
+            const sn = await K.ausfuehren({ op: "schnitt", ziel: id, ebene: { punkt, normale: dn } }); loops.push(...kettenAusKanten(sn.kanten));
+          } catch (e) { if (e.code !== "FEHLGESCHLAGEN" && e.code !== "UNGUELTIG") throw e; } // Körper liegt ganz hinter der Schnittebene
+        }
+        if (!ziele.length) throw new Error("Schnittebene trifft keinen Körper");
+      }
+      const p = await K.ausfuehren({ op: "projektion", ziele, richtung: ach.n, xAchse: ach.x, verdeckt });
+      const r = ansichtAusProjektion(p, { d, oben, massstab, verdeckt }); if (!r) throw new Error("Ansicht ist leer");
+      if (schnittLage != null) r.flaechen = loops.map((l) => l.map((w) => r.abbild(w)));
+      return r;
+    })().then((r) => { if (gen === exaktFuer) { exaktAnsichtCache.set(key, { r }); bereit(); } })
+      .catch((e) => { if (gen === exaktFuer) { exaktAnsichtCache.set(key, { fehler: e.message }); bereit(); } })
+      .finally(() => { if (temp.length) K.ausfuehren({ op: "freigeben", ziele: temp }).catch(() => {}); });
   }
   return { stand: "warte" };
 }
-function ersetzeNetz(mesh, n, M) {
+function ersetzeNetz(mesh, n, M) { // Anzeige-Netz durch die Tessellierung des exakten Körpers ersetzen (Flächenzuordnung je Dreieck)
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(n.positionen, 3)); g.setAttribute("normal", new THREE.BufferAttribute(n.normalen, 3)); g.setIndex(new THREE.BufferAttribute(n.indizes, 1));
   const l = new THREE.BufferGeometry(); l.setAttribute("position", new THREE.BufferAttribute(n.linien, 3));
@@ -4443,7 +4459,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { exaktAnsicht: (art, m = 1, verdeckt = true) => { const e = exakteAnsicht(art, m, verdeckt, () => {}); return { stand: e.stand, exakt: !!e.r?.exakt, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

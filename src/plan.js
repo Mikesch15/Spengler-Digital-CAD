@@ -66,8 +66,8 @@ export function planModul(ctx) {
   const cache = new Map();
   const ansicht = (a) => {
     if (a.lupe) return lupenAnsicht(a);
-    // Exaktes Modell (CAD-Kern ein): Ansicht aus exakter Projektion, verdeckte Kanten ohne Doppelungen; Schnitte bleiben vorerst Netz
-    const ex = !a.schnitt && ctx.exaktAnsicht ? ctx.exaktAnsicht(a.art, 1 / a.massstab, a.verdeckt !== false, () => aktualisiere()) : null;
+    // Exaktes Modell (CAD-Kern ein): Ansicht aus exakter Projektion, verdeckte Kanten ohne Doppelungen; Schnitte: Halbraum-Schnitt und Schnittflächen aus dem Kern
+    const ex = ctx.exaktAnsicht ? ctx.exaktAnsicht(a.art, 1 / a.massstab, a.verdeckt !== false, () => aktualisiere(), a.schnitt ? +a.schnitt.lage || 0 : null) : null;
     if (ex?.r) return ex.r;
     const key = `${a.art}|${a.massstab}|${a.verdeckt !== false}|${a.schnitt ? a.schnitt.lage : ""}|${ex?.stand ?? ""}|${ctx.signatur()}`;
     if (!cache.has(key)) {
