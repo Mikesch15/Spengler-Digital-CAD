@@ -350,6 +350,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <button class="wz" id="wBlech"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg>Blechprofil</button>
       <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path d="M3 6h10l-3 12h11"/><circle cx="3" cy="6" r="1.5"/></svg>Spengler-Vorlage</button>
       <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><path d="M3 5h18M3 12h18M3 19h18M9 5v14"/></svg>Freies Profil</button>
+      <button class="wz" id="wRund" title="Zylinder- oder Kegelmantel (Rohr, Kaminhut, Trichter, Rinnenstutzen …) mit exakter Abwicklung und DXF"><svg viewBox="0 0 24 24"><path d="M7 5h10l3 14H4z"/><ellipse cx="12" cy="5" rx="5" ry="1.5"/></svg>Rund-/Kegelblech</button>
       <button class="wz" id="wFlaeche" title="Blech als Grundfläche aus der Skizze; Kanten anklicken und Spenglerbaustein zuweisen (Falz, Traufe, Ortgang …)"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg>Flächenblech</button>
       <button class="wz" id="wBlechAufFlaeche"><svg viewBox="0 0 24 24"><path d="M4 18l4-12h12l-4 12z"/><path d="M8 6V3M20 6V3" opacity=".6"/></svg><span><b>Blech auf Körperfläche</b><small>Fläche anklicken – Umriss wird übernommen</small></span></button>
       <button class="wz" id="wKehle"><svg viewBox="0 0 24 24"><path d="M3 18h6l4-10h8"/><path d="M3 21h6l4-10h8" opacity=".5"/></svg><span><b>Kehle / Grat</b><small>zwei Flächen anklicken</small></span></button>
@@ -501,6 +502,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     <h4>Flächenblech mit Kantenbausteinen</h4>
     <ul>
       <li>Nur die <b>Grundfläche</b> des Blechs skizzieren (Rechteck, Linienzug, auch konisch oder mit Bogen) – Masse auf der Falzachse bzw. der fertigen Kante. Mehrere Bahnen nebeneinander in einer Skizze geben je ein Blech.</li>
+      <li><b>Rund-/Kegelblech</b> (Blech ▾): Zylinder oder Kegelstumpf (Rohr, Kaminhut, Trichter) mit Ø unten/oben auf der Blechmitte, Höhe, Umfangswinkel und Zugabe an der Naht. Die Werkstatt zeigt die exakte Abwicklung (Radien, Öffnungswinkel, Sehne, Gewicht) und speichert sie als DXF mit echten Bögen.</li>
       <li><b>Flächenblech</b>: Kante in der Ansicht anklicken (oder in der Liste) und den Baustein wählen: Doppelstehfalz, Stehfalz, liegender Falz, Traufe, Ortgang, Wasserfalz, Saum, Abkantung … oder «Eigene Abkantfolge». Eine gemeinsame Kante zweier Bahnen bekommt automatisch das Gegenstück (Unterfalz ↔ Oberfalz).</li>
       <li>Das Programm rechnet Zugabe je Kante, Zuschnitt mit Eckausklinkungen, Biegelinien, Abkantliste (Anschlag ab Schnittkante), m² für die Stückliste, DXF und Werkstattblatt.</li>
       <li><b>Blech ▾</b>: Flächenblech aus Skizze, <b>auf Körperfläche</b> (Fläche anklicken – Umriss wird übernommen, Blech liegt aussen auf) oder <b>Kehle / Grat</b> (zwei Flächen anklicken – gekantetes Blech entlang der Kehl- bzw. Gratlinie, Länge automatisch, an den Enden Kantenbausteine wie Saum; mit Zuschnitt und Abkantliste).</li>

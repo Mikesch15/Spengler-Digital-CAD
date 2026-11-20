@@ -7,7 +7,8 @@ import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
-import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
+import { abwicklungDxf, abwicklungenDxf, flaecheDxf, rundblechDxf } from "../kern/dxf.js";
+import { rundblechAbwicklung, rundblechSvg } from "../kern/abwicklungRund.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
 import { blechTeilKommando, extrusionKommandos, rotationKommandos, extrusionsHoehen, extrusionsKanten, extrusionsFlaechen, matrixZeilen, flaechenblechPlan, baueFlaechenblech } from "../kern/cad/featureBau.js";
@@ -781,6 +782,11 @@ function regen() {
           laenge: +bl.abw.laenge.toFixed(1), stueck: f.stueck ?? 1, notiz: f.notiz, _blech: bl,
           _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
         if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, s.ebene, m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
+      } else if (f.typ === "rundblech") { // Zylinder-/Kegelmantel: exakte Abwicklung (kern/abwicklungRund.js), 3D als Drehkörper
+        const m = material(f.material), kegel = f.art !== "zylinder";
+        if (!(f.d1 > m.t && f.h > 0) || (kegel && !(f.d2 >= 0)) || !(f.winkel > 0 && f.winkel <= 360)) throw new Error("Durchmesser, Höhe und Winkel prüfen (Winkel 1–360°)");
+        f._rund = rundblechAbwicklung({ art: kegel && Math.abs(f.d1 - f.d2) > 1e-9 ? "kegel" : "zylinder", d1: f.d1, d2: kegel ? f.d2 : f.d1, h: f.h, t: m.t, k: m.k, winkel: f.winkel, zugabe: f.zugabe });
+        if (!f.versteckt) modell.add(koerperMesh(rundGeometrie(f, m), darstellungVon(f, m), f.id));
       } else if (f.typ === "detail") {
         f._teile = null; throw new Error("Spenglerdetails gibt es nicht mehr – als Flächenblech mit Kantenbausteinen zeichnen und dieses Feature löschen");
       } else if (f.typ === "profil") {
@@ -875,7 +881,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 });
 
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ));
@@ -1059,6 +1065,7 @@ function zeigeWerkstatt() {
   }
   if (f?.typ === "flaeche" && f._teile?.length) return waehle(f._teile[0].id);
   if (f?._blech) return zeigeFlaechenteil(w, f);
+  if (f?.typ === "rundblech" && f._rund) return zeigeRund(w, f);
   if (!f || !f._res) { w.innerHTML = `<p class="leer">${f ? (f._fehler || "Volumenkörper: keine Abwicklung.") : "Blechteil anklicken, um Zuschnitt und Abkantfolge zu sehen."}</p>`; return; }
   const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst), abB = einst.anzeige.abB;
   w.innerHTML = `<div class="zahl"><b>${f1(r.zuschnitt)}</b><span>mm Zuschnitt</span></div>
@@ -1252,7 +1259,7 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
   auswahl = f.id; // Werkstatt zeigt das Teil schon während der Eingabe
   dialog({
     titel, hinweis, felder: felder(f), feature: f,
-    info: () => (f._fehler ? "⚠ " + f._fehler : f._res ? `Zuschnitt ${f1(f._res.zuschnitt)} × ${f.laenge} mm · ${f._res.biegungen.length} Biegungen` : ""),
+    info: () => (f._fehler ? "⚠ " + f._fehler : f._rund ? `Zuschnitt ${f1(f._rund.masse.zuschnitt[0])} × ${f1(f._rund.masse.zuschnitt[1])} mm${f._rund.art === "kegel" ? ` · R ${f1(f._rund.masse.R)} / r ${f1(f._rund.masse.r)} · ${f._rund.masse.phi.toFixed(2)}°` : ""}` : f._res ? `Zuschnitt ${f1(f._res.zuschnitt)} × ${f.laenge} mm · ${f._res.biegungen.length} Biegungen` : ""),
     ...extra,
     aendern: (w, feld) => {
       setze(f, w); merkeAusdruecke(f);
@@ -1279,6 +1286,7 @@ function bearbeite(f) {
   if (f.typ === "bild") return bildDialog(f);
   if (f.typ === "kanten3d") return kantenDialog(f);
   if (f.typ === "kehle") return kehleDialog(f);
+  if (f.typ === "rundblech") return rundDialog(f);
   if (KOERPER_WZ[f.typ]) return koerperDialog(f.typ, f);
   if (f.typ === "loft") return loftDialog(f);
   if (f.typ === "blech") return blechDialog(f);
@@ -1471,6 +1479,60 @@ function profilDialog(f) {
     { zusatz: tabelle, binden, wahlNr: -1 });
 }
 
+
+// ------------------------------------------------------------ Rund-/Kegelblech (Zylinder- oder Kegelmantel mit exakter Abwicklung)
+// Meridian-Querschnitt (r, h) mit Dicke t senkrecht zur Mantellinie – gleich für Netz und exakten Körper
+function rundMeridian(f, m) {
+  const t = m.t, r1 = f.d1 / 2, r2 = (f.art === "zylinder" ? f.d1 : f.d2) / 2, s = Math.hypot(r1 - r2, f.h), nx = f.h / s, ny = (r1 - r2) / s;
+  const p = (r, z, d) => [r + nx * d, z + ny * d];
+  return [p(r1, 0, -t / 2), p(r1, 0, t / 2), p(r2, f.h, t / 2), p(r2, f.h, -t / 2), p(r1, 0, -t / 2)];
+}
+function rundGeometrie(f, m) {
+  const E = E_(f.ebene), q = rundMeridian(f, m).map(([r, h]) => new THREE.Vector2(r, h));
+  const phi = (Math.min(360, f.winkel || 360) * Math.PI) / 180, voll = phi >= 2 * Math.PI - 1e-9, geos = [new THREE.LatheGeometry(q, Math.max(16, Math.round((96 * phi) / (2 * Math.PI))), 0, phi)];
+  if (!voll) for (const w of [0, phi]) { const k = new THREE.ShapeGeometry(new THREE.Shape(q.slice(0, -1))); k.applyMatrix4(new THREE.Matrix4().makeRotationY(w - Math.PI / 2)); geos.push(k); }
+  // Lathe: um lokal Y, Start bei lokal +Z → Y = Ebenennormale, Z = u, X = Y × Z = v (wie der exakte Drehkörper)
+  const M = new THREE.Matrix4().makeBasis(V(E.v), V(E.n), V(E.u)).setPosition(V(E.o));
+  return zusammen(geos.map((g) => { const n = g.index ? g.toNonIndexed() : g; n.deleteAttribute("uv"); n.applyMatrix4(M); return n; }));
+}
+function rundDialog(f) {
+  const istNeu = !f;
+  f ||= { id: neueId(), typ: "rundblech", name: "Rundblech " + (doc.features.filter((x) => x.typ === "rundblech").length + 1), art: "kegel", d1: 400, d2: 200, h: 150, winkel: 360, zugabe: 10,
+    material: neuMaterial(), stueck: einst.neu.stueck, ebene: "XZ" };
+  const felder = (f) => [
+    { id: "name", label: "Name", text: true, wert: f.name },
+    { id: "art", label: "Form", optionen: [["kegel", "Kegelstumpf / Kegel"], ["zylinder", "Zylinder (Rohr)"]], wert: f.art },
+    { id: "d1", label: "Ø unten (Blechmitte)", einheit: "mm", wert: f.d1 },
+    ...(f.art === "zylinder" ? [] : [{ id: "d2", label: "Ø oben (0 = Spitze)", einheit: "mm", wert: f.d2 }]),
+    { id: "h", label: "Höhe", einheit: "mm", wert: f.h },
+    { id: "winkel", label: "Umfang (360 = ganz)", einheit: "°", wert: f.winkel },
+    { id: "zugabe", label: "Zugabe an der Naht", einheit: "mm", wert: f.zugabe ?? 0 },
+    { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
+    { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
+    { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
+    { id: "ebene", label: "Grundfläche in", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
+  ];
+  const setze = (f, w) => { const alt = f.art; Object.assign(f, w, { name: w.name.trim() || f.name }); if (alt !== f.art) setTimeout(() => { const d = dlg; if (d) dialog({ ...d, felder: felder(f) }); }); };
+  featureDialog(f, istNeu, felder, setze, "Rund-/Kegelblech",
+    "Masse auf der Blechmitte. Die Abwicklung wird exakt auf der K-Faser des Materials gerechnet (Zylinder und Kegel sind abwickelbar). Zugabe = Überlappung an der Naht.");
+}
+function zeigeRund(w, f) {
+  const a = f._rund, M = a.masse, m = material(f.material), kegel = a.art === "kegel";
+  const flaeche = kegel ? (M.phi * Math.PI / 360) * (M.R * M.R - M.r * M.r) + M.zugabe * (M.R - M.r) : (M.breite + M.zugabe) * M.hoehe;
+  const zeilen = kegel
+    ? [["Radius aussen R", `${f1(M.R)} mm`], ["Radius innen r", `${f1(M.r)} mm`], ["Öffnungswinkel", `${M.phi.toFixed(3)}°`], ["Sehne", `${f1(M.sehne)} mm`], ["Mantellinie", `${f1(M.mantellinie)} mm`]]
+    : [["Abwicklungsbreite", `${f1(M.breite)} mm`], ["Höhe", `${f1(M.hoehe)} mm`], ["Ø K-Faser", `${f1(M.faserDurchmesser)} mm`]];
+  zeilen.push(["Zugabe Naht", `${f1(M.zugabe)} mm`], ["Gewicht", m.dichte ? `${(flaeche * m.t * m.dichte * 1e-6).toFixed(3)} kg` : "–"]);
+  w.innerHTML = `<div class="zahl"><b>${f1(M.zuschnitt[0])} × ${f1(M.zuschnitt[1])}</b><span>mm Zuschnitt (Rechteck)</span></div>
+    <div class="unter">${esc(f.name)} · ${kegel ? (f.d2 > 0 ? "Kegelstumpf" : "Kegel") : "Zylinder"} · ${esc(m.name)} · ${f.stueck ?? 1} Stk.</div>
+    ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
+    <div class="zeichnung">${rundblechSvg(a, { breite: 276 })}</div>
+    <table class="liste"><tbody>${zeilen.map(([k, v]) => `<tr><td>${k}</td><td class="num">${v}</td></tr>`).join("")}</tbody></table>
+    <p class="hinweis">Exakt abwickelbar. Gerechnet auf der K-Faser (k ${m.k}, t ${m.t} mm). Rot gestrichelt: Nahtlinie (Überlappung anreissen).</p>
+    <div class="reihe"><button class="knopf haupt" id="kRundDxf">DXF speichern</button><button class="knopf" id="kRundKopie">Masse kopieren</button></div>`;
+  $("kRundDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, rundblechDxf(a, f.name), "application/dxf");
+  $("kRundKopie").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(M.zuschnitt[0])} × ${f1(M.zuschnitt[1])} mm`, ...zeilen.map(([k, v]) => `${k}\t${v}`)].join("\n"));
+}
 
 // ------------------------------------------------------------ Flächenblech: Grundfläche aus der Skizze, Kantenbausteine je Kante
 const alleBausteine = () => [...(einst.bausteine || []), ...(doc.bausteine || []).filter((b) => !(einst.bausteine || []).some((e) => e.id === b.id))];
@@ -3913,6 +3975,7 @@ $("wExtrusion").onclick = () => { if (dlg) $("dAbbrechen").click(); extrusionDia
 $("wDrehung").onclick = () => { if (dlg) $("dAbbrechen").click(); drehungDialog(); };
 $("wSweep").onclick = () => { if (dlg) $("dAbbrechen").click(); sweepDialog(); };
 $("wFlaeche").onclick = () => { if (dlg) $("dAbbrechen").click(); flaecheDialog(); };
+$("wRund").onclick = () => { if (dlg) $("dAbbrechen").click(); rundDialog(); };
 $("wBlechAufFlaeche").onclick = () => blechAufFlaecheStart();
 $("wKehle").onclick = () => { if (dlg) $("dAbbrechen").click(); kehleDialog(); };
 // ------------------------------------------------------------ Werkzeugleiste: Klappmenüs (fest positioniert, die Leiste rollt seitlich)
@@ -4157,6 +4220,11 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
           try { blech.set(`${f.id}:${i}`, await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1))); }
           catch (e) { nicht.set(`${f.id}:${i}`, e.message); }
         }
+      } else if (f.typ === "rundblech") { // Mantel als Drehkörper um die Ebenennormale (Meridianebene u/n)
+        if (f.versteckt || !f._rund) continue;
+        const E = E_(f.ebene), q = rundMeridian(f, material(f.material)), profil = { start: q[0], segmente: q.slice(1, 4).map((p) => ({ bis: p })) };
+        try { blech.set(f.id, (await x({ op: "rotation", profil, ebene: { ursprung: E.o, x: E.u, n: E.v.map((v) => -v) }, winkel: Math.min(360, f.winkel || 360), achse: { punkt: E.o, richtung: E.n } })).id); }
+        catch (e) { nicht.set(f.id, e.message); }
       } else if (["sweep", "loft", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
     if (step) { // alle sichtbaren exakten Körper (mit Komponentenlage) in eine STEP-Datei
