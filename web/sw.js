@@ -1,6 +1,6 @@
 // Service Worker der Web-Version: zuerst das Netz (immer die neueste Version), ohne Netz aus dem Zwischenspeicher.
-const CACHE = "sdcad-v2";
-const DATEIEN = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
+const CACHE = "sdcad-v3";
+const DATEIEN = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./logo.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(DATEIEN)).then(() => self.skipWaiting()));
