@@ -28,10 +28,11 @@ jobs:
           npx cap add android
           # Symbol: eckiges Symbol statt adaptivem Standardsymbol
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          IM=$(command -v magick || command -v convert || { sudo apt-get install -y imagemagick >/dev/null && command -v convert; })
           for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
             n=${d%%:*}; s=${d##*:}
             for f in ic_launcher ic_launcher_round ic_launcher_foreground; do
-              convert ../web/icon-512.png -resize ${s}x${s} android/app/src/main/res/mipmap-$n/$f.png
+              $IM ../web/icon-512.png -resize ${s}x${s} android/app/src/main/res/mipmap-$n/$f.png
             done
           done
           # Version
