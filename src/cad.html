@@ -388,6 +388,15 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .browser .ptitel::after { content: "▾"; font-size: 10px; opacity: .6; transition: transform .15s; } .browser.zu .ptitel::after { transform: rotate(-90deg); }
 .browser.zu .baum { display: none; }
 .mitte.werkzu { grid-template-columns: minmax(0, 1fr) 0 !important; column-gap: 0; } .mitte.werkzu .werkstatt { display: none; }
+.layerbox { position: absolute; right: 10px; bottom: 44px; z-index: 6; width: 400px; max-width: calc(100% - 20px); background: color-mix(in srgb, var(--panel) 90%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 18px rgba(20, 35, 50, .14); padding: 6px 8px; font-size: 12px; }
+.layerbox .ltitel { font-weight: 600; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.layerbox .lrow { display: grid; grid-template-columns: auto auto 1fr 92px 104px 12px auto; gap: 4px; align-items: center; padding: 2px 0; }
+.layerbox .lrow.aktiv { background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 4px; }
+.layerbox input[type=text], .layerbox select { min-width: 0; padding: 2px 4px; font-size: 12px; }
+.layerbox .lfarbe { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line); }
+.layerbox .ltitel { cursor: pointer; user-select: none; } .layerbox.zu #layerListe, .layerbox.zu .lknoepfe { display: none; }
+.layerbox .lknoepfe { display: flex; gap: 6px; margin-top: 4px; }
+.wz.an { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 1px var(--accent); }
 #werkAuf { display: none; position: absolute; right: 8px; top: 8px; z-index: 6; } .mitte.werkzu #werkAuf { display: block; }
 .register { position: relative; } #werkZu { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); padding: 2px 8px; }
 @media (max-width: 1000px) { .mitte.werkzu { grid-template-rows: 60vh auto; } }
@@ -419,6 +428,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <div class="aktivwz" id="aktivWz" hidden></div>
     <div class="gruppe" id="gHaupt"><div class="knoepfe">
       <button class="wz" id="wSkizze"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3.5-6 3 4 3.5-5"/><circle cx="7" cy="15" r="1" fill="currentColor"/><circle cx="17" cy="8" r="1" fill="currentColor"/></svg>Skizze</button>
+      <button class="wz" id="w2D" title="2D-Modus: nur zeichnen – mit Layern, Farben, Linienarten und DXF-Ausgabe"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M7 15l4-6 3 4 3-5" stroke-dasharray="3 2"/></svg>2D</button>
       <span class="trenner" aria-hidden="true"></span>
     <div class="klapp" data-klapp="koerper"><button class="wz klappknopf" aria-haspopup="true" title="Extrudieren, Drehen, Sweep, Übergang"><svg viewBox="0 0 24 24"><path class="f" d="M4 14l8 4 8-4-8-4z"/><path d="M4 14v3l8 4 8-4v-3M12 18v3"/><path d="M12 8V2M9 5l3-3 3 3"/></svg><span class="kz"><span class="kl">Körper</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
       <button class="wz" id="wExtrusion"><svg viewBox="0 0 24 24"><path class="f" d="M4 14l8 4 8-4-8-4z"/><path d="M4 14v3l8 4 8-4v-3M12 18v3"/><path d="M12 8V2M9 5l3-3 3 3"/></svg>Extrudieren</button>
@@ -537,6 +547,8 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       </div>
       <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><button class="dklein" id="dKlein" title="Dialog einklappen – Ansicht frei zum Antippen" aria-label="Dialog einklappen">▾</button><div class="inhalt" id="dInhalt"></div>
         <div class="fuss"><span id="dInfo" role="status"></span><button class="knopf weg" id="dLoeschen" hidden>Löschen</button><button class="knopf" id="dAbbrechen">Abbrechen</button><button class="knopf haupt" id="dOk">OK</button></div></div>
+      <div class="layerbox" id="layerBox" hidden><div class="ltitel" id="lTitel" title="Layer-Leiste ein-/ausklappen">Layer ▾</div><div id="layerListe"></div>
+        <div class="lknoepfe"><button class="knopf klein" id="lNeu">＋ Layer</button><button class="knopf klein" id="lZuw" title="Gewähltes Element auf den aktiven Layer legen">Element → Layer</button><button class="knopf klein haupt" id="lDxf" title="Zeichnung als DXF mit Layern, Farben und Linienarten speichern">DXF</button></div></div>
       <div id="messAnzeige" hidden></div>
       <div id="status"></div>
     </section>
@@ -636,6 +648,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <li><b>Sweep</b> (Profil entlang Pfad) und <b>Übergang</b> (Loft zwischen zwei Profilen).</li>
       <li><b>Kanten abrunden / fasen</b> (Ändern ▾): einzelne gerade Kanten eines beliebigen Volumenkörpers anklicken – Aussenkanten werden gerundet bzw. gefast, Innenkanten als Kehle ausgefüllt. Ecken mit drei gerundeten Kanten werden nicht kugelig verschliffen.</li>
       <li><b>Teilen</b> (Ändern ▾): Körper oder Blechteil an einer Ebene in zwei Teile schneiden. <b>Komponente</b>: Rechtsklick/langes Antippen auf ein Teil → «Eigene Komponente aus diesem Teil». <b>Flächenblech</b>: «Skizze liegt …» (Mitte/Vorderseite/Rückseite) und Abkantrichtung wählbar. Tablet: Skizze-Knöpfe «Löschen» und «Hilfslinie»; Stift dreht das Modell; rechtes Feld mit » zuklappen.</li>
+      <li><b>2D-Modus</b> (Knopf «2D»): nur zeichnen, Körper ausgeblendet. Leiste «Layer»: je Layer Farbe und Linienart (durchgezogen, gestrichelt, Strich-Punkt, Mittellinie, verdeckt, gepunktet), ein-/ausblenden, aktiver Layer für neue Linien, «Element → Layer» legt das gewählte Element um. «DXF» speichert die Zeichnung mit Layern, Farben und Linienarten.</li>
       <li><b>Ziehpfeil</b>: im Dialog erscheint bei Extrusion (Abstand), Blechlänge und Verschieben (X/Y/Z) ein Pfeil in der Ansicht – anfassen und ziehen ändert das Mass (Umschalt = fein). Das Zahlenfeld bleibt gültig.</li>
       <li><b>Flächen wählen</b>: bei Extrudieren und Flächenblech die Skizze anklicken – jede Teilfläche (auch Überlappungen, Inseln, durchzogene Rechtecke) einzeln, mehrere nacheinander, nochmals anklicken = abwählen; gewählte Flächen sind blau, die Fläche unter dem Zeiger orange.</li>
       <li><b>Ändern ▾</b>: Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>

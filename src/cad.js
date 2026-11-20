@@ -8,6 +8,7 @@ import { projekteModul } from "./projekte.js";
 import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern/vorlagen/detail3d.js";
 import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
+import { FARBEN, LINIENARTEN, farbeHex, standardLayer, skizzenDxf } from "../kern/zeichnung2d.js";
 import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
 import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
 import { kantenGeometrie, RICHTUNGEN as ANSICHT_RICHTUNGEN } from "./ansicht.js";
@@ -508,17 +509,30 @@ function koerper(formen_, ebene, tiefe, richtung, farbe, fid) {
 const konturForm = (res, t, versatz = [0, 0]) => new THREE.Shape(kontur(res.pfad, t, 3).map(([x, y]) => new THREE.Vector2(x + versatz[0], y + versatz[1])));
 
 const dunkelModus = () => { const t = document.documentElement.dataset.theme; return t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches); };
+// ------------------------------------------------------------ Layer (2D): Farbe und Linienart je Layer, Elemente verweisen mit el.layer
+const layerListe = () => (doc.layer?.length ? doc.layer : (doc.layer = standardLayer()));
+const layerVon = (el) => layerListe().find((l) => l.id === (el.layer ?? "0")) || layerListe()[0];
 function skizzenObjekt(f, farbe = 0x1f5fbf, bestimmt = null) {
   const g = new THREE.Group();
   const normal = new THREE.LineBasicMaterial({ color: farbe, depthTest: false });
   const fertigMat = bestimmt && new THREE.LineBasicMaterial({ color: dunkelModus() ? 0xf2f5f8 : 0x10161d, depthTest: false });
   const projMat = new THREE.LineBasicMaterial({ color: 0x9b59b6, depthTest: false });
   const hilfsMat = new THREE.LineDashedMaterial({ color: 0xd08a2c, dashSize: 4, gapSize: 3, depthTest: false });
+  const layerMats = new Map();
+  const layerMat = (ly) => { // eigene Farbe und/oder Linienart des Layers; sonst null (Standarddarstellung)
+    const art = ly.art || "durchgezogen"; if (ly.aci == null && art === "durchgezogen") return null;
+    const key = `${ly.aci}|${art}`; if (!layerMats.has(key)) {
+      const c = ly.aci != null ? farbeHex(ly.aci) : farbe, mu = LINIENARTEN[art]?.[2] || [];
+      layerMats.set(key, mu.length ? new THREE.LineDashedMaterial({ color: c, dashSize: Math.abs(mu[0]) || 1, gapSize: Math.abs(mu[1]) || 1, depthTest: false }) : new THREE.LineBasicMaterial({ color: c, depthTest: false }));
+    }
+    return layerMats.get(key);
+  };
   for (const el of f.elemente) {
-    const mat = el.projiziert ? projMat : bestimmt?.has(el.id) ? fertigMat : normal;
+    const ly = layerVon(el); if (ly.sichtbar === false) continue;
+    const lm = layerMat(ly), mat = el.projiziert ? projMat : lm || (bestimmt?.has(el.id) ? fertigMat : normal);
     for (const pts of elGeo(el).linien) {
       const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts.map((p) => zu3D(f.ebene, p))), el.hilfs ? hilfsMat : mat);
-      if (el.hilfs) l.computeLineDistances();
+      if (el.hilfs || mat.isLineDashedMaterial) l.computeLineDistances();
       l.renderOrder = 10; g.add(l);
     }
     if (el.art === "punkt") {
@@ -1072,7 +1086,7 @@ function regen() {
   zeigeBrowser(); zeigeZeit(); zeigeWerkstatt();
   speichern(); merke();
   if (dlg?.info) { const t = dlg.info(); $("dInfo").textContent = t; $("dInfo").className = t.startsWith("⚠") ? "fehler" : ""; }
-  dlg?.nachRegen?.(); zeichneGriffe();
+  dlg?.nachRegen?.(); zeichneGriffe(); if (modus2d) for (const o of modell.children) if (o.isMesh) o.visible = false;
   exaktPlanen(); // exakter CAD-Kern (nur wenn eingeschaltet): Netze durch exakte Körper ersetzen
 }
 
@@ -3454,7 +3468,7 @@ $("tHilfs").onclick = () => { if (!skizze?.sel) return status("Zuerst ein Elemen
 function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
-  $("gSkizze").hidden = false; setTimeout(leisteZustand);
+  $("gSkizze").hidden = false; setTimeout(leisteZustand); setTimeout(layerZeigen);
   ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = true));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null };
   steuerung.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
@@ -3474,13 +3488,72 @@ function starteSkizze(f) {
   regen(); fitte(alleBox().isEmpty() ? new THREE.Box3(new THREE.Vector3(-150, -150, -150), new THREE.Vector3(150, 150, 150)) : alleBox());
   setzeWerkzeug(f.elemente.length ? "auswahl" : "linie");
 }
+// ------------------------------------------------------------ 2D-Modus: nur Skizzen/Zeichnung, Körper ausgeblendet, Layer-Leiste, DXF-Ausgabe
+let modus2d = false;
+function layerZeigen() {
+  const box = $("layerBox"); box.hidden = !(modus2d || skizze); if (box.hidden) return;
+  const ls = layerListe(), akt = doc.aktivLayer && ls.some((l) => l.id === doc.aktivLayer) ? doc.aktivLayer : "0";
+  $("layerListe").innerHTML = ls.map((l) => `<div class="lrow${l.id === akt ? " aktiv" : ""}" data-l="${esc(l.id)}">
+    <input type="radio" name="layerAkt" ${l.id === akt ? "checked" : ""} title="Aktiver Layer: neue Linien kommen hierher" aria-label="Aktiver Layer ${esc(l.name)}">
+    <input type="checkbox" data-lf="sichtbar" ${l.sichtbar !== false ? "checked" : ""} title="Layer ein-/ausblenden" aria-label="Sichtbar">
+    <input type="text" data-lf="name" value="${esc(l.name)}" aria-label="Layername">
+    <select data-lf="aci" aria-label="Farbe"><option value="">Standard</option>${FARBEN.map(([c, n]) => `<option value="${c}" ${l.aci === c ? "selected" : ""}>${n}</option>`).join("")}</select>
+    <select data-lf="art" aria-label="Linienart">${Object.entries(LINIENARTEN).map(([k, [, n]]) => `<option value="${k}" ${(l.art || "durchgezogen") === k ? "selected" : ""}>${n}</option>`).join("")}</select>
+    <span class="lfarbe" style="background:#${(l.aci != null ? farbeHex(l.aci) : 0x1f5fbf).toString(16).padStart(6, "0")}"></span>
+    ${l.id !== "0" ? `<button data-ldel="${esc(l.id)}" title="Layer löschen (Linien wandern nach Layer 0)" aria-label="Layer löschen">✕</button>` : ""}</div>`).join("");
+}
+$("layerListe").addEventListener("change", (e) => {
+  const row = e.target.closest(".lrow"); if (!row) return; const l = layerListe().find((x) => x.id === row.dataset.l); if (!l) return;
+  if (e.target.name === "layerAkt") doc.aktivLayer = l.id;
+  const k = e.target.dataset.lf;
+  if (k === "sichtbar") l.sichtbar = e.target.checked; else if (k === "name") l.name = e.target.value.trim() || l.name; else if (k === "aci") l.aci = e.target.value === "" ? null : +e.target.value; else if (k === "art") l.art = e.target.value;
+  layerZeigen(); if (skizze) zeichneLive(); else regen(); merke();
+});
+$("layerListe").addEventListener("click", (e) => {
+  const d = e.target.closest("[data-ldel]")?.dataset.ldel; if (!d) return;
+  for (const f of doc.features) for (const el of f.elemente || []) if (el.layer === d) el.layer = "0";
+  doc.layer = layerListe().filter((l) => l.id !== d); if (doc.aktivLayer === d) doc.aktivLayer = "0";
+  layerZeigen(); if (skizze) zeichneLive(); else regen(); merke();
+});
+$("lTitel").onclick = () => $("layerBox").classList.toggle("zu");
+$("lNeu").onclick = () => { const ls = layerListe(), n = ls.length; const l = { id: "L" + Date.now().toString(36), name: `Layer ${n}`, aci: FARBEN[n % FARBEN.length][0], art: "durchgezogen", sichtbar: true }; ls.push(l); doc.aktivLayer = l.id; layerZeigen(); merke(); };
+$("lZuw").onclick = () => {
+  if (!skizze?.sel && !skizze?.mehr?.size) return status("Zuerst ein Element anklicken (Werkzeug Auswahl), dann «Element → Layer».");
+  const ziele = skizze.mehr?.size ? [...skizze.mehr].map((x) => (typeof x === "object" ? x : skizze.f.elemente.find((e) => e.id === x))).filter(Boolean) : [skizze.sel];
+  for (const el of ziele) el.layer = doc.aktivLayer || "0"; zeichneLive(); status(`${ziele.length} Element${ziele.length === 1 ? "" : "e"} auf Layer «${layerVon(ziele[0]).name}» gelegt.`);
+};
+function zeichnungObjekte() { // Skizzenelemente aller sichtbaren Skizzen als DXF-Objekte (Skizzenkoordinaten, mm)
+  const out = [];
+  for (const sk of doc.features.filter((x) => x.typ === "skizze" && !x.versteckt && !x._aus)) for (const el of sk.elemente) {
+    if (el.hilfs || el.projiziert || el.art === "punkt") continue;
+    const layer = el.layer ?? "0";
+    if (el.art === "kreis") { out.push({ layer, art: "kreis", c: el.c, r: el.r }); continue; }
+    if (el.art === "bogen") { const d = bogenDaten(el); if (d) { const w0 = (d.start * 180) / Math.PI, sw = (d.sweep * 180) / Math.PI, a = sw >= 0 ? w0 : w0 + sw, b = sw >= 0 ? w0 + sw : w0, nm = (v) => ((v % 360) + 360) % 360; out.push({ layer, art: "bogen", c: d.c, r: d.r, w0: nm(a), w1: nm(b) }); continue; } }
+    for (const pts of elGeo(el).linien) { const zu = pts.length > 2 && Math.hypot(pts[0][0] - pts.at(-1)[0], pts[0][1] - pts.at(-1)[1]) < 1e-9; if (pts.length === 2 && !zu) out.push({ layer, art: "linie", a: pts[0], b: pts[1] }); else out.push({ layer, art: "poly", pts: zu ? pts.slice(0, -1) : pts, geschlossen: zu }); }
+  }
+  return out;
+}
+$("lDxf").onclick = () => { const o = zeichnungObjekte(); if (!o.length) return status("Noch nichts gezeichnet."); herunterladen(`${doc.nr || "Zeichnung"} 2D.dxf`, skizzenDxf(layerListe(), o, doc.objekt || ""), "application/dxf"); status(`DXF mit ${o.length} Elementen und ${layerListe().filter((l) => l.sichtbar !== false).length} Layern gespeichert.`); };
+function schalte2D(an = !modus2d) {
+  if (dlg) $("dAbbrechen").click();
+  modus2d = an; $("w2D").classList.toggle("an", an); document.body.classList.toggle("modus2d", an);
+  if (an) {
+    if (!skizze) {
+      let f = finde(auswahl); if (f?.typ !== "skizze") f = [...doc.features].reverse().find((x) => x.typ === "skizze");
+      if (!f) { f = { id: neueId(), typ: "skizze", name: "Zeichnung " + (doc.features.filter((x) => x.typ === "skizze").length + 1), ebene: "XY", elemente: [] }; einfuegen(f); }
+      starteSkizze(f);
+    }
+  } else { if (skizze) beendeSkizze(); regen(); }
+  layerZeigen();
+}
+$("w2D").onclick = () => schalte2D();
 function beendeSkizze() {
   if (!skizze) return;
   abschliessenLinie();
   const f = skizze.f;
   skizze = null;
   if (!f.elemente.length) entferneFeature(f);
-  $("gSkizze").hidden = true; setTimeout(leisteZustand);
+  $("gSkizze").hidden = true; setTimeout(leisteZustand); setTimeout(layerZeigen);
   ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null };
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
@@ -4259,6 +4332,7 @@ function analyseGecacht(f) {
 function zeichneLive() {
   leeren(live); labels = [];
   if (!skizze) return;
+  for (const el of skizze.f.elemente) if (el.layer == null) el.layer = doc.aktivLayer || "0"; // neue Elemente kommen auf den aktiven Layer
   const f = skizze.f, s = skizze, A = analyseGecacht(f), B = bezuege(f);
   live.add(skizzenObjekt(f, 0x1f5fbf, A?.bestimmt));
   const fg = $("fgAnzeige"); fg.textContent = A ? (A.dof ? A.dof + " FG" : "bestimmt") : ""; fg.classList.toggle("voll", A?.dof === 0);
@@ -5045,7 +5119,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
