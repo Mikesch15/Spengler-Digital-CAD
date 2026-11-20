@@ -30,6 +30,11 @@ await s.mouse.click(mitte[0] + 40, mitte[1] - 60); await s.mouse.move(mitte[0] +
 const pts = await s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.typ === "skizze").elemente.flatMap((e) => e.pts || []));
 const neu = pts.filter((p) => !(Math.abs(p[1] - 10.3) < 1e-6));
 ok(neu.length >= 1 && neu.some((p) => Math.abs(p[0] / 5 - Math.round(p[0] / 5)) > 0.02), `Kein 5-mm-Raster: neue Punkte ${JSON.stringify(neu.map((p) => p.map((v) => +v.toFixed(2))))}`);
+// Linke und rechte Taste ziehen: Ansicht bleibt unverändert
+await s.evaluate(() => window.sdcadTest.beendeSkizze?.()); await s.waitForTimeout(300);
+{ const bx0 = await s.locator("#leinwand").boundingBox(), p0 = [bx0.x + bx0.width * 0.3, bx0.y + bx0.height * 0.7], k0 = await s.evaluate(() => window.sdcadTest.kamera());
+  for (const bt of ["left", "right"]) { await s.mouse.move(...p0); await s.mouse.down({ button: bt }); await s.mouse.move(p0[0] + 150, p0[1] + 60, { steps: 6 }); await s.mouse.up({ button: bt }); }
+  const k1 = await s.evaluate(() => window.sdcadTest.kamera()); ok(JSON.stringify(k0) === JSON.stringify(k1), "Linke und rechte Maustaste ziehen: Ansicht dreht und verschiebt sich nicht"); }
 // Mausrad gedrückt (mit/ohne Umschalt) in der 3D-Ansicht ohne Skizze
 await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.keyboard.press("Escape"); await s.waitForTimeout(100);
 await s.click("#dAbbrechen").catch(() => {}); await s.evaluate(() => window.sdcadTest.beendeSkizze?.()); await s.waitForTimeout(400);
@@ -41,7 +46,7 @@ await s.keyboard.down("Shift"); await s.mouse.move(px, py); await s.mouse.down({
 const c2 = await s.evaluate(() => window.sdcadTest.kamera());
 ok(d(c1.ziel, c2.ziel) < 1e-6 && d(c1.pos, c2.pos) > 1, `Umschalt + Mausrad gedrückt dreht um das Ziel (Kamera bewegt um ${d(c1.pos, c2.pos).toFixed(1)} mm, Ziel fest)`);
 const cfg = await s.evaluate(() => window.sdcadTest.steuerung());
-ok(cfg.damping === false && cfg.mitte === 2 && cfg.zoomZeiger === true, `Steuerung: keine Dämpfung, Mausrad = Verschieben, Umschalt tauscht auf Drehen, Zoom zum Zeiger (${JSON.stringify(cfg)})`);
+ok(cfg.damping === false && cfg.mitte === 2 && cfg.links === null && cfg.rechts === null && cfg.zoomZeiger === true, `Steuerung: keine Dämpfung, Mausrad = Verschieben, Umschalt tauscht auf Drehen, Zoom zum Zeiger (${JSON.stringify(cfg)})`);
 ok(probleme.length === 0, "keine Seitenfehler " + probleme.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Bedienung: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

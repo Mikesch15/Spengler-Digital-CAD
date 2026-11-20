@@ -168,7 +168,7 @@ const steuerung = new OrbitControls(kamera, leinwand);
 steuerung.enableDamping = false; // keine Nachlaufzeit: Drehen und Verschieben folgen der Maus sofort
 steuerung.rotateSpeed = 1.1; steuerung.panSpeed = 1.2; steuerung.zoomSpeed = 1.2; steuerung.zoomToCursor = true;
 // Wie Fusion: Mausrad gedrückt = Verschieben, Umschalt + Mausrad gedrückt = Drehen, Rad = Zoom zum Zeiger (OrbitControls tauscht Verschieben/Drehen bei Umschalt)
-steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
+steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null }; // linke und rechte Taste bewegen die Ansicht nicht; Finger/Stift (Touch) drehen und verschieben weiter
 szene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; // Studiolicht: Spiegelungen wie im CAD-Programm
 szene.add(new THREE.HemisphereLight(0xffffff, 0x66727a, 0.55));
 const licht = new THREE.DirectionalLight(0xffffff, 1.15); licht.position.set(1, 2, 3); szene.add(licht);
@@ -3161,7 +3161,7 @@ function starteSkizze(f) {
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
   $("gSkizze").hidden = false; setTimeout(leisteZustand);
   ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = true));
-  steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+  steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null };
   steuerung.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
   const E = E_(f.ebene);
   skizzenRaster = new THREE.GridHelper(2000, 400, 0x1f5fbf, 0x9db7dd);
@@ -3187,7 +3187,7 @@ function beendeSkizze() {
   if (!f.elemente.length) entferneFeature(f);
   $("gSkizze").hidden = true; setTimeout(leisteZustand);
   ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
-  steuerung.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
+  steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null };
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
   szene.remove(skizzenRaster); skizzenRaster = null; boden.visible = true;
   $("eingabe").hidden = true; leeren(live); labels = []; document.querySelectorAll(".massbox").forEach((b) => b.remove()); $("fgAnzeige").textContent = "";
@@ -4736,7 +4736,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
