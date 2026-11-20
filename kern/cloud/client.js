@@ -67,7 +67,12 @@ export class CloudClient {
   // ---- Verbindung zur Spengler-Digital-App ----
   // CAD → App: Zuschnittteile (Tabelle cad_teile); die App übernimmt sie in die Aufmasse des Projekts (Auftrag)
   async teileSenden(auftrag, teile) {
-    const zeilen = teile.map((t, i) => ({ company_id: this.sitzung.firma, auftrag, teil_nr: t.nr ?? i + 1, teil_label: t.label ?? null, name: t.name, material_name: t.material ?? null, staerke_mm: t.staerke ?? null, zuschnitt_breite_mm: t.breite ?? null, zuschnitt_laenge_mm: t.laenge ?? null, stueck: t.stueck ?? 1, vorlage_name: t.vorlage ?? null, dokument: t.dokument ?? null, project_id: t.projectId ?? null, app_data: t.appData ?? null }));
+    // Spalten laut Tabelle cad_teile: Textspalten sind NOT NULL (leer statt null), Längen begrenzt, company_id kommt vom Server (my_company_id())
+    const text = (v, n) => String(v ?? "").slice(0, n);
+    if (!String(auftrag || "").trim()) throw new CloudFehler("Die Auftragsnummer fehlt.", 0, "eingabe");
+    const zeilen = teile.map((t, i) => ({ auftrag: text(auftrag, 40), teil_nr: t.nr ?? i + 1, teil_label: text(t.label, 60), name: text(t.name, 200), material_name: text(t.material, 200), staerke_mm: t.staerke ?? null,
+      zuschnitt_breite_mm: t.breite ?? null, zuschnitt_laenge_mm: t.laenge ?? null, flaeche_mm2: t.flaeche ?? null, stueck: Math.max(0, Math.round(t.stueck ?? 1)), vorlage_name: text(t.vorlage, 200), dokument: text(t.dokument, 200),
+      project_id: t.projectId ?? null, operationen: t.operationen ?? [], app_data: t.appData ?? {}, addin_version: text(t.version ?? "Spengler Digital CAD", 40) }));
     return this._mitToken("/rest/v1/cad_teile", { methode: "POST", kopf: { Prefer: "return=representation" }, body: zeilen });
   }
   // App → CAD: offene Profilaufträge (z. B. Aufmass-Profile, die im CAD gebaut werden sollen)

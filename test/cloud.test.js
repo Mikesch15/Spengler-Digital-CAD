@@ -100,7 +100,7 @@ ok((await cp.projektLaden(p1.id)).daten.teile.length === 3, "Konfliktversuch hat
 await cp.projektSpeichern(p1.id, 2, { name: "Dach Müller", auftrag: "2026-114", daten: {}, geloescht: true }); ok((await cp.projekte()).length === 0, "Löschen = geloescht (verschwindet aus der Liste)");
 // App-Verbindung
 const tr = await cp.teileSenden("2026-114", [{ name: "Ortbrett", material: "Zink 0.7", staerke: 0.7, breite: 333, laenge: 3000, stueck: 2, vorlage: "Freies Profil", appData: { schenkel: [] } }]);
-ok(sv.teile.length === 1 && sv.teile[0].auftrag === "2026-114" && sv.teile[0].zuschnitt_breite_mm === 333 && sv.teile[0].company_id === "f1" && sv.teile[0].teil_nr === 1, "Teile an die App senden (cad_teile: Auftrag, Zuschnitt, Stück)");
+ok(sv.teile.length === 1 && sv.teile[0].auftrag === "2026-114" && sv.teile[0].zuschnitt_breite_mm === 333 && !("company_id" in sv.teile[0]) && sv.teile[0].teil_nr === 1 && sv.teile[0].dokument === "" && sv.teile[0].addin_version === "Spengler Digital CAD" && sv.teile[0].operationen.length === 0, "Teile an die App senden (cad_teile: Auftrag, Zuschnitt, Stück)");
 const pau = await cp.profilAuftraege(); ok(pau.length === 1 && pau[0].titel === "Ortbrett", "Offene Profilaufträge der App lesen");
 ok((await cp.profilAuftragGebaut("a1")).status === "gebaut" && (await cp.profilAuftraege()).length === 0 && (await cp.profilAuftragGebaut("a1")) === null, "Profilauftrag als «gebaut» melden (nur einmal)");
 // Spiegel ⇄ Einstellungen
@@ -150,6 +150,8 @@ ok((await cp.profilAuftragGebaut("a1")).status === "gebaut" && (await cp.profilA
   loescheImSpiegel(sp1, { baustein: [e1.bausteine[0]], material: [e1.materialien[0]], detail: [] }); const b6 = await abgleichen(c6, spiegelSpeicher(sp1));
   ok(b6.geloescht === 2 && sv6.zeilen.every((z) => z.geloescht), "Lokal gelöschter Baustein und Material werden in der Cloud als gelöscht markiert (nicht mehr zurückgeholt)");
 }
+{ let w = null; try { await cp.teileSenden("", [{ name: "x" }]); } catch (e) { w = e; } ok(w?.message.includes("Auftragsnummer"), "Senden ohne Auftragsnummer wird verständlich abgelehnt");
+  await cp.teileSenden("X".repeat(60), [{ name: "y" }]); ok(sv.teile.at(-1).auftrag.length === 40 && sv.teile.at(-1).material_name === "" && sv.teile.at(-1).vorlage_name === "", "Überlange Auftragsnummer wird gekürzt, Textspalten nie null (NOT NULL in der Tabelle)"); }
 // Prüfsumme ignoriert version/modified/_-Felder
 const h1 = await pruefsumme({ a: 1, version: 1, modified: "x", _z: 5 }), h2 = await pruefsumme({ version: 9, a: 1, modified: "y" });
 ok(h1 === h2 && h1 !== (await pruefsumme({ a: 2 })), "Prüfsumme ignoriert version, modified und «_»-Felder");
