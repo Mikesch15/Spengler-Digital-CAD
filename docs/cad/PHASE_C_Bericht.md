@@ -22,9 +22,27 @@
 
 **Grösse:** Das Windows-Installationsprogramm und die Web-Version enthalten jetzt zusätzlich 23 MB WASM (die Web-Version lädt sie nur bei Bedarf).
 
-## Nächste Schritte (C2 …)
-1. **Anzeige aus dem Kern:** Bei eingeschaltetem Kern werden Blechteile aus `tessellieren` dargestellt (mit Flächen- und Kanten-IDs) statt aus `ExtrudeGeometry`. Die Auswahl im Viewport läuft dann über die exakte Topologie.
-2. **Extrusion und Drehung aus Skizzenprofilen:** Linien, Bögen, Kreise, Splines aus `kern/skizze.js` werden zu Kern-Profilen. Boolesch (verbinden, ausschneiden, schneiden) läuft über den Kern.
+## C2a/C2b – Exaktes Modell für Skizzenkörper (erledigt, 20.11.2026)
+
+| Punkt | Umsetzung |
+|---|---|
+| Skizze → exaktes Profil | `kern/cad/skizzeProfile.js` übersetzt Linienzüge (auch mit Eckradien), Dreipunktbögen, Kreise, Rechtecke, Langlöcher und verbundene Ketten aus Linien und Bögen exakt, mit Löchern wie in der App. **Splines, Ellipsen und Text** gelten als «noch nicht exakt»; sie werden nicht angenähert. |
+| Features → Kommandos | `extrusionKommandos` (eine/umgekehrt/symmetrisch) und `rotationKommandos` (rechtshändig um die Skizzenachse, Drehrichtung gegen das Netz geprüft) in `kern/cad/featureBau.js` |
+| Exaktes Modell in der App | Ist der Kern eingeschaltet, baut die App nach jedem Neuaufbau (250 ms verzögert, im Worker) Extrusionen und Drehungen samt **Verbinden, Ausschneiden und Schneiden** sowie Blechteile exakt. Danach **ersetzt sie deren Anzeige-Netz durch die Tessellierung des exakten Körpers**, mit Flächenzuordnung je Dreieck (`userData.exakt`). Plan, Messen, Kollision und STL arbeiten damit auf dem exakten Netz. |
+| Ehrlicher Rückfall | Was noch nicht exakt geht, bleibt Netz und steht in der Statusmeldung: Abrunden/Fasen, Schale, Muster, Spiegeln, Bewegen, Sweep, Loft, Import, Kehle, Flächenblech, Splines/Ellipsen/Text, Drehung mit Löchern, Blechteile mit Komponentenlage. Beispiel: «Exakt aus dem CAD-Kern: 3 Körper · als Netz: Ellipse (Ellipse noch nicht exakt)». |
+| Veraltete Ergebnisse | Kommt ein neuerer Neuaufbau dazwischen, wird das ältere Ergebnis verworfen (Laufnummer). Alle Kernkörper werden nach jedem Lauf freigegeben. |
+
+**Tests**
+- **`test/cad.test.js`** (+4): Rechteck mit Kreis- und Langloch; Linienzug mit 4 Eckradien; Kette mit umgekehrtem Stück und Bogen; Ellipse → «noch nicht exakt»
+- **`tests/app-kern/pruefen.mjs`** (+6, gesamt 15/15) mit einem Projekt aus Platte mit Loch, ausgeschnittener Bohrung, Ring (Drehung 360°), Segment (Drehung 90°) und Ellipse:
+  - **Aus:** Alles bleibt Netz wie 0.2.
+  - **Ein:** 3 Körper kommen aus dem Kern. Die Netzvolumen stimmen auf 0,2 % mit den exakten Werten überein (der Rest ist Sehnenfehler der Anzeige). Das 90°-Segment liegt wie das Netz (gleiche Grenzen). Die Ellipse bleibt Netz und wird genannt. Keine Seitenfehler.
+
+**Hinweis:** Masse, die die App heute aus Netzen rechnet (z. B. Messen am Körper), werden bei eingeschaltetem Kern mit dem genaueren Netz gerechnet. Exakte Masse direkt aus dem Kern (Volumen, Fläche, Schwerpunkt im Prüfen-Menü) sind der nächste Schritt.
+
+## Nächste Schritte (C2c …)
+1. **Prüfen → Eigenschaften:** exaktes Volumen, Fläche, Schwerpunkt und Masse je Körper aus dem Kern; Gültigkeitsprüfung
+2. **Splines und Ellipsen exakt** (B-Spline- und Ellipsenkurven im Profilformat)
 3. **Abrunden/Fasen und Schale** über Kanten- und Flächenreferenzen (`topologie.js`) statt über Koordinaten am Netz.
 4. **Feature-Fehler** aus dem Kern (`KernFehler.code`) direkt in der Zeitleiste anzeigen.
 5. **Offline:** Service Worker legt `cad/` beim ersten Laden in den Zwischenspeicher. Heute geschieht das bereits über «Netz zuerst, dann Cache», aber ohne Vorabladen.

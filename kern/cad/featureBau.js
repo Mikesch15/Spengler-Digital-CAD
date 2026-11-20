@@ -24,3 +24,21 @@ export function blechTeilKommando({ res, t, ebene, laenge, richtung = "normal", 
     soll: { volumen: t * q.mitte * laenge, mitte: q.mitte, theta: q.theta, zuschnitt: res.zuschnitt },
   };
 }
+
+// Extrusion einer Skizze (Profile aus skizzeProfile.js) – wie koerperGeometrie(): Tiefe entlang der Ebenennormalen,
+// richtung "umgekehrt" = nach hinten, "symmetrisch" = halb/halb. Ein Kommando je Aussenkontur (mit ihren Löchern).
+export function extrusionKommandos({ profile, ebene, abstand, richtung = "eine" }) {
+  if (!(abstand > 0)) throw new Error("Abstand muss grösser als 0 sein");
+  const start = richtung === "umgekehrt" ? -abstand : richtung === "symmetrisch" ? -abstand / 2 : 0, e = kernEbene(ebene, start);
+  return profile.map((p) => ({ op: "extrusion", profil: p.profil, loecher: p.loecher, ebene: e, hoehe: abstand }));
+}
+// Drehung einer Skizze um eine Achse der Skizze (Punkt a, Richtung d in u/v), Winkel in Grad, rechtshändig um d
+// (wie LatheGeometry in drehGeometrie(): positiver Winkel dreht von der Profilseite zu Achse × Profilseite).
+export function rotationKommandos({ profile, ebene, a, d, winkel }) {
+  const e = kernEbene(ebene), w = (u, v) => [0, 1, 2].map((i) => ebene.u[i] * u + ebene.v[i] * v);
+  const punkt = w(a[0], a[1]).map((x, i) => x + ebene.o[i]), richtung = w(d[0], d[1]);
+  return profile.map((p) => {
+    if (p.loecher.length) throw new Error("Drehung mit Löchern im Profil: noch nicht exakt");
+    return { op: "rotation", profil: p.profil, ebene: e, winkel, achse: { punkt, richtung } };
+  });
+}

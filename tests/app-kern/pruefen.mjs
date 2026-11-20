@@ -30,7 +30,7 @@ async function seite(kern) {
 { // 2 Schalter ein
   const { s, anfragen, probleme } = await seite("occt");
   ok(await s.evaluate(() => !document.getElementById("wStepExakt").hidden), "Ein: Knopf «STEP exakt» sichtbar");
-  ok(!anfragen.some((u) => /replicad_single\.wasm/.test(u)), "Ein: Kern wird erst bei Gebrauch geladen (lazy)");
+  // Eingeschaltet baut die App das Modell exakt auf → der Kern wird sofort (im Worker) geladen; ausgeschaltet nie (Teil 1)
   await s.waitForSelector("#k3D", { timeout: 5000 });
   await s.click("#k3D");
   await s.waitForFunction(() => /^[✓⚠]|CAD-Kern/.test(document.getElementById("k3DErg").textContent), null, { timeout: 60000 });
@@ -42,6 +42,42 @@ async function seite(kern) {
   ok(/STEP exakt \(B-Rep, AP242\): 1 Blechteil/.test(await s.textContent("#status")), "Ein: Statusmeldung nennt exportierte Teile");
   ok(probleme.length === 0, `Ein: keine Fehler in der Konsole ${probleme.join(" | ")}`);
   await s.close();
+}
+{ // 3 Exaktes Modell: Extrusion mit Loch, Ausschneiden, Drehung → Netze aus dem Kern
+  const PI = Math.PI, projekt = { objekt: "Kerntest", nr: "T-1", zaehler: 20, features: [
+    { id: "s1", typ: "skizze", name: "Skizze 1", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [100, 50] }, { id: 2, art: "kreis", c: [25, 25], r: 10 }] },
+    { id: "e1", typ: "extrusion", name: "Platte", skizze: "s1", abstand: 20, richtung: "eine", vorgang: "neu" },
+    { id: "s2", typ: "skizze", name: "Skizze 2", ebene: "XY", elemente: [{ id: 1, art: "kreis", c: [75, 25], r: 8 }] },
+    { id: "e2", typ: "extrusion", name: "Loch", skizze: "s2", abstand: 20, richtung: "eine", vorgang: "ausschneiden", ziel: "alle" },
+    { id: "s3", typ: "skizze", name: "Skizze 3", ebene: "XZ", elemente: [{ id: 1, art: "rechteck", a: [200, 0], b: [220, 40] }] },
+    { id: "d1", typ: "drehung", name: "Ring", skizze: "s3", achse: "V", winkel: 360, vorgang: "neu" },
+    { id: "s5", typ: "skizze", name: "Skizze 5", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [300, 0], b: [320, 30] }] },
+    { id: "d2", typ: "drehung", name: "Segment 90°", skizze: "s5", achse: "V", winkel: 90, vorgang: "neu" },
+    { id: "s4", typ: "skizze", name: "Skizze 4", ebene: "XY", elemente: [{ id: 1, art: "ellipse", c: [0, 200], a: [30, 200], r2: 10 }] },
+    { id: "e3", typ: "extrusion", name: "Ellipse", skizze: "s4", abstand: 5, richtung: "eine", vorgang: "neu" },
+  ] };
+  let netzD2 = null;
+  for (const kern of [null, "occt"]) {
+    const s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
+    await s.addInitScript(([k, d]) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); if (k) localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: k } })); }, [kern, projekt]);
+    await s.goto("http://localhost:8767/index.html?test");
+    if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
+    else await s.waitForTimeout(1500);
+    const k = await s.evaluate(() => window.sdcadTest.koerperInfo()), st = await s.textContent("#status");
+    const platte = k.find((o) => o.fid === "e1"), ring = k.find((o) => o.fid === "d1"), ell = k.find((o) => o.fid === "e3");
+    const vP = 100 * 50 * 20 - PI * 100 * 20 - PI * 64 * 20, vR = PI * (220 ** 2 - 200 ** 2) * 40;
+    const d2 = k.find((o) => o.fid === "d2");
+    if (!kern) netzD2 = d2;
+    else ok(d2.exakt && [0, 1, 2].every((i) => Math.abs(d2.min[i] - netzD2.min[i]) < 0.5 && Math.abs(d2.max[i] - netzD2.max[i]) < 0.5), `Ein: Drehung 90° liegt wie das Netz (Grenzen ${JSON.stringify(d2.min.map(Math.round))}…${JSON.stringify(d2.max.map(Math.round))} / Netz ${JSON.stringify(netzD2.min.map(Math.round))}…${JSON.stringify(netzD2.max.map(Math.round))})`);
+    if (!kern) ok(!platte.exakt && !ring.exakt && probleme.length === 0, `Aus: Körper bleiben Netz wie 0.2 (Platte ${platte.volumen.toFixed(0)} mm³)`);
+    else {
+      ok(platte.exakt && ring.exakt && platte.flaechen >= 8, `Ein: Platte und Ring aus dem Kern (Platte ${platte.flaechen} Flächen) – ${st}`);
+      ok(Math.abs(platte.volumen - vP) / vP < 0.002 && Math.abs(ring.volumen - vR) / vR < 0.002, `Ein: Netzvolumen ≈ exakt (Platte ${platte.volumen.toFixed(0)}/${vP.toFixed(0)}, Ring ${ring.volumen.toFixed(0)}/${vR.toFixed(0)})`);
+      ok(!ell.exakt && /Ellipse \(Ellipse noch nicht exakt\)/.test(st), "Ein: Ellipse bleibt Netz und wird in der Statusmeldung genannt");
+      ok(probleme.length === 0, `Ein: keine Seitenfehler ${probleme.join(" | ")}`);
+    }
+    await s.close();
+  }
 }
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "App mit CAD-Kern: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

@@ -10,7 +10,8 @@ import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf } from "../kern/dxf.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
-import { blechTeilKommando } from "../kern/cad/featureBau.js";
+import { blechTeilKommando, extrusionKommandos, rotationKommandos } from "../kern/cad/featureBau.js";
+import { skizzenProfile, NichtExakt } from "../kern/cad/skizzeProfile.js";
 import { zuschnittAusVolumen } from "../kern/cad/blech.js";
 import { dxfLesen } from "../kern/dxflesen.js";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
@@ -802,6 +803,7 @@ function regen() {
   speichern(); merke();
   if (dlg?.info) { const t = dlg.info(); $("dInfo").textContent = t; $("dInfo").className = t.startsWith("⚠") ? "fehler" : ""; }
   dlg?.nachRegen?.();
+  exaktPlanen(); // exakter CAD-Kern (nur wenn eingeschaltet): Netze durch exakte Körper ersetzen
 }
 
 // ------------------------------------------------------------ Rückgängig / Wiederholen
@@ -4082,6 +4084,66 @@ async function pruefe3D(f, aus) {
   finally { if (id) kern().ausfuehren({ op: "freigeben", ziele: [id] }).catch(() => {}); }
 }
 
+// Exaktes Modell: Volumenkörper (Extrusion, Drehung inkl. Verbinden/Ausschneiden/Schneiden) und Blechteile werden im Kern
+// gebaut; ihr Anzeige-Netz wird durch die Tessellierung des exakten Körpers ersetzt (mit Flächenzuordnung).
+// Was noch nicht exakt geht (Abrunden/Fasen, Schale, Muster, Sweep, Loft, Import, Splines …), bleibt als Netz und wird genannt.
+let exaktLauf = 0, exaktTimer = null;
+const exaktPlanen = () => { if (!kernAn()) return; clearTimeout(exaktTimer); exaktTimer = setTimeout(() => exaktesModell().catch((e) => status(kernFehlerText(e))), 250); };
+function ersetzeNetz(mesh, n, M) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(n.positionen, 3)); g.setAttribute("normal", new THREE.BufferAttribute(n.normalen, 3)); g.setIndex(new THREE.BufferAttribute(n.indizes, 1));
+  const l = new THREE.BufferGeometry(); l.setAttribute("position", new THREE.BufferAttribute(n.linien, 3));
+  if (M) { g.applyMatrix4(M); l.applyMatrix4(M); }
+  mesh.geometry.dispose(); mesh.geometry = g;
+  const kante = mesh.children.find((c) => c.isLineSegments); if (kante) { kante.geometry.dispose(); kante.geometry = l; }
+  mesh.userData.exakt = { flaechen: n.flaechen }; // Dreieck → Flächenindex (Auswahl auf exakte Topologie)
+}
+async function exaktesModell() {
+  if (!kernAn()) return;
+  const lauf = ++exaktLauf, K = kern(), ids = [], koerper = new Map(), nicht = new Map(), blech = new Map();
+  const x = async (k) => { const r = await K.ausfuehren(k); if (r.id) ids.push(r.id); return r; };
+  const vereinige = async (liste) => { let a = liste[0]; for (const b of liste.slice(1)) a = (await x({ op: "boolesch", art: "vereinigen", a, b })).id; return a; };
+  const markiereZiel = (f, grund) => { if (f.ziel && f.ziel !== "alle") nicht.set(f.ziel, grund); else for (const k of koerper.keys()) nicht.set(k, grund); };
+  try {
+    for (const f of doc.features) {
+      if (lauf !== exaktLauf) return;
+      if (f._aus || f._fehler) continue;
+      if (["vorlage", "profil", "blech"].includes(f.typ)) {
+        if (f._kernLage && !f.versteckt && !lageVon(f)) { const k = await exaktKoerper(f); ids.push(k.id); blech.set(f.id, k.id); }
+      } else if (f.typ === "extrusion" || f.typ === "drehung") {
+        const s = finde(f.skizze), op = f.vorgang || "neu";
+        let kmd;
+        try {
+          const profile = skizzenProfile(profilElemente(s));
+          if (!profile.length) throw new NichtExakt("kein geschlossenes Profil");
+          if (f.typ === "extrusion") kmd = extrusionKommandos({ profile, ebene: E_(s.ebene), abstand: f.abstand, richtung: f.richtung });
+          else { const [a, d] = drehAchse(s, f.achse); kmd = rotationKommandos({ profile, ebene: E_(s.ebene), a, d, winkel: f.winkel ?? 360 }); }
+        } catch (e) { if (op === "neu") nicht.set(f.id, `${e.message} noch nicht exakt`); else markiereZiel(f, `${f.name}: ${e.message} noch nicht exakt`); continue; }
+        const w = await vereinige(await Promise.all(kmd.map(async (k) => (await x(k)).id)));
+        if (op === "neu") { koerper.set(f.id, w); continue; }
+        const ziele = f.ziel && f.ziel !== "alle" ? [f.ziel].filter((z) => koerper.has(z)) : [...koerper.keys()];
+        for (const z of op === "verbinden" ? ziele.slice(0, 1) : ziele) {
+          if (nicht.has(z)) continue;
+          koerper.set(z, (await x({ op: "boolesch", art: { verbinden: "vereinigen", ausschneiden: "abziehen", schneiden: "schneiden" }[op], a: koerper.get(z), b: w })).id);
+        }
+        if (doc.features.some((k) => k.typ === "kantenrund" && k.ziel === f.id && !k._aus)) nicht.set(f.id, "Abrunden/Fasen noch nicht exakt");
+      } else if (["kanten3d", "schale", "kmuster", "kspiegel", "bewegen"].includes(f.typ)) markiereZiel(f, `${f.name} noch nicht exakt`);
+      else if (["sweep", "loft", "import", "kehle", "flaeche"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
+    }
+    let n = 0;
+    for (const [fid, id] of [...koerper, ...blech]) {
+      if (nicht.has(fid)) continue;
+      const mesh = modell.children.find((o) => o.isMesh && o.userData.fid === fid); if (!mesh) continue;
+      const netz = await K.ausfuehren({ op: "tessellieren", ziel: id });
+      if (lauf !== exaktLauf) return;
+      ersetzeNetz(mesh, netz, lageVon(hauptVon(fid))); n++;
+    }
+    zeigeKanten?.();
+    const rest = [...nicht].map(([fid, g]) => `${finde(fid)?.name ?? fid} (${g})`);
+    status(`Exakt aus dem CAD-Kern: ${n} Körper${rest.length ? ` · als Netz: ${rest.join(", ")}` : ""}`);
+  } finally { if (ids.length) K.ausfuehren({ op: "freigeben", ziele: ids }).catch(() => {}); }
+}
+
 // ------------------------------------------------------------ Austausch: STEP/STL exportieren, STEP/STL importieren
 function sichtbareKoerper() {
   modell.updateMatrixWorld(true);
@@ -4190,7 +4252,9 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+    for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
+    g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
     const je = new Map(); ms.forEach((m) => { const k = m.userData.fid; if (!je.has(k)) je.set(k, []); je.get(k).push(m); });
     for (const [fid, l] of je) { const pr = l.slice(1); for (let i = 0; i < pr.length; i++) for (let j = i + 1; j < pr.length; j++) {
