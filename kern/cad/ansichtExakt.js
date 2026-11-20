@@ -49,7 +49,9 @@ export function ansichtAusProjektion(p, { d, oben, massstab, verdeckte = true })
   const abbild = (w) => aufPapier([dot(w, xa), dot(w, ya)]);
   // Weltpunkt in der Bildebene (Tiefe 0): abbild(w) trifft den Punkt, Abstände zwischen Punkten sind die wahren Abstände in der Ansicht
   for (const pt of punkte) pt.w = [0, 1, 2].map((i) => pt.q[0] * xa[i] + pt.q[1] * ya[i]);
-  return { breite, hoehe, sichtbar: sicht.filter(lang), verdeckt: verd.filter(lang), punkte: punkte.map(({ x, y, w }) => ({ x, y, w })), abbild, exakt: true };
+  // Kreise/Bögen der sichtbaren Linien: Mittelpunkt als Weltpunkt in der Bildebene, Radius in Modell-mm (für Ø- und R-Masse)
+  const kreise = kreiseAusLinienzuegen(p.sichtbar).map((k) => ({ x: aufPapier(k.c)[0], y: aufPapier(k.c)[1], r: k.r, voll: k.voll, w: [0, 1, 2].map((i) => k.c[0] * xa[i] + k.c[1] * ya[i]) }));
+  return { breite, hoehe, sichtbar: sicht.filter(lang), verdeckt: verd.filter(lang), punkte: punkte.map(({ x, y, w }) => ({ x, y, w })), kreise, abbild, exakt: true };
 }
 
 // Geschnittene Kanten (3D-Polylinien je Kante, aus { op: "schnitt" }) zu geschlossenen Linienzügen verketten
@@ -69,4 +71,26 @@ export function kettenAusKanten(kanten, tol = 1e-4) {
     if (ok && zug.length > 3) { zug.pop(); loops.push(zug); }
   }
   return loops;
+}
+
+// Kreise und Kreisbögen aus Linienzügen erkennen (Kern liefert Bögen als dichte Punktfolgen auf dem exakten Kreis).
+// Rückgabe: [{ c: [x, y], r, voll, w0, w1 }] in denselben Einheiten wie die Eingabe; Winkel in Grad (gegen den Uhrzeiger von w0 nach w1).
+export function kreiseAusLinienzuegen(zuege, { minPunkte = 12, tol = 2e-3 } = {}) {
+  const out = [];
+  for (const z of zuege) {
+    if (z.length < minPunkte) continue;
+    const a = z[0], m = z[Math.floor(z.length / 2)], b = z.at(-1), c0 = z[Math.floor(z.length / 4)];
+    const mitte = (p, q, r) => { // Umkreis dreier Punkte
+      const d = 2 * (p[0] * (q[1] - r[1]) + q[0] * (r[1] - p[1]) + r[0] * (p[1] - q[1])); if (Math.abs(d) < 1e-12) return null;
+      const f = (u) => u[0] * u[0] + u[1] * u[1];
+      return [(f(p) * (q[1] - r[1]) + f(q) * (r[1] - p[1]) + f(r) * (p[1] - q[1])) / d, (f(p) * (r[0] - q[0]) + f(q) * (p[0] - r[0]) + f(r) * (q[0] - p[0])) / d];
+    };
+    const voll = Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-6, c = mitte(a, c0, m) ?? mitte(c0, m, z[Math.floor((3 * z.length) / 4)]);
+    if (!c) continue;
+    const r = Math.hypot(a[0] - c[0], a[1] - c[1]);
+    if (!(r > 1e-6) || !z.every((p) => Math.abs(Math.hypot(p[0] - c[0], p[1] - c[1]) - r) <= tol * Math.max(1, r))) continue;
+    const w = (p) => (Math.atan2(p[1] - c[1], p[0] - c[0]) * 180) / Math.PI;
+    out.push({ c, r, voll, w0: w(a), w1: w(b) });
+  }
+  return out;
 }

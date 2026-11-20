@@ -31,3 +31,12 @@
   - Kern (+6): Schnittfläche 1600 mm² (Platte mit Bohrung), zwei geschlossene Linienzüge zu je 800 mm², deckungsgleich in der Ansicht, Halbraum ausserhalb gibt einen sauberen Fehler.
   - App (+2): Schnittansicht aus dem Kern mit 2 Schnittflächen (Fläche 4686,1 gegen 4685,8 mm²), Planblatt zeigt die schraffierte Schnittfläche.
 - **Gefunden und behoben:** Beim Einbau habe ich versehentlich die Funktion `ersetzeNetz` gelöscht. Der App-Test hat das sofort gemeldet; sie ist wiederhergestellt.
+
+## E3 – Durchmesser- und Radiusmasse aus exakten Kreisen (erledigt, 20.11.2026)
+- **Kreiserkennung (`kreiseAusLinienzuegen`, rein, getestet):** Die exakte Projektion liefert Bögen als dichte Punktfolgen auf dem exakten Kreis. Daraus werden Kreise und Bögen mit Mittelpunkt (Weltpunkt in der Bildebene) und Radius in Modell-mm erkannt. Gerade Linienzüge werden nicht als Kreis gedeutet.
+- **Planblatt:** Neue Massarten **Durchmesser Ø** und **Radius R**, gezeichnet mit Masslinie unter 45° und Text. Der Radius gilt in Modell-mm, die Darstellung folgt dem Massstab der Ansicht. Im Eigenschaftenfeld umschaltbar, Text frei überschreibbar (z. B. «4× Ø8»).
+- **Automatische Bemassung** setzt bei exakten Ansichten zusätzlich Ø an Vollkreisen und R an Bögen, gleiche Radien nur einmal.
+- **Tests:**
+  - Kern (+5): Bohrung Ø20 wird als Vollkreis r 10,0000 erkannt, Eckenrundung als Bogen r 6,0000, Mittelpunkt deckungsgleich (`abbild()`), gerade Linien erzeugen keinen Kreis.
+  - App (+1): Die automatische Bemassung enthält «Ø20».
+- **Noch nicht:** Winkelmasse, manuelles Setzen von Ø/R per Mausklick, Mittellinien und Symmetrieachsen.

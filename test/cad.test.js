@@ -367,6 +367,20 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   ok(leer === CODES.FEHLGESCHLAGEN || leer === CODES.UNGUELTIG, `Halbraum ausserhalb des Körpers → sauberer Fehler (${leer})`);
 }
 
+// ---------------------------------------------------------------- 10g Kreiserkennung für Ø/R-Masse (Phase E3)
+{
+  const { ansichtAusProjektion, kameraAchsen, kreiseAusLinienzuegen } = await import("../kern/cad/ansichtExakt.js");
+  const q = (await x({ op: "quader", min: [0, 0, 0], max: [100, 50, 20] })).id, b = (await x({ op: "bohrung", ziel: q, punkt: [50, 25, 20], richtung: [0, 0, -1], d: 20, durch: true })).id;
+  const r = (await x({ op: "verrunden", ziel: b, r: 6, kanten: [{ punkt: [100, 50, 10] }] })).id;
+  const a = kameraAchsen([0, 0, 1], [0, 1, 0]), ansicht = ansichtAusProjektion(await x({ op: "projektion", ziele: [r], richtung: a.n, xAchse: a.x }), { d: [0, 0, 1], oben: [0, 1, 0], massstab: 1 });
+  const voll = ansicht.kreise.filter((k) => k.voll), bogen = ansicht.kreise.filter((k) => !k.voll);
+  ok(voll.length === 1 && Math.abs(voll[0].r - 10) < 1e-6, `Vorderansicht: ein Vollkreis, r ${voll[0]?.r.toFixed(4)} (Bohrung Ø20)`);
+  ok(bogen.length === 1 && Math.abs(bogen[0].r - 6) < 1e-6, `Vorderansicht: ein Bogen, r ${bogen[0]?.r.toFixed(4)} (Eckenrundung R6)`);
+  ok(Math.hypot(voll[0].x - (50 + 1), voll[0].y - (50 - 25 + 1)) < 1e-6 || Math.abs(voll[0].x - 51) < 1e-6, `Kreismittelpunkt im Blatt bei x ${voll[0].x.toFixed(3)} (50 + Rand 1)`);
+  ok(Math.abs(ansicht.abbild(voll[0].w)[0] - voll[0].x) < 1e-9 && Math.abs(ansicht.abbild(voll[0].w)[1] - voll[0].y) < 1e-9, "Kreismittelpunkt als Weltpunkt: abbild() deckt sich");
+  ok(kreiseAusLinienzuegen([[[0, 0], [10, 0], [20, 0], [30, 0], [40, 0], [50, 0], [60, 0], [70, 0], [80, 0], [90, 0], [100, 0], [110, 0], [120, 0]]]).length === 0, "Gerade Linienzüge werden nicht als Kreis erkannt");
+}
+
 // ---------------------------------------------------------------- 10 Speicher: Freigabe und Leckprüfung
 {
   const vorher = (await x({ op: "speicher" })).handles;

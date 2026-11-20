@@ -146,6 +146,14 @@ export function planModul(ctx) {
     // Masse
     for (const m of plan.masse) {
       const a = plan.ansichten.find((x) => x.id === m.ansicht); const r = a && ansicht(a); if (!r) continue;
+      if (m.art === "d" || m.art === "rad") { // Durchmesser-/Radiusmass an einem Kreis der exakten Ansicht: m.a = Mittelpunkt (Weltpunkt), m.r = Radius in Modell-mm
+        const [cx0, cy0] = r.abbild(m.a), C = [cx0 + a.x, cy0 + a.y], Rp = m.r / massstabVon(a), u = [Math.cos(Math.PI / 4), -Math.sin(Math.PI / 4)], sel2 = auswahl === m.id ? " sel" : "";
+        const p1 = m.art === "d" ? [C[0] - u[0] * Rp, C[1] - u[1] * Rp] : C, p2 = [C[0] + u[0] * Rp, C[1] + u[1] * Rp], ausser = [p2[0] + u[0] * 6, p2[1] + u[1] * 6];
+        const wert = m.art === "d" ? 2 * m.r : m.r, text = m.text || `${m.art === "d" ? "Ø" : "R"}${+wert.toFixed(m.art === "d" ? 1 : 2)}`;
+        out.push(`<g data-id="${m.id}" class="mass${sel2}"><line x1="${z(p1[0])}" y1="${z(p1[1])}" x2="${z(p2[0])}" y2="${z(p2[1])}" class="masslinie" marker-end="url(#pp)"${m.art === "d" ? ' marker-start="url(#pp)"' : ""}/>
+          <line x1="${z(p2[0])}" y1="${z(p2[1])}" x2="${z(ausser[0])}" y2="${z(ausser[1])}" class="masslinie"/><text x="${z(ausser[0] + 1)}" y="${z(ausser[1])}" class="t35 masstext">${esc(text)}</text></g>`);
+        continue;
+      }
       const [ax, ay] = r.abbild(m.a), [bx, by] = r.abbild(m.b), A = [ax + a.x, ay + a.y], B = [bx + a.x, by + a.y], L = m.lage || [(A[0] + B[0]) / 2, Math.min(A[1], B[1]) - 8];
       const sel = auswahl === m.id ? " sel" : "";
       let p1, p2, wert;
@@ -221,6 +229,8 @@ ${out.join("\n")}
       <label class="feld"><span>Verdeckte Kanten</span><select data-e="verdeckt"><option value="1" ${e.verdeckt !== false ? "selected" : ""}>zeigen</option><option value="" ${e.verdeckt === false ? "selected" : ""}>weglassen</option></select></label>
       <label class="feld"><span>Beschriftung</span><input data-e="titel" value="${esc(e.titel || "")}" placeholder="${esc(RICHTUNGEN[e.art]?.name)}"></label>`;
     else if (plan.details.includes(e)) box.innerHTML = `<label class="feld"><span>Massstab</span><select data-e="massstab">${ms(e.massstab)}</select></label><label class="feld"><span>Beschriftung</span><input data-e="titel" value="${esc(e.titel || "")}"></label>`;
+    else if (plan.masse.includes(e) && (e.art === "d" || e.art === "rad")) box.innerHTML = `<label class="feld"><span>Art</span><select data-e="art"><option value="d" ${e.art === "d" ? "selected" : ""}>Durchmesser Ø</option><option value="rad" ${e.art === "rad" ? "selected" : ""}>Radius R</option></select></label>
+      <label class="feld"><span>Text statt Wert</span><input data-e="text" value="${esc(e.text || "")}" placeholder="z. B. 4× Ø8"></label>`;
     else if (plan.masse.includes(e)) box.innerHTML = `<label class="feld"><span>Art</span><select data-e="art"><option value="h" ${e.art === "h" ? "selected" : ""}>waagrecht</option><option value="v" ${e.art === "v" ? "selected" : ""}>senkrecht</option><option value="a" ${e.art === "a" ? "selected" : ""}>ausgerichtet</option></select></label>
       <label class="feld"><span>Text statt Wert</span><input data-e="text" value="${esc(e.text || "")}" placeholder="z. B. 1/3"></label>`;
     else box.innerHTML = `<label class="feld"><span>Text</span><input data-e="text" value="${esc(e.text)}"></label><label class="feld"><span>Grösse (mm)</span><input data-e="groesse" type="number" step="0.5" value="${e.groesse || 5}"></label>`;
@@ -336,7 +346,10 @@ ${out.join("\n")}
     const xs = stufen("x"), ys = stufen("y"), unten = a.y + r.hoehe + 14, rechts = a.x + r.breite + 10;
     if (xs.length > 1) { neu(xs[0], xs.at(-1), "h", [0, unten + (xs.length > 2 && xs.length <= 12 ? 8 : 0)]); if (xs.length > 2 && xs.length <= 12) xs.slice(1).forEach((p, i) => neu(xs[i], p, "h", [0, unten])); }
     if (ys.length > 1) { neu(ys[0], ys.at(-1), "v", [rechts + (ys.length > 2 && ys.length <= 12 ? 8 : 0), 0]); if (ys.length > 2 && ys.length <= 12) ys.slice(1).forEach((p, i) => neu(ys[i], p, "v", [rechts, 0])); }
-    sel = null; zeige(); ctx.status(`Automatisch bemasst: ${xs.length > 2 && xs.length <= 12 ? "Ketten- und " : ""}Gesamtmasse. Masse lassen sich verschieben oder löschen.`);
+    // Exakte Ansicht: Durchmesser an Vollkreisen, Radien an Bögen (nur bei sichtbaren Kreisen, gleiche Radien nur einmal)
+    let kr = 0; const gemeldet = new Set();
+    for (const k of r.kreise || []) { const art = k.voll ? "d" : "rad", sig = `${art}${k.r.toFixed(3)}`; if (k.r < 0.4 || gemeldet.has(sig)) continue; gemeldet.add(sig); plan.masse.push({ id: neuId(), ansicht: a.id, a: k.w, r: k.r, art, auto: true }); kr++; }
+    sel = null; zeige(); ctx.status(`Automatisch bemasst: ${xs.length > 2 && xs.length <= 12 ? "Ketten- und " : ""}Gesamtmasse${kr ? ` und ${kr} Kreis${kr === 1 ? "" : "e"}/Bögen (Ø, R)` : ""}. Masse lassen sich verschieben oder löschen.`);
   }
   const passenderPlanMassstab = (F) => {
     const box = ctx.groesse(); return PLAN_MASSSTAEBE.find((m) => box / m <= (F.b - 60) / 2.2) || 100;
