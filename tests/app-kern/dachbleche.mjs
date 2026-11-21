@@ -9,7 +9,7 @@ const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280
 await s.addInitScript(() => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Test", nr: "X", zaehler: 5, features: [{ id: "sk", typ: "skizze", name: "Grundriss", ebene: "XZ", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [12000, 7000] }] }] })));
 await s.goto("http://localhost:8797/index.html?test"); await s.waitForTimeout(900);
 await s.evaluate(() => document.getElementById("wDachAuto").click()); await s.waitForSelector("#d_neigung", { timeout: 4000 });
-await s.selectOption("#d_gform", "skizze"); await s.selectOption("#d_gskizze", "sk"); await s.waitForTimeout(600);
+await s.selectOption("#d_darstellung", "detail"); await s.selectOption("#d_gform", "skizze"); await s.selectOption("#d_gskizze", "sk"); await s.waitForTimeout(600);
 const info = () => s.textContent("#dInfo");
 ok(/Dachfläche [\d.]+ m²/.test(await info()), "Grundriss aus Skizze: " + (await info()));
 await s.selectOption("#d_form", "sattel"); await s.fill("#d_giebel", "2,4"); await s.dispatchEvent("#d_giebel", "input"); await s.waitForTimeout(600);

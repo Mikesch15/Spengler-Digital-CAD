@@ -40,8 +40,9 @@ export function flaechenKoerper(fl, sc, aufbau, deckung, opt = {}) {
   const P = stuecke.flat(), [s0, s1] = spanne(P, 0), [t0, t1] = spanne(P, 1);
   // Schnitt der Geraden mit allen Stücken: zusammenhängende Abschnitte (benachbarte Stücke verschmelzen)
   const ausschn = opt.ausschnitte || [], abziehen = (l, a, b) => l.flatMap(([x, y]) => (b <= x || a >= y ? [[x, y]] : [...(a > x ? [[x, a]] : []), ...(b < y ? [[b, y]] : [])]));
+  const polyAbs = (k, c) => { const l = stuecke.map((st) => intervall(st, k, c)).filter((x) => x && x[1] - x[0] > 1).sort((a, b) => a[0] - b[0]), o = []; for (const x of l) { const z = o[o.length - 1]; if (z && x[0] <= z[1] + 2) z[1] = Math.max(z[1], x[1]); else o.push([x[0], x[1]]); } return o; };
   const abschnitte = (k, c, hw = 0) => {
-    const l = stuecke.map((st) => intervall(st, k, c)).filter((x) => x && x[1] - x[0] > 1).sort((a, b) => a[0] - b[0]); let o = []; for (const x of l) { const z = o[o.length - 1]; if (z && x[0] <= z[1] + 2) z[1] = Math.max(z[1], x[1]); else o.push([x[0], x[1]]); }
+    let o = polyAbs(k, c);
     for (const a of ausschn) { if (k === 0 && c + hw > a.s0 && c - hw < a.s1) o = abziehen(o, a.t0 - (a.wechsel || 0), a.t1 + (a.wechsel || 0)); else if (k === 1 && c + hw > a.t0 && c - hw < a.t1) o = abziehen(o, a.s0, a.s1); }
     return o.filter((x) => x[1] - x[0] > 1);
   };
@@ -67,7 +68,23 @@ export function flaechenKoerper(fl, sc, aufbau, deckung, opt = {}) {
     }
   } else if (dm) for (const st of stuecke) { const [a, b] = spanne(st, 0), [c, d] = spanne(st, 1); box("daemmung", a, b, c, d, dm.von, dm.bis, { platte: true, flaeche: Math.abs(flaecheEbene(st)) / 1e6 }); }
   // Unterdach und Deckung als Platten
-  for (const id of ["unterdach", "deckung"]) if (L[id] && L[id].bis > L[id].von) for (const st of stuecke) { const [a, b] = spanne(st, 0), [c, d] = spanne(st, 1); box(id, a, b, c, d, L[id].von, L[id].bis, { platte: true, flaeche: Math.abs(flaecheEbene(st)) / 1e6 }); }
+  const ziegel = !!opt.ziegel && L.deckung && deckung.lattweite > 0 && deckung.deckbreite > 0;
+  for (const id of ["unterdach", "deckung"]) if (L[id] && L[id].bis > L[id].von) for (const st of stuecke) { const [a, b] = spanne(st, 0), [c, d] = spanne(st, 1); box(id, a, b, c, d, L[id].von, L[id].bis, { platte: true, flaeche: Math.abs(flaecheEbene(st)) / 1e6, unsichtbar: id === "deckung" && ziegel }); }
+  // Einzelne Ziegel: Reihen im Abstand der Lattweite ab der Traufe, Breite = Deckbreite (Biber: Reihen um halbe Breite versetzt); am Rand und an Öffnungen geschnitten
+  if (ziegel) {
+    const lw = deckung.lattweite, db = deckung.deckbreite, versatz = /biber/.test(deckung.art || ""), D = L.deckung;
+    for (let k = 0; t0 + k * lw < t1 - 30; k++) {
+      const tlo = t0 + k * lw, thi = Math.min(tlo + lw, t1); if (thi - tlo < 30) continue;
+      const A = polyAbs(1, tlo + 0.5), Bz = polyAbs(1, thi - 0.5); let iv = [];
+      for (const [a1, a2] of A) for (const [b1, b2] of Bz) { const x = Math.max(a1, b1), y = Math.min(a2, b2); if (y - x > 20) iv.push([x, y]); }
+      for (const a of ausschn) if (thi > a.t0 && tlo < a.t1) iv = abziehen(iv, a.s0, a.s1);
+      const off = versatz && k % 2 ? db / 2 : 0;
+      for (const [sa, sb] of iv) for (let j = Math.floor((sa - s0 - off) / db); s0 + off + j * db < sb; j++) {
+        const a = Math.max(sa, s0 + off + j * db), b = Math.min(sb, s0 + off + (j + 1) * db); if (b - a < 30) continue;
+        box("ziegel", a + 1.5, b - 1.5, tlo + 1.5, thi - 1.5, D.von, D.bis);
+      }
+    }
+  }
   // Wechsel (Auswechslungen) oberhalb und unterhalb jeder Öffnung zwischen den nächsten durchlaufenden Sparren
   if (sp && pos.length) for (const a of ausschn) {
     const links = pos.filter((q) => q + bw / 2 <= a.s0), rechts = pos.filter((q) => q - bw / 2 >= a.s1), sa = links.length ? links.at(-1) + bw / 2 : s0, sb = rechts.length ? rechts[0] - bw / 2 : s1;
@@ -90,7 +107,7 @@ export function flaechenKoerper(fl, sc, aufbau, deckung, opt = {}) {
 // Mengen über alle Flächen: Holzliste (Querschnitt, Länge, Stück), Latten (laufende Meter), Flächen, Ziegel
 export function dachMengen(flaechen, deckung, linien = [], abzug = 0) {
   const holz = new Map(), lm = { konter: new Map(), lattung: new Map() }, wechsel = new Map();
-  let daemm = 0, unterdach = 0, deck = 0;
+  let daemm = 0, unterdach = 0, deck = 0, gezeichnet = 0;
   for (const f of flaechen) {
     for (const k of f.koerper) {
       if (k.art === "sparren") { const l = Math.round(k.laenge / 10) * 10, key = `${k.b}/${k.h}|${l}`; const h = holz.get(key) || { querschnitt: `${k.b}/${k.h}`, laenge: l, stueck: 0 }; h.stueck++; holz.set(key, h); }
@@ -99,13 +116,14 @@ export function dachMengen(flaechen, deckung, linien = [], abzug = 0) {
       else if (k.art === "daemmung") daemm += k.flaeche;
       else if (k.art === "unterdach") unterdach += k.flaeche;
       else if (k.art === "deckung") deck += k.flaeche;
+      else if (k.art === "ziegel") gezeichnet++;
     }
   }
   const r2 = (x) => Math.round(x * 100) / 100; daemm = Math.max(0, daemm - abzug); unterdach = Math.max(0, unterdach - abzug); deck = Math.max(0, deck - abzug);
   const gk = new Map(); // Grat- und Kehlsparren: Länge der Linie, auf 10 mm gerundet
   for (const l of linien) if (l.art === "grat" || l.art === "kehle") { const len = Math.round(l.laenge / 10) * 10, key = l.art + "|" + len, h = gk.get(key) || { art: l.art === "grat" ? "Gratsparren" : "Kehlsparren", laenge: len, stueck: 0 }; h.stueck++; gk.set(key, h); }
   return {
-    wechsel: [...wechsel.values()].sort((a, b) => a.laenge - b.laenge), abzug: r2(abzug), gratKehl: [...gk.values()].sort((a, b) => a.laenge - b.laenge), sparren: [...holz.values()].sort((a, b) => a.laenge - b.laenge), konter: [...lm.konter.values()].map((x) => ({ ...x, meter: r2(x.meter) })), lattung: [...lm.lattung.values()].map((x) => ({ ...x, meter: r2(x.meter) })),
+    ziegelGezeichnet: gezeichnet, wechsel: [...wechsel.values()].sort((a, b) => a.laenge - b.laenge), abzug: r2(abzug), gratKehl: [...gk.values()].sort((a, b) => a.laenge - b.laenge), sparren: [...holz.values()].sort((a, b) => a.laenge - b.laenge), konter: [...lm.konter.values()].map((x) => ({ ...x, meter: r2(x.meter) })), lattung: [...lm.lattung.values()].map((x) => ({ ...x, meter: r2(x.meter) })),
     daemmung: r2(daemm), unterdach: r2(unterdach), deckflaeche: r2(deck),
     ziegel: Math.ceil(deck * (deckung.stueckProM2 || 0)), gewichtKg: Math.round(deck * (deckung.gewichtProM2 || 0)),
   };

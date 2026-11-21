@@ -40,20 +40,37 @@ export function dachSchnitt({ art, neigung = 35, schichten, aufbau, wandstaerke 
     const off = kehle ? (U ? U.bis : 0) : top, sch = +blech.schenkel || 150, y0 = off / c; // Scheitel / Tiefpunkt des Blechs auf Höhe der Auflagefläche
     zuege.push({ name: DETAILARTEN[art] + "blech", pts: [-1, 0, 1].map((sg) => sg === 0 ? [0, y0] : [sg * c * sch, y0 + (kehle ? 1 : -1) * s * sch]) });
   }
-  return { polys, zuege, texte, art, neigung, legende: [...liste].reverse().map((l) => ({ id: l.id, name: l.name })), titel: `${DETAILARTEN[art]} ${Math.round(neigung)}°` };
+  // Masse: jede Schicht einzeln (Dicke senkrecht zur Dachfläche) + Gesamtdicke, ausserhalb der Zeichnung
+  const kette = liste.filter((l) => !(l.id === "daemmung" && aufbau.daemmung === "zwischen") && l.bis > l.von).sort((a, b) => a.von - b.von), masse = [];
+  if (kette.length) {
+    let P, dir, Tm = L + 70;
+    if (art === "traufe") { const d = [-c, s], nrm = [s, c], T0 = [nrm[0] * H, nrm[1] * H]; P = (o, k = 0) => [T0[0] + nrm[0] * o + d[0] * (Tm + k), T0[1] + nrm[1] * o + d[1] * (Tm + k)]; dir = d; }
+    else if (art === "ortgang") { P = (o, k = 0) => [-(Tm + k), o + H]; dir = [-1, 0]; }
+    else { const kehle = art === "kehle", d = kehle ? [c, s] : [c, -s], nrm = kehle ? [-s, c] : [s, c]; P = (o, k = 0) => [nrm[0] * o + d[0] * (Tm + k), nrm[1] * o + d[1] * (Tm + k)]; dir = d; }
+    for (const l of kette) masse.push({ a: P(l.von), b: P(l.bis), text: `${+(l.bis - l.von).toFixed(1)}`, tick: dir, textPos: (() => { const m = P((l.von + l.bis) / 2); return [m[0] + dir[0] * 70, m[1] + dir[1] * 70]; })() });
+    const v0 = Math.min(...kette.map((l) => l.von)), v1 = Math.max(...kette.map((l) => l.bis));
+    masse.push({ a: P(v0, 150), b: P(v1, 150), text: `Σ ${+(v1 - v0).toFixed(1)}`, tick: dir, textPos: (() => { const m = P((v0 + v1) / 2, 150); return [m[0] + dir[0] * 90, m[1] + dir[1] * 90]; })(), gesamt: true });
+  }
+  return { polys, zuege, texte, masse, art, neigung, legende: [...liste].reverse().map((l) => ({ id: l.id, name: l.name })), titel: `${DETAILARTEN[art]} ${Math.round(neigung)}°` };
 }
 
 // SVG in Papier-mm: M = Massstab 1:M, Legende rechts
 export function dachSchnittSvg(sch, { M = 5, rand = 5, schrift = 2.3, blechDicke = 0.7 } = {}) {
-  const k = 1 / M, pts = [...sch.polys.flatMap((p) => p.pts), ...sch.zuege.flatMap((t) => t.pts)], x0 = Math.min(...pts.map((p) => p[0])), x1 = Math.max(...pts.map((p) => p[0])), y0 = Math.min(...pts.map((p) => p[1])), y1 = Math.max(...pts.map((p) => p[1]));
+  const k = 1 / M, pts = [...sch.polys.flatMap((p) => p.pts), ...sch.zuege.flatMap((t) => t.pts), ...(sch.masse || []).flatMap((m) => [m.a, m.b, m.textPos])], x0 = Math.min(...pts.map((p) => p[0])), x1 = Math.max(...pts.map((p) => p[0])), y0 = Math.min(...pts.map((p) => p[1])), y1 = Math.max(...pts.map((p) => p[1]));
   const legB = 66, dB = (x1 - x0) * k, dH = (y1 - y0) * k, kopf = schrift * 3.2, b = rand * 2 + dB + 6 + legB, h = Math.max(rand * 2 + dH + kopf, rand * 2 + kopf + (sch.legende.length + 1) * schrift * 1.7);
   const P = ([x, y]) => [z(rand + (x - x0) * k), z(rand + kopf + (y1 - y) * k)], pf = (q, zu = true) => q.map(P).map(([x, y], i) => `${i ? "L" : "M"}${x} ${y}`).join("") + (zu ? "Z" : "");
   const out = [`<text x="${rand}" y="${rand + schrift}" class="titel" text-anchor="start">${sch.titel} · 1:${M}</text>`];
   for (const p of sch.polys) out.push(`<path d="${pf(p.pts)}" fill="${FARBEN[p.id] || "#cfd5da"}" class="schicht"/>`);
   for (const t of sch.zuege) out.push(`<path d="${pf(t.pts, false)}" class="blech" stroke-width="${z(Math.max(0.4, blechDicke * k * 1.5))}"/>`);
+  for (const m of sch.masse || []) { // Massketten: Linie mit Strichen an den Enden und Wert
+    const [a, b] = [P(m.a), P(m.b)], t = m.tick, nx = -t[1], ny = t[0], tk = 2.2; void nx; void ny;
+    out.push(`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" class="mass"/>`);
+    for (const e of [m.a, m.b]) { const q = P(e), r = P([e[0] + t[0] * 40, e[1] + t[1] * 40]), u = P([e[0] - t[0] * 40, e[1] - t[1] * 40]); void tk; out.push(`<line x1="${u[0]}" y1="${u[1]}" x2="${r[0]}" y2="${r[1]}" class="mass"/>`); void q; }
+    const q = P(m.textPos); out.push(`<text x="${q[0]}" y="${z(q[1] + schrift * 0.3)}" class="masszahl" text-anchor="middle">${m.text}</text>`);
+  }
   const lx = rand + dB + 6; let ly = rand + kopf + schrift;
   for (const l of sch.legende) { out.push(`<rect x="${z(lx)}" y="${z(ly - schrift * 0.8)}" width="${z(schrift)}" height="${z(schrift * 0.8)}" fill="${FARBEN[l.id] || "#cfd5da"}" class="schicht"/>`, `<text x="${z(lx + schrift * 1.4)}" y="${z(ly)}" class="legende" text-anchor="start">${l.name.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</text>`); ly += schrift * 1.7; }
   for (const t of sch.texte) { out.push(`<text x="${z(lx)}" y="${z(ly + schrift * 0.4)}" class="legende" text-anchor="start">${t}</text>`); ly += schrift * 1.7; }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${z(b)} ${z(h)}" width="${z(b)}" height="${z(h)}" font-size="${schrift}" font-family="sans-serif"><style>.schicht{stroke:#222;stroke-width:.15}.blech{fill:none;stroke:#b8732d;stroke-linejoin:round;stroke-linecap:round}.titel{font-weight:700;fill:#1f2a33}.legende{fill:#1f2a33;font-size:${schrift * 0.85}px}</style>${out.join("")}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${z(b)} ${z(h)}" width="${z(b)}" height="${z(h)}" font-size="${schrift}" font-family="sans-serif"><style>.schicht{stroke:#222;stroke-width:.15}.blech{fill:none;stroke:#b8732d;stroke-linejoin:round;stroke-linecap:round}.titel{font-weight:700;fill:#1f2a33}.legende{fill:#1f2a33;font-size:${schrift * 0.85}px}.mass{stroke:#1f5fbf;stroke-width:.2}.masszahl{fill:#1f5fbf;font-size:${schrift * 0.9}px}</style>${out.join("")}</svg>`;
   return { svg, b: z(b), h: z(h), name: sch.titel };
 }

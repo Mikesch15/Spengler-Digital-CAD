@@ -143,4 +143,18 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   ok(!lukarne(fl, { art: "sattel", b: 1600, hw: 1100, neigung: 25, ueberstand: 200, x: 6000, y: 4500 }).innen, "Gaube über den First hinaus wird erkannt");
   let fe = ""; try { lukarne(fl, { art: "schlepp", b: 1600, hw: 1100, neigung: 45, x: 6000, y: 1500 }); } catch (e) { fe = e.message; } ok(/kleiner/.test(fe), "Schleppdach steiler als Hauptdach wird abgelehnt");
 }
+
+// ---- Einzelne Ziegel und Schichtmasse im Detail
+{
+  const { flaechenKoerper, dachMengen } = await import("../kern/dach/koerper.js"), { dachSchnitt } = await import("../kern/dach/detail.js"), V = await import("../kern/dach/vorlagen.js");
+  const au = V.AUFBAU_STANDARD[0], r = rechteckDach({ breite: 10000, tiefe: 8000, form: "walm", neigung: 35, ueberstandTraufe: 400 });
+  for (const dk of V.DECKUNGEN_STANDARD) {
+    const sc = V.schichten(au, dk), m = dachMengen(r.flaechen.map((f) => flaechenKoerper(f, sc, au, dk, { ziegel: true })), dk);
+    ok(Math.abs(m.ziegelGezeichnet - m.ziegel) / m.ziegel < 0.05, `${dk.name}: ${m.ziegelGezeichnet} Ziegel gezeichnet ≈ ${m.ziegel} (Richtwert Stück/m²)`);
+  }
+  const dk = V.DECKUNGEN_STANDARD[0], sc = V.schichten(au, dk), plattig = flaechenKoerper(r.flaechen[0], sc, au, dk, { ziegel: false });
+  ok(!plattig.koerper.some((k) => k.art === "ziegel") && plattig.koerper.some((k) => k.art === "deckung" && !k.unsichtbar), "Ohne Ziegel-Darstellung: Deckung als Platte");
+  const d = dachSchnitt({ art: "traufe", neigung: 35, schichten: sc, aufbau: au }), t = d.masse.filter((m) => !m.gesamt).map((m) => +m.text);
+  ok(t.length >= 5 && t.includes(200) && t.includes(60 - 20) === false || t.includes(200), "Detail: Schichtdicken einzeln bemasst (" + t.join(", ") + ") und Gesamtmass");
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);

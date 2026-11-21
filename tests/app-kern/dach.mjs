@@ -12,6 +12,7 @@ await s.evaluate(() => document.getElementById("wDachAuto").click()); await s.wa
 const feats = () => s.evaluate(() => window.sdcadTest.dok().features.map((f) => f.typ).filter((t) => t === "gebaeude" || t === "dach"));
 ok((await feats()).join() === "gebaeude,dach", "Legt Gebäude und Dach an");
 const info = () => s.textContent("#dInfo"), koerper = () => s.evaluate(() => window.sdcadTest.sichtbareKoerper());
+await s.selectOption("#d_darstellung", "detail"); await s.waitForTimeout(600);
 let n1 = await koerper(); ok(n1 >= 6, `Satteldach: ${n1} Körper (2 Dachflächen + Wände)`);
 ok(/Dachfläche [\d.]+ m² · First 10\.6 m/.test(await info()), "Info: " + (await info()));
 await s.selectOption("#d_form", "walm"); await s.waitForTimeout(500); const n2 = await koerper(); ok(/Grate [12]\d\.\d m/.test(await info()) && n2 >= 8, `Walmdach: Grate in der Info, ${n2} Körper`);
@@ -22,6 +23,9 @@ ok(!/Mindestneigung/.test(await info()), "40° mit Biber doppelt: kein Hinweis")
 await s.selectOption("#d_gform", "L"); await s.waitForTimeout(700);
 ok(/Kehlen [\d.]+ m/.test(await info()), "L-Form (Walm): Kehle in der Info – " + (await info()));
 await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(400); await s.screenshot({ path: "/tmp/t/dach.png" });
+await s.selectOption("#d_darstellung", "ziegel"); await s.waitForTimeout(12000);
+const nZiegel = await s.evaluate(() => window.sdcadTest.koerperInfo?.().length ?? 0); ok(nZiegel > 0, "Darstellung mit einzelnen Ziegeln baut (" + nZiegel + " Körper)");
+await s.selectOption("#d_darstellung", "detail"); await s.waitForTimeout(800);
 await s.click("#dOk"); await s.waitForTimeout(400);
 // Phase 2: einzelne Körper (Sparren, Dämmung, Unterdach, Latten, Deckung) + Holzliste im Werkstatt-Panel
 const nDetail = await koerper(); ok(nDetail >= 11, `Aufbau detailliert: ${nDetail} Körper (je Art ein Netz)`);
