@@ -29,4 +29,16 @@ for (const [nm, b] of [["Flansch 90° (rund)", { werkzeug: flanschStandard("flan
 }
 // Konvexer Kreis: Platte endet am Biegebeginn (Volumen der Platte + Flansch < Platte bis zur gezeichneten Kante + Flansch)
 const sehrKurz = flaechenblech(kreis, [{ werkzeug: flanschStandard("flansch") }], m); ok(sehrKurz.profile[0].zugabe > 20 && sehrKurz.profile[0].zugabe < 30, `Zugabe Flansch 90/25 = ${sehrKurz.profile[0].zugabe.toFixed(2)} mm`);
+// Nachträglich an ein Blechprofil angesetzt (Kante A = Anfang, Kante B = Ende)
+{
+  const { freiesProfil, profilErweitern } = await import("../kern/profile.js"), { berechne } = await import("../kern/geometrie.js"), { folge } = await import("../kern/details.js");
+  const p = freiesProfil(0, [{ L: 100, winkel: 90 }, { L: 60, winkel: 0 }], m), R = (x) => berechne(x.start, x.ops, m.t, m.ri, m.k), r0 = R(p);
+  const rB = R(profilErweitern(p, [{ ende: "B", zeilen: folge("1 90 25") }], m)), rA = R(profilErweitern(p, [{ ende: "A", zeilen: folge("1 90 25") }], m)), rU = R(profilErweitern(p, [{ ende: "B", zeilen: folge("1 U+ 8") }], m));
+  ok(rB.biegungen.length === 2 && rB.zuschnitt - r0.zuschnitt > 22 && rB.zuschnitt - r0.zuschnitt < 26, `Flansch 25 an Kante B: Zuschnitt +${(rB.zuschnitt - r0.zuschnitt).toFixed(1)} mm, 2 Biegungen`);
+  ok(rA.biegungen.length === 2 && nah(rA.zuschnitt, rB.zuschnitt, 1e-6), "Flansch 25 an Kante A: gleicher Zuschnitt wie an Kante B");
+  const e = (r) => r.pfad.at(-1).p2;
+  ok(nah(e(rB)[0], 75, 1e-6) && nah(e(rB)[1], 60, 1e-6), "Kante B: Ende des Profils liegt 25 mm zurück (75 / 60)");
+  ok(rU.biegungen.length === 2 && rU.zuschnitt - r0.zuschnitt > 6, "Umschlag an Kante B angesetzt");
+  const zwei = R(profilErweitern(p, [{ ende: "B", zeilen: folge("1 90 25") }, { ende: "B", zeilen: folge("1 90 10") }], m)); ok(zwei.biegungen.length === 3, "Zwei Schritte an derselben Kante setzen sich fort");
+}
 if (f) { console.error(f + " Fehler"); process.exit(1); } else console.log("Flansch/Umschlag: alle Tests bestanden");

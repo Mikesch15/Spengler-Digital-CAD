@@ -26,7 +26,7 @@ import { kantenGeometrie, RICHTUNGEN as ANSICHT_RICHTUNGEN } from "./ansicht.js"
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
-import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, alsZeilen } from "../kern/profile.js";
+import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, profilErweitern, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf, rundblechDxf } from "../kern/dxf.js";
 import { scheibeMitRand, kragen, kegelstumpf, beurteilen, zuschnitt, zuschnittDxf, VERFAHREN } from "../kern/umformung.js";
@@ -202,6 +202,28 @@ steuerung.addEventListener("change", () => { // OrbitControls dreht um sein Ziel
   const R = kamera.quaternion.clone().multiply(drehQ.clone().invert()), d = drehPivot.clone().sub(steuerung.target), sh = d.clone().sub(d.clone().applyQuaternion(R));
   kamera.position.add(sh); steuerung.target.add(sh); drehQ.copy(kamera.quaternion);
 });
+// Grosse Modelle: Zoom zur Oberfläche unter dem Zeiger (Kamera und Ziel werden um diesen Punkt skaliert) – die Kamera nähert sich nur bis zu einem Mindestabstand und fährt nie durch die Wand.
+// Verschieben und Drehen beginnen mit dem Ziel auf der Oberfläche in Bildmitte: die Geschwindigkeit passt zum betrachteten Teil (nicht zur Entfernung zum Modellmittelpunkt).
+const modellRadius = () => { const b = new THREE.Box3(); modell.children.forEach((o) => { if (!o.userData.konstruktion) b.expandByObject(o); }); return b.isEmpty() ? 500 : b.getSize(new THREE.Vector3()).length() / 2; };
+const flaechenTreffer = (ndcPunkt) => { kamera.updateMatrixWorld(true); strahl.setFromCamera(ndcPunkt, kamera); return strahl.intersectObjects(modell.children.filter((o) => o.isMesh && o.visible), false)[0] || null; };
+function ziehNahe(P, faktor) {
+  const d = kamera.position.distanceTo(P); if (d < 1e-6) return;
+  const r = modellRadius(), minAbst = Math.max(4, r * 0.0004), maxAbst = Math.max(r * 40, 2000);
+  let nd = d * faktor; if (faktor < 1) nd = Math.max(nd, Math.min(d, minAbst)); else nd = Math.min(nd, Math.max(d, maxAbst));
+  const k = nd / d, ko = kamera.position.clone().sub(P).multiplyScalar(k), zo = steuerung.target.clone().sub(P).multiplyScalar(k); kamera.position.copy(P).add(ko); steuerung.target.copy(P).add(zo);
+  kamera.near = Math.max(0.3, Math.min(r / 100, nd * 0.02)); kamera.far = Math.max(kamera.far, r * 50, nd * 20); kamera.updateProjectionMatrix();
+}
+leinwand.addEventListener("wheel", (e) => {
+  if (skizze || modus2d) return; // in der Skizze bleibt das bisherige Zoomen
+  e.preventDefault(); e.stopImmediatePropagation();
+  const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 100 : e.deltaY, treffer = flaechenTreffer(ndc(e));
+  let P = treffer?.point; if (!P) P = strahl.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(kamera.getWorldDirection(new THREE.Vector3()), steuerung.target), new THREE.Vector3());
+  if (P) ziehNahe(P, Math.exp(dy * 0.0011 * steuerung.zoomSpeed));
+}, { capture: true, passive: false });
+addEventListener("pointerdown", (e) => { // Ziel auf die Oberfläche in Bildmitte legen (Ansicht bleibt gleich)
+  if (!e.isPrimary || skizze || modus2d || e.target !== leinwand || (e.pointerType === "mouse" && e.button !== 1)) return;
+  const t = flaechenTreffer(new THREE.Vector2(0, 0)); if (t && t.distance > kamera.near * 2) steuerung.target.copy(t.point);
+}, true);
 // Stift (Tablet) bewegt das Modell wie der Finger (drehen), ausser in der Skizze – dort zeichnet er; die Maus bleibt unberührt
 addEventListener("pointerdown", (e) => { steuerung.mouseButtons.LEFT = e.pointerType === "pen" && !skizze && e.target === leinwand ? THREE.MOUSE.ROTATE : null; }, true);
 szene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; // Studiolicht: Spiegelungen wie im CAD-Programm
@@ -1111,7 +1133,7 @@ function regen() {
       } else if (f.typ === "vorlage") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         const m = material(f.material), v = VORLAGE[f.vorlage];
-        const { start, ops } = v.bau(f.params, m);
+        const { start, ops } = profilErweitern(v.bau(f.params, m), profilErweiterungen(f, m), m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         f._kernLage = null;
         if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id)); }
@@ -1167,6 +1189,9 @@ function regen() {
         f._teile = br.teile.map((t, i) => { const vid = { kamin: "kamin", "luk-wand": "wand", "luk-kehle": "kehle" }[t.art] || BLECH_VORLAGE[t.art], { start, ops } = VORLAGE[vid].bau({ ...(BLECH_VORLAGE[t.art] ? par[t.art] : { ...standardwerte(vid), ...(par[vid] || {}) }), neigung: t.neigung }, m);
           return { id: `${f.id}:${i}`, typ: "dachblech", eltern: f, name: `${t.name} ${t.laenge} mm`, material: f.material, laenge: t.laenge, stueck: t.stueck, notiz: `Neigung ${t.neigung}° · aus «${d.name}»`, _res: berechne(start, ops, m.t, m.ri, m.k) }; });
         if (!f.versteckt && gd) for (const fo of f._formen) modell.add(koerperMesh(dachPlatte(fo.punkte, fo.normale, 4, gd), BLECH_FARBE[fo.art] || 0xa9622f, f.id));
+      } else if (f.typ === "profilkante") { // Flansch/Umschlag/Baustein, nachträglich an Kante A oder B eines Blechprofils – wirkt im Profil (profilErweiterungen)
+        const z = finde(f.ziel); if (!z || (z.typ !== "profil" && z.typ !== "vorlage")) throw new Error("Das Blechprofil fehlt");
+        if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Blechprofil muss vor diesem Schritt stehen");
       } else if (f.typ === "eindeckung") { // Ziegel einzeln eindecken – nach den Spenglerblechen: die Ziegel werden an Kehle, Anschlüssen und Öffnungen geschnitten
         f._ziegel = null; const d = finde(f.dach); if (d?.typ !== "dach" || !d._dach) throw new Error("Dach fehlt – das Dach muss vor der Eindeckung stehen und fehlerfrei sein");
         if (doc.features.indexOf(d) > doc.features.indexOf(f)) throw new Error("Das Dach muss vor der Eindeckung stehen");
@@ -1228,7 +1253,7 @@ function regen() {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         const m = material(f.material);
         if (f.zeilen.some((z) => !(z.L > 0))) throw new Error("Jeder Schenkel braucht eine Länge grösser als 0");
-        const { start, ops } = freiesProfil(f.start, f.zeilen, m);
+        const { start, ops } = profilErweitern(freiesProfil(f.start, f.zeilen, m), profilErweiterungen(f, m), m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         f._kernLage = null;
         if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id)); }
@@ -1318,7 +1343,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
@@ -1401,7 +1426,7 @@ const istAbgewickelt = (f) => doc.features.filter((x) => (x.typ === "abwickeln" 
 // Kontextmenü (Rechtsklick oder langes Antippen) in Zeitleiste und Browser
 function featureMenue(f, x, y) {
   const m = $("featureMenue"), i = doc.features.indexOf(f);
-  const punkte = [...(f.typ === "kante" ? [["kumk", "Richtung umkehren"]] : []), ...(f.typ === "flaeche" ? [["abw", istAbgewickelt(f) ? "Falten (zurück in Form)" : "Abwickeln (flach bearbeiten) …"]] : []), ["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
+  const punkte = [...((f.typ === "kante" || f.typ === "profilkante") ? [["kumk", "Richtung umkehren"]] : []), ...(f.typ === "flaeche" ? [["abw", istAbgewickelt(f) ? "Falten (zurück in Form)" : "Abwickeln (flach bearbeiten) …"]] : []), ["bearb", "Bearbeiten"], ["umbenennen", "Umbenennen …"], ["unter", f.unterdrueckt ? "Aktivieren" : "Unterdrücken"],
     ["zurueck", "Bis hier zurückrollen (danach aus)"], ["ende", "Alle aktivieren (Marke ans Ende)"], ["links", "Nach vorne verschieben"], ["rechts", "Nach hinten verschieben"],
     ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["darst", "Darstellung …"]]),
     ...(["skizze", "ebene", "achse", "konpunkt"].includes(f.typ) ? [] : [["kompNeu", "Eigene Komponente aus diesem Teil"], ["komp", f.komponente ? `Komponente «${esc(f.komponente)}» ändern …` : "In Komponente …"], ...(f.komponente ? [["kompAus", "Aus Komponente herauslösen"], ["kompLage", `Komponente «${esc(f.komponente)}» verschieben / drehen …`], ["kompName", "Komponente umbenennen …"], ["kompLoesen", "Komponente auflösen"]] : [])]), ["kopie", "Duplizieren"], ["weg", "Löschen"]];
@@ -1811,6 +1836,7 @@ function bearbeite(f) {
   if (f.typ === "dachelement") return dachelementDialog(f);
   if (f.typ === "lukarne") return lukarneDialog(f);
   if (f.typ === "eindeckung") return eindeckungDialog(f);
+  if (f.typ === "profilkante") return kanteDialog(f);
   if (f.typ === "gebaeude") { const d = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id); return d ? dachDialog(d) : gebaeudeDialog(f); }
   if (f.typ === "abwickeln" || f.typ === "falten") return status(f.typ === "abwickeln" ? "Abwickeln: das Blech liegt flach, bis «Falten» folgt. Dazwischen Skizze + Extrusion «Ausschneiden»." : "Falten: bildet die Ausschnitte der Abwicklung aufs gekantete Blech ab.");
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
@@ -2628,13 +2654,13 @@ function dachDialog(f) {
 }
 // ------------------------------------------------------------ Kanten-Werkzeug: Flansch / Umschlag / Kantenbaustein (erst Blech anklicken, dann die Kante)
 let kantenWz = null; // { typ, baustein, seite, schritt: "blech" | "kante", f }
-const kantenWzText = () => { const w = kantenWz; if (!w) return ""; return w.schritt === "blech" ? "① Flächenblech anklicken" : `② Kante von «${w.f.name}» anklicken`; };
+const kantenWzText = () => { const w = kantenWz; if (!w) return ""; return w.schritt === "blech" ? "① Flächenblech oder Blechprofil anklicken" : istProfil(w.f) ? `② «${w.f.name}»: Kante A (Anfang) oder Kante B (Ende) wählen` : `② Kante von «${w.f.name}» anklicken`; };
 function kantenBarZeigen() {
   const w = kantenWz, bar = $("kantenBar"); bar.hidden = !w; if (!w) return;
   $("kbTitel").textContent = w.typ === "flansch" ? "Flansch" : w.typ === "umschlag" ? "Umschlag" : `Baustein: ${bausteinName(w.baustein)}`;
   $("kbText").textContent = kantenWzText();
   $("kbWinkelL").hidden = w.typ !== "flansch"; document.querySelector("#kantenBar label:nth-of-type(2)").hidden = w.typ === "baustein";
-  $("kbRichtung").textContent = `Richtung: ${w.seite === -1 ? "nach hinten" : "Sichtseite"} ⇄`;
+  $("kbRichtung").textContent = `Richtung: ${w.seite === -1 ? "nach hinten" : "Sichtseite"} ⇄`; $("kbEnden").hidden = !(w.schritt === "kante" && istProfil(w.f));
 }
 function endeKantenWz() { kantenWz = null; menueKante = null; kantenBarZeigen(); zeigeKanten(); }
 let kHoverWartet = false, kHoverPos = null; // Kante unter dem Zeiger leuchtet auf (Werkzeug Schritt 2)
@@ -2646,9 +2672,25 @@ $("labels").addEventListener("pointerover", (e) => { // auch die Beschriftung «
   const kd = e.target.closest?.(".kante"); if (!kantenWz || kantenWz.schritt !== "kante" || !kd || kd.dataset.fid !== kantenWz.f.id || menueKante?.key === kd.dataset.kante) return;
   menueKante = { fid: kantenWz.f.id, key: kd.dataset.kante }; zeigeKanten();
 });
+// Nachträgliche Kantenbausteine eines Blechprofils (Kante A = Anfang, B = Ende) als Verlängerung der Abkantfolge
+function profilErweiterungen(f, m) {
+  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus).map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende === "B" ? "B" : "A", zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean);
+}
+const istProfil = (h) => h?.typ === "profil" || h?.typ === "vorlage";
+function kantenWert(w, m) { // Baustein bzw. Werkzeug der Kantenleiste → Wert für einen Schritt
+  if (w.typ === "baustein") { const b = bausteinFuer(w.baustein); return w.seite === -1 ? { folge: folgeUmkehren(bausteinFolge(werkzeugAuf(b, m), m)), versatz: +b.versatz || 0 } : w.baustein; }
+  const wk = { ...flanschStandard(w.typ), winkel: parseFloat($("kbWinkel").value) || 90, laenge: parseFloat($("kbLaenge").value) || (w.typ === "umschlag" ? 10 : 25), seite: w.seite }; return werkzeugNeu({ werkzeug: wk }, wk, m);
+}
+function wendeProfilKante(ende) { // Schritt «Profilkante» in der Zeitleiste anlegen (live)
+  const w = kantenWz, f = w?.f; if (!istProfil(f)) return status("Zuerst ein Blechprofil anklicken.");
+  const m = material(f.material), titel = w.typ === "flansch" ? "Flansch" : w.typ === "umschlag" ? "Umschlag" : bausteinName(w.baustein);
+  const n = { id: neueId(), typ: "profilkante", name: `${titel} ${f.name} · Kante ${ende}`, ziel: f.id, ende, wert: kantenWert(w, m) };
+  einfuegen(n); w.letzte = n; regen();
+  status(f._fehler ? "⚠ " + f._fehler : `Kante ${ende} von «${f.name}»: «${titel}» angesetzt (Schritt in der Zeitleiste). Weitere Kante wählen oder «Fertig».`);
+}
 function starteKantenWz(typ, x = 200, y = 80) {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
-  const los = (baustein) => { kantenWz = { typ, baustein, seite: 1, schritt: "blech", f: null }; const h = hauptVon(auswahl); if (h?.typ === "flaeche" && !h.versteckt) { kantenWz.f = h; kantenWz.schritt = "kante"; zeigeKanten(); } kantenBarZeigen(); status(kantenWzText()); };
+  const los = (baustein) => { kantenWz = { typ, baustein, seite: 1, schritt: "blech", f: null }; const h = hauptVon(auswahl); if ((h?.typ === "flaeche" || istProfil(h)) && !h.versteckt) { kantenWz.f = h; kantenWz.schritt = "kante"; zeigeKanten(); } kantenBarZeigen(); status(kantenWzText()); };
   if (typ !== "baustein") return los(null);
   const m = $("kantenMenue"), gruppen = [...new Set(alleBausteine().map((b) => b.gruppe || "Eigene"))];
   m.innerHTML = `<div class="kmkopf"><b>Baustein wählen</b><button class="kmzu" data-kmzu aria-label="Schliessen">×</button></div>${gruppen.map((gr) => `<div class="kmgruppe">${esc(gr)}</div>${alleBausteine().filter((b) => (b.gruppe || "Eigene") === gr).map((b) => `<button data-kb="${esc(b.id)}">${esc(b.name)}<small>${esc(b.folge)}</small></button>`).join("")}`).join("")}`;
@@ -2659,8 +2701,8 @@ function kantenWzKlick(e) { // true = Klick verbraucht
   const w = kantenWz;
   strahl.setFromCamera(ndc(e), kamera);
   const t = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0], h = t ? hauptVon(t.object.userData.fid) : null;
-  if (w.schritt === "kante") { const k = kanteUnterMaus(w.f, e); if (k) { wendeKantenWz(k); return true; } if (!(h?.typ === "flaeche" && h !== w.f)) { status(kantenWzText()); return true; } }
-  if (h?.typ !== "flaeche") { status("Hier ist kein Flächenblech – " + kantenWzText()); return true; }
+  if (w.schritt === "kante") { if (w.f.typ === "flaeche") { const k = kanteUnterMaus(w.f, e); if (k) { wendeKantenWz(k); return true; } } if (!((h?.typ === "flaeche" || istProfil(h)) && h !== w.f)) { status(kantenWzText()); return true; } }
+  if (h?.typ !== "flaeche" && !istProfil(h)) { status("Hier ist kein Blech – " + kantenWzText()); return true; }
   w.f = h; w.schritt = "kante"; waehle(h.id); zeigeKanten(); kantenBarZeigen(); status(kantenWzText()); return true;
 }
 function wendeKantenWz(key) { // legt einen Schritt «Kante» in der Zeitleiste an (live, mit eigenem Dialog)
@@ -2678,7 +2720,7 @@ function wendeKantenWz(key) { // legt einen Schritt «Kante» in der Zeitleiste 
 }
 // Richtung eines Schritts umkehren (Sichtseite ⇄ hinten), live
 function kanteUmkehren(f, key) {
-  const m = material(f.material), schritt = f.typ === "kante" ? f : kantenSchritte(f, key).at(-1), ziel = f.typ === "kante" ? finde(f.ziel) : f, v = schritt ? schritt.wert : ziel.kanten?.[key]; if (!v) return;
+  const m = material(f.material), schritt = f.typ === "kante" || f.typ === "profilkante" ? f : kantenSchritte(f, key).at(-1), ziel = f.typ === "kante" || f.typ === "profilkante" ? finde(f.ziel) : f, v = schritt ? schritt.wert : ziel.kanten?.[key]; if (!v) return;
   const neu = v.werkzeug ? werkzeugNeu(v, { ...v.werkzeug, seite: v.werkzeug.seite === -1 ? 1 : -1 }, m) : (() => { const b = bausteinFuer(v); return { folge: folgeUmkehren(bausteinFolge(werkzeugAuf(b, m), m)), versatz: +b.versatz || 0 }; })();
   if (schritt) schritt.wert = neu; else setzeKanteVon(ziel, key, neu);
   regen();
@@ -2692,7 +2734,7 @@ function kanteDialog(f) {
       { id: "seite", label: "Richtung", optionen: [["1", "zur Sichtseite"], ["-1", "nach hinten"]], wert: String(x.werkzeug.seite === -1 ? -1 : 1) }]
       : typeof x === "string" ? [{ id: "baustein", label: "Baustein", optionen: alleBausteine().map((b) => [b.id, b.name]), wert: x }]
       : [{ id: "folge", label: "Abkantfolge", text: true, wert: x?.folge ?? "" }]),
-    { id: "anhaengen", label: "Bei belegter Kante", optionen: [["", "ersetzt den Baustein der Kante"], ["1", "setzt ihn fort (anhängen)"]], wert: ff.anhaengen ? "1" : "" }]; };
+    ...(ff.typ === "kante" ? [{ id: "anhaengen", label: "Bei belegter Kante", optionen: [["", "ersetzt den Baustein der Kante"], ["1", "setzt ihn fort (anhängen)"]], wert: ff.anhaengen ? "1" : "" }] : [])]; };
   const setze = (ff, ww) => {
     ff.name = ww.name?.trim() || ff.name; ff.anhaengen = !!ww.anhaengen;
     if (ff.wert?.werkzeug) { const wk = { ...ff.wert.werkzeug }; if (ww.winkel > 0) wk.winkel = ww.winkel; if (ww.laenge > 0) wk.laenge = ww.laenge; wk.radius = ww.radius > 0 ? ww.radius : null; if (ww.bezug) wk.bezug = ww.bezug; wk.seite = +ww.seite === -1 ? -1 : 1; ff.wert = werkzeugNeu(ff.wert, wk, m); }
@@ -2705,7 +2747,7 @@ function kanteDialog(f) {
 document.querySelectorAll("[data-kantenwz]").forEach((b) => b.addEventListener("click", () => { const r = b.getBoundingClientRect(); setTimeout(() => starteKantenWz(b.dataset.kantenwz, r.right + 6, r.top), 0); }));
 $("kbRichtung").onclick = () => { if (!kantenWz) return; kantenWz.seite = kantenWz.seite === -1 ? 1 : -1; kantenBarZeigen(); if (kantenWz.letzte && finde(kantenWz.letzte.id)) kanteUmkehren(kantenWz.letzte, kantenWz.letzte.key); };
 for (const id of ["kbWinkel", "kbLaenge"]) $(id).addEventListener("input", () => { const l = kantenWz?.letzte; if (!l || !finde(l.id) || !l.wert?.werkzeug) return; const wk = { ...l.wert.werkzeug }, a = parseFloat($("kbWinkel").value), c = parseFloat($("kbLaenge").value); if (a > 0 && wk.typ === "flansch") wk.winkel = a; if (c > 0) wk.laenge = c; l.wert = werkzeugNeu(l.wert, wk, material(kantenWz.f.material)); regen(); zeigeKanten(); });
-$("kbEnde").onclick = endeKantenWz;
+$("kbEnde").onclick = endeKantenWz; $("kbA").onclick = () => wendeProfilKante("A"); $("kbB").onclick = () => wendeProfilKante("B");
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && kantenWz && !dlg && !skizze) { endeKantenWz(); status(""); } });
 function flaecheDialog(f) {
   const istNeu = !f;
@@ -5844,7 +5886,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { kameraZiel: () => { const t = flaechenTreffer(new THREE.Vector2(0, 0)); return { abstand: t ? t.distance : null, kamera: kamera.position.toArray(), min: Math.max(4, modellRadius() * 0.0004) }; }, maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

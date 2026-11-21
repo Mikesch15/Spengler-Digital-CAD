@@ -183,3 +183,19 @@ export function alsZeilen(start, ops) {
   }
   return { start, zeilen };
 }
+
+// Nachträglich an ein Profil angesetzte Kantenbausteine / Flansche / Umschläge an Kante A (Anfang) oder Kante B (Ende)
+// extras: [{ ende: "A" | "B", zeilen }], zeilen = folge(`1 ${Abkantfolge}`) – der erste Schenkel (Länge 1) ist nur Platzhalter für das Profil selbst
+const bend = (z, m, vorz = 1) => (z.art === "umschlag" ? HEM(vorz * (z.winkel >= 0 ? 1 : -1), m, z.ri > 0 ? z.ri : null) : B(vorz * z.winkel, z.ri > 0 ? z.ri : null));
+export function profilErweitern(profil, extras, m) {
+  let start = profil.start, ops = profil.ops.slice();
+  for (const x of extras || []) {
+    const z = x.zeilen; if (!z || z.length < 2) continue;
+    if (x.ende === "B") { ops.push(bend(z[0], m)); for (let i = 1; i < z.length; i++) { ops.push(L(z[i].L)); if (i < z.length - 1) ops.push(bend(z[i], m)); } }
+    else { // Kante A: der Baustein läuft vom Profil weg; vorangestellt in umgekehrter Reihenfolge mit umgekehrten Winkeln
+      const vor = []; for (let i = z.length - 1; i >= 1; i--) { vor.push(L(z[i].L)); vor.push(bend(z[i - 1], m, -1)); }
+      start -= vor.filter((o) => o.typ === "biegung").reduce((s, o) => s + o.winkel, 0); ops = [...vor, ...ops];
+    }
+  }
+  return { start, ops };
+}
