@@ -1,0 +1,33 @@
+SPENGLER DIGITAL CAD – ZUSAMMENFASSUNG (21.11.2026)
+
+STAND
+Alles ist auf main (Commit 96eab6e). Windows-Release mit Auto-Update läuft an (voraussichtlich 0.2.198).
+Tests vor dem Merge: npm test und alle 43 App-Tests grün. CI-Ergebnis des Releases noch nicht abgewartet.
+
+DAS WURDE GEBAUT (diese Sitzung)
+- Skizze: Projizieren von Linien, Kreisen und Bögen anderer Skizzen; jede Fläche/Kante einzeln; X = Hilfslinie
+- Skizzenansicht bleibt senkrecht (Drehen nur in der Ebene)
+- Extrusion/Profil: zwei Seiten verschieden lang, negatives Mass = Gegenrichtung, Pfeile an beiden Enden,
+  "Bis Fläche/Ebene/Kante"
+- Flansch/Baustein auch am Blechprofil aus Linienzug
+- Dachfenster, Kamin, Lukarne: Verschiebepfeile in alle Richtungen
+- Dialoge als Schritt-Assistent (Dach, Lukarne, Blechprofil, Vorlage u. a.)
+
+UX-PROFESSIONALISIERUNG
+- Dialog rechts angedockt, überdeckt die 3D-Ansicht nicht; bei Blechwerkzeugen bleibt Zuschnitt/DXF sichtbar
+- Befehlssuche: Strg+K oder "/", zuletzt benutzte oben
+- Rechte Spalte verstellbar, Arbeitsbereich zurücksetzbar
+- Hell-/Dunkelmodus durchgängig (vorher war der Dunkelmodus kaputt)
+- Design-Tokens, Meldungen, Esc/Enter im Dialog, Sprunglink, Smartphone-quer-Layout
+- Tests: Fenstergrössen, Touch/Stift (emuliert), Projektdatei öffnen
+
+GEFUNDENER FEHLER
+Seit meinem Pfeile-Commit blockierte der Fusspfeil der Extrusion die Flächenwahl in der Skizze. Behoben.
+
+NICHT GEPRÜFT / OFFEN
+- Touch/Stift auf echter Tablet-Hardware
+- Android-Build (läuft nur auf main)
+- Komplett neues Leistenlayout nicht gemacht (gruppierte Leiste bleibt, plus Suche)
+- Altes CSS nur teilweise auf Tokens umgestellt
+
+Details: docs/cad/UX_Bericht.md, UX_Konzept.md, UX_Bestandsaufnahme.md
