@@ -185,4 +185,15 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   ok(kk.koerper.filter((k) => k.art === "sparren").length >= 14 && Lflaeche.flaechen[0].stuecke?.length === 2, "Aufbau (Sparren …) auf einer nicht konvexen Dachfläche");
   let fe = ""; try { dachAusFlaechen({ flaechen: [{ name: "Wand", punkte: [[0, 0, 0], [1000, 0, 0], [1000, 0, 2000], [0, 0, 2000]] }], grundriss: [], traufhoehe: 3000 }); } catch (e) { fe = e.message; } ok(/senkrecht/.test(fe), "Senkrechte Fläche wird abgelehnt");
 }
+
+// ---- Lukarne nach Aufmass (Massaufnahmeart «Lukarne Seitenwand»): vordere Höhe, Winkel oben, Trauflänge
+{
+  const { lukarne } = await import("../kern/dach/lukarne.js"), r = rechteckDach({ breite: 12000, tiefe: 9000, form: "sattel", neigung: 30.5, ueberstandTraufe: 0, ueberstandOrtgang: 0 });
+  const l = lukarne(r.flaechen[0], { masse: "aufmass", art: "schlepp", bu: 1800, bo: 1800, hf: 1500, wL: 95, lL: 3000, wR: 95, lR: 3000, x: 6000, y: 800 }, 0), a = l.aufmass.links;
+  ok(nah(a.schraege, 3469.06, 1) && nah(a.tiefe, 2988.58, 1) && nah(a.flaeche, 2.2414, 0.001), `Seitenwand wie in der Spengler-App: Schräge ${a.schraege.toFixed(1)} (3469,06), Tiefe ${a.tiefe.toFixed(1)} (2988,58), Fläche ${a.flaeche.toFixed(4)} m² (2,2414)`);
+  const m = lukarne(r.flaechen[0], { masse: "aufmass", art: "sattel", neigung: 25, bu: 1800, bo: 1600, hf: 1200, wL: 90, lL: 1700, wR: 92, lR: 1750, hR: 1250, x: 6000, y: 800 }, 0);
+  ok(m.innen && m.aufmass.links.schraege !== m.aufmass.rechts.schraege && m.formen.filter((f) => f.art === "wange").length === 2 && m.formen.filter((f) => f.art === "dach").length === 2, "Links und rechts unabhängig: zwei verschiedene Seitenwände, zwei Dachhälften");
+  ok(m.hinweise.some((h) => /Trauflänge/.test(h)), "Gemessene Trauflänge weicht von der Dachfläche ab: Hinweis mit beiden Werten");
+  ok(m.bleche.some((b) => b.name.includes("links")) && m.bleche.some((b) => b.name.includes("rechts")) && m.rect.poly.length >= 4, "Bleche und Öffnung aus dem Aufmass");
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);

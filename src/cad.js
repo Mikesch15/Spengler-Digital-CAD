@@ -1191,7 +1191,7 @@ function regen() {
         f._luk = null; const d = finde(f.dach); if (d?.typ !== "dach" || !d._dach) throw new Error("Dach fehlt");
         const fl = d._dach.flaechen[f.flaeche]; if (!fl) throw new Error("Diese Dachfläche gibt es nicht (mehr) – andere Fläche wählen");
         const lk = lukarneGeo(fl, f, 0); f._luk = lk;
-        if (!lk.innen) throw new Error(lk.hinweise[0]);
+        if (!lk.innen) throw new Error(lk.hinweise.find((h) => /ragt über/.test(h)) || lk.hinweise[0]);
         const gd = finde(d.gebaeude), ko = f._lukK?.koerper;
         if (!f.versteckt && gd && ko) { zeigeDachKoerper(ko, gd, f.id); // gleicher Aufbau wie das Hauptdach (Sparren, Dämmung, Unterdach, Latten, Deckung)
           if (lk.fenster) { const o = d._schichten?.oben ?? 0, fp = lk.fenster.punkte.map((p) => p.map((v, i) => v + lk.fenster.normale[i] * (o + 5))); modell.add(koerperMesh(dachPlatte(fp, lk.fenster.normale, -70, gd), 0x6f93b0, f.id)); } }
@@ -2505,15 +2505,25 @@ function eindeckungDialog(f) {
 }
 function lukarneDialog(f) {
   const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
-  const istNeu = !f; f ||= { id: neueId(), typ: "lukarne", name: "Lukarne " + (doc.features.filter((x) => x.typ === "lukarne").length + 1), dach: daecher.at(-1).id, flaeche: 0, art: "sattel", b: 1600, hw: 1100, neigung: 30, ueberstand: 200, wd: 150, dd: 250, x: 3000, y: 1500 };
+  const istNeu = !f; f ||= { id: neueId(), typ: "lukarne", name: "Lukarne " + (doc.features.filter((x) => x.typ === "lukarne").length + 1), dach: daecher.at(-1).id, flaeche: 0, masse: "aufmass", art: "sattel", bu: 1800, bo: 1800, hf: 1200, hL: 0, wL: 90, lL: 1500, hR: 0, wR: 90, lR: 1500, b: 1600, hw: 1100, neigung: 30, ueberstand: 200, wd: 150, dd: 250, x: 3000, y: 1500 };
+  if (istNeu) { const fl0 = finde(f.dach)?._dach?.flaechen?.[0]; if (fl0) f.lL = f.lR = Math.round(f.hf / Math.tan((fl0.neigung * Math.PI) / 180)); } // Vorgabe: waagrechte Traufe bis zur Dachfläche
   const flOpt = (id) => (finde(id)?._dach?.flaechen || []).map((x, i) => [String(i), `Fläche ${i + 1}: ${x.neigung.toFixed(0)}°, ${x.flaeche.toFixed(1)} m²`]);
+  const aufmass = (f) => f.masse === "aufmass";
   const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "dach", label: "Dach", optionen: daecher.map((d) => [d.id, d.name]), wert: f.dach }, { id: "flaeche", label: "Dachfläche", optionen: flOpt(f.dach), wert: String(f.flaeche ?? 0) },
-    { id: "art", label: "Art", optionen: Object.entries(LUKARNENARTEN), wert: f.art }, { id: "b", label: "Breite aussen", einheit: "mm", wert: f.b }, { id: "hw", label: "Stirnwandhöhe (ab Dach)", einheit: "mm", wert: f.hw }, { id: "neigung", label: "Dachneigung Gaube (Sattel/Schlepp)", einheit: "°", wert: f.neigung },
-    { id: "ueberstand", label: "Dachüberstand Gaube", einheit: "mm", wert: f.ueberstand }, { id: "wd", label: "Wandstärke", einheit: "mm", wert: f.wd }, { id: "dd", label: "Dachaufbau Gaube (Dicke)", einheit: "mm", wert: f.dd },
-    { id: "x", label: "Lage: Mitte quer ab linker Kante", einheit: "mm", wert: f.x }, { id: "y", label: "Lage: Stirnwand ab Traufe", einheit: "mm", wert: f.y }];
-  const setze = (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; if (w.flaeche !== undefined) f.flaeche = +w.flaeche || 0; if (w.art) f.art = w.art; for (const k of ["b", "hw", "neigung", "ueberstand", "wd", "dd", "x", "y"]) if (Number.isFinite(w[k])) f[k] = w[k]; };
-  featureDialog(f, istNeu, felder, setze, "Lukarne", "Satteldach-, Schlepp- oder Flachdachgaube auf einer Dachfläche: Stirnwand, Wangen und Gaubendach schneiden die Hauptdachfläche (Kehlen). Im Hauptdach werden Sparren und Latten unterbrochen, Wechsel eingefügt und die Fläche abgezogen. Anschlussbleche (Kehle, Wangen, Fuss) erscheinen bei den Dachblechen. Dachaufbau der Gaube ist eine einfache Platte.",
-    { info: () => f._fehler ? "⚠ " + f._fehler : f._luk ? `Öffnung ${f._luk.flaeche.toFixed(2)} m² · höchster Punkt ${(f._luk.firsthoehe / 1000).toFixed(2)} m` : "" });
+    { id: "masse", label: "Eingabe", optionen: [["aufmass", "Aufmass: Front und Seitenwände einzeln gemessen"], ["modell", "Modell: Breite, Stirnhöhe, Dachüberstand"]], wert: f.masse || "modell" },
+    { id: "art", label: "Art", optionen: Object.entries(LUKARNENARTEN), wert: f.art },
+    ...(aufmass(f) ? [{ id: "bu", label: "Front: Breite unten", einheit: "mm", wert: f.bu }, { id: "bo", label: "Front: Breite oben", einheit: "mm", wert: f.bo }, { id: "hf", label: "Front: Höhe", einheit: "mm", wert: f.hf },
+      { id: "hL", label: "Seite links: vordere Höhe (0 = wie Front)", einheit: "mm", wert: f.hL ?? 0 }, { id: "wL", label: "Seite links: Winkel oben an der vorderen Höhe zur Traufe", einheit: "°", wert: f.wL ?? 90 }, { id: "lL", label: "Seite links: Trauflänge der Lukarne", einheit: "mm", wert: f.lL },
+      { id: "hR", label: "Seite rechts: vordere Höhe (0 = wie Front)", einheit: "mm", wert: f.hR ?? 0 }, { id: "wR", label: "Seite rechts: Winkel oben an der vorderen Höhe zur Traufe", einheit: "°", wert: f.wR ?? 90 }, { id: "lR", label: "Seite rechts: Trauflänge der Lukarne", einheit: "mm", wert: f.lR },
+      { id: "neigung", label: "Dachneigung Gaube (nur Satteldachgaube)", einheit: "°", wert: f.neigung }]
+    : [{ id: "b", label: "Breite aussen", einheit: "mm", wert: f.b }, { id: "hw", label: "Stirnwandhöhe (ab Dach)", einheit: "mm", wert: f.hw }, { id: "neigung", label: "Dachneigung Gaube (Sattel/Schlepp)", einheit: "°", wert: f.neigung }, { id: "ueberstand", label: "Dachüberstand Gaube", einheit: "mm", wert: f.ueberstand }]),
+    { id: "wd", label: "Wandstärke", einheit: "mm", wert: f.wd }, { id: "dd", label: "Dachaufbau Gaube (Dicke)", einheit: "mm", wert: f.dd },
+    { id: "x", label: "Lage: Mitte quer ab linker Kante", einheit: "mm", wert: f.x }, { id: "y", label: "Lage: Front ab Traufe", einheit: "mm", wert: f.y }];
+  const setze = (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; if (w.flaeche !== undefined) f.flaeche = +w.flaeche || 0; if (w.art) f.art = w.art; if (w.masse) f.masse = w.masse;
+    for (const k of ["bu", "bo", "hf", "hL", "wL", "lL", "hR", "wR", "lR", "b", "hw", "neigung", "ueberstand", "wd", "dd", "x", "y"]) if (Number.isFinite(w[k])) f[k] = w[k]; };
+  featureDialog(f, istNeu, felder, setze, "Lukarne", "Aufmass wie am Objekt: Front (Breite unten, Breite oben, Höhe) und je Seitenwand links/rechts die vordere Höhe, der Winkel oben an der vorderen Höhe zur Traufe und die Trauflänge – genau wie die Massaufnahme «Lukarne Seitenwand». Die Unterkante der Seitenwand liegt auf der Dachfläche. Im Hauptdach werden Sparren und Latten unterbrochen, Wechsel eingefügt und die Fläche abgezogen; die Anschlussbleche erscheinen bei den Dachblechen. Das Gaubendach ist eine einfache Platte.",
+    { neuBei: ["masse"], info: () => { if (f._fehler) return "⚠ " + f._fehler; const l = f._luk; if (!l) return ""; const am = l.aufmass, seite = (n, x) => `${n}: Schräge ${x.schraege.toFixed(0)}, Tiefe ${x.tiefe.toFixed(0)}, Fläche ${x.flaeche.toFixed(2)} m²`;
+      return (l.hinweise.length ? "⚠ " + l.hinweise.join(" · ") + " " : "") + (am ? `${seite("Links", am.links)} · ${seite("Rechts", am.rechts)} · ` : "") + `Öffnung ${l.flaeche.toFixed(2)} m² · höchster Punkt ${(l.firsthoehe / 1000).toFixed(2)} m`; } });
 }
 function dachelementDialog(f) {
   const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");

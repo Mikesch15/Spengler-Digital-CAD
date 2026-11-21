@@ -42,11 +42,14 @@ ok(/Wechsel/.test(await s.textContent("#werkstatt")), "Holzliste: Wechsel für F
 await s.evaluate((i) => window.sdcadTest.waehle(i), id); await s.waitForTimeout(300);
 ok(/Kaminanschluss/.test(await s.textContent("#werkstatt")), "Dachbleche: Kaminanschluss");
 // Lukarne
-await s.evaluate(() => document.getElementById("wLukarne").click()); await s.waitForSelector("#d_hw", { timeout: 4000 }); await s.waitForTimeout(500);
+await s.evaluate(() => document.getElementById("wLukarne").click()); await s.waitForSelector("#d_bu", { timeout: 4000 }); await s.waitForTimeout(500);
 ok(/Öffnung [\d.]+ m²/.test(await info()), "Lukarne (Sattel): " + (await info()));
 await s.selectOption("#d_art", "schlepp"); await s.fill("#d_neigung", "15"); await s.dispatchEvent("#d_neigung", "input"); await s.waitForTimeout(500);
 ok(/Öffnung [\d.]+ m²/.test(await info()), "Lukarne (Schlepp): " + (await info()));
 await s.selectOption("#d_art", "sattel"); await s.waitForTimeout(400);
+// Aufmass: Front und Seitenwände einzeln (links/rechts unabhängig), Winkel und Trauflänge wie in der Massaufnahme «Lukarne Seitenwand»
+await s.fill("#d_wL", "95"); await s.dispatchEvent("#d_wL", "input"); await s.fill("#d_lR", "1800"); await s.dispatchEvent("#d_lR", "input"); await s.fill("#d_bo", "1700"); await s.dispatchEvent("#d_bo", "input"); await s.waitForTimeout(500);
+ok(/Links: Schräge \d+, Tiefe \d+, Fläche [\d.]+ m² · Rechts: Schräge/.test(await info()), "Lukarne Aufmass: Seitenwände einzeln berechnet – " + (await info()).slice(0, 150));
 await s.click("#dOk"); await s.waitForTimeout(500);
 await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(500); await s.screenshot({ path: "/tmp/t/lukarne.png" });
 await s.evaluate((i) => window.sdcadTest.waehle(i), id); await s.waitForTimeout(300);

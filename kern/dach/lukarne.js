@@ -2,12 +2,14 @@
 // Lokales System der Gaube: X quer zur Traufe, Y waagrecht den Hang hinauf (ab der Stirnwand), Z senkrecht; Ursprung auf der Dachoberfläche an der Stirnwand (Mitte).
 import { flaechenRahmen } from "./koerper.js";
 import { beschneide } from "./form.js";
+import { lukarneAufmass } from "./lukarneAufmass.js";
 const rad = (g) => (g * Math.PI) / 180, norm = (a) => { const l = Math.hypot(...a) || 1; return a.map((x) => x / l); };
 export const LUKARNENARTEN = { sattel: "Satteldachgaube", schlepp: "Schleppgaube", flach: "Flachdachgaube" };
 const innenPunkt = (poly, p) => { let v = 0; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length], k = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]); if (Math.abs(k) < 1e-6) continue; if (v && Math.sign(k) !== v) return false; v = Math.sign(k); } return true; };
 
 // el: { art, b (Breite aussen), hw (Stirnwandhöhe), neigung (Gaubendach), ueberstand, x (Mitte quer ab linker Kante), y (Fusspunkt ab Traufe), wd (Wandstärke), dd (Dachstärke) }
 export function lukarne(fl, el, oben = 0) {
+  if (el.masse === "aufmass") return lukarneAufmass(fl, el, oben); // Aufmass: Front und Seitenwände einzeln gemessen
   const R = flaechenRahmen(fl), S = R.S, B = +el.b || 0, Hw = +el.hw || 0, U = +el.ueberstand || 0, art = el.art || "sattel", hinweise = [];
   if (!(B > 0 && Hw > 0)) throw new Error("Breite und Stirnhöhe müssen grösser als 0 sein");
   const run = Math.hypot(S.up[0], S.up[1]), tanM = S.up[2] / (run || 1e-9), cosM = run;
