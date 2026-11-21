@@ -1,0 +1,63 @@
+SPENGLER DIGITAL CAD – UX/UI-PROFESSIONALISIERUNG: ZUSAMMENFASSUNG DES GESAMTEN AUFTRAGS (21.11.2026)
+
+STAND
+Auf main (Commit 96eab6e) und Branch ux/professionalisierung. Windows-Release läuft an (voraussichtlich 0.2.198).
+Tests vor dem Merge: npm test und alle 43 App-Tests grün. Ergebnis des Release-Builds auf main noch nicht abgewartet.
+
+PHASEN
+1 Bestandsaufnahme ........ erledigt (docs/cad/UX_Bestandsaufnahme.md, Probleme P0-P3, Vorher-Screenshots)
+2 Designkonzept ........... erledigt (docs/cad/UX_Konzept.md); klickbarer Prototyp nicht erstellt
+3 Grundlagen .............. erledigt: Tokens, Hell/Dunkel, Dialoge, Meldungen, responsive Grundstruktur
+4 Gesamte Anwendung ....... weitgehend: Dialoge, Plan-Editor, Einstellungen, Projekte, Hilfe, Ablage geprüft
+5 Bediendetails ........... erledigt: Esc/Enter, Fokus, Tab-Reihenfolge, Sprunglink, Meldungen
+6 Qualitätssicherung ...... erledigt, mit Einschränkungen (siehe unten)
+
+ABNAHMEKRITERIEN (16)
+ 1 Einheitliche visuelle Sprache ............. ja (Tokens, Dunkelmodus repariert); Alt-CSS nur teilweise token-basiert
+ 2 Alle Bereiche folgen dem Designsystem .... weitgehend
+ 3 Navigation verständlich/auffindbar ........ ja (gruppierte Leiste + Befehlssuche)
+ 4 Navigation skaliert ...................... ja (Suche Strg+K, zuletzt benutzt, 90+ Werkzeuge)
+ 5 3D-Ansicht im Mittelpunkt ................ ja (Dialog rechts angedockt, Spalte verstellbar)
+ 6 Dialoge/Assistenten einheitlich .......... ja (8 lange Dialoge als Assistent, übrige <= 8 Felder)
+ 7 Desktop und Tablet professionell ......... ja (6 Fenstergrössen getestet)
+ 8 Smartphone nicht abgeschnitten ........... ja (kein Überlauf; quer: Seitenleiste)
+ 9 Hell/Dunkel konsistent ................... ja (Hauptansichten und Fenster geprüft)
+10 Alle Funktionen erreichbar ............... ja (kein Werkzeug entfernt; Suche findet alle sichtbaren)
+11 Bestehende Projekte öffnen/speichern ..... ja (Test projektdatei)
+12 CAD-Kern/OCCT/Worker/Formate intakt ...... ja (nicht angefasst; Kern-Tests grün)
+13 Bestehende Tests bestehen ................ ja (43 App-Tests + npm test)
+14 Build und CI erfolgreich ................. Web und Windows-Installer erfolgreich auf dem Branch; Android nur auf main, nicht geprüft
+15 Wichtigste Ansichten dokumentiert ........ ja (docs/cad/ux/vorher und nachher)
+16 Dokumentation = tatsächlicher Stand ...... ja (Bericht, README, STATUS)
+
+WAS UMGESETZT WURDE
+- Dialoge rechts angedockt, bei Blechwerkzeugen bleibt Zuschnitt/DXF sichtbar
+- Befehlssuche (Strg+K, "/", Knopf), zuletzt benutzte Befehle
+- Rechte Spalte verstellbar, Arbeitsbereich zurücksetzbar
+- Schritt-Assistenten: Dach, Gebäude, Lukarne, Dachfenster/Kamin, Dachbleche, Vorlage, Blechprofil, Rundblech
+- Dunkelmodus repariert (Leiste, Ansichtsknöpfe, 3D-Hintergrund)
+- Meldungen (klickdurchlässig, role=alert), Statuszeile mit Warnfarbe
+- Esc = Abbrechen, Enter = Weiter/OK, Sprunglink, Tab-Reihenfolge
+- Smartphone quer: Dialog als Seitenleiste; Leistenrand-Hinweis; scrollbare Tabellen in Fenstern
+- Neue Tests: Befehlssuche, Assistent, Responsive (ca. 90 Prüfungen), Touch/Stift, Projektdatei
+
+BEI DEN TESTS GEFUNDEN UND BEHOBEN
+- Dunkelmodus war schon vorher inkonsistent
+- Fehler auf main seit Pfeile-Commit: Fusspfeil der Extrusion blockierte die Flächenwahl in der Skizze
+- Angedockter Dialog versteckte das Teil-Panel (Zuschnitt/DXF) bei Blechwerkzeugen
+- Meldungen deckten die Zeichenfläche ab und fingen Klicks
+
+BEWUSST UNVERÄNDERT
+CAD-Kern, OCCT/Worker/WASM, Löser, Feature-Struktur und IDs, Dateiformate, Import/Export, Cloud, Tastenkürzel,
+Maus-/Touch-/Stiftsteuerung, Plan-Modul (nur Feldstil), Tauri/Android-Hülle, Lizenz/Update.
+
+NICHT ERFÜLLT / EINSCHRÄNKUNGEN
+- Kein komplett neues Leistenlayout (gruppierte Leiste bleibt, ergänzt durch Suche)
+- Kein klickbarer Prototyp
+- Altes CSS nur teilweise auf Tokens umgestellt (Hauptfarben, Radien, Schatten sind umgestellt)
+- Touch/Stift nur mit emulierten Eingabeereignissen geprüft, nicht auf echter Tablet-Hardware
+- Android-Build nicht ausgeführt
+- Plan-Editor-Layout (zweizeilige Leiste) unverändert
+
+DOKUMENTE
+docs/cad/UX_Bericht.md, UX_Konzept.md, UX_Bestandsaufnahme.md, docs/cad/ux/vorher, docs/cad/ux/nachher
