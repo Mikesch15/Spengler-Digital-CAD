@@ -82,4 +82,25 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
     ok(nah(r.firsthoehe, 3000 + Math.tan(35 * Math.PI / 180) * 4000, 5), `${gf}-Form ${form}: Firsthöhe wie Hauptflügel`);
   }
 }
+
+// ---- Phase 3: Grundriss aus Skizze (konvex) / Phase 5: Dachbleche
+{
+  const { polygonDach, fluegelDach } = await import("../kern/dach/fluegel.js"), { dachBleche } = await import("../kern/dach/bleche.js");
+  const a = polygonDach({ grundriss: [[0, 0], [10000, 0], [10000, 6000], [0, 6000]], giebel: [2, 4], neigung: 30, ueberstandTraufe: 0, ueberstandOrtgang: 0 });
+  ok(a.flaechen.length === 2 && nah(a.firsthoehe, 3000 + 3000 * Math.tan(Math.PI / 6), 2), "Skizzen-Grundriss mit Giebelkanten 2 und 4: Satteldach");
+  const b = polygonDach({ grundriss: [[0, 0], [10000, 0], [12000, 5000], [5000, 9000], [-1000, 5000]], neigung: 30 });
+  ok(b.flaechen.length === 5, "Konvexes Fünfeck: 5 Dachflächen (Zeltdach)");
+  let fe = ""; try { polygonDach({ grundriss: [[0, 0], [10, 0], [10, 10], [5, 5], [0, 10]] }); } catch (e) { fe = e.message; }
+  ok(/konvex/.test(fe), "Nicht konvexer Grundriss wird abgelehnt");
+  // Dachbleche
+  const s = dachBleche(rechteckDach({ breite: 10000, tiefe: 8000, form: "sattel", neigung: 35, ueberstandTraufe: 400, ueberstandOrtgang: 300 }).flaechen), art = (x) => s.teile.filter((t) => t.art === x);
+  ok(art("traufe").length === 1 && art("traufe")[0].stueck === 2 && nah(art("traufe")[0].laenge, 10600, 10), "Satteldach: 2 Traufbleche à 10,6 m");
+  ok(art("first").length === 1 && nah(art("first")[0].laenge, 10600, 10), "Satteldach: 1 Firstblech 10,6 m");
+  ok(art("ortgang")[0].stueck === 4, "Satteldach: 4 Ortgangbleche");
+  const w = dachBleche(rechteckDach({ breite: 10000, tiefe: 8000, form: "walm", neigung: 35, ueberstandTraufe: 0 }).flaechen);
+  ok(w.teile.find((t) => t.art === "grat")?.stueck === 4 && !w.teile.some((t) => t.art === "ortgang"), "Walmdach: 4 Gratbleche, kein Ortgang");
+  const l = dachBleche(fluegelDach({ grundform: { form: "L", breite: 12000, tiefe: 8000, fluegelBreite: 5000, fluegelTiefe: 5000 }, form: "sattel", neigung: 35 }).flaechen);
+  ok(l.teile.filter((t) => t.art === "kehle").reduce((n, t) => n + t.stueck, 0) === 2, "L-Form Satteldach: 2 Kehlbleche");
+  ok(dachBleche(a.flaechen, { arten: { traufe: false } }).teile.every((t) => t.art !== "traufe"), "Blechart abschaltbar");
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);

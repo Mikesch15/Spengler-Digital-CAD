@@ -4,7 +4,7 @@
 import { dachFlaechen, beschneide, flaecheVon } from "./form.js";
 const EPS = 1e-6, rad = (g) => (g * Math.PI) / 180;
 
-export const GRUNDFORMEN = { rechteck: "Rechteck", L: "L-Form", T: "T-Form", U: "U-Form" };
+export const GRUNDFORMEN = { rechteck: "Rechteck", L: "L-Form", T: "T-Form", U: "U-Form", skizze: "Aus Skizze (konvex)" };
 // Umriss (gegen den Uhrzeiger) und Flügel-Rechtecke der Grundformen. Hauptflügel: [0,0]–[B,T]; Querflügel ragen um ft über die Rückseite (v = T) hinaus
 export function grundrissForm({ form = "rechteck", breite: B, tiefe: T, fluegelBreite: fb = B / 3, fluegelTiefe: ft = T / 2 }) {
   fb = Math.min(Math.max(fb, 1), form === "U" ? B / 2 - 1 : B - 1);
@@ -80,4 +80,17 @@ export function fluegelDach({ grundform, form = "sattel", neigung = 35, neigung2
   }
   const hoeheAn = (p) => { let h = -Infinity; for (const w of W) if (inHuelle(w.hull, p)) h = Math.max(h, Math.min(...w.ebenen.map((e) => hoehe(e, p)))); return h === -Infinity ? traufhoehe : h; };
   return { flaechen, linien, huelle: W[0].hull, grundriss, hoeheAn, firsthoehe: Math.max(...flaechen.flatMap((f) => f.punkte.map((q) => q[2]))), traufhoehe, hinweise, fluegel: W.map((w) => w.name) };
+}
+
+// Beliebiger konvexer Grundriss (z. B. aus einer Skizze): überall dieselbe Neigung; giebel = Kantennummern (ab 1, in Umlaufrichtung gegen den Uhrzeiger) ohne Dachfläche (Ortgang), alle übrigen Kanten sind Traufen (Walm-/Zeltdach)
+export const gegenUhrzeiger = (p) => (flaecheVon(p) < 0 ? p.slice().reverse() : p.slice());
+export function konvex(p) { let v = 0; for (let i = 0; i < p.length; i++) { const a = p[i], b = p[(i + 1) % p.length], c = p[(i + 2) % p.length], k = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]); if (Math.abs(k) < 1e-6) continue; if (v && Math.sign(k) !== v) return false; v = Math.sign(k); } return true; }
+export function polygonDach({ grundriss, neigung = 35, giebel = [], ueberstandTraufe = 400, ueberstandOrtgang = 300, traufhoehe = 3000 }) {
+  const poly = gegenUhrzeiger(grundriss).filter((q, i, a) => Math.hypot(q[0] - a[(i + a.length - 1) % a.length][0], q[1] - a[(i + a.length - 1) % a.length][1]) > 1e-3);
+  if (poly.length < 3) throw new Error("Der Grundriss braucht mindestens 3 Ecken");
+  if (!konvex(poly)) throw new Error("Der Skizzen-Grundriss muss konvex sein (keine einspringenden Ecken). Für L-, T- und U-Formen die Grundform wählen.");
+  const G = new Set(giebel.map((x) => x - 1)), kanten = poly.map((_, i) => (G.has(i) ? { neigung: null, ueberstand: ueberstandOrtgang } : { neigung, ueberstand: ueberstandTraufe }));
+  if (G.size >= poly.length) throw new Error("Mindestens eine Kante muss eine Dachfläche tragen (nicht alle Kanten Giebel)");
+  const d = dachFlaechen({ grundriss: poly, kanten, traufhoehe });
+  return { ...d, hinweise: [] };
 }

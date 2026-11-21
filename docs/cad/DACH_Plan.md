@@ -1,6 +1,6 @@
 # Dach-Modus (zweiter Grundaufbau) – Plan
 
-Stand: 21.11.2026 · Phase 1–2 gebaut; Phase 3 teilweise (L/T/U mit Satteldach/Walmdach, Kehlen, Grat-/Kehlsparren in der Liste; Skizzen-Grundriss und Gehrungen offen); Phase 4–6 offen.
+Stand: 21.11.2026 · Phase 1–2 gebaut; Phase 3 (L/T/U, Kehlen, Grat-/Kehlsparren in der Liste, konvexer Skizzen-Grundriss; Gehrungen offen); Phase 5 gebaut (Dachbleche: Traufe, Ortgang, First, Grat, Kehle mit Abwicklung; 3D schematisch; Kamin-/Fenstereinfassung folgen mit Phase 4); Phase 4 und 6 offen.
 
 ## Entscheide (vom Besitzer)
 1. **Details** sollen sich aus dem Dach erstellen lassen (Schnitte durch Traufe, First, Ortgang, Grat, Kehle, Kamin, Fenster, Lukarne – massstäblich im Plan, mit Schichtenaufbau und Blechprofilen).
