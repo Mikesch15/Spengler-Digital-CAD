@@ -28,6 +28,10 @@ function befehle() {
 }
 // Zusätzliche Befehle ohne eigenen Knopf (z. B. Arbeitsbereich zurücksetzen): { name, tipp, gruppe, run }
 export const zusatzBefehle = [];
+// zuletzt benutzte Befehle (nur Namen, nur in diesem Browser) stehen bei leerer Suche oben
+const ZUL = "sdcad-zuletzt";
+const lesZuletzt = () => { try { return JSON.parse(localStorage.getItem(ZUL)) || []; } catch { return []; } };
+const merkeZuletzt = (name) => { try { localStorage.setItem(ZUL, JSON.stringify([name, ...lesZuletzt().filter((n) => n !== name)].slice(0, 6))); } catch { /* Speicher gesperrt */ } };
 let offen = null;
 export function oeffneBefehlssuche() {
   if (offen) return schliesse();
@@ -39,12 +43,13 @@ export function oeffneBefehlssuche() {
   let treffer = [], nr = 0;
   const zeige = () => {
     const w = norm(eing.value).split(/\s+/).filter(Boolean);
-    treffer = alle.filter((c) => w.every((x) => c.text.includes(x))).sort((a, b) => (norm(a.name).startsWith(w[0] || "") ? 0 : 1) - (norm(b.name).startsWith(w[0] || "") ? 0 : 1)).slice(0, 40);
+    const zul = lesZuletzt();
+    treffer = (w.length ? alle : [...alle.filter((c) => zul.includes(c.name)).sort((a, b) => zul.indexOf(a.name) - zul.indexOf(b.name)), ...alle.filter((c) => !zul.includes(c.name))]).filter((c) => w.every((x) => c.text.includes(x))).sort((a, b) => (w.length ? (norm(a.name).startsWith(w[0]) ? 0 : 1) - (norm(b.name).startsWith(w[0]) ? 0 : 1) : 0)).slice(0, 40);
     nr = Math.min(nr, Math.max(0, treffer.length - 1));
-    liste.innerHTML = treffer.length ? treffer.map((c, i) => `<li role="option" data-i="${i}" class="${i === nr ? "aktiv" : ""}">${c.icon}<span class="bs-name">${c.name.replace(/[<>&]/g, "")}</span><span class="bs-gruppe">${c.gruppe}</span></li>`).join("") : '<li class="bs-leer">Kein Werkzeug gefunden.</li>';
+    liste.innerHTML = treffer.length ? treffer.map((c, i) => `<li role="option" data-i="${i}" class="${i === nr ? "aktiv" : ""}">${c.icon}<span class="bs-name">${c.name.replace(/[<>&]/g, "")}</span><span class="bs-gruppe">${!w.length && zul.includes(c.name) ? "★ zuletzt benutzt" : c.gruppe}</span></li>`).join("") : '<li class="bs-leer">Kein Werkzeug gefunden.</li>';
     liste.querySelector(".aktiv")?.scrollIntoView({ block: "nearest" });
   };
-  const starte = (c) => { if (!c) return; schliesse(); setTimeout(() => (c.run ? c.run() : c.b.click()), 0); };
+  const starte = (c) => { if (!c) return; merkeZuletzt(c.name); schliesse(); setTimeout(() => (c.run ? c.run() : c.b.click()), 0); };
   eing.addEventListener("input", () => { nr = 0; zeige(); });
   eing.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); schliesse(); }

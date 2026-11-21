@@ -1,30 +1,45 @@
-# UX-Professionalisierung – Zwischenbericht
+# UX-Professionalisierung – Abschlussbericht
 
-Branch: `ux/professionalisierung` (kein Release; `main` unverändert). Stand: siehe `git log` des Branches.
+Branch: `ux/professionalisierung` (Basis `main` 75d83be). Es wurde **nicht** auf `main` veröffentlicht: Ein Merge löst ein Windows-Release mit Auto-Update aus und liegt in der Entscheidung des Besitzers.
 
-## Umgesetzt
-- **Layout:** Dialoge rechts angedockt (Desktop), Teil/Auftrag weicht; rechte Spalte verstellbar (260–720 px, gespeichert, Doppelklick = Standard).
-- **Navigation:** Befehlssuche (Strg+K, «/», «Suchen»), liest die Leiste aus dem DOM und startet denselben Knopf; «Arbeitsbereich zurücksetzen» als Zusatzbefehl.
-- **Dialogsystem:** Schritt-Assistent (Schrittleiste, Zurück/Weiter, OK jederzeit) für Dach, Gebäude, Lukarne, Dachfenster/Kamin, Dachbleche, Vorlage, Blechprofil, Rundblech; Esc = Abbrechen, Enter = nächster Schritt bzw. OK.
-- **Designsystem:** Tokens für Abstände, Radien, Schriftgrössen, Schatten, Fokus, Warnfarbe; Radien/Schatten der Bestands-CSS auf Tokens umgestellt.
-- **Hell/Dunkel:** Werkzeugleiste, Ansichtsknöpfe, Meldungen und 3D-Hintergrund jetzt im Dunkelmodus konsistent.
-- **Rückmeldung:** Statuszeile als lesbare Pille mit `aria-live`, Warnungen rot hervorgehoben.
-- **Responsive:** Werkzeugleiste mit Randhinweis bei Wischbedarf; Befehlssuche als Vollzugang auf Tablet/Handy.
+## 1. Zusammenfassung
+Die Oberfläche wurde gezielt neu organisiert, ohne CAD-Kern, Geometrie, Datenformate oder Build zu verändern. Kernpunkte: angedockte Dialoge/Assistenten, Befehlssuche mit «zuletzt benutzt», verstellbares Arbeitsbereich-Panel, durchgängiger Hell-/Dunkelmodus, Designsystem-Tokens, einheitliche Rückmeldungen, Tastatur-/Touch-/Stift-Prüfung, Responsive-Test über sechs Fenstergrössen.
 
-## Bewusst unverändert
-CAD-Kern, OCCT/Worker/WASM, Datenformate, Projektdateien, Cloud/Projekte, Tastenkürzel, Maus-/Touch-/Stiftsteuerung, Plan-Modul, Tauri/Android-Hülle, Build-Skripte.
+## 2. Navigations- und Layoutkonzept
+Siehe `UX_Konzept.md`. Kurz: 3D-Ansicht im Zentrum; rechts **eine** Spalte für das jeweils Wichtige (Teil/Auftrag, oder der aktive Dialog – bei Blechwerkzeugen mit Teil-Panel darunter, damit Zuschnitt/Abwicklung live sichtbar bleiben); Browser schwebend; Leiste gruppiert + Befehlssuche als vollständiger Zugang (skaliert mit dem Funktionsumfang: 90+ Werkzeuge, Suche statt Menüjagd). Smartphone quer: Dialog als Seitenleiste, hoch/Tablet: Bodensheet.
 
-## Weitere Umsetzung (dritte Etappe)
-- **Meldungen:** `src/meldungen.js` – Warnungen/Fehler erscheinen zusätzlich als schliessbare Meldung (`role="alert"`, max. 3, 7 s), damit sie nicht in der Statuszeile untergehen.
-- **Tastatur:** Sprunglink «Zur 3D-Ansicht» als erster Tab-Stopp; DOM-Reihenfolge Leiste → Browser → Ansicht → Dialog → Teil/Auftrag → Zeitleiste ist zugleich die Tab-Reihenfolge.
-- **Icons:** geprüft – 93 Werkzeug-Icons, alle `viewBox 24`, keine Inline-Strichstärken; Skizzen-Werkzeuge sind bewusst Linienicons, Körper-/Blechwerkzeuge mit Flächenton (`.f`). Einheitlichkeit kommt zentral aus dem CSS.
-- **Eingaben/Plan/Einstellungen:** niedrig spezifischer Grundstil für Auswahl-/Textfelder (Plan-Editor-Auswahlfelder waren ungestylt), Einstellungs-Register brechen um statt abgeschnitten zu werden, `--on-accent` statt festem Weiss.
-- **CI:** Auf dem Branch laufen «Web-Version» und «Windows-Installer» (Tauri) – beide erfolgreich (Run-Nr. 197–200); veröffentlicht wird nur auf `main`. Android baut nur auf `main`.
+## 3. Überarbeitete Bereiche
+- Dialogsystem (alle Feature-Dialoge): Docking, Schrittleiste, Zurück/Weiter/OK/Abbrechen/Löschen einheitlich, Esc/Enter.
+- Schritt-Assistenten: Dach, Gebäude, Lukarne, Dachfenster/Kamin, Dachbleche, Vorlage, Blechprofil, Rundblech. Übrige Dialoge haben höchstens 8 Felder und bleiben einseitig (Vorgabe: einfache Werkzeuge nicht verkomplizieren).
+- Navigation: Befehlssuche (Strg+K, «/», Knopf), zuletzt benutzte Befehle, «Arbeitsbereich zurücksetzen».
+- Arbeitsbereich: verstellbare Spalte (260–720 px, gespeichert).
+- Designsystem: Tokens für Abstände, Radien, Schriftgrössen, Schatten, Fokus, Warn-/Akzentfarben, Leiste/Glas/Meldung/Ansicht (je Hell/Dunkel).
+- Rückmeldung: Statuszeile als Pille mit `aria-live`, Warnungen rot; Meldungen (`role=alert`, schliessbar, blockieren die Zeichenfläche nicht).
+- Dunkelmodus: Leiste, Ansichtsknöpfe, Meldungen, 3D-Hintergrund, Einstellungen, Plan-Editor, Projekte, Hilfe, Ablage geprüft (Screenshots).
+- Responsive: Leistenrand-Hinweis, Smartphone-quer-Layout, scrollbare Tabellen in Fenstern, Einstellungs-Register umbrechend.
+- Tastatur: Sprunglink, Tab-Reihenfolge = DOM-Reihenfolge, Esc/Enter.
 
-## Offen
-- Stift/Touch auf echter Hardware (Tablet) und Android-Build nicht in dieser Umgebung prüfbar.
-- Restliche Farben/Abstände im Alt-CSS (~400 Zeilen) sind noch nicht auf Tokens umgestellt; Plan-Editor-Layout (zweizeilige Werkzeugleiste) bleibt funktional unverändert.
-- Entscheidung des Besitzers: Branch nach `main` mergen (löst Windows-Release aus).
+## 4. Bewusst unverändert
+CAD-Kern, OCCT/Worker/WASM, Mesh-Fallbacks, Löser, Feature-/Zeitleistenstruktur und IDs, Projektdateien/Formate, Import/Export, Cloud/Projekte-Integration, Materialien/Vorlagen/Bausteine, Sicherung, Tastenkürzel, Maus-/Touch-/Stiftsteuerung, Plan-Modul (nur Grundstil der Eingabefelder), Tauri/Android-Hülle, Lizenz/Update.
 
-## Tests
-`npm test` (Kern) und 17 Playwright-App-Tests (`tests/app-kern/`), darunter neu `befehlssuche.mjs` (Suche, angedockter Dialog, Esc/Enter, Warnhervorhebung). Vorher-/Nachher-Screenshots: `docs/cad/ux/vorher`, `docs/cad/ux/nachher`.
+## 5. Beim Test gefundene und behobene Fehler
+- **Dunkelmodus** war im Bestand inkonsistent (weisse Leiste mit hellem Text, unlesbare Ansichtsknöpfe).
+- **Regression auf `main`** (seit Commit 3ec760d): Der neue Fusspfeil der Extrusion fing Klicks bei der Flächenwahl in der Skizze ab (Test `flaechen.mjs` schlug fehl). Behoben auf dem Branch (Fusspfeil bei aktiver Flächenwahl ohne Trefferfläche).
+- Angedocktes Dialog-Layout versteckte bei Blechwerkzeugen das Teil-Panel (Zuschnitt/DXF) → bleibt jetzt unter dem Dialog sichtbar (`rundblech.mjs`).
+- Meldungen deckten die Zeichenfläche ab und fingen Klicks → klickdurchlässig.
+
+## 6. Offene UX-Punkte / Einschränkungen
+- Stift und Touch sind mit echten Eingabeereignissen (Chromium/CDP, `pointerType` touch/pen) geprüft, nicht auf echter Tablet-Hardware.
+- Android-App: Build nur auf `main` (Workflow); die Web-Ressourcen sind dieselben wie in der geprüften Web-Version, ein Android-Build wurde hier nicht ausgeführt.
+- Alt-CSS: grosse Teile nutzen weiterhin feste Werte; Radien, Schatten und Hauptfarben laufen über Tokens, der Rest ist visuell konsistent, aber nicht token-basiert.
+- Kein Vollumbau der Leiste: die gruppierte Leiste blieb bewusst erhalten (bewährt, durch Suche ergänzt).
+- Plan-Editor: zweizeilige Werkzeugleiste unverändert, Grundstil der Felder angeglichen.
+
+## 7. Tests und CI
+- `npm test` (Kern): grün.
+- 43 Playwright-App-Tests (`tests/app-kern/*.mjs`): grün. Neu: `befehlssuche.mjs`, `assistent.mjs`, `responsive.mjs` (6 Fenstergrössen × Hell/Dunkel, ~90 Prüfungen), `eingabegeraete.mjs` (Touch/Stift), `projektdatei.mjs` (Öffnen/Neustart), `skizzenansicht.mjs` u. a.
+- CI auf dem Branch: «Web-Version» und «Windows-Installer» (Tauri/WebView2) erfolgreich (Runs 197–200 für die ersten Commits; Lauf zum letzten Commit siehe GitHub Actions).
+- Exakter CAD-Kern ein/aus: `pruefen.mjs`, `rundblech.mjs` (Kern netz/occt), `detail3d.mjs` grün.
+
+## 8. Screenshots und Commits
+Vorher/Nachher: `docs/cad/ux/vorher/`, `docs/cad/ux/nachher/`. Commits: `git log main..ux/professionalisierung`.

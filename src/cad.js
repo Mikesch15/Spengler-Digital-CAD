@@ -930,7 +930,7 @@ function beidseitig(f, feld, feld2) {
   if (f.richtung === "zwei") return [{ plus: true, feld, faktor: 1, min: 0.1, farbe }, { plus: false, feld: feld2, faktor: 1, min: 0.1, farbe }];
   if (f.richtung === "symmetrisch") return [{ plus: true, feld, faktor: 2, min: 0.1, farbe }, { plus: false, feld, faktor: 2, min: 0.1, farbe }];
   const d = f.richtung === "umgekehrt" ? -1 : 1, fern = d * vz; // Richtung des fernen Endes (+1 = Normale)
-  return [{ plus: fern > 0, feld, faktor: vz, farbe }, { plus: fern < 0, feld, faktor: -vz, farbe }];
+  return [{ plus: fern > 0, feld, faktor: vz, farbe }, { plus: fern < 0, feld, faktor: -vz, farbe, nah: true }]; // nah: Pfeil am Fuss (liegt auf der Profilfläche)
 }
 function griffeFuer(f) {
   if (f.bis && f.bis !== "mass" && (f.typ === "extrusion" || ["blech", "vorlage", "profil"].includes(f.typ))) return []; // Ausdehnung folgt der gewählten Fläche/Kante
@@ -999,7 +999,8 @@ steuerung.addEventListener("change", () => { if (griffe.length && !griffZug) zei
 function griffAn(e) { // Pfeil unter dem Zeiger (Abstand zur Strecke Fuss–Spitze am Bildschirm)
   if (!griffe.length || skizze) return null;
   const sm = smPos(e), r = e.pointerType === "touch" ? 30 : e.pointerType === "pen" ? 22 : 14; let best = null, bd = r;
-  for (const g of griffe) { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); if (A[2] > 1 || B[2] > 1) continue; const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = g; } }
+  const flaechenWahl = aktiveWahl()?.wahl === "flaechen"; // bei der Flächenwahl in der Skizze darf der Fusspfeil keine Klicks auf die Flächen abfangen
+  for (const g of griffe) { if (g.nah && flaechenWahl) continue; const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); if (A[2] > 1 || B[2] > 1) continue; const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = g; } }
   return best;
 }
 leinwand.addEventListener("pointerdown", (e) => {
@@ -1797,6 +1798,7 @@ function dialog(opt) {
     return `<div class="feld" data-s="${esc(fd.schritt || "")}"${fd.wahl ? ` data-wahl="${fd.wahl}" data-feld="${fd.id}"` : ""}><label for="d_${fd.id}">${fd.wahl ? "⊕ " : ""}${fd.label}${fd.einheit ? ` (${fd.einheit})` : ""}</label>${inp}</div>`;
   }).join("") + (opt.zusatz ? `<div id="dZusatz">${opt.zusatz()}</div>` : "") + (opt.hinweis ? `<p class="hinweis">${opt.hinweis}</p>` : "");
   $("dialog").hidden = false;
+  document.querySelector(".mitte")?.classList.toggle("dialogMitWerk", ["blech", "vorlage", "profil", "rundblech", "kehle", "flaeche", "flaechenteil", "kante", "profilkante"].includes(opt.feature?.typ)); // Blechwerkzeuge zeigen Zuschnitt/Abwicklung im Teil-Panel
   zeigeSchritt();
   opt.felder.forEach((fd) => $("d_" + fd.id).addEventListener(fd.optionen ? "change" : "input", () => opt.aendern?.(werte(), fd.id)));
   opt.binden?.($("dZusatz"));
@@ -1839,7 +1841,7 @@ function merkeAusdruecke(f) {
 }
 function schliesse() {
   if (dlg?.felder.some((fd) => fd.wahl)) status(""); // Hinweis «… anklicken» gilt nur im Dialog
-  $("dialog").hidden = true; dlg = null; grundebenen.visible = false; hoverLoeschen(); zeichneGriffe(); setTimeout(leisteZustand);
+  $("dialog").hidden = true; document.querySelector(".mitte")?.classList.remove("dialogMitWerk"); dlg = null; grundebenen.visible = false; hoverLoeschen(); zeichneGriffe(); setTimeout(leisteZustand);
 }
 $("dOk").onclick = () => { const m = dlg?.pflicht?.(); if (m) return status(m); dlg?.ok?.(werte()); schliesse(); regen(); };
 $("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); if (typeof wendeSchnittAn === "function") wendeSchnittAn(); };

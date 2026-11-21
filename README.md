@@ -45,6 +45,9 @@ Werkstattblatt drucken. Läuft als Windows-Programm, im Browser und auf dem Hand
 - **Blechprofil aus Skizze:** Blech mittig, links oder rechts der Linie, Kante A an Anfang oder Ende
 - **PC-Programm:** Speichern/Öffnen mit Windows-Dialog, zuletzt geöffnete Projekte, `.sdcad` per Doppelklick,
   automatische Updates
+- **Befehlssuche** (Strg + K oder `/`): jedes Werkzeug nach Name oder Stichwort finden und starten, zuletzt benutzte oben
+- **Dialoge als Schritt-Assistent** (Dach, Lukarne, Blechprofil …), am Desktop rechts angedockt; Esc bricht ab, Enter geht weiter
+- Rechte Spalte verstellbar (Ziehen am Rand, Doppelklick = Standard); Hell-/Dunkelmodus durchgängig
 - Kurzanleitung und Tastenkürzel im Programm unter **Hilfe** (F1)
 
 ## Aufbau
