@@ -21,6 +21,19 @@ await s.evaluate(() => window.sdcadTest.bearbeite("e1")); await s.waitForSelecto
 ok(await s.inputValue("#d_abstand2") === "30", "Dialog zeigt Abstand 2 = 30");
 await s.selectOption("#d_richtung", "eine", { force: true }); await s.waitForTimeout(400);
 ok(await s.evaluate(() => !document.getElementById("d_abstand2")), "bei «Eine Seite» verschwindet Abstand 2");
+// Pfeile an beiden Enden; negative Eingabe extrudiert bei einer Seite in die Gegenrichtung
+await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(300);
+let g = await s.evaluate(() => window.sdcadTest.griffe()); ok(g.length === 2 && g.some((q) => q.feld === "abstand" && q.faktor === 1) && g.some((q) => q.feld === "abstand" && q.faktor === -1), "Eine Seite: zwei Pfeile (fern = +, nah = −): " + g.map((q) => q.feld + q.faktor).join(","));
+await s.fill("#d_abstand", "-50", { force: true }); await s.waitForTimeout(500);
+let e2 = (await s.evaluate(() => window.sdcadTest.koerper())).find((x) => x.fid === "e1");
+ok(e2 && e2.volumen === 100000 && Math.abs(e2.min[2] + 50) < 0.01 && Math.abs(e2.max[2]) < 0.01, "Abstand −50 extrudiert 50 in die Gegenrichtung: " + JSON.stringify([e2?.volumen, e2?.min, e2?.max]));
+g = await s.evaluate(() => window.sdcadTest.griffe()); ok(g.length === 2, "bei negativem Mass weiterhin zwei Pfeile");
+const nah = g.find((q) => q.faktor === 1); // Pfeil am Fuss (nahes Ende) ziehen: Betrag wächst
+const dx = nah.schirm.b[0] - nah.schirm.a[0], dy = nah.schirm.b[1] - nah.schirm.a[1], L = Math.hypot(dx, dy) || 1;
+await s.mouse.move(nah.schirm.b[0], nah.schirm.b[1]); await s.mouse.down(); await s.mouse.move(nah.schirm.b[0] + dx / L * 25, nah.schirm.b[1] + dy / L * 25, { steps: 4 }); await s.mouse.up(); await s.waitForTimeout(400);
+ok(+(await s.inputValue("#d_abstand")) > -50, "Nahen Pfeil nach aussen ziehen verkleinert den Betrag Richtung Null (" + await s.inputValue("#d_abstand") + ")");
+await s.selectOption("#d_richtung", "zwei", { force: true }); await s.waitForTimeout(500);
+g = await s.evaluate(() => window.sdcadTest.griffe()); ok(g.length === 2 && g.some((q) => q.feld === "abstand2"), "Zwei Seiten: je ein Pfeil für Abstand 1 und Abstand 2");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Zweiseitig (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

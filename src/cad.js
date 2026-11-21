@@ -9,7 +9,7 @@ import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern
 import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
-import { rueckVersatz, zweiseitig } from "../kern/richtung.js";
+import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
 import { aufmassAusPunkt } from "../kern/dach/lukarneAufmass.js";
@@ -222,6 +222,11 @@ leinwand.addEventListener("wheel", (e) => {
   let P = treffer?.point; if (!P) P = strahl.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(kamera.getWorldDirection(new THREE.Vector3()), steuerung.target), new THREE.Vector3());
   if (P) ziehNahe(P, Math.exp(dy * 0.0011 * steuerung.zoomSpeed));
 }, { capture: true, passive: false });
+// Skizze: Umschalt + Mausrad gedrückt dreht die Ansicht nur in der Ebene (2D, Blick bleibt senkrecht auf die Fläche)
+let rollZug = null;
+leinwand.addEventListener("pointerdown", (e) => { if (!skizze || e.pointerType !== "mouse" || e.button !== 1 || !e.shiftKey) return; e.stopImmediatePropagation(); e.preventDefault(); leinwand.setPointerCapture(e.pointerId); rollZug = { x: e.clientX }; }, true);
+leinwand.addEventListener("pointermove", (e) => { if (!rollZug) return; e.stopImmediatePropagation(); const ang = -(e.clientX - rollZug.x) * 0.008; rollZug.x = e.clientX; kamera.up.applyAxisAngle(kamera.getWorldDirection(new THREE.Vector3()), ang); kamera.lookAt(steuerung.target); steuerung.update(); }, true);
+for (const t of ["pointerup", "pointercancel"]) leinwand.addEventListener(t, (e) => { if (!rollZug) return; try { leinwand.releasePointerCapture(e.pointerId); } catch {} rollZug = null; }, true);
 addEventListener("pointerdown", (e) => { // Ziel auf die Oberfläche in Bildmitte legen (Ansicht bleibt gleich)
   if (!e.isPrimary || skizze || modus2d || e.target !== leinwand || (e.pointerType === "mouse" && e.button !== 1)) return;
   const t = flaechenTreffer(new THREE.Vector2(0, 0)); if (t && t.distance > kamera.near * 2) steuerung.target.copy(t.point);
@@ -916,6 +921,14 @@ function uebernimmWahl(e) {
 // ------------------------------------------------------------ Ziehpfeile (wie in Fusion): Masse im Dialog zusätzlich mit einem Pfeil in der Ansicht ziehen
 const griffGruppe = new THREE.Group(); szene.add(griffGruppe);
 let griffe = [], griffZug = null;
+// Pfeile an beiden Enden einer Extrusion/Länge: plus = Ende in +Normalenrichtung. Einseitig: der ferne Pfeil ändert das Mass, der nahe zieht es durch Null (negatives Mass = Gegenrichtung)
+function beidseitig(f, feld, feld2) {
+  const farbe = 0xe0782b, v = +f[feld] || 0, vz = v < 0 ? -1 : 1;
+  if (f.richtung === "zwei") return [{ plus: true, feld, faktor: 1, min: 0.1, farbe }, { plus: false, feld: feld2, faktor: 1, min: 0.1, farbe }];
+  if (f.richtung === "symmetrisch") return [{ plus: true, feld, faktor: 2, min: 0.1, farbe }, { plus: false, feld, faktor: 2, min: 0.1, farbe }];
+  const d = f.richtung === "umgekehrt" ? -1 : 1, fern = d * vz; // Richtung des fernen Endes (+1 = Normale)
+  return [{ plus: fern > 0, feld, faktor: vz, farbe }, { plus: fern < 0, feld, faktor: -vz, farbe }];
+}
 function griffeFuer(f) {
   const l = [], mitte = (ms) => { const bb = new THREE.Box3(); ms.forEach((m) => bb.expandByObject(m)); return bb.isEmpty() ? null : bb; };
   if (f.typ === "extrusion") {
@@ -923,13 +936,13 @@ function griffeFuer(f) {
     const regs = gewaehlteRegionen(f, sk); let uv;
     if (regs) { if (!regs.length) return l; uv = regs[0].innen; }
     else { const p = schleifen(sk).sort((a, b) => Math.abs(flaeche(b)) - Math.abs(flaeche(a)))[0]; if (!p) return l; uv = [p.reduce((a, q) => a + q[0], 0) / p.length, p.reduce((a, q) => a + q[1], 0) / p.length]; }
-    const E = E_(sk.ebene), n = V(E.n).normalize(), a = +f.abstand || 0, sym = f.richtung === "symmetrisch", sg = f.richtung === "umgekehrt" ? -1 : 1;
-    l.push({ feld: "abstand", pos: zu3D(sk.ebene, uv).addScaledVector(n, sg * (sym ? a / 2 : a)), dir: n.clone().multiplyScalar(sg), faktor: sym ? 2 : 1, min: 0.1, farbe: 0xe0782b });
-  } else if (["blech", "vorlage", "profil"].includes(f.typ) && f.laenge > 0) {
+    const E = E_(sk.ebene), n = V(E.n).normalize(), z = zweiseitig(f, "abstand", "abstand2"), r = rueckVersatz(z.richtung, z.tiefe), b0 = zu3D(sk.ebene, uv);
+    for (const g of beidseitig(f, "abstand", "abstand2")) l.push({ ...g, pos: b0.clone().addScaledVector(n, g.plus ? z.tiefe - r : -r), dir: n.clone().multiplyScalar(g.plus ? 1 : -1) });
+  } else if (["blech", "vorlage", "profil"].includes(f.typ) && f.laenge != 0) {
     const bb = mitte(modell.children.filter((o) => o.isMesh && o.userData.fid === f.id)); if (!bb) return l;
-    const E = E_(f.ebene), n = V(E.n).normalize(), sg = f.richtung === "umgekehrt" ? -1 : 1, d = n.clone().multiplyScalar(sg), c = bb.getCenter(new THREE.Vector3());
-    let ext = 0; for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) ext = Math.max(ext, new THREE.Vector3(x, y, z).sub(c).dot(d));
-    l.push({ feld: "laenge", pos: c.addScaledVector(d, ext), dir: d, faktor: f.richtung === "symmetrisch" ? 2 : 1, min: 0.1, farbe: 0xe0782b });
+    const E = E_(f.ebene), n = V(E.n).normalize(), c = bb.getCenter(new THREE.Vector3());
+    let eMax = -Infinity, eMin = Infinity; for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) { const e = new THREE.Vector3(x, y, z).sub(c).dot(n); eMax = Math.max(eMax, e); eMin = Math.min(eMin, e); }
+    for (const g of beidseitig(f, "laenge", "laenge2")) l.push({ ...g, pos: c.clone().addScaledVector(n, g.plus ? eMax : eMin), dir: n.clone().multiplyScalar(g.plus ? 1 : -1) });
   } else if (f.typ === "bewegen" || f.typ === "kmuster") {
     const bb = mitte(modell.children.filter((o) => o.isMesh && (String(o.userData.fid) === f.ziel || String(o.userData.fid).startsWith(f.ziel + ":")))); if (!bb) return l;
     const c = bb.getCenter(new THREE.Vector3());
@@ -1519,11 +1532,11 @@ const rundteile = () => doc.features.filter((f) => f.typ === "rundblech" && !f.v
   return { name: f.name, notiz: [f.notiz, "Rundblech: Rechteck um die Abwicklung"].filter(Boolean).join(" · "), material: material(f.material), zuschnitt: Math.min(a, b), laenge: +Math.max(a, b).toFixed(1), stueck: (f.stueck ?? 1) * (f._faktor || 1) };
 });
 function auftrag() {
-  return stueckliste([...blechteile().map((f) => ({ name: f.name, notiz: f.notiz, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: f.laenge, stueck: f.stueck ?? 1 })), ...rundteile()]);
+  return stueckliste([...blechteile().map((f) => ({ name: f.name, notiz: f.notiz, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: laengeVon(f), stueck: f.stueck ?? 1 })), ...rundteile()]);
 }
 const f2 = (v) => v.toFixed(2);
 // Materialbedarf: Spaltband/Coil in Laufmetern, Tafeln als Stückzahl (Schätzung)
-const bedarf = () => materialbedarf([...blechteile().map((f) => ({ name: f.name, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: f.laenge, stueck: f.stueck ?? 1 })), ...rundteile()], einst);
+const bedarf = () => materialbedarf([...blechteile().map((f) => ({ name: f.name, material: material(f.material), zuschnitt: f._res.zuschnitt, laenge: laengeVon(f), stueck: f.stueck ?? 1 })), ...rundteile()], einst);
 function bedarfCsv() {
   const zeilen = bedarf().flatMap((e) => [
     ...e.baender.map((b) => [e.material, `Spaltband ${b.breite}`, +b.laufmeter.toFixed(2), "lfm", b.stueck]),
@@ -1559,7 +1572,7 @@ function zeigeAuftrag(w) {
   $("kAlleDruck").onclick = () => drucke(blechteile(), true);
   $("kEtiketten").onclick = druckeEtiketten;
   $("kAlleDxf").onclick = () => herunterladen(`${doc.nr || "auftrag"} Abwicklungen.dxf`,
-    abwicklungenDxf(blechteile().map((f) => ({ res: f._res, abw: f._blech?.abw, laenge: f.laenge, titel: `${f.name} ${f.stueck ?? 1} Stk ${material(f.material).name}` })), einst.skizze.abstand), "application/dxf");
+    abwicklungenDxf(blechteile().map((f) => ({ res: f._res, abw: f._blech?.abw, laenge: laengeVon(f), titel: `${f.name} ${f.stueck ?? 1} Stk ${material(f.material).name}` })), einst.skizze.abstand), "application/dxf");
   $("kCsv").onclick = () => herunterladen(`${doc.nr || "auftrag"} Stückliste.csv`, stuecklisteCsv(a, [["Objekt", doc.objekt], ["Nr.", doc.nr], []]) + bedarfCsv(), "text/csv");
 }
 // Dach: Holzliste, Latten, Flächen, Ziegel (Werkstatt-Panel, CSV)
@@ -1619,11 +1632,11 @@ function zeigeWerkstatt() {
     </tbody></table>
     <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button>${f.typ === "profil" ? '<button class="knopf" id="kEigene">Als eigene Vorlage speichern</button>' : ""}${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
     <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
-    <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>`;
-  $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${f.laenge} mm`, "",
+    <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${laengeVon(f)} mm · ${f.stueck ?? 1} Stk.</dd></dl>`;
+  $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${laengeVon(f)} mm`, "",
     `Biegung\tAnschlag ab A (mm)${abB ? "\tAnschlag ab B (mm)" : ""}\tWinkel\tRichtung`,
     ...r.biegungen.map((b) => `B${b.nr}\t${f1(b.pos)}${abB ? `\t${f1(r.zuschnitt - b.pos)}` : ""}\t${f1(Math.abs(b.winkel))}\t${b.richtung}`)].join("\n"));
-  $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, f.laenge, f.name), "application/dxf");
+  $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, laengeVon(f), f.name), "application/dxf");
   $("kDruck").onclick = () => drucke([f]);
   $("kKopie").onclick = () => dupliziere(f.eltern || f);
   if ($("k3D")) $("k3D").onclick = () => pruefe3D(f, $("k3DErg"));
@@ -1660,7 +1673,7 @@ function werkstattblatt(f) {
     <header><div>${kopf("Werkstattblatt")}<h1>${esc(f.name)}</h1></div>
       <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
     <div class="eckdaten">
-      <div><small>Zuschnitt</small><b>${f1(r.zuschnitt)} × ${f.laenge} mm</b></div>
+      <div><small>Zuschnitt</small><b>${f1(r.zuschnitt)} × ${laengeVon(f)} mm</b></div>
       <div><small>Material</small><b>${esc(m.name)}</b></div>
       <div><small>Stück</small><b>${f.stueck ?? 1}</b></div>
       <div><small>Aus</small><b>${q ? `${q.art} ${q.breite}${q.laenge ? " × " + q.laenge : ""}` : "Sonderformat"}</b></div>
@@ -1674,7 +1687,7 @@ function werkstattblatt(f) {
     <p class="hinweis">Masse in mm auf der Blechmitte. Anschlag ab Kante A (grüner Punkt)${abB ? ", «ab B» ab der anderen Kante für gewendetes Blech" : ""}. Richtung «oben/unten» mit Kante A links.
       Innenradius ${m.ri} mm, K-Faktor ${m.k}.</p>
     ${d.etikett ? `<dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
-      <dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${f.laenge} mm · ${f.stueck ?? 1} Stk.</dd></dl>` : ""}
+      <dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${laengeVon(f)} mm · ${f.stueck ?? 1} Stk.</dd></dl>` : ""}
   </section>`;
 }
 function stuecklisteBlatt() {
@@ -1698,7 +1711,7 @@ function druckeEtiketten() {
   const etiketten = blechteile().flatMap((f) => {
     const n = Math.max(0, Math.round(f.stueck ?? 1)), m = material(f.material);
     return Array.from({ length: n }, (_, i) => `<dl class="etikett klebe"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd>
-      <dt>Teil</dt><dd>${esc(f.name)}${n > 1 ? ` <small>${i + 1}/${n}</small>` : ""}</dd><dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(f._res.zuschnitt)} × ${f.laenge}</dd></dl>`);
+      <dt>Teil</dt><dd>${esc(f.name)}${n > 1 ? ` <small>${i + 1}/${n}</small>` : ""}</dd><dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(f._res.zuschnitt)} × ${laengeVon(f)}</dd></dl>`);
   });
   if (!etiketten.length) return status("Keine Blechteile für Etiketten.");
   const boegen = [];
@@ -1827,7 +1840,7 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
   auswahl = f.id; // Werkstatt zeigt das Teil schon während der Eingabe
   dialog({
     titel, hinweis, felder: felder(f), feature: f,
-    info: () => (f._fehler ? "⚠ " + f._fehler : f._rund ? `Zuschnitt ${f1(f._rund.masse.zuschnitt[0])} × ${f1(f._rund.masse.zuschnitt[1])} mm${f._rund.art === "kegel" ? ` · R ${f1(f._rund.masse.R)} / r ${f1(f._rund.masse.r)} · ${f._rund.masse.phi.toFixed(2)}°` : ""}` : f._res ? `Zuschnitt ${f1(f._res.zuschnitt)} × ${f.laenge} mm · ${f._res.biegungen.length} Biegungen` : ""),
+    info: () => (f._fehler ? "⚠ " + f._fehler : f._rund ? `Zuschnitt ${f1(f._rund.masse.zuschnitt[0])} × ${f1(f._rund.masse.zuschnitt[1])} mm${f._rund.art === "kegel" ? ` · R ${f1(f._rund.masse.R)} / r ${f1(f._rund.masse.r)} · ${f._rund.masse.phi.toFixed(2)}°` : ""}` : f._res ? `Zuschnitt ${f1(f._res.zuschnitt)} × ${laengeVon(f)} mm · ${f._res.biegungen.length} Biegungen` : ""),
     ...extra,
     aendern: (w, feld) => {
       setze(f, w); merkeAusdruecke(f);
@@ -4435,7 +4448,7 @@ function beendeSkizze() {
   $("gSkizze").hidden = true; setTimeout(leisteZustand); setTimeout(layerZeigen);
   ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null };
-  steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; steuerung.enableRotate = true;
+  steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; steuerung.enableRotate = true; kamera.up.set(0, 1, 0);
   szene.remove(skizzenRaster); skizzenRaster = null; boden.visible = true;
   $("eingabe").hidden = true; leeren(live); labels = []; document.querySelectorAll(".massbox").forEach((b) => b.remove()); $("fgAnzeige").textContent = "";
   status(f.elemente.length ? "Skizze fertig. Jetzt «Extrudieren» (geschlossene Profile) oder «Blechprofil» (offener Linienzug)." : "");
@@ -5687,7 +5700,7 @@ async function pruefe3D(f, aus) {
   try {
     const k = await exaktKoerper(f); id = k.id;
     const e = await kern().ausfuehren({ op: "eigenschaften", ziel: id });
-    const z = zuschnittAusVolumen(e.volumen, k.m.t, f.laenge, k.m.k, k.soll.theta), d = z - f._res.zuschnitt;
+    const z = zuschnittAusVolumen(e.volumen, k.m.t, laengeVon(f), k.m.k, k.soll.theta), d = z - f._res.zuschnitt;
     const gut = e.gueltig && e.geschlossen && Math.abs(d) < 1e-3;
     aus.textContent = `${gut ? "✓" : "⚠"} Körper ${e.gueltig ? "gültig" : "UNGÜLTIG"} · Zuschnitt aus 3D ${z.toFixed(3)} mm, Abwicklung ${f._res.zuschnitt.toFixed(3)} mm (Δ ${d.toFixed(4)})`;
     aus.className = gut ? "hinweis" : "fehler";
@@ -6014,7 +6027,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { kameraQ: () => kamera.quaternion.toArray(), griffe: () => griffe.map((g) => ({ feld: g.feld, faktor: g.faktor, dir: g.dir.toArray(), pos: g.pos.toArray(), schirm: (() => { const r = leinwand.getBoundingClientRect(), A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos) * 0.7).toArray()); return { b: [r.left + B[0], r.top + B[1]], a: [r.left + A[0], r.top + A[1]] }; })() })), kameraZiel: () => { const t = flaechenTreffer(new THREE.Vector2(0, 0)); return { abstand: t ? t.distance : null, kamera: kamera.position.toArray(), min: Math.max(4, modellRadius() * 0.0004) }; }, maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { kameraBlick: () => kamera.getWorldDirection(new THREE.Vector3()).toArray(), kameraQ: () => kamera.quaternion.toArray(), griffe: () => griffe.map((g) => ({ feld: g.feld, faktor: g.faktor, dir: g.dir.toArray(), pos: g.pos.toArray(), schirm: (() => { const r = leinwand.getBoundingClientRect(), A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos) * 0.7).toArray()); return { b: [r.left + B[0], r.top + B[1]], a: [r.left + A[0], r.top + A[1]] }; })() })), kameraZiel: () => { const t = flaechenTreffer(new THREE.Vector2(0, 0)); return { abstand: t ? t.distance : null, kamera: kamera.position.toArray(), min: Math.max(4, modellRadius() * 0.0004) }; }, maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));
