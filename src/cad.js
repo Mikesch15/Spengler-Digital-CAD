@@ -11,6 +11,7 @@ import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
 import "./befehlssuche.js";
 import "./arbeitsbereich.js";
+import { zeigeMeldung } from "./meldungen.js";
 import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
@@ -1738,7 +1739,9 @@ let hinweisZeit = 0; // Hinweise bleiben kurz stehen, bevor die Mauskoordinaten 
 function status(t, koordinaten = false) {
   if (koordinaten && Date.now() - hinweisZeit < 3000) return; if (!koordinaten) hinweisZeit = Date.now();
   const el = $("status"); el.textContent = t;
-  el.classList.toggle("warn", !koordinaten && /^(⚠|Fehler|Zuerst |Bitte |Kein[e]? |Nicht |Das .* (fehlt|geht nicht)|.*fehlgeschlagen)/.test(t)); // Warnungen fallen auf, Hinweise bleiben ruhig
+  const warn = !koordinaten && /^(⚠|Fehler|Zuerst |Bitte |Kein[e]? |Nicht |Das .* (fehlt|geht nicht)|.*fehlgeschlagen)/.test(t);
+  el.classList.toggle("warn", warn); // Warnungen fallen auf, Hinweise bleiben ruhig
+  if (warn) zeigeMeldung(t, "warn");
 }
 async function kopiere(text) {
   try { await navigator.clipboard.writeText(text); status("In die Zwischenablage kopiert."); } catch { status("Kopieren wird hier nicht unterstützt."); }

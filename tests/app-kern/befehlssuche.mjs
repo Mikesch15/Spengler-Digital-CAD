@@ -37,6 +37,13 @@ ok(await s.evaluate(() => document.getElementById("dialog").hidden || /Zuerst mi
 // Warnmeldungen fallen auf
 await s.evaluate(() => document.getElementById("wDachElement").click()); await s.waitForTimeout(300);
 ok(await s.evaluate(() => document.getElementById("status").classList.contains("warn")), "Warnung («Zuerst ein Dach anlegen») wird hervorgehoben");
+ok(await s.evaluate(() => document.querySelectorAll("#meldungen .meldung-toast").length >= 1 && document.querySelector("#meldungen .meldung-toast").getAttribute("role") === "alert"), "Warnung erscheint zusätzlich als Meldung (role=alert)");
+await s.evaluate(() => document.querySelectorAll("#meldungen .meldung-toast").forEach((m) => m.click())); await s.waitForTimeout(200);
+ok(await s.evaluate(() => document.querySelectorAll("#meldungen .meldung-toast").length === 0), "Klick schliesst die Meldung");
+ok(await s.evaluate(() => document.querySelector('a[href], button, input, select, [tabindex]:not([tabindex="-1"])')?.id === "skipLink"), "Erster Tab-Stopp der Seite: Sprunglink «Zur 3D-Ansicht»");
+await s.focus("#skipLink");
+await s.keyboard.press("Enter"); ok(await s.evaluate(() => document.activeElement?.id === "leinwand"), "Sprunglink setzt den Fokus auf die 3D-Ansicht");
+ok(await s.evaluate(() => getComputedStyle(document.querySelector("#plan select, .modal select") || document.body).color !== ""), "Grundstil für Auswahlfelder vorhanden");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Befehlssuche/Dialog (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

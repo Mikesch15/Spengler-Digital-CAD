@@ -14,8 +14,17 @@ Branch: `ux/professionalisierung` (kein Release; `main` unverändert). Stand: si
 ## Bewusst unverändert
 CAD-Kern, OCCT/Worker/WASM, Datenformate, Projektdateien, Cloud/Projekte, Tastenkürzel, Maus-/Touch-/Stiftsteuerung, Plan-Modul, Tauri/Android-Hülle, Build-Skripte.
 
+## Weitere Umsetzung (dritte Etappe)
+- **Meldungen:** `src/meldungen.js` – Warnungen/Fehler erscheinen zusätzlich als schliessbare Meldung (`role="alert"`, max. 3, 7 s), damit sie nicht in der Statuszeile untergehen.
+- **Tastatur:** Sprunglink «Zur 3D-Ansicht» als erster Tab-Stopp; DOM-Reihenfolge Leiste → Browser → Ansicht → Dialog → Teil/Auftrag → Zeitleiste ist zugleich die Tab-Reihenfolge.
+- **Icons:** geprüft – 93 Werkzeug-Icons, alle `viewBox 24`, keine Inline-Strichstärken; Skizzen-Werkzeuge sind bewusst Linienicons, Körper-/Blechwerkzeuge mit Flächenton (`.f`). Einheitlichkeit kommt zentral aus dem CSS.
+- **Eingaben/Plan/Einstellungen:** niedrig spezifischer Grundstil für Auswahl-/Textfelder (Plan-Editor-Auswahlfelder waren ungestylt), Einstellungs-Register brechen um statt abgeschnitten zu werden, `--on-accent` statt festem Weiss.
+- **CI:** Auf dem Branch laufen «Web-Version» und «Windows-Installer» (Tauri) – beide erfolgreich (Run-Nr. 197–200); veröffentlicht wird nur auf `main`. Android baut nur auf `main`.
+
 ## Offen
-Icons vereinheitlichen (Strichstärken sind per CSS einheitlich, Motive nicht), Toast-System für Meldungen, Tab-Reihenfolge, restliche CSS-Altblöcke (Farben direkt statt Tokens), Plan-Editor und Einstellungen visuell angleichen, Prüfung Tauri-/Android-Build und Stifteingabe auf echter Hardware.
+- Stift/Touch auf echter Hardware (Tablet) und Android-Build nicht in dieser Umgebung prüfbar.
+- Restliche Farben/Abstände im Alt-CSS (~400 Zeilen) sind noch nicht auf Tokens umgestellt; Plan-Editor-Layout (zweizeilige Werkzeugleiste) bleibt funktional unverändert.
+- Entscheidung des Besitzers: Branch nach `main` mergen (löst Windows-Release aus).
 
 ## Tests
 `npm test` (Kern) und 17 Playwright-App-Tests (`tests/app-kern/`), darunter neu `befehlssuche.mjs` (Suche, angedockter Dialog, Esc/Enter, Warnhervorhebung). Vorher-/Nachher-Screenshots: `docs/cad/ux/vorher`, `docs/cad/ux/nachher`.

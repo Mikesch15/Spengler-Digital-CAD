@@ -23,6 +23,7 @@
   --fs-s: 12px; --fs-m: 13px; --fs-l: 14px; --fs-xl: 16px;
   --sh-panel: 0 1px 2px rgba(20, 35, 50, .05); --sh-overlay: 0 6px 24px rgb(0 0 0 / .15); --sh-modal: 0 18px 50px rgb(0 0 0 / .35);
   --focus: 2px solid var(--accent); --warn: #b26a00;
+  --on-accent: #ffffff;
   --leiste-bg: linear-gradient(#ffffff, #f4f6f9); --glas: rgba(255, 255, 255, .85); --meldung-bg: #eef2f6;
   --ansicht-bg: radial-gradient(120% 100% at 50% 0%, #f5f8fb 0%, #dde4eb 60%, #cdd6df 100%);
 }
@@ -188,7 +189,7 @@ tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in
   .dialog .inhalt { max-height: none; }
 }
 .knopf { border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 3px; padding: 6px 12px; font: 600 13px var(--font-body); cursor: pointer; }
-.knopf.haupt { background: var(--accent); border-color: var(--accent); color: #fff; }
+.knopf.haupt { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .knopf.weg { color: var(--bend); margin-right: auto; }
 .hinweis { font-size: 12px; color: var(--muted); }
 table.zeilen { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
@@ -440,13 +441,13 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .pjliste { list-style: none; margin: 6px 0; padding: 0; max-height: 44vh; overflow: auto; border: 1px solid var(--line); border-radius: 3px; }
 .pjliste li { padding: 6px 10px; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; flex-direction: column; gap: 1px; } .pjliste li:last-child { border-bottom: 0; }
 .pjliste li:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); } .pjliste li.aktiv { background: var(--accent-soft); } .pjliste li.archiv b { opacity: .6; }
-.pjliste small { color: var(--muted); } .pjmarke { font: 600 11px var(--font-body); color: #fff; background: var(--accent); border-radius: 3px; padding: 0 5px; margin-left: 4px; } .pjmarke.grau { background: var(--muted); }
+.pjliste small { color: var(--muted); } .pjmarke { font: 600 11px var(--font-body); color: var(--on-accent); background: var(--accent); border-radius: var(--r-s); padding: 0 5px; margin-left: 4px; } .pjmarke.grau { background: var(--muted); }
 #pjInhalt .feld { display: grid; gap: 2px; margin: 6px 0; } #pjInhalt .feld span { color: var(--muted); font-size: 12px; } #pjInhalt input[type=text], #pjInhalt input[type=search], #pjInhalt textarea, #pjInhalt select { width: 100%; }
 .projzeile { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; justify-content: space-between; } .projzeile .knopf { white-space: nowrap; } #aProjektName { font-weight: 600; color: var(--fg); }
 
 .schritte{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin:0;padding:8px 12px 2px;font-size:12px}
 .schritte button{border:1px solid var(--line);background:transparent;color:inherit;border-radius:12px;padding:2px 9px;cursor:pointer;font:inherit}
-.schritte button.jetzt{background:var(--accent);color:#fff;border-color:transparent}
+.schritte button.jetzt{background:var(--accent);color:var(--on-accent);border-color:transparent}
 .schritte .titel{flex-basis:100%;font-weight:600;font-size:13px;margin-bottom:2px}
 .dialog .feld[hidden]{display:none}
 
@@ -485,8 +486,23 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .leiste.mehr { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
 .leiste.mehrLinks { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent); }
 .leiste.mehr.mehrLinks { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+
+/* Grundstil für Eingaben ohne eigene Regel (niedrige Spezifität): einheitlich in Hell und Dunkel, z. B. Auswahlfelder im Plan-Editor */
+:where(select, input[type="text"], input[type="number"], input[type="search"], input:not([type])) { color: var(--fg); background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-s); }
+/* Einstellungen: viele Register umbrechen statt abgeschnitten zu werden */
+.eregister { display: flex; flex-wrap: wrap; overflow-x: visible; }
+/* Meldungen */
+#meldungen { position: fixed; z-index: 80; left: 50%; bottom: 64px; transform: translateX(-50%); display: grid; gap: var(--sp-2); width: min(520px, calc(100% - 24px)); pointer-events: none; }
+.meldung-toast { pointer-events: auto; display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-m); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-left: 4px solid var(--warn); box-shadow: var(--sh-overlay); cursor: pointer; font-size: var(--fs-m); }
+.meldung-toast.warn { border-left-color: var(--fehler); } .meldung-toast.ok { border-left-color: var(--ok); }
+.meldung-toast span { flex: 1; } .meldung-toast button { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 var(--sp-1); }
+/* Sprunglink für Tastaturnutzer */
+.skip { position: absolute; left: var(--sp-2); top: -48px; z-index: 100; padding: var(--sp-2) var(--sp-3); background: var(--accent); color: var(--on-accent); border-radius: var(--r-s); text-decoration: none; }
+.skip:focus { top: var(--sp-2); }
+#leinwand:focus { outline: none; }
 </style>
 
+<a class="skip" href="#leinwand" id="skipLink">Zur 3D-Ansicht</a>
 <div class="app">
   <nav class="leiste" aria-label="Werkzeuge" id="leiste">
     <div class="marke"><img src="logo.png" alt="" width="32" height="32">Spengler Digital <span>CAD</span></div>
@@ -616,7 +632,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   <div class="mitte">
     <aside class="panel browser"><h2 class="ptitel">Browser</h2><ul class="baum" id="baum"></ul></aside>
     <section class="ansicht" id="ansicht">
-      <canvas id="leinwand" aria-label="3D-Ansicht"></canvas>
+      <canvas id="leinwand" tabindex="-1" aria-label="3D-Ansicht"></canvas>
       <div id="labels"></div>
       <div id="fangZeichen" hidden><svg viewBox="-12 -12 24 24" aria-hidden="true"><g></g></svg><span></span></div>
       <div id="wuerfelHit" title="Ansichtswürfel: Fläche anklicken"></div>

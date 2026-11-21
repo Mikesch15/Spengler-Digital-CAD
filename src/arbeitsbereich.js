@@ -28,3 +28,6 @@ if (leiste) {
   if (typeof ResizeObserver !== "undefined") new ResizeObserver(pruefe).observe(leiste);
   pruefe();
 }
+
+// Sprunglink: Fokus auf die 3D-Ansicht (Tastaturbedienung)
+document.getElementById("skipLink")?.addEventListener("click", (e) => { e.preventDefault(); document.getElementById("leinwand")?.focus(); });
