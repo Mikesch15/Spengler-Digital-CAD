@@ -9,6 +9,7 @@ import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern
 import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
+import { rueckVersatz, zweiseitig } from "../kern/richtung.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
 import { aufmassAusPunkt } from "../kern/dach/lukarneAufmass.js";
@@ -511,7 +512,7 @@ const nurPos = (g) => { const n = g.index ? g.toNonIndexed() : g.clone(); for (c
 function koerperGeometrie(formen_, ebene, tiefe, richtung, ueber = 0) {
   const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe + 2 * ueber, bevelEnabled: false, curveSegments: 48 });
   geo.translate(0, 0, -ueber);
-  if (richtung === "umgekehrt") geo.translate(0, 0, -tiefe); else if (richtung === "symmetrisch") geo.translate(0, 0, -tiefe / 2);
+  geo.translate(0, 0, -rueckVersatz(richtung, tiefe));
   geo.applyMatrix4(basis(ebene));
   return geo;
 }
@@ -556,7 +557,7 @@ function nachAussen(geo) {
 }
 function koerper(formen_, ebene, tiefe, richtung, farbe, fid) {
   const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe, bevelEnabled: false, curveSegments: 48 });
-  if (richtung === "umgekehrt") geo.translate(0, 0, -tiefe); else if (richtung === "symmetrisch") geo.translate(0, 0, -tiefe / 2);
+  geo.translate(0, 0, -rueckVersatz(richtung, tiefe));
   geo.applyMatrix4(basis(ebene));
   const mesh = new THREE.Mesh(geo, oberflaechenMaterial(farbe, geo)); mesh.userData.art = farbe;
   mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 28), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.6 })));
@@ -1069,7 +1070,7 @@ function regen() {
         const fs = formen(s, undefined, f); if (!fs.length) throw new Error(Array.isArray(f.flaechen) ? "Gewählte Fläche gibt es nicht mehr – neu anklicken" : "Skizze hat kein geschlossenes Profil");
         const kr = doc.features.filter((x) => x.typ === "kantenrund" && x.ziel === f.id && !x._aus);
         aktSchnitt = { ebene: s.ebene, loops: gewaehlteRegionen(f, s)?.map((r) => r.aussen) ?? schleifen(s) };
-        try { volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, f.abstand, f.richtung, (f.vorgang || "neu") === "neu" ? 0 : 0.01)); } finally { aktSchnitt = null; }
+        try { volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, zweiseitig(f, "abstand", "abstand2").tiefe, zweiseitig(f, "abstand", "abstand2").richtung, (f.vorgang || "neu") === "neu" ? 0 : 0.01)); } finally { aktSchnitt = null; }
       } else if (f.typ === "bild") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         if (!f.versteckt) bilder.add(bildObjekt(f));
@@ -1135,14 +1136,14 @@ function regen() {
         const riAn = (i) => (radien[i] > 0 ? Math.max(radien[i] - d * Math.sign(drehung(k, i)) - m.t / 2, 0) : null);
         f._res = blechAusKette(kk, m, riAn);
         f._kernLage = { ebene: E_(s.ebene), versatz: kk[0] }; // für den exakten CAD-Kern (gleiche Lage wie das Anzeige-Netz)
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, kk[0])], s.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id));
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, kk[0])], s.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id));
       } else if (f.typ === "vorlage") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         const m = material(f.material), v = VORLAGE[f.vorlage];
         const { start, ops } = profilErweitern(v.bau(f.params, m), profilErweiterungen(f, m), m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         f._kernLage = null;
-        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id)); }
+        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
       } else if (f.typ === "flaeche") {
         f._bleche = null; f._teile = null; f._mitAbwicklung = false;
         if (!f.kantenBasis) f.kantenBasis = { ...(f.kanten || {}) };
@@ -1262,7 +1263,7 @@ function regen() {
         const { start, ops } = profilErweitern(freiesProfil(f.start, f.zeilen, m), profilErweiterungen(f, m), m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         f._kernLage = null;
-        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, f.laenge, f.richtung, darstellungVon(f, m), f.id)); }
+        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
       }
     } catch (e) { f._fehler = e.message; }
   }
@@ -1833,7 +1834,8 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
   });
   setze(f, werte()); regen();
 }
-const RICHTUNGEN = [["eine", "Eine Seite"], ["umgekehrt", "Umgekehrt"], ["symmetrisch", "Symmetrisch"]];
+const zweiFeld = (f, feld, label = "Länge") => (f.richtung === "zwei" ? [{ id: feld + "2", label: `${label} 2 (Gegenrichtung)`, einheit: "mm", wert: f[feld + "2"] ?? Math.round((+f[feld] || 100) / 2) }] : []);
+const RICHTUNGEN = [["eine", "Eine Seite"], ["umgekehrt", "Umgekehrt"], ["symmetrisch", "Symmetrisch"], ["zwei", "Zwei Seiten (verschieden lang)"]];
 const LAGEN = [["mitte", "Mitte"], ["links", "Links"], ["rechts", "Rechts"]];
 
 function bearbeite(f) {
@@ -1924,12 +1926,13 @@ function extrusionDialog(f) {
   f ||= { id: neueId(), typ: "extrusion", name: "Extrusion " + (doc.features.filter((x) => x.typ === "extrusion").length + 1), skizze: sk.at(-1).id, flaechen: [], abstand: 100, richtung: "eine", vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: Array.isArray(f.flaechen) ? "Flächen in" : "Profil aus", wahl: Array.isArray(f.flaechen) ? "flaechen" : "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
-    { id: "abstand", label: "Abstand", einheit: "mm", wert: f.abstand },
+    { id: "abstand", label: f.richtung === "zwei" ? "Abstand 1" : "Abstand", einheit: "mm", wert: f.abstand },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
+    ...zweiFeld(f, "abstand", "Abstand"),
     ...vorgangFelder(f),
   ], (f, w) => { if (Array.isArray(f.flaechen) && w.skizze !== f.skizze) f.flaechen = []; Object.assign(f, w); }, "Extrudieren",
   "Fläche(n) in der Skizze anklicken (jede Teilfläche einzeln, auch Überlappungen und Inseln; nochmals anklicken = abwählen). Vorgang wie in Fusion: neuer Körper, vereinigen, ausschneiden oder schneiden.",
-  { pflicht: () => (Array.isArray(f.flaechen) && !f.flaechen.length ? "Zuerst mindestens eine Fläche in der Skizze anklicken." : "") });
+  { neuBei: ["richtung"], pflicht: () => (Array.isArray(f.flaechen) && !f.flaechen.length ? "Zuerst mindestens eine Fläche in der Skizze anklicken." : "") });
 }
 
 const VORGAENGE = [["neu", "Neuer Körper"], ["verbinden", "Vereinigen"], ["ausschneiden", "Ausschneiden"], ["schneiden", "Schneiden (Schnittmenge)"]];
@@ -1965,7 +1968,7 @@ function blechDialog(f) {
   const sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
   if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: Blechmitte oder eine Blechoberfläche.");
   f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: Math.max(0, ketten(sk.at(-1)).findIndex((k) => !k.mitBogen)), lage: einst.neu.lage, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
-  const REGELN = [["Linienzug", () => true], ["Lage des Blechs", (id) => ["lage", "umkehren"].includes(id)], ["Material und Länge", (id) => ["material", "laenge", "stueck", "notiz", "richtung"].includes(id)]];
+  const REGELN = [["Linienzug", () => true], ["Lage des Blechs", (id) => ["lage", "umkehren"].includes(id)], ["Material und Länge", (id) => ["material", "laenge", "laenge2", "stueck", "notiz", "richtung"].includes(id)]];
   featureDialog(f, istNeu, (f) => mitSchritten([
     { id: "skizze", label: "Linienzug aus", wahl: "kette", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "kette", label: "Linienzug", optionen: ketten(finde(f.skizze) || sk.at(-1)).map((k, i) => [i, `Nr. ${i + 1}${k.mitBogen ? " (mit Bogen)" : ""}`]), wert: f.kette },
@@ -1976,8 +1979,9 @@ function blechDialog(f) {
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
+    ...zweiFeld(f, "laenge"),
   ], REGELN), (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1), umkehren: w.umkehren === "1" }), "Blechprofil",
-  "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Pfeilrichtung gesehen links bzw. rechts davon. In der Ansicht: grüner Punkt = Kante A, oranger Pfeil = Richtung.");
+  "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Pfeilrichtung gesehen links bzw. rechts davon. In der Ansicht: grüner Punkt = Kante A, oranger Pfeil = Richtung.", { neuBei: ["richtung"] });
 }
 
 function vorlageDialog(f) {
@@ -1989,6 +1993,8 @@ function vorlageDialog(f) {
     ...VORLAGE[f.vorlage].params.map(([k, l, e]) => ({ id: "p_" + k, label: l, einheit: e, wert: f.params[k] })),
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
+    { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung || "eine" },
+    ...zweiFeld(f, "laenge"),
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
     { id: "ebene", label: "Querschnitt in", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
@@ -2000,10 +2006,10 @@ function vorlageDialog(f) {
     }
     f.name = w.name.trim() || f.name;
     for (const [k] of VORLAGE[f.vorlage].params) if (Number.isFinite(w["p_" + k])) f.params[k] = w["p_" + k];
-    Object.assign(f, { material: w.material, laenge: w.laenge, stueck: w.stueck, ebene: w.ebene, notiz: w.notiz });
+    Object.assign(f, { material: w.material, laenge: w.laenge, stueck: w.stueck, ebene: w.ebene, notiz: w.notiz, richtung: w.richtung || f.richtung || "eine" }); if (Number.isFinite(w.laenge2)) f.laenge2 = w.laenge2;
   };
-  const REGELN = [["Vorlage", () => true], ["Masse", (id) => id.startsWith("p_")], ["Material, Länge, Lage", (id) => ["material", "laenge", "stueck", "notiz", "ebene"].includes(id)]];
-  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Spengler-Vorlage", "", { wahlNr: -1 });
+  const REGELN = [["Vorlage", () => true], ["Masse", (id) => id.startsWith("p_")], ["Material, Länge, Lage", (id) => ["material", "laenge", "laenge2", "richtung", "stueck", "notiz", "ebene"].includes(id)]];
+  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Spengler-Vorlage", "", { wahlNr: -1, neuBei: ["richtung"] });
 }
 
 // Freies Profil: Schenkel als Tabelle, Winkel jeweils nach dem Schenkel
@@ -2017,6 +2023,8 @@ function profilDialog(f) {
     { id: "start", label: "Startwinkel", einheit: "°", wert: f.start },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
+    { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung || "eine" },
+    ...zweiFeld(f, "laenge"),
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
     { id: "ebene", label: "Querschnitt in", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
@@ -2051,7 +2059,7 @@ function profilDialog(f) {
   };
   featureDialog(f, istNeu, felder, setze, "Freies Profil",
     "Winkel nach dem Schenkel: + biegt nach oben (links), − nach unten (rechts). Umschlag = 180°, Vorzeichen gibt die Seite. Masse auf der Blechmitte.",
-    { zusatz: tabelle, binden, wahlNr: -1 });
+    { zusatz: tabelle, binden, wahlNr: -1, neuBei: ["richtung"] });
 }
 
 
@@ -3161,25 +3169,25 @@ function gerundeteExtrusion(s, f, kr) {
   const senk = kr.find((k) => k.kanten !== "quer"), quer = kr.find((k) => k.kanten !== "senkrecht");
   const opt = (k) => (k ? (k.art === "fase" ? { fase: k.mass } : { r: k.mass }) : {});
   let fs = formen(s, { aussenFn: (p) => eckenBearbeiten(p, opt(senk)), lochFn: (p) => eckenBearbeiten(p, opt(senk)) }, f);
-  if (!quer) return koerperGeometrie(fs, s.ebene, f.abstand, f.richtung);
-  const m = Math.min(quer.mass, Math.abs(f.abstand) / 2 - 0.01); if (!(m > 0)) return koerperGeometrie(fs, s.ebene, f.abstand, f.richtung);
+  if (!quer) return koerperGeometrie(fs, s.ebene, zweiseitig(f, "abstand", "abstand2").tiefe, zweiseitig(f, "abstand", "abstand2").richtung);
+  const m = Math.min(quer.mass, Math.abs(zweiseitig(f, "abstand", "abstand2").tiefe) / 2 - 0.01); if (!(m > 0)) return koerperGeometrie(fs, s.ebene, zweiseitig(f, "abstand", "abstand2").tiefe, zweiseitig(f, "abstand", "abstand2").richtung);
   // Oben/unten: Kontur um m einziehen, dann mit Fase bzw. Rundung (Bevel) wieder auf die volle Grösse
   fs = formen(s, { aussenFn: (p) => versatzPolylinie(eckenBearbeiten(p, opt(senk)), m, true), lochFn: (p) => versatzPolylinie(eckenBearbeiten(p, opt(senk)), -m, true) }, f);
-  const geo = new THREE.ExtrudeGeometry(fs, { depth: Math.abs(f.abstand) - 2 * m, bevelEnabled: true, bevelThickness: m, bevelSize: m, bevelOffset: 0, bevelSegments: quer.art === "fase" ? 1 : 6, curveSegments: 48 });
+  const geo = new THREE.ExtrudeGeometry(fs, { depth: Math.abs(zweiseitig(f, "abstand", "abstand2").tiefe) - 2 * m, bevelEnabled: true, bevelThickness: m, bevelSize: m, bevelOffset: 0, bevelSegments: quer.art === "fase" ? 1 : 6, curveSegments: 48 });
   geo.translate(0, 0, m);
-  const t = Math.abs(f.abstand); if (f.richtung === "umgekehrt") geo.translate(0, 0, -t); else if (f.richtung === "symmetrisch") geo.translate(0, 0, -t / 2);
+  const zw = zweiseitig(f, "abstand", "abstand2"), t = Math.abs(zw.tiefe); geo.translate(0, 0, -rueckVersatz(zw.richtung, t));
   geo.applyMatrix4(basis(s.ebene)); return geo;
 }
 // Schale: Innenraum = Kontur um die Wanddicke eingezogen (Löcher erweitert), Boden/Deckel bleiben je nach «offen»
 function schalenWerkzeug(z, f) {
-  const s = finde(z.skizze), d = f.dicke > 0 ? f.dicke : 2, t = Math.abs(z.abstand);
+  const s = finde(z.skizze), d = f.dicke > 0 ? f.dicke : 2, t = Math.abs(zweiseitig(z, "abstand", "abstand2").tiefe);
   const fs = formen(s, { aussenFn: (p) => versatzPolylinie(p, d, true), lochFn: (p) => versatzPolylinie(p, -d, true) }, z);
   let z0 = d, z1 = t - d;
   if (f.offen === "oben" || f.offen === "beide") z1 = t + 1;
   if (f.offen === "unten" || f.offen === "beide") z0 = -1;
   if (z1 - z0 <= 0) throw new Error("Wanddicke zu gross");
   const geo = new THREE.ExtrudeGeometry(fs, { depth: z1 - z0, bevelEnabled: false, curveSegments: 48 }); geo.translate(0, 0, z0);
-  if (z.richtung === "umgekehrt") geo.translate(0, 0, -t); else if (z.richtung === "symmetrisch") geo.translate(0, 0, -t / 2);
+  geo.translate(0, 0, -rueckVersatz(zweiseitig(z, "abstand", "abstand2").richtung, t));
   geo.applyMatrix4(basis(s.ebene)); return geo;
 }
 // Körper eines Features in der Szene (auch Blechteile «id:n») und als Volumenkörper
@@ -5658,7 +5666,7 @@ const kernFehlerText = (e) => e?.code === "NICHT_GELADEN" ? `Der CAD-Kern konnte
 // Exakter Körper eines Blechteils (Vorlage, freies Profil, Blech aus Linienzug) – gleiche Lage wie das Anzeige-Netz
 async function exaktKoerper(f) {
   const m = material(f.material);
-  const { kommando, soll } = blechTeilKommando({ res: f._res, t: m.t, ebene: f._kernLage.ebene, laenge: f.laenge, richtung: f.richtung, versatz: f._kernLage.versatz });
+  const { kommando, soll } = blechTeilKommando({ res: f._res, t: m.t, ebene: f._kernLage.ebene, laenge: zweiseitig(f, "laenge", "laenge2").tiefe, richtung: zweiseitig(f, "laenge", "laenge2").richtung, versatz: f._kernLage.versatz });
   const { id } = await kern().ausfuehren(kommando);
   return { id, soll, m };
 }
@@ -5739,10 +5747,10 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
   const markiereZiel = (f, grund) => { if (f.ziel && f.ziel !== "alle") nicht.set(f.ziel, grund); else for (const k of koerper.keys()) nicht.set(k, grund); };
   // Abrunden/Fasen einer Extrusion wie gerundeteExtrusion(): erst Kanten entlang der Extrusion, dann Boden/Deckel
   const kantenRunden = async (w, kr, f, s) => {
-    const senk = kr.find((k) => k.kanten !== "quer"), quer = kr.find((k) => k.kanten !== "senkrecht"), lage = extrusionsHoehen({ ebene: E_(s.ebene), abstand: f.abstand, richtung: f.richtung });
+    const senk = kr.find((k) => k.kanten !== "quer"), quer = kr.find((k) => k.kanten !== "senkrecht"), lage = extrusionsHoehen({ ebene: E_(s.ebene), abstand: zweiseitig(f, "abstand", "abstand2").tiefe, richtung: zweiseitig(f, "abstand", "abstand2").richtung });
     for (const [k, art] of [[senk, "senkrecht"], [quer, "quer"]]) {
       if (!k) continue;
-      const kanten = extrusionsKanten(await K.ausfuehren({ op: "topologie", ziel: w }), lage, art), mass = art === "quer" ? Math.min(k.mass, Math.abs(f.abstand) / 2 - 0.01) : k.mass;
+      const kanten = extrusionsKanten(await K.ausfuehren({ op: "topologie", ziel: w }), lage, art), mass = art === "quer" ? Math.min(k.mass, Math.abs(zweiseitig(f, "abstand", "abstand2").tiefe) / 2 - 0.01) : k.mass;
       if (kanten.length && mass > 0) w = (await x(k.art === "fase" ? { op: "fasen", ziel: w, d: mass, kanten } : { op: "verrunden", ziel: w, r: mass, kanten })).id;
     }
     return w;
@@ -5760,7 +5768,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         try {
           const profile = exakteProfile(s, f);
           if (!profile.length) throw new NichtExakt("kein geschlossenes Profil");
-          if (f.typ === "extrusion") kmd = extrusionKommandos({ profile, ebene: E_(s.ebene), abstand: f.abstand, richtung: f.richtung });
+          if (f.typ === "extrusion") kmd = extrusionKommandos({ profile, ebene: E_(s.ebene), abstand: zweiseitig(f, "abstand", "abstand2").tiefe, richtung: zweiseitig(f, "abstand", "abstand2").richtung });
           else { const [a, d] = drehAchse(s, f.achse); kmd = rotationKommandos({ profile, ebene: E_(s.ebene), a, d, winkel: f.winkel ?? 360 }); }
         } catch (e) { if (op === "neu") nicht.set(f.id, `${e.message} noch nicht exakt`); else markiereZiel(f, `${f.name}: ${e.message} noch nicht exakt`); continue; }
         let w = await vereinige(await Promise.all(kmd.map(async (k) => (await x(k)).id)));
@@ -5783,7 +5791,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         const z = finde(f.ziel); if (!koerper.has(f.ziel) || nicht.has(f.ziel)) continue;
         if (!["oben", "unten", "beide"].includes(f.offen)) { nicht.set(f.ziel, "Schale ohne offene Seite noch nicht exakt"); continue; }
         try {
-          const lage = extrusionsHoehen({ ebene: E_(finde(z.skizze).ebene), abstand: z.abstand, richtung: z.richtung });
+          const lage = extrusionsHoehen({ ebene: E_(finde(z.skizze).ebene), abstand: zweiseitig(z, "abstand", "abstand2").tiefe, richtung: zweiseitig(z, "abstand", "abstand2").richtung });
           const offen = extrusionsFlaechen(await K.ausfuehren({ op: "topologie", ziel: koerper.get(f.ziel) }), lage, f.offen);
           koerper.set(f.ziel, (await x({ op: "schale", ziel: koerper.get(f.ziel), dicke: f.dicke > 0 ? f.dicke : 2, offen })).id);
         } catch (e) { nicht.set(f.ziel, `${f.name}: ${e.message}`); }
@@ -6012,7 +6020,7 @@ if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { griff
       out.push({ fid, i, j, v: Math.round(Math.abs(v / 6)), y: p.length ? [+ymin.toFixed(2), +ymax.toFixed(2)] : null }); } }
     return out; }, schirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; }, schirmUV: (e, uv) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(zu3D(e, uv).toArray()); return [r.left + s[0], r.top + s[1]]; }, koerper: () => modell.children.filter((o) => o.isMesh).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, a = g.attributes.position.array; let v = 0;
     for (let i = 0; i < a.length; i += 9) v += a[i] * (a[i + 4] * a[i + 8] - a[i + 5] * a[i + 7]) - a[i + 1] * (a[i + 3] * a[i + 8] - a[i + 5] * a[i + 6]) + a[i + 2] * (a[i + 3] * a[i + 7] - a[i + 4] * a[i + 6]);
-    return { fid: o.userData.fid, dreiecke: a.length / 9, volumen: Math.round(v / 6) }; }), aufSchirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; } };
+    const bx = new THREE.Box3().setFromBufferAttribute(g.attributes.position); return { fid: o.userData.fid, dreiecke: a.length / 9, volumen: Math.round(v / 6), min: bx.min.toArray(), max: bx.max.toArray() }; }), aufSchirm: (p) => { const r = leinwand.getBoundingClientRect(), s = aufSchirm(p); return [r.left + s[0], r.top + s[1]]; } };
 // PC-Programm: Update-Prüfung beim Start (abschaltbar in den Einstellungen)
 if (pc && einst.programm.updates) pc.invoke("nach_update_suchen").catch(() => {}); // ohne Netz still weiter
 // PC-Programm: per Doppelklick geöffnete .sdcad-Datei laden

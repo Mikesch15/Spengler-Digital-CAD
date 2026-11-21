@@ -1,3 +1,4 @@
+import { rueckVersatz } from "../richtung.js";
 // Spengler Digital CAD – App-Features → Kern-Kommandos (rein, ohne Kern, ohne Oberfläche)
 // Damit die Oberfläche keine OCCT-Details kennt: sie liefert die Daten, die sie ohnehin hat
 // (Rechenergebnis aus kern/geometrie.js, Material, Ebene {o,u,v,n}, Länge, Richtung, Versatz), hier entstehen Kommandos.
@@ -23,7 +24,7 @@ export function kernEbene(e, versatzNormale = 0) {
 export function blechTeilKommando({ res, t, ebene, laenge, richtung = "normal", versatz = [0, 0] }) {
   if (!(laenge > 0)) throw new Error("Länge muss grösser als 0 sein");
   const q = blechQuerschnitt(res, t);
-  const start = richtung === "umgekehrt" ? -laenge : richtung === "symmetrisch" ? -laenge / 2 : 0;
+  const start = -rueckVersatz(richtung, laenge);
   return {
     kommando: { op: "extrusion", profil: verschiebeProfil(q.profil, versatz[0], versatz[1]), ebene: kernEbene(ebene, start), hoehe: laenge },
     soll: { volumen: t * q.mitte * laenge, mitte: q.mitte, theta: q.theta, zuschnitt: res.zuschnitt },
@@ -34,7 +35,7 @@ export function blechTeilKommando({ res, t, ebene, laenge, richtung = "normal", 
 // richtung "umgekehrt" = nach hinten, "symmetrisch" = halb/halb. Ein Kommando je Aussenkontur (mit ihren Löchern).
 export function extrusionKommandos({ profile, ebene, abstand, richtung = "eine" }) {
   if (!(abstand > 0)) throw new Error("Abstand muss grösser als 0 sein");
-  const start = richtung === "umgekehrt" ? -abstand : richtung === "symmetrisch" ? -abstand / 2 : 0, e = kernEbene(ebene, start);
+  const start = -rueckVersatz(richtung, abstand), e = kernEbene(ebene, start);
   return profile.map((p) => ({ op: "extrusion", profil: p.profil, loecher: p.loecher, ebene: e, hoehe: abstand }));
 }
 // Drehung einer Skizze um eine Achse der Skizze (Punkt a, Richtung d in u/v), Winkel in Grad, rechtshändig um d
@@ -51,7 +52,7 @@ export function rotationKommandos({ profile, ebene, a, d, winkel }) {
 // Lage einer Extrusion entlang der Ebenennormalen: Boden h0 und Deckel h1 (h = Punkt · n)
 export function extrusionsHoehen({ ebene, abstand, richtung = "eine" }) {
   const n = ebene.n, l = Math.hypot(...n), nn = n.map((v) => v / l), h = dot(ebene.o, nn);
-  const start = richtung === "umgekehrt" ? -abstand : richtung === "symmetrisch" ? -abstand / 2 : 0;
+  const start = -rueckVersatz(richtung, abstand);
   return { n: nn, h0: h + start, h1: h + start + abstand };
 }
 // Kanten einer extrudierten Form für «Abrunden/Fasen» wie in der App: "senkrecht" = gerade Kanten entlang der Extrusion
