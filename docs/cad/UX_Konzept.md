@@ -33,7 +33,7 @@ Vorhanden: Farben (`--bg --panel --panel-2 --line --fg --muted --accent --accent
 ## Phasen
 1. ✔ Bestandsaufnahme (`UX_Bestandsaufnahme.md`).
 2. ✔ Konzept (dieses Dokument).
-3. ✔ Grundlagen: angedockter Dialog, Schrittleiste, Befehlssuche. Offen: Token-Erweiterung, Fokusringe.
-4. Offen: verstellbare Panelbreite + «Arbeitsbereich zurücksetzen», Tabellen im Teil-Panel (Scroll statt Abschneiden), einheitliche Meldungen, Icons.
-5. Offen: Tab-Reihenfolge, Escape-Verhalten, leere Zustände.
+3. ✔ Grundlagen: angedockter Dialog, Schrittleiste, Befehlssuche, Tokens (`--sp-*`, `--r-*`, `--fs-*`, `--sh-*`, `--focus`, `--warn`).
+4. ✔ Verstellbare Panelbreite + «Arbeitsbereich zurücksetzen» (Tabellen im Teil-Panel lassen sich verbreitern), Warnmeldungen in der Statuszeile hervorgehoben, Werkzeugleiste mit Rand-Hinweis auf schmalen Displays. Offen: Icons vereinheitlichen, Meldungen als Toast statt nur Statuszeile.
+5. ✔ Esc bricht den Dialog ab, Enter = nächster Schritt bzw. OK. Offen: Tab-Reihenfolge prüfen, leere Zustände.
 6. Laufend: Tests nach jedem Schritt (`npm test`, `tests/app-kern/*.mjs`).

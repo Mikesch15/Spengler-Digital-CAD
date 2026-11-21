@@ -23,6 +23,20 @@ const pos = await s.evaluate(() => { const d = document.getElementById("dialog")
 ok(pos.parent === "mitte" && pos.dl >= pos.ar - 1, "Dialog ist rechts angedockt und überdeckt die 3D-Ansicht nicht (" + JSON.stringify(pos) + ")");
 await s.click("#dAbbrechen"); await s.waitForTimeout(300);
 ok(await s.evaluate(() => document.getElementById("dialog").hidden && getComputedStyle(document.querySelector(".werkstatt")).display !== "none"), "Nach dem Schliessen ist Teil/Auftrag wieder da");
+// Esc bricht den Dialog ab; Enter geht im Assistenten weiter, auf der letzten Seite/ohne Schritte = OK
+await s.evaluate(() => document.getElementById("wExtrusion").click()); await s.waitForSelector("#d_abstand", { state: "attached" });
+await s.keyboard.press("Escape"); await s.waitForTimeout(300);
+ok(await s.evaluate(() => document.getElementById("dialog").hidden), "Esc bricht den Dialog ab");
+await s.evaluate(() => document.getElementById("wDachAuto").click()); await s.waitForSelector("#d_name", { state: "attached" });
+await s.focus("#d_name"); await s.keyboard.press("Enter"); await s.waitForTimeout(300);
+ok(/Schritt 2 von 5/.test(await s.evaluate(() => document.querySelector("#dSchritte .titel")?.textContent || "")), "Enter im Assistenten: nächster Schritt");
+await s.keyboard.press("Escape"); await s.waitForTimeout(300);
+await s.evaluate(() => document.getElementById("wExtrusion").click()); await s.waitForSelector("#d_abstand", { state: "attached" });
+await s.focus("#d_abstand"); await s.keyboard.press("Enter"); await s.waitForTimeout(400);
+ok(await s.evaluate(() => document.getElementById("dialog").hidden || /Zuerst mindestens eine Fl/.test(document.getElementById("status").textContent)), "Enter im Einzeldialog = OK (schliesst oder meldet die fehlende Pflichtangabe)");
+// Warnmeldungen fallen auf
+await s.evaluate(() => document.getElementById("wDachElement").click()); await s.waitForTimeout(300);
+ok(await s.evaluate(() => document.getElementById("status").classList.contains("warn")), "Warnung («Zuerst ein Dach anlegen») wird hervorgehoben");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Befehlssuche/Dialog (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

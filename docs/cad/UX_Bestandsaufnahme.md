@@ -31,11 +31,11 @@ Grundlage: tatsächlicher Quellcode (`src/cad.html` ≈ 101 KB, `src/cad.js` ≈
 | P1 | Dialoge überdeckten die 3D-Ansicht (rechts oben, 330 px) – gerade bei Dach/Lukarne wird das Modell verdeckt. | **Erledigt:** Dialog ist am Desktop in der rechten Spalte angedockt, Teil/Auftrag weicht solange. |
 | P1 | Funktionsumfang (92 Werkzeuge, 11 Menüs) nur über Menüs auffindbar; neue Nutzer kennen die Gruppen nicht. | **Erledigt:** Befehlssuche (Strg+K, «/», Knopf «Suchen») startet jedes Werkzeug über denselben Knopf. |
 | P1 | Lange Dialoge (bis 40 Felder) auf einer Seite. | Erledigt für Dach, Gebäude, Lukarne, Dachfenster/Kamin, Dachbleche, Vorlage, Blechprofil, Rundblech (Schritt-Assistent); übrige Dialoge haben < 10 Felder. |
-| P1 | Werkstatt-Panel: Tabellen (Holzliste, Mengen) werden bei 300 px abgeschnitten («MENG», «16 St»). | Offen → Konzept: Panelbreite verstellbar, Tabellen horizontal scrollbar. |
-| P2 | Handy: Werkzeugleiste zeigt nur wenige Knöpfe, Rest nur durch Wischen erreichbar. | Befehlssuche als vollständiger Zugang; weiteres Konzept offen. |
+| P1 | Werkstatt-Panel: Tabellen (Holzliste, Mengen) werden bei 300 px abgeschnitten («MENG», «16 St»). | **Erledigt:** Spalte per Ziehen verbreiterbar (260–720 px, gespeichert), Doppelklick = Standard. |
+| P2 | Handy: Werkzeugleiste zeigt nur wenige Knöpfe, Rest nur durch Wischen erreichbar. | **Erledigt:** Rand blendet aus, solange weitere Werkzeuge folgen; Befehlssuche als vollständiger Zugang. |
 | P2 | Mehrere aufeinanderfolgende CSS-/Override-Blöcke in `cad.html` (Zeilen 11–440+), Farben teilweise direkt (`rgb(...)`, `#...`) statt über Tokens. | Offen → Token-Erweiterung (Abstände, Radien, Schatten, Typografie). |
-| P2 | Status- und Fehlermeldungen erscheinen an wechselnden Stellen (Statuszeile, Dialog-Info, Alerts). | Offen. |
-| P2 | Fokus-/Tab-Reihenfolge, sichtbare Fokusringe nicht durchgängig definiert. | Offen. |
+| P2 | Status- und Fehlermeldungen erscheinen an wechselnden Stellen (Statuszeile, Dialog-Info, Alerts). | Teilweise: Warnungen in der Statuszeile sind rot markiert, Statuszeile als lesbare Pille. Offen: einheitliches Toast-System. |
+| P2 | Fokus-/Tab-Reihenfolge, sichtbare Fokusringe nicht durchgängig definiert. | Fokusringe für Knöpfe/Felder vorhanden (`:focus-visible`); Esc/Enter im Dialog ergänzt. Tab-Reihenfolge offen. |
 | P3 | Icons uneinheitlich in Strichstärke/Füllung (`.f`-Füllung nur teilweise). | Offen. |
 | P3 | Hilfetexte in Dialogen teilweise sehr lang. | Offen. |
 

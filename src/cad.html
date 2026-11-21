@@ -17,6 +17,12 @@
   --accent: #1d4f7a; --accent-soft: #e6eef6; --bend: #a3221b; --view: #dfe5eb; --sketch: #1f5fbf; --ok: #2d6a2d; --fehler: #a3221b;
   --font-body: "Segoe UI", Arial, system-ui, sans-serif; --font-label: "Segoe UI", Arial, system-ui, sans-serif;
   --font-num: "Segoe UI", Arial, system-ui, sans-serif;
+  /* Designsystem: Abstände, Radien, Schriftgrössen, Schatten, Fokus – neue Komponenten verwenden nur diese Tokens */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --r-s: 4px; --r-m: 6px; --r-l: 10px;
+  --fs-s: 12px; --fs-m: 13px; --fs-l: 14px; --fs-xl: 16px;
+  --sh-panel: 0 1px 2px rgba(20, 35, 50, .05); --sh-overlay: 0 6px 24px rgb(0 0 0 / .15); --sh-modal: 0 18px 50px rgb(0 0 0 / .35);
+  --focus: 2px solid var(--accent); --warn: #b26a00;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #13181b; --panel: #1b2125; --panel-2: #222a2f; --line: #323b41; --fg: #e3e8eb; --muted: #93a0a8;
@@ -87,7 +93,8 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 #leinwand { width: 100%; height: 100%; display: block; touch-action: none; }
 .ansichtsknoepfe { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
 .ansichtsknoepfe button, .klein { border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 3px; padding: 4px 8px; font: 600 12px var(--font-label); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; }
-#status { position: absolute; left: 8px; bottom: 8px; right: 8px; font-size: 13px; color: var(--muted); pointer-events: none; }
+#status { position: absolute; left: var(--sp-2); bottom: var(--sp-2); max-width: calc(100% - 2 * var(--sp-2)); width: fit-content; font-size: var(--fs-m); color: var(--muted); pointer-events: none; padding: var(--sp-1) var(--sp-3); border-radius: var(--r-m); background: color-mix(in srgb, var(--panel) 82%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+#status:empty { display: none; } #status.warn { color: var(--fehler); border-left: 3px solid var(--fehler); }
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 #labels div { position: absolute; transform: translate(-50%, -50%); font: 600 11px var(--font-num); color: var(--sketch); background: color-mix(in srgb, var(--view) 80%, transparent); padding: 0 3px; border-radius: 3px; white-space: nowrap; }
 #labels div.mass { pointer-events: auto; cursor: pointer; border: 1px solid transparent; }
@@ -439,7 +446,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 
 /* Dialoge angedockt (Desktop): eigene Spalte rechts statt Überdeckung der 3D-Ansicht; Teil/Auftrag weicht solange */
 @media (min-width: 1001px) {
-  .mitte > .dialog { position: static; grid-column: 2; grid-row: 1; width: auto; max-width: none; top: auto; right: auto; align-self: stretch; display: flex; flex-direction: column; min-height: 0; border-radius: 6px; box-shadow: none; }
+  .mitte > .dialog { position: static; grid-column: 2; grid-row: 1; width: auto; max-width: none; top: auto; right: auto; align-self: stretch; display: flex; flex-direction: column; min-height: 0; border-radius: var(--r-m); box-shadow: var(--sh-panel); }
   .mitte > .dialog .inhalt { max-height: none; overflow: auto; flex: 1 1 auto; min-height: 0; }
   .mitte:has(> .dialog:not([hidden])) > .werkstatt, .mitte:has(> .dialog:not([hidden])) > #werkAuf { display: none; }
   .mitte:has(> .dialog:not([hidden])) { grid-template-columns: minmax(0, 1fr) max(var(--werk-w, 300px), 340px) !important; column-gap: 8px !important; }
@@ -448,10 +455,10 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 
 /* Befehlssuche (Strg + K) */
 .bs-hinter { position: fixed; inset: 0; z-index: 60; background: rgb(10 20 30 / .35); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
-.bs { width: min(560px, calc(100% - 24px)); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 50px rgb(0 0 0 / .35); overflow: hidden; display: flex; flex-direction: column; max-height: 70vh; }
+.bs { width: min(560px, calc(100% - 24px)); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--sh-modal); overflow: hidden; display: flex; flex-direction: column; max-height: 70vh; }
 .bs input { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 14px 16px; font-size: 16px; background: transparent; color: inherit; outline: none; }
 .bs ul { list-style: none; margin: 0; padding: 4px; overflow: auto; }
-.bs li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+.bs li { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-3); border-radius: var(--r-m); cursor: pointer; }
 .bs li svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .bs li svg .f { fill: color-mix(in srgb, var(--accent) 18%, transparent); }
 .bs li .bs-name { flex: 1; } .bs li .bs-gruppe { color: var(--muted); font-size: 12px; }
@@ -466,6 +473,12 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   .teiler:hover::after, .teiler:active::after { opacity: 1; }
   .mitte.werkzu .teiler, .mitte:has(> .dialog:not([hidden])) .teiler { display: none; }
 }
+
+/* Werkzeugleiste auf schmalen Displays: Wischen möglich, Rand blendet aus, solange weitere Werkzeuge folgen */
+.leiste { scrollbar-width: thin; }
+.leiste.mehr { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+.leiste.mehrLinks { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent); }
+.leiste.mehr.mehrLinks { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
 </style>
 
 <div class="app">

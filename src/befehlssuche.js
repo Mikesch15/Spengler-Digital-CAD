@@ -47,10 +47,10 @@ export function oeffneBefehlssuche() {
   const starte = (c) => { if (!c) return; schliesse(); setTimeout(() => (c.run ? c.run() : c.b.click()), 0); };
   eing.addEventListener("input", () => { nr = 0; zeige(); });
   eing.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { e.preventDefault(); schliesse(); }
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); schliesse(); }
     else if (e.key === "ArrowDown") { e.preventDefault(); nr = Math.min(nr + 1, treffer.length - 1); zeige(); }
     else if (e.key === "ArrowUp") { e.preventDefault(); nr = Math.max(nr - 1, 0); zeige(); }
-    else if (e.key === "Enter") { e.preventDefault(); starte(treffer[nr]); }
+    else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); starte(treffer[nr]); }
   });
   liste.addEventListener("click", (e) => { const li = e.target.closest("li[data-i]"); if (li) starte(treffer[+li.dataset.i]); });
   hinter.addEventListener("pointerdown", (e) => { if (e.target === hinter) schliesse(); });

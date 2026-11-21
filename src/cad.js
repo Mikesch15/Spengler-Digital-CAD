@@ -1735,7 +1735,11 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 for (const [id, k] of [["aObjekt", "objekt"], ["aNr", "nr"]]) { $(id).value = doc[k]; $(id).addEventListener("input", (e) => { doc[k] = e.target.value; speichern(); zeigeWerkstatt(); }); }
 
 let hinweisZeit = 0; // Hinweise bleiben kurz stehen, bevor die Mauskoordinaten sie ersetzen
-function status(t, koordinaten = false) { if (koordinaten && Date.now() - hinweisZeit < 3000) return; if (!koordinaten) hinweisZeit = Date.now(); $("status").textContent = t; }
+function status(t, koordinaten = false) {
+  if (koordinaten && Date.now() - hinweisZeit < 3000) return; if (!koordinaten) hinweisZeit = Date.now();
+  const el = $("status"); el.textContent = t;
+  el.classList.toggle("warn", !koordinaten && /^(⚠|Fehler|Zuerst |Bitte |Kein[e]? |Nicht |Das .* (fehlt|geht nicht)|.*fehlgeschlagen)/.test(t)); // Warnungen fallen auf, Hinweise bleiben ruhig
+}
 async function kopiere(text) {
   try { await navigator.clipboard.writeText(text); status("In die Zwischenablage kopiert."); } catch { status("Kopieren wird hier nicht unterstützt."); }
 }
@@ -4274,7 +4278,12 @@ $("hZu").onclick = () => hilfe(false);
 $("hVersion").textContent = `Version ${VERSION}` + (pc ? " · PC-Programm" : " · Web-Version");
 document.addEventListener("keydown", (e) => {
   if (e.key === "F1") { e.preventDefault(); hilfe($("hilfe").hidden); }
-  else if (e.key === "Escape") { if (!$("bEditor").hidden) $("bAbbrechen").click(); else if (!$("hilfe").hidden) hilfe(false); else if (!$("einst").hidden) $("eAbbrechen").click(); }
+  else if (e.key === "Escape") {
+    if (!$("bEditor").hidden) $("bAbbrechen").click(); else if (!$("hilfe").hidden) hilfe(false); else if (!$("einst").hidden) $("eAbbrechen").click();
+    else if (dlg && !skizze && !document.querySelector(".modal:not([hidden])") && !e.defaultPrevented) { $("dAbbrechen").click(); e.preventDefault(); } // Esc bricht den offenen Dialog ab
+  } else if (e.key === "Enter" && dlg && !e.shiftKey && !e.isComposing && e.target?.closest?.("#dialog input") && !e.target.closest("#dZusatz")) { // Enter im Dialog: nächster Schritt, auf der letzten Seite OK
+    e.preventDefault(); const w = $("dWeiter"); if (!w.hidden) w.click(); else $("dOk").click();
+  }
 });
 document.querySelectorAll(".modal").forEach((m) => m.addEventListener("click", (e) => { if (e.target === m) (m.id === "hilfe" ? hilfe(false) : $("eAbbrechen").click()); }));
 

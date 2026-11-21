@@ -19,3 +19,12 @@ if (mitte) {
   teiler.addEventListener("dblclick", zuruecksetzen);
   zusatzBefehle.push({ name: "Arbeitsbereich zurücksetzen", tipp: "Panelbreite auf Standard", gruppe: "Ansicht", run: zuruecksetzen });
 }
+
+// Werkzeugleiste: Hinweis (ausblendender Rand), wenn sich weitere Werkzeuge durch Wischen erreichen lassen
+const leiste = document.getElementById("leiste");
+if (leiste) {
+  const pruefe = () => { leiste.classList.toggle("mehr", leiste.scrollLeft + leiste.clientWidth < leiste.scrollWidth - 4); leiste.classList.toggle("mehrLinks", leiste.scrollLeft > 4); };
+  leiste.addEventListener("scroll", pruefe, { passive: true }); addEventListener("resize", pruefe);
+  if (typeof ResizeObserver !== "undefined") new ResizeObserver(pruefe).observe(leiste);
+  pruefe();
+}
