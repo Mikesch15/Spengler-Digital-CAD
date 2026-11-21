@@ -3,11 +3,11 @@
 // So entstehen Satteldach, Pultdach, Walmdach und Zeltdach aus einer Rechnung; First, Grate und Ortgang ergeben sich von selbst.
 // Koordinaten: Grundriss (u, v) in mm, Höhe h in mm. Reine Rechnung, keine Abhängigkeit von three.js.
 const rad = (g) => (g * Math.PI) / 180, EPS = 1e-6;
-const flaecheVon = (p) => p.reduce((s, q, i) => s + q[0] * p[(i + 1) % p.length][1] - p[(i + 1) % p.length][0] * q[1], 0) / 2;
+export const flaecheVon = (p) => p.reduce((s, q, i) => s + q[0] * p[(i + 1) % p.length][1] - p[(i + 1) % p.length][0] * q[1], 0) / 2;
 const gegenUhr = (p) => (flaecheVon(p) < 0 ? p.slice().reverse() : p);
 
 // Halbebenen-Beschneiden (Sutherland–Hodgman): behält Punkte mit c0 + c1·u + c2·v ≥ 0
-function beschneide(poly, [c0, c1, c2]) {
+export function beschneide(poly, [c0, c1, c2]) {
   const f = (p) => c0 + c1 * p[0] + c2 * p[1], out = [];
   for (let i = 0; i < poly.length; i++) {
     const a = poly[i], b = poly[(i + 1) % poly.length], fa = f(a), fb = f(b);

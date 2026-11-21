@@ -70,4 +70,16 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   
 }
 
+
+// ---- Phase 3: L-/T-/U-Grundrisse (Kreuzgiebel, Kehlen)
+{
+  const { fluegelDach, grundrissForm } = await import("../kern/dach/fluegel.js");
+  for (const [gf, nK, form] of [["L", 1, "sattel"], ["T", 2, "sattel"], ["U", 4, "sattel"], ["L", 1, "walm"], ["T", 2, "walm"], ["U", 2, "walm"]]) {
+    const g = { form: gf, breite: 12000, tiefe: 8000, fluegelBreite: 5000, fluegelTiefe: 5000 }, o = grundrissForm(g), fp = Math.abs(o.grundriss.reduce((s, p, i) => s + p[0] * o.grundriss[(i + 1) % o.grundriss.length][1] - o.grundriss[(i + 1) % o.grundriss.length][0] * p[1], 0) / 2) / 1e6;
+    const r = fluegelDach({ grundform: g, form, neigung: 35, ueberstandTraufe: 0, ueberstandOrtgang: 0 }), A = r.flaechen.reduce((s, f) => s + f.grundflaeche, 0), K = r.linien.filter((l) => l.art === "kehle");
+    ok(Math.abs(A - fp) < 0.01, `${gf}-Form ${form}: Dachflächen decken den Grundriss lückenlos (${A.toFixed(1)} = ${fp.toFixed(1)} m²)`);
+    ok(K.length >= 1 && (form === "sattel" ? K.length === nK * 2 || K.length === nK : K.length >= nK), `${gf}-Form ${form}: Kehlen vorhanden (${K.length})`);
+    ok(nah(r.firsthoehe, 3000 + Math.tan(35 * Math.PI / 180) * 4000, 5), `${gf}-Form ${form}: Firsthöhe wie Hauptflügel`);
+  }
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);

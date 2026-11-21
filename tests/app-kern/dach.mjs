@@ -19,6 +19,8 @@ await s.fill("#d_neigung", "15"); await s.dispatchEvent("#d_neigung", "input"); 
 ok(/Richtwert-Mindestneigung/.test(await info()), "15° ist zu flach für Schiebeziegel – Hinweis");
 await s.selectOption("#d_deckung", "biber-doppel"); await s.fill("#d_neigung", "40"); await s.dispatchEvent("#d_neigung", "input"); await s.waitForTimeout(500);
 ok(!/Mindestneigung/.test(await info()), "40° mit Biber doppelt: kein Hinweis");
+await s.selectOption("#d_gform", "L"); await s.waitForTimeout(700);
+ok(/Kehlen [\d.]+ m/.test(await info()), "L-Form (Walm): Kehle in der Info – " + (await info()));
 await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(400); await s.screenshot({ path: "/tmp/t/dach.png" });
 await s.click("#dOk"); await s.waitForTimeout(400);
 // Phase 2: einzelne Körper (Sparren, Dämmung, Unterdach, Latten, Deckung) + Holzliste im Werkstatt-Panel

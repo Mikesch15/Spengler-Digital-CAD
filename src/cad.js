@@ -10,6 +10,7 @@ import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
+import { fluegelDach, grundrissForm, GRUNDFORMEN } from "../kern/dach/fluegel.js";
 import { flaechenKoerper as dachFlaechenKoerper, dachMengen } from "../kern/dach/koerper.js";
 import { DECKUNGEN_STANDARD, AUFBAU_STANDARD, grundeinstellung as dachGrund, schichten as dachSchichten, pruefeDach } from "../kern/dach/vorlagen.js";
 import { FARBEN, LINIENARTEN, farbeHex, standardLayer, skizzenDxf } from "../kern/zeichnung2d.js";
@@ -1129,17 +1130,17 @@ function regen() {
         if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, blechEbene(s.ebene, f, m), m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
       } else if (f.typ === "gebaeude") { // Gebäude-Ansatz: Wände bis zur Traufe bzw. zum Dach (Giebel)
         if (!(f.breite > 0 && f.tiefe > 0 && f.traufhoehe > 0)) throw new Error("Breite, Tiefe und Wandhöhe müssen grösser als 0 sein");
-        const dach = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id && !x._aus), r = dach ? dachErgebnis(dach, f) : rechteckDach({ breite: f.breite, tiefe: f.tiefe, form: "zelt", neigung: 0.0001, ueberstandTraufe: 0, traufhoehe: f.traufhoehe });
+        const dach = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id && !x._aus), r = dach ? dachErgebnis(dach, f) : { grundriss: grundrissForm(f).grundriss, hoeheAn: () => f.traufhoehe };
         const ws = waende(r.grundriss, r), t = Math.min(+f.wandstaerke || 0, f.breite / 2 - 1, f.tiefe / 2 - 1);
-        if (!f.versteckt) for (const w of ws) { const i = w.kante, A = r.grundriss[i], B = r.grundriss[(i + 1) % 4], L = Math.hypot(B[0] - A[0], B[1] - A[1]); if (t > 0) modell.add(koerperMesh(wandPlatte(w.punkte, [-(B[1] - A[1]) / L, (B[0] - A[0]) / L], t, f), 0xd9d5cc, f.id)); }
+        if (!f.versteckt) for (const w of ws) { const i = w.kante, A = r.grundriss[i], B = r.grundriss[(i + 1) % r.grundriss.length], L = Math.hypot(B[0] - A[0], B[1] - A[1]); if (t > 0) modell.add(koerperMesh(wandPlatte(w.punkte, [-(B[1] - A[1]) / L, (B[0] - A[0]) / L], t, f), 0xd9d5cc, f.id)); }
       } else if (f.typ === "dach") { // Dachflächen mit Aufbau (Phase 1: eine Platte je Fläche von Sparrenunterkante bis Deckung)
         const g = finde(f.gebaeude); if (g?.typ !== "gebaeude") throw new Error("Gebäude fehlt"); if (doc.features.indexOf(g) > doc.features.indexOf(f)) throw new Error("Das Gebäude muss vor dem Dach stehen");
         const r = dachErgebnis(f, g); f._dach = r; const dk = deckungVon(f), au = aufbauVon(f); doc.dachVorlagen ||= { deckungen: [], aufbauten: [] };
         for (const [l, id, q] of [[doc.dachVorlagen.deckungen, dk?.id, dk], [doc.dachVorlagen.aufbauten, au?.id, au]]) if (q && !l.some((x) => x.id === id)) l.push(JSON.parse(JSON.stringify(q)));
         const sc = dachSchichten(au, dk); f._schichten = sc;
-        const detail = f.darstellung !== "platte"; f._koerper = r.flaechen.map((fl) => dachFlaechenKoerper(fl, sc, aufbauVon(f), dk)); f._mengen = dachMengen(f._koerper, dk);
+        const detail = f.darstellung !== "platte"; f._koerper = r.flaechen.map((fl) => dachFlaechenKoerper(fl, sc, aufbauVon(f), dk)); f._mengen = dachMengen(f._koerper, dk, r.linien);
         if (!f.versteckt) {
-          if (!detail) for (const fl of r.flaechen) modell.add(koerperMesh(dachPrisma(fl.punkte, fl.normale, sc.unten, sc.oben, g), 0xb5543a, f.id));
+          if (!detail) for (const fl of r.flaechen) for (const st of fl.stuecke || [fl.punkte]) modell.add(koerperMesh(dachPrisma(st, fl.normale, sc.unten, sc.oben, g), 0xb5543a, f.id));
           else for (const art of DACH_ARTEN) { const boxen = f._koerper.flatMap((x) => x.koerper.filter((k) => k.art === art.id)); if (boxen.length) modell.add(koerperMesh(dachBoxenGeo(boxen, g), art.farbe, f.id, dachBoxenKanten(boxen, g))); }
         }
       } else if (f.typ === "kante") { // Flansch/Umschlag/Baustein an einer Kante: wirkt über das Flächenblech (berechneKanten)
@@ -1471,6 +1472,7 @@ function zeigeAuftrag(w) {
 function dachListeZeilen(f) {
   const m = f._mengen, dk = deckungVon(f), z = [["Art", "Querschnitt mm", "Länge", "Menge"]];
   for (const h of m.sparren) z.push(["Sparren", h.querschnitt, h.laenge + " mm", h.stueck + " Stk."]);
+  for (const h of m.gratKehl || []) z.push([h.art, "", h.laenge + " mm", h.stueck + " Stk."]);
   for (const h of m.konter) z.push(["Konterlattung", h.querschnitt, h.meter + " m", h.stueck + " Stk."]);
   for (const h of m.lattung) z.push(["Dachlattung", h.querschnitt, h.meter + " m", h.stueck + " Stk."]);
   z.push(["Dämmung", "", "", m.daemmung + " m²"], ["Unterdach", "", "", m.unterdach + " m²"], ["Deckung " + dk.name, "", "", m.deckflaeche + " m²"], ["Ziegel (Richtwert)", "", "", m.ziegel + " Stk. · " + m.gewichtKg + " kg"]);
@@ -2339,6 +2341,7 @@ function dachBoxenKanten(boxen, g) {
   const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return geo;
 }
 function dachErgebnis(f, g) {
+  if (g.form && g.form !== "rechteck") return fluegelDach({ grundform: g, form: f.form || "sattel", neigung: +f.neigung || 35, neigung2: f.neigung2 ? +f.neigung2 : null, ueberstandTraufe: +f.ueberstandTraufe || 0, ueberstandOrtgang: +f.ueberstandOrtgang || 0, traufhoehe: g.traufhoehe });
   return rechteckDach({ breite: g.breite, tiefe: g.tiefe, form: f.form || "sattel", neigung: +f.neigung || 35, neigung2: f.neigung2 ? +f.neigung2 : null, ueberstandTraufe: +f.ueberstandTraufe || 0, ueberstandOrtgang: +f.ueberstandOrtgang || 0, firstRichtung: f.firstRichtung || "laengs", traufhoehe: g.traufhoehe });
 }
 // Dach (u, v, h) → Welt (x, y = Höhe, z = −v); Ursprung des Gebäudes bei g.x/g.z
@@ -2364,8 +2367,9 @@ function wandPlatte(punkte, innenNormal, t, g) {
 function gebaeudeDialog(f) {
   const istNeu = !f; f ||= { id: neueId(), typ: "gebaeude", name: "Gebäude " + (doc.features.filter((x) => x.typ === "gebaeude").length + 1), breite: 10000, tiefe: 8000, traufhoehe: 3000, wandstaerke: 300, x: 0, z: 0 };
   featureDialog(f, istNeu, (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "breite", label: "Breite (Länge)", einheit: "mm", wert: f.breite }, { id: "tiefe", label: "Tiefe", einheit: "mm", wert: f.tiefe },
+    { id: "gform", label: "Grundform", optionen: Object.entries(GRUNDFORMEN), wert: f.form || "rechteck" }, { id: "fluegelBreite", label: "Querflügel: Breite", einheit: "mm", wert: f.fluegelBreite ?? 4000 }, { id: "fluegelTiefe", label: "Querflügel: ragt über Rückseite", einheit: "mm", wert: f.fluegelTiefe ?? 5000 }, 
     { id: "traufhoehe", label: "Wandhöhe bis Traufe", einheit: "mm", wert: f.traufhoehe }, { id: "wandstaerke", label: "Wandstärke", einheit: "mm", wert: f.wandstaerke }, { id: "x", label: "Lage X", einheit: "mm", wert: f.x ?? 0 }, { id: "z", label: "Lage Z", einheit: "mm", wert: f.z ?? 0 }],
-    (f, w) => { for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke", "x", "z"]) if (Number.isFinite(w[k])) f[k] = w[k]; f.name = w.name?.trim() || f.name; }, "Gebäude (Ansatz)", "Rechteckiger Gebäudekörper: Wände bis zur Traufe, Giebel bis zum Dach. Später erweiterbar (Geschosse, Öffnungen).");
+    (f, w) => { for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke", "x", "z", "fluegelBreite", "fluegelTiefe"]) if (Number.isFinite(w[k])) f[k] = w[k]; if (w.gform) f.form = w.gform; f.name = w.name?.trim() || f.name; }, "Gebäude (Ansatz)", "Rechteckiger Gebäudekörper: Wände bis zur Traufe, Giebel bis zum Dach. Später erweiterbar (Geschosse, Öffnungen).");
 }
 function dachDialog(f) {
   const istNeu = !f; let g;
@@ -2375,13 +2379,14 @@ function dachDialog(f) {
   } else g = finde(f.gebaeude);
   if (!g) return status("Das Gebäude dieses Dachs fehlt.");
   const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "breite", label: "Gebäude: Breite", einheit: "mm", wert: g.breite }, { id: "tiefe", label: "Gebäude: Tiefe", einheit: "mm", wert: g.tiefe }, { id: "traufhoehe", label: "Wandhöhe bis Traufe", einheit: "mm", wert: g.traufhoehe }, { id: "wandstaerke", label: "Wandstärke", einheit: "mm", wert: g.wandstaerke },
+    { id: "gform", label: "Grundform", optionen: Object.entries(GRUNDFORMEN), wert: g.form || "rechteck" }, { id: "fluegelBreite", label: "Querflügel: Breite", einheit: "mm", wert: g.fluegelBreite ?? 4000 }, { id: "fluegelTiefe", label: "Querflügel: ragt über Rückseite", einheit: "mm", wert: g.fluegelTiefe ?? 5000 }, 
     { id: "form", label: "Dachform", optionen: Object.entries(DACHFORMEN), wert: f.form }, { id: "firstRichtung", label: "First / Gefälle", optionen: [["laengs", "First längs (Länge)"], ["quer", "First quer (Tiefe)"]], wert: f.firstRichtung || "laengs" },
     { id: "neigung", label: "Neigung", einheit: "°", wert: f.neigung }, ...(["sattel", "walm"].includes(f.form) ? [{ id: "neigung2", label: "Neigung 2. Seite", einheit: "°", wert: f.neigung2 ?? f.neigung }] : []),
     { id: "ueberstandTraufe", label: "Überstand Traufe", einheit: "mm", wert: f.ueberstandTraufe }, { id: "ueberstandOrtgang", label: "Überstand Ortgang", einheit: "mm", wert: f.ueberstandOrtgang },
     { id: "deckung", label: "Deckung", optionen: dachEinst().deckungen.map((d) => [d.id, d.name]), wert: f.deckung }, { id: "aufbau", label: "Dachaufbau", optionen: dachEinst().aufbauten.map((a) => [a.id, a.name]), wert: f.aufbau },
     { id: "darstellung", label: "Darstellung", optionen: [["detail", "Aufbau detailliert (Sparren, Dämmung, Latten …)"], ["platte", "Nur Platte (schnell)"]], wert: f.darstellung || "detail" }];
   const setze = (f, w) => {
-    for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke"]) if (w[k] > 0) g[k] = w[k];
+    for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke", "fluegelBreite", "fluegelTiefe"]) if (w[k] > 0) g[k] = w[k]; if (w.gform) g.form = w.gform;
     for (const k of ["neigung", "neigung2", "ueberstandTraufe", "ueberstandOrtgang"]) if (Number.isFinite(w[k]) && w[k] >= 0) f[k] = w[k];
     for (const k of ["form", "firstRichtung", "deckung", "aufbau", "darstellung"]) if (w[k]) f[k] = w[k];
     f.name = w.name?.trim() || f.name; if (f.neigung > 80) f.neigung = 80; if (f.neigung2 > 80) f.neigung2 = 80;
@@ -2389,7 +2394,7 @@ function dachDialog(f) {
   featureDialog(f, istNeu, felder, setze, "Dach automatisch",
     "Grundform (Rechteck) mit Massen, Dachform, Neigung, Überstände, Deckung und Aufbau – alles andere rechnet das Programm. Deckungs- und Aufbauwerte stellst du in den Einstellungen › Dach ein.",
     { info: () => { const r = f._dach; if (f._fehler) return "⚠ " + f._fehler; if (!r) return ""; const m = pruefeDach({ neigungen: r.flaechen.map((x) => x.neigung), deckung: deckungVon(f) }), A = r.flaechen.reduce((s, x) => s + x.flaeche, 0), L = (a) => r.linien.filter((l) => l.art === a).reduce((s, l) => s + l.laenge, 0) / 1000;
-        return (m.length ? "⚠ " + m[0] + " " : "") + `Dachfläche ${A.toFixed(1)} m² · First ${L("first").toFixed(1)} m · Grate ${L("grat").toFixed(1)} m · Firsthöhe ${(r.firsthoehe / 1000).toFixed(2)} m`; } });
+        return (m.length ? "⚠ " + m[0] + " " : "") + (r.hinweise?.length ? "⚠ " + r.hinweise[0] + " " : "") + `Dachfläche ${A.toFixed(1)} m² · First ${L("first").toFixed(1)} m · Grate ${L("grat").toFixed(1)} m${L("kehle") ? ` · Kehlen ${L("kehle").toFixed(1)} m` : ""} · Firsthöhe ${(r.firsthoehe / 1000).toFixed(2)} m`; } });
   if (istNeu) { const d = dlg, alt = d.abbrechen; d.abbrechen = () => { alt(); entferneFeature(g); }; setTimeout(() => $("zoomAlles").click(), 50); }
 }
 // ------------------------------------------------------------ Kanten-Werkzeug: Flansch / Umschlag / Kantenbaustein (erst Blech anklicken, dann die Kante)
