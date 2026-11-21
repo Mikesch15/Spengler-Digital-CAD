@@ -53,8 +53,16 @@ Stand: 21.11.2026 · nur Planung, noch nichts gebaut.
 
 Empfehlung: Phasen 1, 2 und 5 zuerst (Dach mit Blechen), dann 3, 4, 6.
 
-## Offene Punkte (vor Phase 1 klären)
-- Genaue Deckungsdaten (Lattweiten, Überdeckungen, Mindestneigungen) der gewünschten Ziegel – aus Herstellerdaten oder eigene Werte?
-- Welche Dachfenster-Hersteller/-Grössen als erste Vorlagen?
-- Sparrenquerschnitte und Achsabstände als Standard (z. B. 8/20, e = 70)?
-- Normen/Richtwerte, die das Programm prüfen soll (Mindestneigung je Deckung, Lüftungsquerschnitt)?
+## Antworten auf die offenen Punkte (21.11.2026)
+1. **Deckungsdaten:** werden beim Erstellen eines Dachs und in den Grundeinstellungen eingestellt (Vorlagen für Schiebeziegel, Biber einfach/doppelt mit Lattweite, Überdeckung, Mindestneigung, Stück/m², Gewicht/m²; jederzeit änderbar, Cloud-Abgleich).
+2. **Dachfenster:** Velux; die Grösse wird aus einer Liste gewählt (Recherche unten). Weitere Hersteller später als zusätzliche Vorlagen.
+3. **Sparren-Standard:** 8/20 mit Achsabstand 70 als Voreinstellung – frei änderbar.
+4. **Prüfungen:** zuerst Mindestneigung je Deckung und Lüftungsquerschnitt; Prüfregeln als Liste, später erweiterbar.
+
+## Velux-Dachfenster – Recherche (Stand 21.11.2026)
+Gesicherte Quelle: Velux-Datenblätter GGL/GGU (Suchergebnisse, PDF-Text; die Originale konnte ich wegen der Netzwerkfreigabe nicht selbst lesen).
+- **Blendrahmen-Aussenbreite (Ew):** BK 472 · CK 550 · FK 660 · MK 780 · PK 942 · SK 1140 · UK 1340 mm.
+- **Blendrahmen-Aussenhöhe (Eh):** Code 02 = 778 · 04 = 978 · 06 = 1178 · 08 = 1398 · 10 = 1600 mm (weitere Höhen bis ca. 1800 mm in den Datenblättern, Zuordnung noch zu prüfen).
+- **Bestätigte Kombinationen:** CK02 550×778, CK04 550×978, CK06 550×1178, FK06 660×1178, MK08 780×1398, PK10 942×1600, SK06 1140×1178, UK08 1340×1398; FK08 660×1398, MK04 780×978, MK06 780×1178.
+- **Einbau:** Schwingfenster GGL in Dachneigungen 15°–90°; Einbauhöhe (Fensterunterkante) je nach Neigung und Fensterlänge (Velux-Dokument 7063).
+- **Noch offen:** Eindeckrahmen-Aussenmasse und Dachöffnung je Deckung (Ziegel, Schiefer, Blech), Lichtmasse. Quelle: Velux «Übersicht Fensterabmessungen» (Dokument 7061) und die Eindeckrahmen-Unterlagen; vor Phase 4 aus dem Original übernehmen oder vom Besitzer liefern lassen. Nicht jede Grösse ist mit jeder Verglasung/Ausführung lieferbar.
