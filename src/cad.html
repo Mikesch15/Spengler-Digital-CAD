@@ -486,11 +486,11 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   .mitte.werkzu .teiler, .mitte:has(> .dialog:not([hidden])) .teiler { display: none; }
 }
 
-/* Werkzeugleiste auf schmalen Displays: Wischen möglich, Rand blendet aus, solange weitere Werkzeuge folgen */
+/* Werkzeugleiste auf schmalen Displays: Schatten am Rand zeigt, dass sich weitere Werkzeuge wischen lassen (kein mask-image: das würde die aufklappenden Menüs abschneiden) */
 .leiste { scrollbar-width: thin; }
-.leiste.mehr { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
-.leiste.mehrLinks { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 36px), transparent); }
-.leiste.mehr.mehrLinks { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+.leiste.mehr { background: linear-gradient(to left, rgb(0 0 0 / .22), transparent 18px) right / 18px 100% no-repeat, var(--leiste-bg); }
+.leiste.mehrLinks { background: linear-gradient(to right, rgb(0 0 0 / .22), transparent 18px) left / 18px 100% no-repeat, var(--leiste-bg); }
+.leiste.mehr.mehrLinks { background: linear-gradient(to left, rgb(0 0 0 / .22), transparent 18px) right / 18px 100% no-repeat, linear-gradient(to right, rgb(0 0 0 / .22), transparent 18px) left / 18px 100% no-repeat, var(--leiste-bg); }
 
 /* Grundstil für Eingaben ohne eigene Regel (niedrige Spezifität): einheitlich in Hell und Dunkel, z. B. Auswahlfelder im Plan-Editor */
 :where(select, input[type="text"], input[type="number"], input[type="search"], input:not([type])) { color: var(--fg); background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-s); }
@@ -500,6 +500,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 #meldungen { position: fixed; z-index: 80; left: 50%; bottom: 64px; transform: translateX(-50%); display: grid; gap: var(--sp-2); width: min(520px, calc(100% - 24px)); pointer-events: none; }
 .meldung-toast { pointer-events: none; display: flex; gap: var(--sp-3); align-items: flex-start; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-m); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-left: 4px solid var(--warn); box-shadow: var(--sh-overlay); font-size: var(--fs-m); }
 .meldung-toast.warn { border-left-color: var(--fehler); } .meldung-toast.ok { border-left-color: var(--ok); }
+.meldung-toast .aktion { pointer-events: auto; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); border-radius: var(--r-s); font: 600 var(--fs-m) var(--font-body); padding: var(--sp-1) var(--sp-3); cursor: pointer; white-space: nowrap; }
 .meldung-toast span { flex: 1; } .meldung-toast button { pointer-events: auto; border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 var(--sp-1); }
 /* Sprunglink für Tastaturnutzer */
 .skip { position: absolute; left: var(--sp-2); top: -48px; z-index: 100; padding: var(--sp-2) var(--sp-3); background: var(--accent); color: var(--on-accent); border-radius: var(--r-s); text-decoration: none; }

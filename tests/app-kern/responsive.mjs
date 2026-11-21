@@ -24,6 +24,15 @@ for (const th of ["light", "dark"]) for (const [name, w, h, touch] of FENSTER) {
   if (w > 1000) ok(g.ansichtBreite > 0.55 * g.W, `${tag}: 3D-Ansicht behält mehr als 55 % der Breite (${Math.round(g.ansichtBreite)} px)`);
   await s.evaluate(() => document.getElementById("dAbbrechen").click()); await s.waitForTimeout(200);
   ok(await s.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${tag}: nach dem Dialog weiterhin kein Überlauf`);
+  // Aufklappmenüs der Leiste (Register) öffnen sich und sind antippbar – auch wenn die Leiste scrollt
+  for (const gruppe of ["koerper", "blech", "dach"]) {
+    await s.evaluate((g) => document.querySelector(`[data-klapp="${g}"] .klappknopf`).scrollIntoView({ inline: "center" }), gruppe); await s.waitForTimeout(100);
+    const pos = await s.evaluate((g) => { const k = document.querySelector(`[data-klapp="${g}"] .klappknopf`).getBoundingClientRect(); return [k.left + k.width / 2, k.top + k.height / 2]; }, gruppe);
+    await s.touchscreen && touch ? await s.touchscreen.tap(pos[0], pos[1]) : await s.mouse.click(pos[0], pos[1]); await s.waitForTimeout(250);
+    const m = await s.evaluate((g) => { const menu = document.querySelector(`[data-klapp="${g}"] .klappmenue`); if (!menu || menu.hidden) return null; const r = menu.getBoundingClientRect(), b = menu.querySelector("button.wz"), br = b.getBoundingClientRect(), el = document.elementFromPoint(br.left + br.width / 2, br.top + br.height / 2); let geschnitten = false; for (let e = menu.parentElement; e && e !== document.documentElement; e = e.parentElement) { const c = getComputedStyle(e); if ((c.maskImage && c.maskImage !== "none") || (c.webkitMaskImage && c.webkitMaskImage !== "none") || (c.clipPath && c.clipPath !== "none")) geschnitten = true; } return { sichtbar: r.width > 0 && r.height > 0 && !geschnitten, treffer: !!el && menu.contains(el), imFenster: r.left >= -1 && r.right <= innerWidth + 1 }; }, gruppe);
+    ok(!!m && m.sichtbar && m.treffer && m.imFenster, `${tag}: Menü «${gruppe}» öffnet sich sichtbar und antippbar`);
+    await s.keyboard.press("Escape"); await s.evaluate(() => document.querySelectorAll(".klappmenue").forEach((x) => (x.hidden = true)));
+  }
   // Modale Fenster: Einstellungen und Hilfe passen ins Fenster
   for (const id of ["wEinst", "wHilfe"]) {
     await s.evaluate((i) => document.getElementById(i).click(), id); await s.waitForTimeout(300);
