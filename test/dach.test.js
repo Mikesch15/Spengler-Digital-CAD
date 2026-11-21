@@ -166,4 +166,23 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   ok(t.length >= 5 && t.includes(200), "Detail: Schichtdicken einzeln bemasst (" + t.join(", ") + ") und Gesamtmass");
   ok(lk.flaps.some((q) => q.art === "luk-kehle") && lk.fenster && lk.rect.poly.length === 5, "Lukarne: Blechflächen, Fenster, fünfeckige Öffnung");
 }
+
+// ---- Dach aus frei gezeichneten Dachflächen (mm-genau, auch nicht rechtwinklig / mit einspringenden Ecken)
+{
+  const { dachAusFlaechen, zerlegeKonvex } = await import("../kern/dach/flaechen.js"), { flaechenKoerper } = await import("../kern/dach/koerper.js"), V = await import("../kern/dach/vorlagen.js");
+  const r = rechteckDach({ breite: 10000, tiefe: 8000, form: "sattel", neigung: 35, ueberstandTraufe: 400, ueberstandOrtgang: 300 });
+  const d = dachAusFlaechen({ flaechen: r.flaechen.map((f) => ({ name: f.name, punkte: f.punkte })), grundriss: r.grundriss, traufhoehe: 3000 });
+  ok(d.flaechen.length === 2 && nah(d.flaechen[0].flaeche, r.flaechen[0].flaeche, 0.01) && nah(d.firsthoehe, r.firsthoehe, 1) && d.linien.some((l) => l.art === "first" && nah(l.laenge, 10600, 2)) && d.hinweise.length === 0, "Dachflächen aus Vielecken ergeben dasselbe Dach wie die Automatik (Fläche, First, Höhe)");
+  const verschoben = dachAusFlaechen({ flaechen: r.flaechen.map((f, i) => ({ name: f.name, punkte: i === 0 ? f.punkte.map((p) => (p[2] > 5000 ? [p[0] + 8, p[1], p[2]] : p)) : f.punkte })), grundriss: r.grundriss, traufhoehe: 3000 });
+  ok(verschoben.hinweise.some((h) => /weicht um/.test(h)), "Gemeinsame Kante um 8 mm verschoben: Hinweis");
+  const schief = [[0, 0, 3000], [9000, 0, 3000], [11000, 6000, 3000 + 6000 * Math.tan(35 * Math.PI / 180) * 0], [1500, 7000, 3000]].map((p, i) => p); // flach, nicht rechtwinklig
+  const ds = dachAusFlaechen({ flaechen: [{ name: "Schiefe Fläche", punkte: schief }], grundriss: schief.map((p) => [p[0], p[1]]), traufhoehe: 3000 });
+  ok(ds.flaechen[0].grundflaeche > 50, "Nicht rechtwinklige Fläche wird übernommen (" + ds.flaechen[0].flaeche.toFixed(1) + " m²)");
+  const L = [[0, 0], [10, 0], [10, 4], [4, 4], [4, 10], [0, 10]], teile = zerlegeKonvex(L);
+  ok(teile.length === 2 && nah(teile.reduce((a, p) => a + Math.abs(p.reduce((s, q, i) => { const w = p[(i + 1) % p.length]; return s + q[0] * w[1] - w[0] * q[1]; }, 0) / 2), 0), 64, 1e-6), "L-förmige Fläche: 2 konvexe Stücke, gleiche Fläche");
+  const Lflaeche = dachAusFlaechen({ flaechen: [{ name: "L-Fläche", punkte: [[0, 0, 3000], [10000, 0, 3000], [10000, 4000, 3000], [4000, 4000, 3000], [4000, 10000, 3000], [0, 10000, 3000]] }], grundriss: L.map((p) => [p[0] * 1000, p[1] * 1000]), traufhoehe: 3000 }), au = V.AUFBAU_STANDARD[0], dk = V.DECKUNGEN_STANDARD[0];
+  const kk = flaechenKoerper(Lflaeche.flaechen[0], V.schichten(au, dk), au, dk);
+  ok(kk.koerper.filter((k) => k.art === "sparren").length >= 14 && Lflaeche.flaechen[0].stuecke?.length === 2, "Aufbau (Sparren …) auf einer nicht konvexen Dachfläche");
+  let fe = ""; try { dachAusFlaechen({ flaechen: [{ name: "Wand", punkte: [[0, 0, 0], [1000, 0, 0], [1000, 0, 2000], [0, 0, 2000]] }], grundriss: [], traufhoehe: 3000 }); } catch (e) { fe = e.message; } ok(/senkrecht/.test(fe), "Senkrechte Fläche wird abgelehnt");
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);

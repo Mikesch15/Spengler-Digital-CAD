@@ -10,6 +10,7 @@ import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
+import { dachAusFlaechen } from "../kern/dach/flaechen.js";
 import { eindeckung as eindeckungKern, ziegelPrisma } from "../kern/dach/eindeckung.js";
 import { lukarne as lukarneGeo, LUKARNENARTEN } from "../kern/dach/lukarne.js";
 import { elementRechteck, elementKoerper, elementFlaeche, kaminBleche, veluxListe, ELEMENTARTEN } from "../kern/dach/elemente.js";
@@ -2441,7 +2442,36 @@ const gebaeudeUmriss = (g) => (g.form === "skizze" ? skizzenGrundriss(g) : grund
 // Werte der Vorlage, überschrieben mit den Massen, die beim Erstellen des Dachs eingegeben wurden (f.deckungW / f.aufbauW)
 const deckungVon = (f) => { const b = deckungBasis(f); return b ? { ...b, ...(f.deckungW || {}) } : b; };
 const aufbauVon = (f) => { const b = aufbauBasis(f); return b ? { ...b, ...(f.aufbauW || {}) } : b; };
+// Dach aus frei gezeichneten Dachflächen: jede geschlossene Fläche der gewählten Skizzen (auf geneigten Ebenen) ist eine Dachfläche
+function dachAusSkizzen(f, g) {
+  const flaechen = [];
+  for (const id of f.flaechenSkizzen || []) {
+    const sk = finde(id); if (sk?.typ !== "skizze") throw new Error("Eine Skizze der Dachflächen fehlt");
+    if (doc.features.indexOf(sk) > doc.features.indexOf(f)) throw new Error(`«${sk.name}» muss vor dem Dach stehen`);
+    const loops = schleifen(sk);
+    loops.forEach((l, k) => flaechen.push({ name: loops.length > 1 ? `${sk.name} ${k + 1}` : sk.name, punkte: l.map((q) => { const w = welt(sk, q); return [w[0] - (+g.x || 0), -(w[2] - (+g.z || 0)), w[1]]; }) }));
+  }
+  const r = dachAusFlaechen({ flaechen, grundriss: gebaeudeUmriss(g), traufhoehe: g.traufhoehe });
+  return r;
+}
+// Automatisch berechnete Dachflächen in Skizzen auf geneigten Ebenen umwandeln (Ebene aus Traufkante + 3. Punkt, Skizze mit dem Umriss der Fläche): danach mm-genau bearbeitbar
+function dachZuSkizzen(f, g) {
+  const r = f._dach; if (!r?.flaechen?.length) throw new Error("Noch kein Dach berechnet");
+  const idx = doc.features.indexOf(f), neu = [], ids = [], W = (p) => dachWelt(g, p), r2 = (x) => Math.round(x * 100) / 100, kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  r.flaechen.forEach((fl, i) => {
+    const pts = fl.punkte, n = pts.length; let best = 0, bs = Infinity;
+    pts.forEach((a, k) => { const b = pts[(k + 1) % n], sc = ((a[2] + b[2]) / 2) * 1e6 - Math.hypot(b[0] - a[0], b[1] - a[1]); if (sc < bs) { bs = sc; best = k; } }); // tiefste, längste Kante = Traufe
+    const P0 = pts[best], P1 = pts[(best + 1) % n], uv = [P1[0] - P0[0], P1[1] - P0[1], P1[2] - P0[2]], ul = Math.hypot(...uv), u = uv.map((x) => x / ul), vv = kreuz(fl.normale, u), P2 = P0.map((x, k) => x + vv[k] * 1000);
+    const a = W(P0), b = W(P1), c = W(P2), E = dreiPunkte(a, b, c);
+    const eb = { id: neueId(), typ: "ebene", art: "punkte", name: `Dachfläche ${i + 1} · Ebene`, p1: "V:" + fmt3(a), p2: "V:" + fmt3(b), p3: "V:" + fmt3(c), versteckt: true };
+    const sk = { id: neueId(), typ: "skizze", name: `Dachfläche ${i + 1}`, ebene: eb.id, elemente: [{ id: 1, art: "linie", pts: pts.map((p) => zuLokal(E, W(p)).map(r2)), geschlossen: true }] };
+    neu.push(eb, sk); ids.push(sk.id);
+  });
+  doc.features.splice(idx, 0, ...neu); if (doc.marke != null && doc.marke > idx) doc.marke += neu.length;
+  f.flaechenSkizzen = ids; f.quelle = "skizzen";
+}
 function dachErgebnis(f, g) {
+  if (f.quelle === "skizzen") return dachAusSkizzen(f, g);
   if (g.form === "skizze") return polygonDach({ grundriss: skizzenGrundriss(g), neigung: +f.neigung || 35, giebel: String(f.giebel ?? "").split(/[^\d]+/).filter(Boolean).map(Number), ueberstandTraufe: +f.ueberstandTraufe || 0, ueberstandOrtgang: +f.ueberstandOrtgang || 0, traufhoehe: g.traufhoehe });
   if (g.form && g.form !== "rechteck") return fluegelDach({ grundform: g, form: f.form || "sattel", neigung: +f.neigung || 35, neigung2: f.neigung2 ? +f.neigung2 : null, ueberstandTraufe: +f.ueberstandTraufe || 0, ueberstandOrtgang: +f.ueberstandOrtgang || 0, traufhoehe: g.traufhoehe });
   return rechteckDach({ breite: g.breite, tiefe: g.tiefe, form: f.form || "sattel", neigung: +f.neigung || 35, neigung2: f.neigung2 ? +f.neigung2 : null, ueberstandTraufe: +f.ueberstandTraufe || 0, ueberstandOrtgang: +f.ueberstandOrtgang || 0, firstRichtung: f.firstRichtung || "laengs", traufhoehe: g.traufhoehe });
@@ -2540,6 +2570,8 @@ function dachDialog(f) {
   if (!g) return status("Das Gebäude dieses Dachs fehlt.");
   const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "breite", label: "Gebäude: Breite", einheit: "mm", wert: g.breite }, { id: "tiefe", label: "Gebäude: Tiefe", einheit: "mm", wert: g.tiefe }, { id: "traufhoehe", label: "Wandhöhe bis Traufe", einheit: "mm", wert: g.traufhoehe }, { id: "wandstaerke", label: "Wandstärke", einheit: "mm", wert: g.wandstaerke },
     { id: "gform", label: "Grundform", optionen: Object.entries(GRUNDFORMEN), wert: g.form || "rechteck" }, { id: "gskizze", label: "Skizze (bei «Aus Skizze»)", optionen: [["", "–"], ...doc.features.filter((x) => x.typ === "skizze").map((x) => [x.id, x.name])], wert: g.skizze || "" }, { id: "gprofil", label: "Fläche Nr. in der Skizze", wert: (g.profil ?? 0) + 1 }, { id: "fluegelBreite", label: "Querflügel: Breite", einheit: "mm", wert: g.fluegelBreite ?? 4000 }, { id: "fluegelTiefe", label: "Querflügel: ragt über Rückseite", einheit: "mm", wert: g.fluegelTiefe ?? 5000 }, 
+    { id: "quelle", label: "Dachflächen", optionen: [["auto", "Automatisch aus Grundriss und Neigung"], ["skizzen", "Aus Skizzen (mm-genau, frei bearbeitbar)"]], wert: f.quelle || "auto" },
+    ...(f.quelle === "skizzen" ? [{ id: "fAdd", label: "Skizze als Dachfläche hinzufügen", optionen: [["", "–"], ...doc.features.filter((x) => x.typ === "skizze" && !(f.flaechenSkizzen || []).includes(x.id)).map((x) => [x.id, x.name])], wert: "" }, { id: "fDel", label: "Dachfläche entfernen", optionen: [["", "–"], ...(f.flaechenSkizzen || []).map((id) => [id, finde(id)?.name || id])], wert: "" }] : []),
     { id: "form", label: "Dachform", optionen: Object.entries(DACHFORMEN), wert: f.form }, { id: "firstRichtung", label: "First / Gefälle", optionen: [["laengs", "First längs (Länge)"], ["quer", "First quer (Tiefe)"]], wert: f.firstRichtung || "laengs" },
     { id: "neigung", label: "Neigung", einheit: "°", wert: f.neigung }, { id: "giebel", label: "Giebelkanten Nr. (nur Grundform «Aus Skizze», z. B. 2,4)", text: true, wert: f.giebel ?? "" }, ...(["sattel", "walm"].includes(f.form) ? [{ id: "neigung2", label: "Neigung 2. Seite", einheit: "°", wert: f.neigung2 ?? f.neigung }] : []),
     { id: "ueberstandTraufe", label: "Überstand Traufe", einheit: "mm", wert: f.ueberstandTraufe }, { id: "ueberstandOrtgang", label: "Überstand Ortgang", einheit: "mm", wert: f.ueberstandOrtgang },
@@ -2550,12 +2582,16 @@ function dachDialog(f) {
     for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke", "fluegelBreite", "fluegelTiefe"]) if (w[k] > 0) g[k] = w[k]; if (w.gform) g.form = w.gform; if (w.gskizze !== undefined) g.skizze = w.gskizze || null; if (Number.isFinite(+w.gprofil) && +w.gprofil >= 1) g.profil = +w.gprofil - 1;
     for (const k of ["neigung", "neigung2", "ueberstandTraufe", "ueberstandOrtgang"]) if (Number.isFinite(w[k]) && w[k] >= 0) f[k] = w[k];
     dachMasseUebernehmen(f, w);
+    if (w.quelle === "skizzen" && f.quelle !== "skizzen") { if (f.flaechenSkizzen?.length) f.quelle = "skizzen"; else dachZuSkizzen(f, g); }
+    else if (w.quelle === "auto" && f.quelle === "skizzen") f.quelle = "auto";
+    if (w.fAdd) f.flaechenSkizzen = [...(f.flaechenSkizzen || []), w.fAdd];
+    if (w.fDel) f.flaechenSkizzen = (f.flaechenSkizzen || []).filter((id) => id !== w.fDel);
     for (const k of ["form", "firstRichtung", "darstellung"]) if (w[k]) f[k] = w[k]; if (w.giebel !== undefined) f.giebel = w.giebel;
     f.name = w.name?.trim() || f.name; if (f.neigung > 80) f.neigung = 80; if (f.neigung2 > 80) f.neigung2 = 80;
   };
   featureDialog(f, istNeu, felder, setze, "Dach automatisch",
     "Grundform (Rechteck) mit Massen, Dachform, Neigung, Überstände, Deckung und Aufbau – alles andere rechnet das Programm. Deckungs- und Aufbauwerte stellst du in den Einstellungen › Dach ein.",
-    { neuBei: ["deckung", "aufbau"], info: () => { const r = f._dach; if (f._fehler) return "⚠ " + f._fehler; if (!r) return ""; const m = pruefeDach({ neigungen: r.flaechen.map((x) => x.neigung), deckung: deckungVon(f) }), A = r.flaechen.reduce((s, x) => s + x.flaeche, 0), L = (a) => r.linien.filter((l) => l.art === a).reduce((s, l) => s + l.laenge, 0) / 1000;
+    { neuBei: ["deckung", "aufbau", "quelle", "fAdd", "fDel"], info: () => { const r = f._dach; if (f._fehler) return "⚠ " + f._fehler; if (!r) return ""; const m = pruefeDach({ neigungen: r.flaechen.map((x) => x.neigung), deckung: deckungVon(f) }), A = r.flaechen.reduce((s, x) => s + x.flaeche, 0), L = (a) => r.linien.filter((l) => l.art === a).reduce((s, l) => s + l.laenge, 0) / 1000;
         return (m.length ? "⚠ " + m[0] + " " : "") + (r.hinweise?.length ? "⚠ " + r.hinweise[0] + " " : "") + `Dachfläche ${A.toFixed(1)} m² · First ${L("first").toFixed(1)} m · Grate ${L("grat").toFixed(1)} m${L("kehle") ? ` · Kehlen ${L("kehle").toFixed(1)} m` : ""} · Firsthöhe ${(r.firsthoehe / 1000).toFixed(2)} m`; } });
   if (istNeu) { const d = dlg, alt = d.abbrechen; d.abbrechen = () => { alt(); entferneFeature(g); }; setTimeout(() => $("zoomAlles").click(), 50); }
 }
