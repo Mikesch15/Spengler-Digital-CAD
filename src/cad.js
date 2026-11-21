@@ -9,6 +9,8 @@ import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern
 import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
+import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
+import { DECKUNGEN_STANDARD, AUFBAU_STANDARD, grundeinstellung as dachGrund, schichten as dachSchichten, pruefeDach } from "../kern/dach/vorlagen.js";
 import { FARBEN, LINIENARTEN, farbeHex, standardLayer, skizzenDxf } from "../kern/zeichnung2d.js";
 import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
 import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
@@ -1123,6 +1125,17 @@ function regen() {
           _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
         for (const bl of f._bleche) bl.abw.loecher = [];
         if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, blechEbene(s.ebene, f, m), m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
+      } else if (f.typ === "gebaeude") { // Gebäude-Ansatz: Wände bis zur Traufe bzw. zum Dach (Giebel)
+        if (!(f.breite > 0 && f.tiefe > 0 && f.traufhoehe > 0)) throw new Error("Breite, Tiefe und Wandhöhe müssen grösser als 0 sein");
+        const dach = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id && !x._aus), r = dach ? dachErgebnis(dach, f) : rechteckDach({ breite: f.breite, tiefe: f.tiefe, form: "zelt", neigung: 0.0001, ueberstandTraufe: 0, traufhoehe: f.traufhoehe });
+        const ws = waende(r.grundriss, r), t = Math.min(+f.wandstaerke || 0, f.breite / 2 - 1, f.tiefe / 2 - 1);
+        if (!f.versteckt) for (const w of ws) { const i = w.kante, A = r.grundriss[i], B = r.grundriss[(i + 1) % 4], L = Math.hypot(B[0] - A[0], B[1] - A[1]); if (t > 0) modell.add(koerperMesh(wandPlatte(w.punkte, [-(B[1] - A[1]) / L, (B[0] - A[0]) / L], t, f), 0xd9d5cc, f.id)); }
+      } else if (f.typ === "dach") { // Dachflächen mit Aufbau (Phase 1: eine Platte je Fläche von Sparrenunterkante bis Deckung)
+        const g = finde(f.gebaeude); if (g?.typ !== "gebaeude") throw new Error("Gebäude fehlt"); if (doc.features.indexOf(g) > doc.features.indexOf(f)) throw new Error("Das Gebäude muss vor dem Dach stehen");
+        const r = dachErgebnis(f, g); f._dach = r; const dk = deckungVon(f), au = aufbauVon(f); doc.dachVorlagen ||= { deckungen: [], aufbauten: [] };
+        for (const [l, id, q] of [[doc.dachVorlagen.deckungen, dk?.id, dk], [doc.dachVorlagen.aufbauten, au?.id, au]]) if (q && !l.some((x) => x.id === id)) l.push(JSON.parse(JSON.stringify(q)));
+        const sc = dachSchichten(au, dk); f._schichten = sc;
+        if (!f.versteckt) for (const fl of r.flaechen) modell.add(koerperMesh(dachPrisma(fl.punkte, fl.normale, sc.unten, sc.oben, g), 0xb5543a, f.id));
       } else if (f.typ === "kante") { // Flansch/Umschlag/Baustein an einer Kante: wirkt über das Flächenblech (berechneKanten)
         const z = finde(f.ziel); if (z?.typ !== "flaeche") throw new Error("Flächenblech fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
@@ -1246,7 +1259,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
@@ -1317,6 +1330,8 @@ function abwickelnSchalten(f) {
   status("Gefaltet: die Ausschnitte der Abwicklung sind im gekanteten Blech.");
 }
 $("wAbwickeln").onclick = () => abwickelnSchalten();
+$("wDachAuto").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); dachDialog(); };
+$("wGebaeude").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); gebaeudeDialog(); };
 $("wTeilMenue").onclick = () => { const f = hauptVon(auswahl); if (!f) return status("Zuerst ein Teil im Browser, in der Zeitleiste oder in der Ansicht anwählen."); const r = $("wTeilMenue").getBoundingClientRect(); featureMenue(f, r.left, r.bottom + 6); };
 // Ist das Flächenblech gerade abgewickelt? (letzter Abwickeln/Falten-Schritt für dieses Blech ist «Abwickeln»)
 const istAbgewickelt = (f) => doc.features.filter((x) => (x.typ === "abwickeln" || x.typ === "falten") && x.ziel === f.id && !x.unterdrueckt).at(-1)?.typ === "abwickeln";
@@ -1701,6 +1716,8 @@ function bearbeite(f) {
   if (f.typ === "flaechenteil") return bearbeite(f.eltern);
   if (f.typ === "flaeche") return flaecheDialog(f);
   if (f.typ === "kante") return kanteDialog(f);
+  if (f.typ === "dach") return dachDialog(f);
+  if (f.typ === "gebaeude") { const d = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id); return d ? dachDialog(d) : gebaeudeDialog(f); }
   if (f.typ === "abwickeln" || f.typ === "falten") return status(f.typ === "abwickeln" ? "Abwickeln: das Blech liegt flach, bis «Falten» folgt. Dazwischen Skizze + Extrusion «Ausschneiden»." : "Falten: bildet die Ausschnitte der Abwicklung aufs gekantete Blech ab.");
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
   if (f.typ === "achse" || f.typ === "konpunkt") return konstruktionDialog(f.typ, f.art, f);
@@ -2274,6 +2291,63 @@ function partnerKante(f, key) {
     const h = o.gruppen[kk]; if (nah(h.punkte[0], b) && nah(h.punkte.at(-1), a)) return `${o.pi}:${kk}`;
   }
   return null;
+}
+// ------------------------------------------------------------ Dach-Modus (Phase 1): Gebäude-Ansatz + Dach aus Grundriss, Dachform und Aufbau
+const dachEinst = () => (einst.dach ||= dachGrund());
+const deckungVon = (f) => [...(doc.dachVorlagen?.deckungen || []), ...dachEinst().deckungen, ...DECKUNGEN_STANDARD].find((d) => d.id === f.deckung) || dachEinst().deckungen[0];
+const aufbauVon = (f) => [...(doc.dachVorlagen?.aufbauten || []), ...dachEinst().aufbauten, ...AUFBAU_STANDARD].find((a) => a.id === f.aufbau) || dachEinst().aufbauten[0];
+function dachErgebnis(f, g) {
+  return rechteckDach({ breite: g.breite, tiefe: g.tiefe, form: f.form || "sattel", neigung: +f.neigung || 35, neigung2: f.neigung2 ? +f.neigung2 : null, ueberstandTraufe: +f.ueberstandTraufe || 0, ueberstandOrtgang: +f.ueberstandOrtgang || 0, firstRichtung: f.firstRichtung || "laengs", traufhoehe: g.traufhoehe });
+}
+// Dach (u, v, h) → Welt (x, y = Höhe, z = −v); Ursprung des Gebäudes bei g.x/g.z
+const dachWelt = (g, p) => [p[0] + (+g.x || 0), p[2], -p[1] + (+g.z || 0)];
+// Prisma über einem ebenen Polygon (Grundriss-Koordinaten u, v, h): entlang der Normale von unten bis oben aufgedickt; Rückgabe: Dreiecke in Weltkoordinaten
+function dachPrisma(punkte, normale, unten, oben, g) {
+  const n = punkte.length, ob = punkte.map((p) => p.map((v, i) => v + normale[i] * oben)), un = punkte.map((p) => p.map((v, i) => v + normale[i] * unten));
+  const uv2 = punkte.map((p) => new THREE.Vector2(p[0], p[1])), tri = THREE.ShapeUtils.triangulateShape(uv2, []), pos = [], W = (p) => dachWelt(g, p);
+  const T = (a, b, c) => pos.push(...W(a), ...W(b), ...W(c));
+  for (const [i, j, k] of tri) { T(ob[i], ob[j], ob[k]); T(un[i], un[k], un[j]); }
+  for (let i = 0; i < n; i++) { const j = (i + 1) % n; T(un[i], un[j], ob[j]); T(un[i], ob[j], ob[i]); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return nachAussen(geo);
+}
+// Wandplatte: senkrechtes Polygon (u, v, h) um t nach innen aufgedickt
+function wandPlatte(punkte, innenNormal, t, g) {
+  const W = (p) => dachWelt(g, p), a = punkte.map((p) => p.slice()), b = punkte.map((p) => [p[0] + innenNormal[0] * t, p[1] + innenNormal[1] * t, p[2]]);
+  const e1 = [punkte[1][0] - punkte[0][0], punkte[1][1] - punkte[0][1]], l = Math.hypot(...e1) || 1, ex = [e1[0] / l, e1[1] / l];
+  const pl = punkte.map((p) => new THREE.Vector2((p[0] - punkte[0][0]) * ex[0] + (p[1] - punkte[0][1]) * ex[1], p[2])), tri = THREE.ShapeUtils.triangulateShape(pl, []), pos = [], T = (x, y, z) => pos.push(...W(x), ...W(y), ...W(z));
+  for (const [i, j, k] of tri) { T(a[i], a[j], a[k]); T(b[i], b[k], b[j]); }
+  for (let i = 0; i < a.length; i++) { const j = (i + 1) % a.length; T(a[i], a[j], b[j]); T(a[i], b[j], b[i]); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return nachAussen(geo);
+}
+function gebaeudeDialog(f) {
+  const istNeu = !f; f ||= { id: neueId(), typ: "gebaeude", name: "Gebäude " + (doc.features.filter((x) => x.typ === "gebaeude").length + 1), breite: 10000, tiefe: 8000, traufhoehe: 3000, wandstaerke: 300, x: 0, z: 0 };
+  featureDialog(f, istNeu, (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "breite", label: "Breite (Länge)", einheit: "mm", wert: f.breite }, { id: "tiefe", label: "Tiefe", einheit: "mm", wert: f.tiefe },
+    { id: "traufhoehe", label: "Wandhöhe bis Traufe", einheit: "mm", wert: f.traufhoehe }, { id: "wandstaerke", label: "Wandstärke", einheit: "mm", wert: f.wandstaerke }, { id: "x", label: "Lage X", einheit: "mm", wert: f.x ?? 0 }, { id: "z", label: "Lage Z", einheit: "mm", wert: f.z ?? 0 }],
+    (f, w) => { for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke", "x", "z"]) if (Number.isFinite(w[k])) f[k] = w[k]; f.name = w.name?.trim() || f.name; }, "Gebäude (Ansatz)", "Rechteckiger Gebäudekörper: Wände bis zur Traufe, Giebel bis zum Dach. Später erweiterbar (Geschosse, Öffnungen).");
+}
+function dachDialog(f) {
+  const istNeu = !f; let g;
+  if (istNeu) {
+    g = { id: neueId(), typ: "gebaeude", name: "Gebäude " + (doc.features.filter((x) => x.typ === "gebaeude").length + 1), breite: 10000, tiefe: 8000, traufhoehe: 3000, wandstaerke: 300, x: 0, z: 0 }; einfuegen(g);
+    f = { id: neueId(), typ: "dach", name: "Dach " + (doc.features.filter((x) => x.typ === "dach").length + 1), gebaeude: g.id, form: "sattel", firstRichtung: "laengs", neigung: 35, neigung2: 35, ueberstandTraufe: 400, ueberstandOrtgang: 300, deckung: dachEinst().standardDeckung, aufbau: dachEinst().standardAufbau };
+  } else g = finde(f.gebaeude);
+  if (!g) return status("Das Gebäude dieses Dachs fehlt.");
+  const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "breite", label: "Gebäude: Breite", einheit: "mm", wert: g.breite }, { id: "tiefe", label: "Gebäude: Tiefe", einheit: "mm", wert: g.tiefe }, { id: "traufhoehe", label: "Wandhöhe bis Traufe", einheit: "mm", wert: g.traufhoehe }, { id: "wandstaerke", label: "Wandstärke", einheit: "mm", wert: g.wandstaerke },
+    { id: "form", label: "Dachform", optionen: Object.entries(DACHFORMEN), wert: f.form }, { id: "firstRichtung", label: "First / Gefälle", optionen: [["laengs", "First längs (Länge)"], ["quer", "First quer (Tiefe)"]], wert: f.firstRichtung || "laengs" },
+    { id: "neigung", label: "Neigung", einheit: "°", wert: f.neigung }, ...(["sattel", "walm"].includes(f.form) ? [{ id: "neigung2", label: "Neigung 2. Seite", einheit: "°", wert: f.neigung2 ?? f.neigung }] : []),
+    { id: "ueberstandTraufe", label: "Überstand Traufe", einheit: "mm", wert: f.ueberstandTraufe }, { id: "ueberstandOrtgang", label: "Überstand Ortgang", einheit: "mm", wert: f.ueberstandOrtgang },
+    { id: "deckung", label: "Deckung", optionen: dachEinst().deckungen.map((d) => [d.id, d.name]), wert: f.deckung }, { id: "aufbau", label: "Dachaufbau", optionen: dachEinst().aufbauten.map((a) => [a.id, a.name]), wert: f.aufbau }];
+  const setze = (f, w) => {
+    for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke"]) if (w[k] > 0) g[k] = w[k];
+    for (const k of ["neigung", "neigung2", "ueberstandTraufe", "ueberstandOrtgang"]) if (Number.isFinite(w[k]) && w[k] >= 0) f[k] = w[k];
+    for (const k of ["form", "firstRichtung", "deckung", "aufbau"]) if (w[k]) f[k] = w[k];
+    f.name = w.name?.trim() || f.name; if (f.neigung > 80) f.neigung = 80; if (f.neigung2 > 80) f.neigung2 = 80;
+  };
+  featureDialog(f, istNeu, felder, setze, "Dach automatisch",
+    "Grundform (Rechteck) mit Massen, Dachform, Neigung, Überstände, Deckung und Aufbau – alles andere rechnet das Programm. Deckungs- und Aufbauwerte stellst du in den Einstellungen › Dach ein.",
+    { info: () => { const r = f._dach; if (f._fehler) return "⚠ " + f._fehler; if (!r) return ""; const m = pruefeDach({ neigungen: r.flaechen.map((x) => x.neigung), deckung: deckungVon(f) }), A = r.flaechen.reduce((s, x) => s + x.flaeche, 0), L = (a) => r.linien.filter((l) => l.art === a).reduce((s, l) => s + l.laenge, 0) / 1000;
+        return (m.length ? "⚠ " + m[0] + " " : "") + `Dachfläche ${A.toFixed(1)} m² · First ${L("first").toFixed(1)} m · Grate ${L("grat").toFixed(1)} m · Firsthöhe ${(r.firsthoehe / 1000).toFixed(2)} m`; } });
+  if (istNeu) { const d = dlg, alt = d.abbrechen; d.abbrechen = () => { alt(); entferneFeature(g); }; setTimeout(() => $("zoomAlles").click(), 50); }
 }
 // ------------------------------------------------------------ Kanten-Werkzeug: Flansch / Umschlag / Kantenbaustein (erst Blech anklicken, dann die Kante)
 let kantenWz = null; // { typ, baustein, seite, schritt: "blech" | "kante", f }
@@ -3413,7 +3487,7 @@ const probeWerte = { mat: 0, z: 130, a: "", b: "" };
 const meldung = (t) => { $("eMeldung").textContent = t; };
 const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
 let einstRegister = "material";
-const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["detail3d", "Details 3D"], ["vorlagen", "Vorlagen & Sichern"], ["konto", "Konto & Cloud"]];
+const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["detail3d", "Details 3D"], ["vorlagen", "Vorlagen & Sichern"], ["dach", "Dach"], ["konto", "Konto & Cloud"]];
 // Feld an einen Wert der Einstellungen binden: data-e="gruppe.schluessel", data-typ zahl|text|janein|wahl
 function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
   const [g, k] = pfad.split("."), w = entwurf[g][k], id = "e_" + g + "_" + k;
@@ -3521,6 +3595,18 @@ function zeigeEinst() {
       <td class="nowrap"><button class="weg" data-bweg="${i}" aria-label="${esc(b.name)} entfernen">×</button></td></tr>`).join("")}
     </tbody></table></div>
     <div class="reihe ohnerand"><button class="knopf" id="eNeuBaustein">+ Baustein</button><button class="knopf" id="eBausteineStandard">Standard-Bausteine ergänzen</button></div>`,
+    dach: `<h4>Dachdeckung</h4>
+    <p class="hinweis">Richtwerte – vor dem Einsatz am gewählten Produkt prüfen und hier anpassen. Beim Erstellen eines Dachs wählst du die Deckung; die Werte werden ins Projekt übernommen.</p>
+    <div class="tabwrap"><table class="zeilen"><thead><tr><th>Name</th><th>Lattweite</th><th>Deckbreite</th><th>Ziegeldicke</th><th>Stück/m²</th><th>kg/m²</th><th>Min.-Neigung °</th><th>Latte b</th><th>Latte h</th><th></th></tr></thead><tbody>
+    ${(e.dach ||= dachGrund()).deckungen.map((d, i) => `<tr>${[["name", "text"], ["lattweite"], ["deckbreite"], ["ziegelDicke"], ["stueckProM2"], ["gewichtProM2"], ["mindestNeigung"], ["lattenB"], ["lattenH"]].map(([k, t]) => `<td><input data-dach="d:${i}:${k}" type="${t || "number"}" step="any" value="${esc(d[k] ?? "")}" aria-label="${k}"></td>`).join("")}<td>${e.dach.deckungen.length > 1 ? `<button class="weg" data-dweg="d:${i}" aria-label="entfernen">×</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
+    <button class="knopf" data-dneu="d">+ Deckung (Kopie der letzten)</button>
+    <h4>Dachaufbau</h4>
+    <div class="tabwrap"><table class="zeilen"><thead><tr><th>Name</th><th>Sparren b</th><th>Sparren h</th><th>Achsabstand</th><th>Dämmung</th><th>Dämmdicke</th><th>Unterdach</th><th>Konterlatte b</th><th>Konterlatte h</th><th></th></tr></thead><tbody>
+    ${e.dach.aufbauten.map((a, i) => `<tr>${[["name", "text"], ["sparrenB"], ["sparrenH"], ["achsabstand"], ["daemmung", "sel"], ["daemmDicke"], ["unterdachDicke"], ["konterB"], ["konterH"]].map(([k, t]) => t === "sel" ? `<td><select data-dach="a:${i}:${k}"><option value="zwischen" ${a[k] === "zwischen" ? "selected" : ""}>zwischen</option><option value="aufsparren" ${a[k] === "aufsparren" ? "selected" : ""}>auf Sparren</option></select></td>` : `<td><input data-dach="a:${i}:${k}" type="${t || "number"}" step="any" value="${esc(a[k] ?? "")}" aria-label="${k}"></td>`).join("")}<td>${e.dach.aufbauten.length > 1 ? `<button class="weg" data-dweg="a:${i}" aria-label="entfernen">×</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
+    <button class="knopf" data-dneu="a">+ Aufbau (Kopie des letzten)</button>
+    <h4>Voreinstellung</h4>
+    <div class="reihe"><label>Deckung <select data-dach="s:0:standardDeckung">${e.dach.deckungen.map((d) => `<option value="${esc(d.id)}" ${e.dach.standardDeckung === d.id ? "selected" : ""}>${esc(d.name)}</option>`).join("")}</select></label>
+    <label>Aufbau <select data-dach="s:0:standardAufbau">${e.dach.aufbauten.map((a) => `<option value="${esc(a.id)}" ${e.dach.standardAufbau === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></label></div>`,
     detail3d: `
     <h4>3D-Detailvorlagen (STEP)</h4>
     <p class="hinweis">Körper für wiederkehrende Details (Kehle, Stutzen, Halter …) als STEP-Datei. Konvention: <b>Ursprung = Anfang der Ankerkante, +X = Richtung der Kante, +Z = Sichtseite</b>, Masse in mm. Eingesetzt wird mit «3D-Detail» (Blech ▾) an einer Kante. Die Vorlagen werden mit der Firma abgeglichen (bis 1.5 MB je Vorlage).</p>
@@ -3567,6 +3653,7 @@ function probe() {
 }
 $("eInhalt").addEventListener("input", (ev) => {
   const t = ev.target;
+  if (t.dataset.dach) { const [g, i, k] = t.dataset.dach.split(":"), d = entwurf.dach; if (g === "s") d[k] = t.value; else { const o = (g === "d" ? d.deckungen : d.aufbauten)[+i]; o[k] = t.type === "number" ? parseFloat(t.value) || 0 : t.value; o.richtwert = false; } return; }
   if (t.dataset.bk) { const b = entwurf.bausteine[+t.closest("tr").dataset.bi], k = t.dataset.bk; b[k] = k === "versatz" ? parseFloat(t.value) || 0 : t.value;
     if (k === "folge") { try { folge("100 " + bausteinFolge({ ...entwurf.bausteine[+t.closest("tr").dataset.bi], folge: t.value }, entwurf.materialien[0])); t.classList.remove("ungueltig"); } catch (err) { t.classList.add("ungueltig"); meldung(err.message); } } }
   else if (t.dataset.dv) { const v = entwurf.detailvorlagen[+t.dataset.i], k = t.dataset.dv, x = t.type === "number" ? (t.value === "" ? null : parseFloat(t.value)) : t.value; if (k === "name" || k === "category") v[k] = x; else v.compatibility = { ...(v.compatibility || {}), [k]: x }; v.modified = new Date().toISOString().replace(/\.\d+Z$/, ""); }
@@ -3628,6 +3715,8 @@ $("eInhalt").addEventListener("click", async (ev) => {
     } catch (e) { meldung("Keine Update-Information erreichbar (Internet? Noch kein Release auf main?): " + e); }
     return;
   }
+  if (ev.target.dataset.dweg != null) { const [g, i] = ev.target.dataset.dweg.split(":"); (g === "d" ? entwurf.dach.deckungen : entwurf.dach.aufbauten).splice(+i, 1); zeigeEinst(); return; }
+  if (ev.target.dataset.dneu) { const l = ev.target.dataset.dneu === "d" ? entwurf.dach.deckungen : entwurf.dach.aufbauten, v = l.at(-1); l.push({ ...v, id: "eigen" + Date.now().toString(36), name: v.name + " (Kopie)", richtwert: false }); zeigeEinst(); return; }
   if (ev.target.dataset.weg != null) { entwurf.materialien.splice(+ev.target.dataset.weg, 1); zeigeEinst(); }
   else if (ev.target.dataset.vweg != null) { entwurf.vorlagen.splice(+ev.target.dataset.vweg, 1); zeigeEinst(); }
   else if (ev.target.dataset.bweg != null) { const [b] = entwurf.bausteine.splice(+ev.target.dataset.bweg, 1); entwurf.bausteine.forEach((x) => { if (x.partner === b.id) delete x.partner; }); zeigeEinst(); }
