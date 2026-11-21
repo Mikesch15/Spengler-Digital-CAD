@@ -130,4 +130,17 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   ok(nah(m0.deckflaeche - m.deckflaeche, 0.76, 0.01) && m.wechsel[0].stueck === 2, "Deckfläche um die Öffnung (0,76 m²) kleiner; Wechsel in der Liste");
   ok(E.veluxListe().find((v) => v.code === "MK04").b === 780 && E.kaminBleche({ b: 500, h: 500 }).length === 3, "Velux-Liste und Kaminbleche");
 }
+
+// ---- Phase 4: Lukarne (Satteldach-, Schlepp-, Flachdachgaube)
+{
+  const { lukarne } = await import("../kern/dach/lukarne.js"), r = rechteckDach({ breite: 12000, tiefe: 9000, form: "sattel", neigung: 40, ueberstandTraufe: 0, ueberstandOrtgang: 0 }), fl = r.flaechen[0], tm = Math.tan(40 * Math.PI / 180);
+  const sa = lukarne(fl, { art: "sattel", b: 1600, hw: 1100, neigung: 25, ueberstand: 200, x: 6000, y: 1500 });
+  ok(sa.innen && sa.formen.filter((f) => f.art === "dach").length === 2 && sa.bleche.filter((b) => b.art === "luk-kehle").length === 2, "Satteldachgaube: 2 Gaubendächer, 2 Kehlen");
+  const zr = 1100 + 800 * Math.tan(25 * Math.PI / 180); ok(nah(sa.rect.t1 - sa.rect.t0, zr / tm / Math.cos(40 * Math.PI / 180), 5), `Öffnung reicht bis zur Firstschnittstelle (${(sa.rect.t1 - sa.rect.t0).toFixed(0)} mm)`);
+  const sc = lukarne(fl, { art: "schlepp", b: 1600, hw: 1100, neigung: 15, ueberstand: 200, x: 6000, y: 1500 });
+  ok(sc.innen && sc.formen.length === 4 && sc.bleche.some((b) => b.name.includes("oben")), "Schleppgaube: Stirn, 2 Wangen, Dach; Anschluss oben");
+  ok(lukarne(fl, { art: "flach", b: 1600, hw: 1100, x: 6000, y: 1500 }).innen, "Flachdachgaube");
+  ok(!lukarne(fl, { art: "sattel", b: 1600, hw: 1100, neigung: 25, ueberstand: 200, x: 6000, y: 4500 }).innen, "Gaube über den First hinaus wird erkannt");
+  let fe = ""; try { lukarne(fl, { art: "schlepp", b: 1600, hw: 1100, neigung: 45, x: 6000, y: 1500 }); } catch (e) { fe = e.message; } ok(/kleiner/.test(fe), "Schleppdach steiler als Hauptdach wird abgelehnt");
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);

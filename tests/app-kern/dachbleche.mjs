@@ -41,6 +41,16 @@ await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.wa
 ok(/Wechsel/.test(await s.textContent("#werkstatt")), "Holzliste: Wechsel für Fenster und Kamin");
 await s.evaluate((i) => window.sdcadTest.waehle(i), id); await s.waitForTimeout(300);
 ok(/Kaminanschluss/.test(await s.textContent("#werkstatt")), "Dachbleche: Kaminanschluss");
+// Lukarne
+await s.evaluate(() => document.getElementById("wLukarne").click()); await s.waitForSelector("#d_hw", { timeout: 4000 }); await s.waitForTimeout(500);
+ok(/Öffnung [\d.]+ m²/.test(await info()), "Lukarne (Sattel): " + (await info()));
+await s.selectOption("#d_art", "schlepp"); await s.fill("#d_neigung", "15"); await s.dispatchEvent("#d_neigung", "input"); await s.waitForTimeout(500);
+ok(/Öffnung [\d.]+ m²/.test(await info()), "Lukarne (Schlepp): " + (await info()));
+await s.selectOption("#d_art", "sattel"); await s.waitForTimeout(400);
+await s.click("#dOk"); await s.waitForTimeout(500);
+await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(500); await s.screenshot({ path: "/tmp/t/lukarne.png" });
+await s.evaluate((i) => window.sdcadTest.waehle(i), id); await s.waitForTimeout(300);
+ok(/Lukarne Kehle/.test(await s.textContent("#werkstatt")) && /Wangenanschluss/.test(await s.textContent("#werkstatt")), "Dachbleche: Lukarne Kehle und Wangenanschluss");
 // Phase 6: Details aus dem Dach und Dachaufsicht im Plan
 await s.evaluate(() => document.getElementById("wPlan").click()); await s.waitForTimeout(800);
 await s.evaluate(() => document.getElementById("plNeuDetail").click()); await s.waitForTimeout(300);

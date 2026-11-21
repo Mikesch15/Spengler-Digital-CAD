@@ -10,6 +10,7 @@ import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
+import { lukarne as lukarneGeo, LUKARNENARTEN } from "../kern/dach/lukarne.js";
 import { elementRechteck, elementKoerper, elementFlaeche, kaminBleche, veluxListe, ELEMENTARTEN } from "../kern/dach/elemente.js";
 import { dachBleche, dachSegmente, BLECHARTEN } from "../kern/dach/bleche.js";
 import { dachSchnitt, dachSchnittSvg, DETAILARTEN } from "../kern/dach/detail.js";
@@ -1141,9 +1142,10 @@ function regen() {
         const r = dachErgebnis(f, g); f._dach = r; const dk = deckungVon(f), au = aufbauVon(f); doc.dachVorlagen ||= { deckungen: [], aufbauten: [] };
         for (const [l, id, q] of [[doc.dachVorlagen.deckungen, dk?.id, dk], [doc.dachVorlagen.aufbauten, au?.id, au]]) if (q && !l.some((x) => x.id === id)) l.push(JSON.parse(JSON.stringify(q)));
         const sc = dachSchichten(au, dk); f._schichten = sc;
-        const detail = f.darstellung !== "platte"; const els = doc.features.filter((x) => x.typ === "dachelement" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), au2 = aufbauVon(f);
-        f._koerper = r.flaechen.map((fl, i) => dachFlaechenKoerper(fl, sc, au2, dk, { ausschnitte: els.filter((x) => x.flaeche === i).map((x) => { const q = elementRechteck(fl, x); return { s0: q.s0, s1: q.s1, t0: q.t0, t1: q.t1, wechsel: au2.sparrenB, name: x.name }; }) }));
-        f._mengen = dachMengen(f._koerper, dk, r.linien, els.reduce((a, x) => a + elementFlaeche(x), 0));
+        const detail = f.darstellung !== "platte"; const luks = doc.features.filter((x) => x.typ === "lukarne" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), els = doc.features.filter((x) => x.typ === "dachelement" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), au2 = aufbauVon(f);
+        f._koerper = r.flaechen.map((fl, i) => dachFlaechenKoerper(fl, sc, au2, dk, { ausschnitte: [...els.filter((x) => x.flaeche === i).map((x) => { const q = elementRechteck(fl, x); return { s0: q.s0, s1: q.s1, t0: q.t0, t1: q.t1, wechsel: au2.sparrenB, name: x.name }; }),
+          ...luks.filter((x) => x.flaeche === i).flatMap((x) => { try { const q = lukarneGeo(fl, x, sc.oben).rect; return [{ ...q, wechsel: au2.sparrenB, name: x.name }]; } catch { return []; } })] }));
+        f._mengen = dachMengen(f._koerper, dk, r.linien, els.reduce((a, x) => a + elementFlaeche(x), 0) + luks.reduce((a, x) => { try { return a + lukarneGeo(r.flaechen[x.flaeche], x, sc.oben).flaeche; } catch { return a; } }, 0));
         if (!f.versteckt) {
           if (!detail) for (const fl of r.flaechen) for (const st of fl.stuecke || [fl.punkte]) modell.add(koerperMesh(dachPrisma(st, fl.normale, sc.unten, sc.oben, g), 0xb5543a, f.id));
           else for (const art of DACH_ARTEN) { const boxen = f._koerper.flatMap((x) => x.koerper.filter((k) => k.art === art.id)); if (boxen.length) modell.add(koerperMesh(dachBoxenGeo(boxen, g), art.farbe, f.id, dachBoxenKanten(boxen, g))); }
@@ -1154,8 +1156,9 @@ function regen() {
         const m = material(f.material), par = Object.fromEntries(Object.keys(BLECHARTEN).map((a) => [a, { ...standardwerte(BLECH_VORLAGE[a]), ...(f.params?.[a] || {}) }]));
         const br = dachBleche(d._dach.flaechen, { abstand: d._schichten?.oben ?? 0, arten: f.arten || {}, params: par }), gd = finde(d.gebaeude);
         const kam = doc.features.filter((x) => x.typ === "dachelement" && x.dach === d.id && x.art === "kamin" && !x._aus && d._dach.flaechen[x.flaeche] && elementRechteck(d._dach.flaechen[x.flaeche], x).innen).flatMap((x) => kaminBleche(x, +par.traufe.dach || 150).map((t) => ({ ...t, neigung: 0, name: `${t.name} (${x.name})` })));
-        br.teile.push(...kam);
-        f._teile = br.teile.map((t, i) => { const vid = t.art === "kamin" ? "kamin" : BLECH_VORLAGE[t.art], { start, ops } = VORLAGE[vid].bau({ ...(t.art === "kamin" ? standardwerte("kamin") : par[t.art]), neigung: t.neigung }, m);
+        const lukB = doc.features.filter((x) => x.typ === "lukarne" && x.dach === d.id && !x._aus && d._dach.flaechen[x.flaeche]).flatMap((x) => { try { const lk = lukarneGeo(d._dach.flaechen[x.flaeche], x, d._schichten?.oben ?? 0); return lk.innen ? lk.bleche.map((t) => ({ ...t, name: `${t.name} (${x.name})` })) : []; } catch { return []; } });
+        br.teile.push(...kam, ...lukB);
+        f._teile = br.teile.map((t, i) => { const vid = { kamin: "kamin", "luk-wand": "wand", "luk-kehle": "kehle" }[t.art] || BLECH_VORLAGE[t.art], { start, ops } = VORLAGE[vid].bau({ ...(BLECH_VORLAGE[t.art] ? par[t.art] : { ...standardwerte(vid), ...(par[vid] || {}) }), neigung: t.neigung }, m);
           return { id: `${f.id}:${i}`, typ: "dachblech", eltern: f, name: `${t.name} ${t.laenge} mm`, material: f.material, laenge: t.laenge, stueck: t.stueck, notiz: `Neigung ${t.neigung}° · aus «${d.name}»`, _res: berechne(start, ops, m.t, m.ri, m.k) }; });
         if (!f.versteckt && gd) for (const fo of br.formen) modell.add(koerperMesh(dachPlatte(fo.punkte, fo.normale, 4, gd), BLECH_FARBE[fo.art], f.id));
       } else if (f.typ === "dachelement") { // Dachfenster / Kamin auf einer Dachfläche (Öffnung, Wechsel, Anschlussbleche)
@@ -1165,6 +1168,12 @@ function regen() {
         const ek = elementKoerper(fl, f, d._schichten?.oben ?? 0); f._rect = ek.rect;
         if (!ek.rect.innen) throw new Error("Das Element ragt über den Rand der Dachfläche – verschieben oder verkleinern");
         const gd = finde(d.gebaeude); if (!f.versteckt && gd) modell.add(koerperMesh(dachBoxenGeo([{ ecken: ek.ecken }], gd), f.art === "kamin" ? 0x8c8179 : 0x5f7f99, f.id, dachBoxenKanten([{ ecken: ek.ecken }], gd)));
+      } else if (f.typ === "lukarne") { // Lukarne (Gaube) auf einer Dachfläche: Stirn, Wangen, Gaubendach; Öffnung im Hauptdach (Wechsel, Mengenabzug)
+        f._luk = null; const d = finde(f.dach); if (d?.typ !== "dach" || !d._dach) throw new Error("Dach fehlt");
+        const fl = d._dach.flaechen[f.flaeche]; if (!fl) throw new Error("Diese Dachfläche gibt es nicht (mehr) – andere Fläche wählen");
+        const lk = lukarneGeo(fl, f, d._schichten?.oben ?? 0); f._luk = lk;
+        if (!lk.innen) throw new Error(lk.hinweise[0]);
+        const gd = finde(d.gebaeude); if (!f.versteckt && gd) for (const fo of lk.formen) modell.add(koerperMesh(dachPlatte(fo.punkte, fo.normale, fo.dicke, gd), fo.art === "dach" ? 0x9a5a45 : 0xd9d5cc, f.id));
       } else if (f.typ === "kante") { // Flansch/Umschlag/Baustein an einer Kante: wirkt über das Flächenblech (berechneKanten)
         const z = finde(f.ziel); if (z?.typ !== "flaeche") throw new Error("Flächenblech fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
@@ -1288,7 +1297,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
@@ -1362,6 +1371,7 @@ $("wAbwickeln").onclick = () => abwickelnSchalten();
 $("wDachAuto").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); dachDialog(); };
 $("wDachBleche").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); dachblecheDialog(); };
 $("wDachElement").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); dachelementDialog(); };
+$("wLukarne").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); lukarneDialog(); };
 $("wGebaeude").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); gebaeudeDialog(); };
 $("wTeilMenue").onclick = () => { const f = hauptVon(auswahl); if (!f) return status("Zuerst ein Teil im Browser, in der Zeitleiste oder in der Ansicht anwählen."); const r = $("wTeilMenue").getBoundingClientRect(); featureMenue(f, r.left, r.bottom + 6); };
 // Ist das Flächenblech gerade abgewickelt? (letzter Abwickeln/Falten-Schritt für dieses Blech ist «Abwickeln»)
@@ -1774,6 +1784,7 @@ function bearbeite(f) {
   if (f.typ === "dach") return dachDialog(f);
   if (f.typ === "dachbleche") return dachblecheDialog(f);
   if (f.typ === "dachelement") return dachelementDialog(f);
+  if (f.typ === "lukarne") return lukarneDialog(f);
   if (f.typ === "gebaeude") { const d = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id); return d ? dachDialog(d) : gebaeudeDialog(f); }
   if (f.typ === "abwickeln" || f.typ === "falten") return status(f.typ === "abwickeln" ? "Abwickeln: das Blech liegt flach, bis «Falten» folgt. Dazwischen Skizze + Extrusion «Ausschneiden»." : "Falten: bildet die Ausschnitte der Abwicklung aufs gekantete Blech ab.");
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
@@ -2412,6 +2423,18 @@ function wandPlatte(punkte, innenNormal, t, g) {
   for (const [i, j, k] of tri) { T(a[i], a[j], a[k]); T(b[i], b[k], b[j]); }
   for (let i = 0; i < a.length; i++) { const j = (i + 1) % a.length; T(a[i], a[j], b[j]); T(a[i], b[j], b[i]); }
   const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return nachAussen(geo);
+}
+function lukarneDialog(f) {
+  const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
+  const istNeu = !f; f ||= { id: neueId(), typ: "lukarne", name: "Lukarne " + (doc.features.filter((x) => x.typ === "lukarne").length + 1), dach: daecher.at(-1).id, flaeche: 0, art: "sattel", b: 1600, hw: 1100, neigung: 30, ueberstand: 200, wd: 150, dd: 250, x: 3000, y: 1500 };
+  const flOpt = (id) => (finde(id)?._dach?.flaechen || []).map((x, i) => [String(i), `Fläche ${i + 1}: ${x.neigung.toFixed(0)}°, ${x.flaeche.toFixed(1)} m²`]);
+  const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "dach", label: "Dach", optionen: daecher.map((d) => [d.id, d.name]), wert: f.dach }, { id: "flaeche", label: "Dachfläche", optionen: flOpt(f.dach), wert: String(f.flaeche ?? 0) },
+    { id: "art", label: "Art", optionen: Object.entries(LUKARNENARTEN), wert: f.art }, { id: "b", label: "Breite aussen", einheit: "mm", wert: f.b }, { id: "hw", label: "Stirnwandhöhe (ab Dach)", einheit: "mm", wert: f.hw }, { id: "neigung", label: "Dachneigung Gaube (Sattel/Schlepp)", einheit: "°", wert: f.neigung },
+    { id: "ueberstand", label: "Dachüberstand Gaube", einheit: "mm", wert: f.ueberstand }, { id: "wd", label: "Wandstärke", einheit: "mm", wert: f.wd }, { id: "dd", label: "Dachaufbau Gaube (Dicke)", einheit: "mm", wert: f.dd },
+    { id: "x", label: "Lage: Mitte quer ab linker Kante", einheit: "mm", wert: f.x }, { id: "y", label: "Lage: Stirnwand ab Traufe", einheit: "mm", wert: f.y }];
+  const setze = (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; if (w.flaeche !== undefined) f.flaeche = +w.flaeche || 0; if (w.art) f.art = w.art; for (const k of ["b", "hw", "neigung", "ueberstand", "wd", "dd", "x", "y"]) if (Number.isFinite(w[k])) f[k] = w[k]; };
+  featureDialog(f, istNeu, felder, setze, "Lukarne", "Satteldach-, Schlepp- oder Flachdachgaube auf einer Dachfläche: Stirnwand, Wangen und Gaubendach schneiden die Hauptdachfläche (Kehlen). Im Hauptdach werden Sparren und Latten unterbrochen, Wechsel eingefügt und die Fläche abgezogen. Anschlussbleche (Kehle, Wangen, Fuss) erscheinen bei den Dachblechen. Dachaufbau der Gaube ist eine einfache Platte.",
+    { info: () => f._fehler ? "⚠ " + f._fehler : f._luk ? `Öffnung ${f._luk.flaeche.toFixed(2)} m² · höchster Punkt ${(f._luk.firsthoehe / 1000).toFixed(2)} m` : "" });
 }
 function dachelementDialog(f) {
   const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");

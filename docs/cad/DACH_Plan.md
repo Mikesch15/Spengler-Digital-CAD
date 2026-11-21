@@ -1,6 +1,6 @@
 # Dach-Modus (zweiter Grundaufbau) – Plan
 
-Stand: 21.11.2026 · Phase 1–2 gebaut; Phase 3 (L/T/U, Kehlen, Grat-/Kehlsparren in der Liste, konvexer Skizzen-Grundriss; Gehrungen offen); Phase 5 gebaut (Dachbleche: Traufe, Ortgang, First, Grat, Kehle mit Abwicklung; 3D schematisch; Kamin-/Fenstereinfassung folgen mit Phase 4); Phase 6 teilweise gebaut (Details Traufe/Ortgang/First/Grat/Kehle als Schnitt im Plan, Dachaufsicht im Plan, Holz-/Blechlisten als CSV; Cloud-Vorlagen für Dach noch offen); Phase 4 teilweise (Dachfenster mit Velux-Grössen und Kamin: Öffnung, Wechsel, Mengenabzug, Kaminanschlüsse; Eindeckrahmen, Lukarne und Einfassung Fenster offen).
+Stand: 21.11.2026 · Phase 1–2 gebaut; Phase 3 (L/T/U, Kehlen, Grat-/Kehlsparren in der Liste, konvexer Skizzen-Grundriss; Gehrungen offen); Phase 5 gebaut (Dachbleche: Traufe, Ortgang, First, Grat, Kehle mit Abwicklung; 3D schematisch; Kamin-/Fenstereinfassung folgen mit Phase 4); Phase 6 teilweise gebaut (Details Traufe/Ortgang/First/Grat/Kehle als Schnitt im Plan, Dachaufsicht im Plan, Holz-/Blechlisten als CSV; Cloud-Vorlagen für Dach noch offen); Phase 4 gebaut bis auf Eindeckrahmen und Fensterblech (Dachfenster mit Velux-Grössen, Kamin, Lukarne als Sattel-/Schlepp-/Flachdachgaube: Öffnung, Wechsel, Mengenabzug, Anschlussbleche).
 
 ## Entscheide (vom Besitzer)
 1. **Details** sollen sich aus dem Dach erstellen lassen (Schnitte durch Traufe, First, Ortgang, Grat, Kehle, Kamin, Fenster, Lukarne – massstäblich im Plan, mit Schichtenaufbau und Blechprofilen).
