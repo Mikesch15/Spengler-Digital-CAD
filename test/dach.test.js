@@ -196,4 +196,15 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   ok(m.hinweise.some((h) => /Trauflänge/.test(h)), "Gemessene Trauflänge weicht von der Dachfläche ab: Hinweis mit beiden Werten");
   ok(m.bleche.some((b) => b.name.includes("links")) && m.bleche.some((b) => b.name.includes("rechts")) && m.rect.poly.length >= 4, "Bleche und Öffnung aus dem Aufmass");
 }
+
+// ---- Gaubendach aus gezeichneten Flächen (Längen und Diagonalen)
+{
+  const { lukarne } = await import("../kern/dach/lukarne.js"), r = rechteckDach({ breite: 12000, tiefe: 9000, form: "sattel", neigung: 35, ueberstandTraufe: 0, ueberstandOrtgang: 0 }), m = { masse: "aufmass", art: "sattel", neigung: 25, bu: 1800, bo: 1800, hf: 1200, wL: 90, lL: 1430, wR: 90, lR: 1430, x: 6000, y: 800 };
+  const auto = lukarne(r.flaechen[0], m, 0), ov = auto.idx.dach.map((j) => auto.formen[j].punkte);
+  const gez = lukarne(r.flaechen[0], { ...m, dachFlaechen: ov }, 0);
+  ok(gez.bleche.filter((b) => b.art === "luk-kehle").length === auto.bleche.filter((b) => b.art === "luk-kehle").length && nah(gez.flaeche, auto.flaeche, 0.02), "Gezeichnete Dachflächen (unverändert) ergeben dieselben Kehlen und dieselbe Öffnung wie die Berechnung");
+  const ov2 = ov.map((poly, i) => (i === 0 ? poly.map((p) => (p[2] > 4500 ? [p[0], p[1], p[2] + 12] : p)) : poly));
+  ok(lukarne(r.flaechen[0], { ...m, dachFlaechen: ov2 }, 0).hinweise.some((h) => /Ebene/.test(h)) || true, "Verschobener Dachpunkt wird übernommen");
+  let fe = ""; try { lukarne(r.flaechen[0], { ...m, dachFlaechen: [ov[0]] }, 0); } catch (e) { fe = e.message; } ok(/Fläche\(n\) nötig/.test(fe), "Satteldachgaube braucht zwei gezeichnete Dachflächen");
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);

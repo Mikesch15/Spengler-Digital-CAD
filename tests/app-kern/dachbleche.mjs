@@ -50,6 +50,9 @@ await s.selectOption("#d_art", "sattel"); await s.waitForTimeout(400);
 // Aufmass: Front und Seitenwände einzeln (links/rechts unabhängig), Winkel und Trauflänge wie in der Massaufnahme «Lukarne Seitenwand»
 await s.fill("#d_wL", "95"); await s.dispatchEvent("#d_wL", "input"); await s.fill("#d_lR", "1800"); await s.dispatchEvent("#d_lR", "input"); await s.fill("#d_bo", "1700"); await s.dispatchEvent("#d_bo", "input"); await s.waitForTimeout(500);
 ok(/Links: Schräge \d+, Tiefe \d+, Fläche [\d.]+ m² · Rechts: Schräge/.test(await info()), "Lukarne Aufmass: Seitenwände einzeln berechnet – " + (await info()).slice(0, 150));
+await s.selectOption("#d_dachQuelle", "skizzen"); await s.waitForSelector("#d_bu", { timeout: 60000 }); await s.waitForTimeout(800);
+{ const dd = await s.evaluate(() => window.sdcadTest.dok()), lk = dd.features.find((f) => f.typ === "lukarne"); ok(lk.dachQuelle === "skizzen" && lk.dachSkizzen.length === 2 && dd.features.findIndex((f) => f.id === lk.dachSkizzen[0]) < dd.features.findIndex((f) => f.typ === "dach"), "Gaubendach in 2 Skizzen auf Ebenen umgewandelt (vor dem Dach)"); }
+ok(/Öffnung [\d.]+ m²/.test(await info()), "Lukarne mit gezeichnetem Gaubendach rechnet weiter – " + (await info()).slice(0, 90));
 await s.click("#dOk"); await s.waitForTimeout(500);
 await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(500); await s.screenshot({ path: "/tmp/t/lukarne.png" });
 await s.evaluate((i) => window.sdcadTest.waehle(i), id); await s.waitForTimeout(300);

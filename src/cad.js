@@ -12,7 +12,7 @@ import { ablageModul } from "./ablage.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
 import { eindeckung as eindeckungKern, ziegelPrisma } from "../kern/dach/eindeckung.js";
-import { lukarne as lukarneGeo, LUKARNENARTEN } from "../kern/dach/lukarne.js";
+import { lukarne as lukarneKern, LUKARNENARTEN } from "../kern/dach/lukarne.js";
 import { elementRechteck, elementKoerper, elementFlaeche, kaminBleche, veluxListe, ELEMENTARTEN } from "../kern/dach/elemente.js";
 import { dachBleche, dachSegmente, BLECHARTEN } from "../kern/dach/bleche.js";
 import { dachSchnitt, dachSchnittSvg, DETAILARTEN } from "../kern/dach/detail.js";
@@ -2442,6 +2442,34 @@ const gebaeudeUmriss = (g) => (g.form === "skizze" ? skizzenGrundriss(g) : grund
 // Werte der Vorlage, überschrieben mit den Massen, die beim Erstellen des Dachs eingegeben wurden (f.deckungW / f.aufbauW)
 const deckungVon = (f) => { const b = deckungBasis(f); return b ? { ...b, ...(f.deckungW || {}) } : b; };
 const aufbauVon = (f) => { const b = aufbauBasis(f); return b ? { ...b, ...(f.aufbauW || {}) } : b; };
+// Lukarne: Gaubendach optional aus Skizzen (mm-genau, Längen und Diagonalen); sonst aus Neigung und Aufmass berechnet
+function lukarneGeo(fl, x, oben) {
+  let ov = null;
+  if (x.masse === "aufmass" && x.dachQuelle === "skizzen") {
+    const d = finde(x.dach), g = d && finde(d.gebaeude); if (!g) throw new Error("Dach fehlt");
+    ov = [];
+    for (const id of x.dachSkizzen || []) { const sk = finde(id); if (sk?.typ !== "skizze") throw new Error("Eine Skizze des Gaubendachs fehlt"); if (doc.features.indexOf(sk) > doc.features.indexOf(d)) throw new Error(`«${sk.name}» muss vor dem Dach stehen`);
+      for (const l of schleifen(sk)) ov.push(l.map((q) => { const w = welt(sk, q); return [w[0] - (+g.x || 0), -(w[2] - (+g.z || 0)), w[1]]; })); }
+  }
+  return lukarneKern(fl, ov ? { ...x, dachFlaechen: ov } : x, oben);
+}
+// Ebene durch drei Punkte (Traufkante + 3. Punkt in der Fläche) und Skizze mit dem Umriss einer Dachfläche (Koordinaten: u entlang der Traufkante, v die Fläche hinauf)
+function skizzeAusFlaeche(fl, g, name) {
+  const W = (p) => dachWelt(g, p), r2 = (x) => Math.round(x * 100) / 100, kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], pts = fl.punkte, n = pts.length; let best = 0, bs = Infinity;
+  pts.forEach((a, k) => { const b = pts[(k + 1) % n], sc = ((a[2] + b[2]) / 2) * 1e6 - Math.hypot(b[0] - a[0], b[1] - a[1]); if (sc < bs) { bs = sc; best = k; } }); // tiefste, längste Kante = Traufe
+  const P0 = pts[best], P1 = pts[(best + 1) % n], uv = [P1[0] - P0[0], P1[1] - P0[1], P1[2] - P0[2]], ul = Math.hypot(...uv), u = uv.map((x) => x / ul), vv = kreuz(fl.normale, u), P2 = P0.map((x, k) => x + vv[k] * 1000);
+  const a = W(P0), b = W(P1), c = W(P2), E = dreiPunkte(a, b, c);
+  const eb = { id: neueId(), typ: "ebene", art: "punkte", name: `${name} · Ebene`, p1: "V:" + fmt3(a), p2: "V:" + fmt3(b), p3: "V:" + fmt3(c), versteckt: true };
+  const sk = { id: neueId(), typ: "skizze", name, ebene: eb.id, elemente: [{ id: 1, art: "linie", pts: pts.map((p) => zuLokal(E, W(p)).map(r2)), geschlossen: true }] };
+  return [eb, sk];
+}
+function lukarneDachZuSkizzen(f) {
+  const d = finde(f.dach), g = d && finde(d.gebaeude), lk = f._luk; if (!g || !lk) throw new Error("Lukarne noch nicht berechnet");
+  const neu = [], ids = [], namen = lk.idx.dach.length > 1 ? ["Gaubendach links", "Gaubendach rechts"] : ["Gaubendach"];
+  lk.idx.dach.forEach((j, i) => { const [eb, sk] = skizzeAusFlaeche({ punkte: lk.formen[j].punkte, normale: lk.formen[j].normale }, g, `${f.name} · ${namen[i]}`); neu.push(eb, sk); ids.push(sk.id); });
+  const idx = doc.features.indexOf(d); doc.features.splice(idx, 0, ...neu); if (doc.marke != null && doc.marke > idx) doc.marke += neu.length; // vor dem Dach: dessen Öffnungen brauchen die Skizzen
+  f.dachSkizzen = ids; f.dachQuelle = "skizzen";
+}
 // Dach aus frei gezeichneten Dachflächen: jede geschlossene Fläche der gewählten Skizzen (auf geneigten Ebenen) ist eine Dachfläche
 function dachAusSkizzen(f, g) {
   const flaechen = [];
@@ -2457,16 +2485,8 @@ function dachAusSkizzen(f, g) {
 // Automatisch berechnete Dachflächen in Skizzen auf geneigten Ebenen umwandeln (Ebene aus Traufkante + 3. Punkt, Skizze mit dem Umriss der Fläche): danach mm-genau bearbeitbar
 function dachZuSkizzen(f, g) {
   const r = f._dach; if (!r?.flaechen?.length) throw new Error("Noch kein Dach berechnet");
-  const idx = doc.features.indexOf(f), neu = [], ids = [], W = (p) => dachWelt(g, p), r2 = (x) => Math.round(x * 100) / 100, kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-  r.flaechen.forEach((fl, i) => {
-    const pts = fl.punkte, n = pts.length; let best = 0, bs = Infinity;
-    pts.forEach((a, k) => { const b = pts[(k + 1) % n], sc = ((a[2] + b[2]) / 2) * 1e6 - Math.hypot(b[0] - a[0], b[1] - a[1]); if (sc < bs) { bs = sc; best = k; } }); // tiefste, längste Kante = Traufe
-    const P0 = pts[best], P1 = pts[(best + 1) % n], uv = [P1[0] - P0[0], P1[1] - P0[1], P1[2] - P0[2]], ul = Math.hypot(...uv), u = uv.map((x) => x / ul), vv = kreuz(fl.normale, u), P2 = P0.map((x, k) => x + vv[k] * 1000);
-    const a = W(P0), b = W(P1), c = W(P2), E = dreiPunkte(a, b, c);
-    const eb = { id: neueId(), typ: "ebene", art: "punkte", name: `Dachfläche ${i + 1} · Ebene`, p1: "V:" + fmt3(a), p2: "V:" + fmt3(b), p3: "V:" + fmt3(c), versteckt: true };
-    const sk = { id: neueId(), typ: "skizze", name: `Dachfläche ${i + 1}`, ebene: eb.id, elemente: [{ id: 1, art: "linie", pts: pts.map((p) => zuLokal(E, W(p)).map(r2)), geschlossen: true }] };
-    neu.push(eb, sk); ids.push(sk.id);
-  });
+  const idx = doc.features.indexOf(f), neu = [], ids = [];
+  r.flaechen.forEach((fl, i) => { const [eb, sk] = skizzeAusFlaeche(fl, g, `Dachfläche ${i + 1}`); neu.push(eb, sk); ids.push(sk.id); });
   doc.features.splice(idx, 0, ...neu); if (doc.marke != null && doc.marke > idx) doc.marke += neu.length;
   f.flaechenSkizzen = ids; f.quelle = "skizzen";
 }
@@ -2515,14 +2535,15 @@ function lukarneDialog(f) {
     ...(aufmass(f) ? [{ id: "bu", label: "Front: Breite unten", einheit: "mm", wert: f.bu }, { id: "bo", label: "Front: Breite oben", einheit: "mm", wert: f.bo }, { id: "hf", label: "Front: Höhe", einheit: "mm", wert: f.hf },
       { id: "hL", label: "Seite links: vordere Höhe (0 = wie Front)", einheit: "mm", wert: f.hL ?? 0 }, { id: "wL", label: "Seite links: Winkel oben an der vorderen Höhe zur Traufe", einheit: "°", wert: f.wL ?? 90 }, { id: "lL", label: "Seite links: Trauflänge der Lukarne", einheit: "mm", wert: f.lL },
       { id: "hR", label: "Seite rechts: vordere Höhe (0 = wie Front)", einheit: "mm", wert: f.hR ?? 0 }, { id: "wR", label: "Seite rechts: Winkel oben an der vorderen Höhe zur Traufe", einheit: "°", wert: f.wR ?? 90 }, { id: "lR", label: "Seite rechts: Trauflänge der Lukarne", einheit: "mm", wert: f.lR },
-      { id: "neigung", label: "Dachneigung Gaube (nur Satteldachgaube)", einheit: "°", wert: f.neigung }]
+      { id: "dachQuelle", label: "Gaubendach", optionen: [["auto", "Aus Dachneigung berechnet"], ["skizzen", "Aus Skizzen (mm-genau, Längen und Diagonalen)"]], wert: f.dachQuelle || "auto" }, { id: "neigung", label: "Dachneigung Gaube (nur Satteldachgaube, bei «berechnet»)", einheit: "°", wert: f.neigung }]
     : [{ id: "b", label: "Breite aussen", einheit: "mm", wert: f.b }, { id: "hw", label: "Stirnwandhöhe (ab Dach)", einheit: "mm", wert: f.hw }, { id: "neigung", label: "Dachneigung Gaube (Sattel/Schlepp)", einheit: "°", wert: f.neigung }, { id: "ueberstand", label: "Dachüberstand Gaube", einheit: "mm", wert: f.ueberstand }]),
     { id: "wd", label: "Wandstärke", einheit: "mm", wert: f.wd }, { id: "dd", label: "Dachaufbau Gaube (Dicke)", einheit: "mm", wert: f.dd },
     { id: "x", label: "Lage: Mitte quer ab linker Kante", einheit: "mm", wert: f.x }, { id: "y", label: "Lage: Front ab Traufe", einheit: "mm", wert: f.y }];
   const setze = (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; if (w.flaeche !== undefined) f.flaeche = +w.flaeche || 0; if (w.art) f.art = w.art; if (w.masse) f.masse = w.masse;
+    if (w.dachQuelle === "skizzen" && f.dachQuelle !== "skizzen") { if (f.dachSkizzen?.length) f.dachQuelle = "skizzen"; else lukarneDachZuSkizzen(f); } else if (w.dachQuelle === "auto" && f.dachQuelle === "skizzen") f.dachQuelle = "auto";
     for (const k of ["bu", "bo", "hf", "hL", "wL", "lL", "hR", "wR", "lR", "b", "hw", "neigung", "ueberstand", "wd", "dd", "x", "y"]) if (Number.isFinite(w[k])) f[k] = w[k]; };
   featureDialog(f, istNeu, felder, setze, "Lukarne", "Aufmass wie am Objekt: Front (Breite unten, Breite oben, Höhe) und je Seitenwand links/rechts die vordere Höhe, der Winkel oben an der vorderen Höhe zur Traufe und die Trauflänge – genau wie die Massaufnahme «Lukarne Seitenwand». Die Unterkante der Seitenwand liegt auf der Dachfläche. Im Hauptdach werden Sparren und Latten unterbrochen, Wechsel eingefügt und die Fläche abgezogen; die Anschlussbleche erscheinen bei den Dachblechen. Das Gaubendach ist eine einfache Platte.",
-    { neuBei: ["masse"], info: () => { if (f._fehler) return "⚠ " + f._fehler; const l = f._luk; if (!l) return ""; const am = l.aufmass, seite = (n, x) => `${n}: Schräge ${x.schraege.toFixed(0)}, Tiefe ${x.tiefe.toFixed(0)}, Fläche ${x.flaeche.toFixed(2)} m²`;
+    { neuBei: ["masse", "dachQuelle"], info: () => { if (f._fehler) return "⚠ " + f._fehler; const l = f._luk; if (!l) return ""; const am = l.aufmass, seite = (n, x) => `${n}: Schräge ${x.schraege.toFixed(0)}, Tiefe ${x.tiefe.toFixed(0)}, Fläche ${x.flaeche.toFixed(2)} m²`;
       return (l.hinweise.length ? "⚠ " + l.hinweise.join(" · ") + " " : "") + (am ? `${seite("Links", am.links)} · ${seite("Rechts", am.rechts)} · ` : "") + `Öffnung ${l.flaeche.toFixed(2)} m² · höchster Punkt ${(l.firsthoehe / 1000).toFixed(2)} m`; } });
 }
 function dachelementDialog(f) {

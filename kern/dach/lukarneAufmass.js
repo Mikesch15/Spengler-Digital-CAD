@@ -55,12 +55,18 @@ export function lukarneAufmass(fl, el, oben = 0) {
     idx.wange[sg] = formen.length; formen.push({ art: "wange", punkte: hoch(tri), normale: norm(V(nn)), dicke: -wd });
   }
   const dachListe = art === "sattel" ? [{ e: ebenen[-1], extra: [[ebenen[1].a - ebenen[-1].a, ebenen[1].b - ebenen[-1].b, ebenen[1].c - ebenen[-1].c]] }, { e: ebenen[1], extra: [[ebenen[-1].a - ebenen[1].a, ebenen[-1].b - ebenen[1].b, ebenen[-1].c - ebenen[1].c]] }] : [{ e: ebenen[0], extra: [] }];
-  const valleys = [];
-  for (const { e, extra } of dachListe) {
-    const poly = dachPoly(e, extra); if (!poly) throw new Error("Die Dachfläche der Lukarne trifft die Hauptdachfläche nicht – Höhe/Winkel prüfen");
-    const nl = norm([-e.b, -e.c, 1]); idx.dach.push(formen.length); formen.push({ art: "dach", punkte: hoch(poly), normale: norm(V(nl)), dicke: -dd });
-    poly.forEach((a, i) => { const b = poly[(i + 1) % poly.length]; if (Math.abs(a[2] - tanM * a[1]) < 0.5 && Math.abs(b[2] - tanM * b[1]) < 0.5 && len(sub(a, b)) > 50) valleys.push({ a: P(...a), b: P(...b), form: formen.length - 1 }); });
-  }
+  const valleys = [], ov = Array.isArray(el.dachFlaechen) ? el.dachFlaechen : null; // ov: gezeichnete Dachflächen der Lukarne (Grundriss-Koordinaten u, v, h), z. B. aus Skizzen mit Längen und Diagonalen
+  if (ov && ov.length !== dachListe.length) throw new Error(`Gaubendach aus Skizzen: ${dachListe.length} Fläche(n) nötig, ${ov.length} gewählt`);
+  const lokal = (p) => { const d = sub(p, C0); return [dot(d, q), dot(d, w), d[2]]; };
+  dachListe.forEach(({ e, extra }, i) => {
+    let poly, nl;
+    if (ov) {
+      poly = ov[i].map(lokal); let n = [0, 0, 0]; poly.forEach((a, k) => { const c = cross(a, poly[(k + 1) % poly.length]); n = add(n, c); }); n = norm(n); if (n[2] < 0) { n = mul(n, -1); poly.reverse(); } nl = n;
+      const c = poly.reduce((m, p) => add(m, mul(p, 1 / poly.length)), [0, 0, 0]), dev = Math.max(...poly.map((p) => Math.abs(dot(sub(p, c), n)))); if (dev > 2) hinweise.push(`Gaubendach ${i + 1}: Punkte liegen nicht in einer Ebene (Abweichung ${dev.toFixed(1)} mm)`);
+    } else { poly = dachPoly(e, extra); if (!poly) throw new Error("Die Dachfläche der Lukarne trifft die Hauptdachfläche nicht – Höhe/Winkel prüfen"); nl = norm([-e.b, -e.c, 1]); }
+    idx.dach.push(formen.length); formen.push({ art: "dach", punkte: hoch(poly), normale: norm(V(nl)), dicke: -dd });
+    const tol = ov ? 3 : 0.5; poly.forEach((a, k) => { const b = poly[(k + 1) % poly.length]; if (Math.abs(a[2] - tanM * a[1]) < tol && Math.abs(b[2] - tanM * b[1]) < tol && len(sub(a, b)) > 50) valleys.push({ a: P(...a), b: P(...b), form: formen.length - 1 }); });
+  });
   // Blechflächen: Streifen entlang der Anschlusslinien
   const nM = S.n, Cc = P(0, 300, 0), WB = 150, add3 = (a, b, kk = 1) => a.map((x, i) => x + b[i] * kk), un = norm;
   const mit = (poly) => poly.reduce((m, p) => m.map((x, i) => x + p[i] / poly.length), [0, 0, 0]);
