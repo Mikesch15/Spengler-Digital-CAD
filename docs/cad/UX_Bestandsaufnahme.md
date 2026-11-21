@@ -30,6 +30,7 @@ Grundlage: tatsächlicher Quellcode (`src/cad.html` ≈ 101 KB, `src/cad.js` ≈
 |---|---|---|
 | P1 | Dialoge überdeckten die 3D-Ansicht (rechts oben, 330 px) – gerade bei Dach/Lukarne wird das Modell verdeckt. | **Erledigt:** Dialog ist am Desktop in der rechten Spalte angedockt, Teil/Auftrag weicht solange. |
 | P1 | Funktionsumfang (92 Werkzeuge, 11 Menüs) nur über Menüs auffindbar; neue Nutzer kennen die Gruppen nicht. | **Erledigt:** Befehlssuche (Strg+K, «/», Knopf «Suchen») startet jedes Werkzeug über denselben Knopf. |
+| P1 | Dunkelmodus inkonsistent: Werkzeugleiste blieb weiss (heller Text auf Weiss), Ansichtsknöpfe unlesbar, 3D-Hintergrund hell unter dunklen Panels. | **Erledigt:** Tokens `--leiste-bg`, `--glas`, `--meldung-bg`, `--ansicht-bg` mit Dunkelvarianten (Systemeinstellung und `data-theme`). |
 | P1 | Lange Dialoge (bis 40 Felder) auf einer Seite. | Erledigt für Dach, Gebäude, Lukarne, Dachfenster/Kamin, Dachbleche, Vorlage, Blechprofil, Rundblech (Schritt-Assistent); übrige Dialoge haben < 10 Felder. |
 | P1 | Werkstatt-Panel: Tabellen (Holzliste, Mengen) werden bei 300 px abgeschnitten («MENG», «16 St»). | **Erledigt:** Spalte per Ziehen verbreiterbar (260–720 px, gespeichert), Doppelklick = Standard. |
 | P2 | Handy: Werkzeugleiste zeigt nur wenige Knöpfe, Rest nur durch Wischen erreichbar. | **Erledigt:** Rand blendet aus, solange weitere Werkzeuge folgen; Befehlssuche als vollständiger Zugang. |

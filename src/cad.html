@@ -23,12 +23,18 @@
   --fs-s: 12px; --fs-m: 13px; --fs-l: 14px; --fs-xl: 16px;
   --sh-panel: 0 1px 2px rgba(20, 35, 50, .05); --sh-overlay: 0 6px 24px rgb(0 0 0 / .15); --sh-modal: 0 18px 50px rgb(0 0 0 / .35);
   --focus: 2px solid var(--accent); --warn: #b26a00;
+  --leiste-bg: linear-gradient(#ffffff, #f4f6f9); --glas: rgba(255, 255, 255, .85); --meldung-bg: #eef2f6;
+  --ansicht-bg: radial-gradient(120% 100% at 50% 0%, #f5f8fb 0%, #dde4eb 60%, #cdd6df 100%);
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #13181b; --panel: #1b2125; --panel-2: #222a2f; --line: #323b41; --fg: #e3e8eb; --muted: #93a0a8;
-  --accent: #6fa8dc; --accent-soft: #1d3248; --bend: #ef6a5e; --view: #0f1418; --sketch: #6aa5ff; color-scheme: dark; } }
+  --accent: #6fa8dc; --accent-soft: #1d3248; --bend: #ef6a5e; --view: #0f1418; --sketch: #6aa5ff; color-scheme: dark;
+  --leiste-bg: linear-gradient(var(--panel), var(--panel-2)); --glas: color-mix(in srgb, var(--panel) 85%, transparent); --meldung-bg: var(--panel-2);
+  --ansicht-bg: radial-gradient(120% 100% at 50% 0%, #2b363d 0%, #1d262c 60%, #141b20 100%); } }
 :root[data-theme="dark"] { --bg: #13181b; --panel: #1b2125; --panel-2: #222a2f; --line: #323b41; --fg: #e3e8eb; --muted: #93a0a8;
-  --accent: #6fa8dc; --accent-soft: #1d3248; --bend: #ef6a5e; --view: #0f1418; --sketch: #6aa5ff; color-scheme: dark; }
+  --accent: #6fa8dc; --accent-soft: #1d3248; --bend: #ef6a5e; --view: #0f1418; --sketch: #6aa5ff; color-scheme: dark;
+  --leiste-bg: linear-gradient(var(--panel), var(--panel-2)); --glas: color-mix(in srgb, var(--panel) 85%, transparent); --meldung-bg: var(--panel-2);
+  --ansicht-bg: radial-gradient(120% 100% at 50% 0%, #2b363d 0%, #1d262c 60%, #141b20 100%); }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
@@ -37,10 +43,10 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 8px; }
 .mitte { position: relative; display: grid; grid-template-columns: 220px minmax(0, 1fr) 300px; gap: 8px; min-height: 0; }
 @media (max-width: 1000px) { .mitte { grid-template-columns: minmax(0, 1fr); grid-template-rows: 60vh auto auto; } .browser { order: 2; } .werkstatt { order: 3; } .app { height: auto; } }
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; min-width: 0; overflow: auto; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); min-width: 0; overflow: auto; }
 .ptitel { margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--line); font: 600 12px var(--font-label); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
 /* Werkzeugleiste */
-.leiste { display: flex; gap: 6px; align-items: stretch; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px; }
+.leiste { display: flex; gap: 6px; align-items: stretch; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); padding: 6px; }
 .marke { display: flex; align-items: center; gap: 6px; padding: 0 8px; white-space: nowrap; font: 600 18px var(--font-label); }
 .marke span { color: var(--accent); } .marke img { display: block; width: 32px; height: 32px; }
 .gruppe { display: flex; flex-direction: column; border-left: 1px solid var(--line); padding: 0 6px; }
@@ -53,7 +59,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .wz[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .wz:disabled { opacity: .35; cursor: default; }
 /* Werkzeugleiste: Klappmenüs, je Zustand nur die passenden Werkzeuge */
-.klappmenue { position: fixed; z-index: 40; display: grid; gap: 2px; min-width: 250px; max-height: 75vh; overflow: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 8px 28px rgb(0 0 0 / .2); }
+.klappmenue { position: fixed; z-index: 40; display: grid; gap: 2px; min-width: 250px; max-height: 75vh; overflow: auto; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); box-shadow: 0 8px 28px rgb(0 0 0 / .2); }
 .klappmenue .wz { flex-direction: row; justify-content: flex-start; align-items: center; gap: 10px; min-width: 0; width: 100%; padding: 6px 10px; text-align: left; }
 .klappmenue .wz svg { width: 18px; height: 18px; flex: none; }
 .klappmenue .wz small { display: block; color: var(--muted); font-size: 11px; }
@@ -86,10 +92,10 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .typ.ebene { border: 1.5px solid #c77d16; background: color-mix(in srgb, #e8a33d 35%, transparent); transform: skewX(-20deg); }
 /* Wahlfelder im Dialog: das aktive Feld nimmt den Klick in der Ansicht auf */
 .feld[data-wahl] label { cursor: pointer; }
-.feld.waehlt { outline: 2px solid #e8a33d; outline-offset: 2px; border-radius: 4px; }
+.feld.waehlt { outline: 2px solid #e8a33d; outline-offset: 2px; border-radius: var(--r-s); }
 .feld.waehlt label { color: #c77d16; font-weight: 600; }
 /* Ansicht */
-.ansicht { position: relative; background: var(--view); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; min-height: 300px; }
+.ansicht { position: relative; background: var(--view); border: 1px solid var(--line); border-radius: var(--r-s); overflow: hidden; min-height: 300px; }
 #leinwand { width: 100%; height: 100%; display: block; touch-action: none; }
 .ansichtsknoepfe { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; }
 .ansichtsknoepfe button, .klein { border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 3px; padding: 4px 8px; font: 600 12px var(--font-label); letter-spacing: .05em; text-transform: uppercase; cursor: pointer; }
@@ -104,7 +110,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 #labels div.glyph { font: 700 10px var(--font-num); color: #fff; background: #2f8a4c; border-radius: 3px; padding: 0 3px; min-width: 10px; text-align: center; line-height: 14px; }
 #labels div.glyph.klickbar { pointer-events: auto; cursor: pointer; }
 #labels div.gewaehlt { background: #e0782b; color: #fff; }
-#labels div.kante { pointer-events: auto; cursor: pointer; font: 700 11px var(--font-num); color: #fff; background: #1f5fbf; border-radius: 4px; padding: 3px 7px; box-shadow: 0 1px 4px rgb(0 0 0 / .25); }
+#labels div.kante { pointer-events: auto; cursor: pointer; font: 700 11px var(--font-num); color: #fff; background: #1f5fbf; border-radius: var(--r-s); padding: 3px 7px; box-shadow: 0 1px 4px rgb(0 0 0 / .25); }
 #labels div.kante.belegt { background: #2e9b4f; } #labels div.kante.an { background: #e0782b; }
 @media (pointer: coarse) { #labels div.kante { padding: 6px 10px; font-size: 13px; } }
 #kantenMenue { position: fixed; z-index: 30; width: min(300px, calc(100vw - 16px)); max-height: min(70vh, 520px); overflow: auto; padding: 0 0 6px; }
@@ -115,7 +121,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 #kantenMenue button small { display: block; font: 11px var(--font-num); color: var(--muted); }
 #kantenMenue button.an { background: var(--accent-soft); font-weight: 600; }
 #kantenMenue button.an::before { content: "✓ "; }
-.fg { align-self: center; font: 600 11px var(--font-num); padding: 3px 8px; border-radius: 4px; background: color-mix(in srgb, var(--sketch) 15%, transparent); color: var(--sketch); white-space: nowrap; }
+.fg { align-self: center; font: 600 11px var(--font-num); padding: 3px 8px; border-radius: var(--r-s); background: color-mix(in srgb, var(--sketch) 15%, transparent); color: var(--sketch); white-space: nowrap; }
 .fg.voll { background: color-mix(in srgb, #2f8a4c 18%, transparent); color: #2f8a4c; }
 .fg:empty { display: none; }
 .massbox { position: absolute; transform: translate(-50%, -50%); display: flex; gap: 4px; z-index: 5; }
@@ -157,13 +163,13 @@ table.zeilen.parameter input { width: 100%; min-width: 70px; }
 tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in srgb, var(--sketch) 8%, transparent); }
 .knopf.klein { padding: 2px 8px; font-size: 11px; }
 .massfeld { position: static; transform: none; }
-.massbox select { font: 12px var(--font-num); border: 1.5px solid var(--sketch); border-radius: 4px; background: var(--panel); color: var(--fg); }
-.massfeld { position: absolute; transform: translate(-50%, -50%); width: 80px; font: 12px var(--font-num); border: 1.5px solid var(--sketch); border-radius: 4px; padding: 2px 4px; background: var(--panel); color: var(--fg); z-index: 5; }
+.massbox select { font: 12px var(--font-num); border: 1.5px solid var(--sketch); border-radius: var(--r-s); background: var(--panel); color: var(--fg); }
+.massfeld { position: absolute; transform: translate(-50%, -50%); width: 80px; font: 12px var(--font-num); border: 1.5px solid var(--sketch); border-radius: var(--r-s); padding: 2px 4px; background: var(--panel); color: var(--fg); z-index: 5; }
 .eingabe { position: absolute; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--sketch); border-radius: 3px; padding: 4px; }
 .eingabe label { display: flex; align-items: center; gap: 3px; font: 600 11px var(--font-label); color: var(--muted); text-transform: uppercase; }
-.eingabe input { width: 64px; font: 12px var(--font-num); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; background: var(--panel-2); color: var(--fg); }
+.eingabe input { width: 64px; font: 12px var(--font-num); border: 1px solid var(--line); border-radius: var(--r-s); padding: 2px 4px; background: var(--panel-2); color: var(--fg); }
 /* Befehlsdialog */
-.dialog { position: absolute; z-index: 8; top: 44px; right: 8px; width: 330px; max-width: calc(100% - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 6px 24px rgb(0 0 0 / .15); }
+.dialog { position: absolute; z-index: 8; top: 44px; right: 8px; width: 330px; max-width: calc(100% - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); box-shadow: var(--sh-overlay); }
 .dialog h3 { margin: 0; padding: 8px 12px; font: 600 14px var(--font-label); letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
 .dialog h3 { padding-right: 40px; }
 .dialog .dklein { position: absolute; top: 3px; right: 6px; border: 0; background: none; color: var(--muted); font-size: 18px; cursor: pointer; padding: 2px 8px; }
@@ -203,7 +209,7 @@ table.zeilen td:first-child { color: var(--muted); font-family: var(--font-num);
 table.zeilen .weg { border: 0; background: none; color: var(--bend); font-size: 16px; cursor: pointer; padding: 0 4px; }
 #dZusatz { display: grid; gap: 6px; justify-items: start; }
 /* Zeitleiste */
-.zeitleiste { display: flex; align-items: center; gap: 6px; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; }
+.zeitleiste { display: flex; align-items: center; gap: 6px; overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); padding: 6px 10px; }
 .zeitleiste .ztitel { font: 600 11px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-right: 6px; white-space: nowrap; }
 .zeitleiste button { display: flex; align-items: center; gap: 5px; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); border-radius: 3px; padding: 4px 8px; font: 12px var(--font-body); cursor: pointer; white-space: nowrap; }
 #zeit { display: flex; gap: 6px; align-items: center; }
@@ -230,7 +236,7 @@ table.liste.summen { margin-top: 10px; }
 p.hinweis.unter { padding: 6px 12px 0; margin: 0; }
 .zahl span, .unter { color: var(--muted); font-size: 13px; }
 .unter { padding: 0 12px 8px; }
-.notiz { margin: 0 12px 10px; padding: 6px 8px; border-left: 3px solid var(--sketch); background: var(--panel-2); border-radius: 4px; font-size: 13px; white-space: pre-wrap; }
+.notiz { margin: 0 12px 10px; padding: 6px 8px; border-left: 3px solid var(--sketch); background: var(--panel-2); border-radius: var(--r-s); font-size: 13px; white-space: pre-wrap; }
 .notiz b { font: 600 10px var(--font-label); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
 .quelle { margin: 0 12px 10px; padding: 6px 8px; border-radius: 3px; background: var(--accent-soft); font-size: 13px; }
 table.liste { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -252,7 +258,7 @@ table.summen td.num { white-space: nowrap; }
 .zeichnung svg { width: 100%; height: auto; display: block; }
 /* Einstellungen */
 .modal { position: fixed; inset: 0; background: rgb(0 0 0 / .35); display: grid; place-items: center; padding: 12px; z-index: 20; }
-.modalbox { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; width: min(760px, 100%); max-height: calc(100vh - 24px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; box-shadow: 0 10px 40px rgb(0 0 0 / .25); }
+.modalbox { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); width: min(760px, 100%); max-height: calc(100vh - 24px); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; box-shadow: 0 10px 40px rgb(0 0 0 / .25); }
 .modalbox h3 { margin: 0; padding: 10px 14px; font: 600 15px var(--font-label); letter-spacing: .06em; text-transform: uppercase; border-bottom: 1px solid var(--line); }
 .modalbox .inhalt { overflow: auto; padding: 4px 14px 12px; }
 .modalbox h4 { margin: 14px 0 6px; font: 600 12px var(--font-label); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
@@ -282,7 +288,7 @@ table.kuerzel td:first-child { font-family: var(--font-num); font-size: 12px; wh
 .efeld.janein label { color: var(--fg); font-size: 13px; }
 .efeld.janein small { grid-column: 2; }
 .probe small { font-size: 11px; }
-.menue { position: fixed; z-index: 25; width: 320px; max-width: calc(100vw - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; box-shadow: 0 8px 28px rgb(0 0 0 / .2); padding: 4px; display: grid; }
+.menue { position: fixed; z-index: 25; width: 320px; max-width: calc(100vw - 16px); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); box-shadow: 0 8px 28px rgb(0 0 0 / .2); padding: 4px; display: grid; }
 .menue button { display: grid; text-align: left; gap: 1px; border: 0; background: none; color: var(--fg); padding: 6px 8px; border-radius: 3px; cursor: pointer; font: 13px var(--font-body); }
 .menue button:hover { background: var(--panel-2); }
 .menue small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -311,9 +317,9 @@ ul.eigene .weg { margin-left: auto; border: 0; background: none; color: var(--be
   .blatt header dt { font: 600 10px var(--font-label); text-transform: uppercase; color: #555; }
   .blatt header dd { margin: 0; font-family: var(--font-num); }
   .eckdaten { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-  .eckdaten div { border: 1px solid #999; border-radius: 4px; padding: 4px 6px; }
+  .eckdaten div { border: 1px solid #999; border-radius: var(--r-s); padding: 4px 6px; }
   .eckdaten b { font: 600 14px var(--font-num); }
-  .grosszeichnung { border: 1px solid #999; border-radius: 4px; display: flex; justify-content: center; }
+  .grosszeichnung { border: 1px solid #999; border-radius: var(--r-s); display: flex; justify-content: center; }
   .grosszeichnung svg { width: 100%; height: auto; max-height: 95mm; }
   .abwicklung svg { width: 100%; height: auto; display: block; }
   .blatt table.liste th, .blatt table.liste td { border-bottom: 1px solid #999; color: #000; }
@@ -361,29 +367,29 @@ body { font-size: 13px; } @media (max-width: 1000px) { body { font-size: 14px; }
 table.zeilen th { font: 600 12px var(--font-body); letter-spacing: 0; text-transform: none; color: var(--muted); }
 fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-weight: 600; }
 .leer { color: var(--muted); padding: 16px; text-align: center; border: 1px dashed var(--line); margin: 8px 0; }
-.meldung { padding: 6px 8px; margin: 6px 0; border-radius: 3px; background: #eef2f6; white-space: pre-wrap; } .fehler { color: var(--fehler); }
+.meldung { padding: 6px 8px; margin: 6px 0; border-radius: 3px; background: var(--meldung-bg); white-space: pre-wrap; } .fehler { color: var(--fehler); }
 
 /* ---- Professioneller Durchgang: Symbole, Werkzeugleiste, Ansicht ---- */
 .wz svg { stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; width: 26px; height: 26px; }
 .wz svg .f { fill: color-mix(in srgb, var(--accent) 16%, transparent); }
 .wz:hover:not(:disabled) svg .f, .wz[aria-pressed="true"] svg .f { fill: color-mix(in srgb, var(--accent) 30%, transparent); }
 .klappmenue .wz svg { width: 22px; height: 22px; }
-.leiste { padding: 5px 12px; gap: 2px; align-items: center; box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 1px 2px rgba(20,35,50,.06); background: linear-gradient(#ffffff, #f4f6f9); }
+.leiste { padding: 5px 12px; gap: 2px; align-items: center; box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 1px 2px rgba(20,35,50,.06); background: var(--leiste-bg); }
 .leiste > .gruppe, .leiste .knoepfe { gap: 1px; align-items: center; }
-.wz { min-width: 58px; padding: 5px 7px 4px; gap: 2px; font: 500 11.5px var(--font-body); color: var(--fg); border-radius: 4px; letter-spacing: 0; }
+.wz { min-width: 58px; padding: 5px 7px 4px; gap: 2px; font: 500 11.5px var(--font-body); color: var(--fg); border-radius: var(--r-s); letter-spacing: 0; }
 .kz { display: inline-flex; align-items: center; gap: 2px; } .kz .kpfeil { font-size: 8px; opacity: .6; margin: 0; }
 .klappmenue .wz { flex-direction: row; justify-content: flex-start; gap: 10px; font-size: 13px; padding: 6px 12px; min-width: 0; width: 100%; }
 .leiste .trenner { width: 1px; align-self: stretch; margin: 6px 8px; background: var(--line); flex: none; }
 .marke { gap: 9px; padding-right: 14px; margin-right: 6px; border-right: 1px solid var(--line); font: 700 15px var(--font-label); letter-spacing: -.01em; }
 .marke img { width: 30px; height: 30px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
 .panel { box-shadow: 0 1px 2px rgba(20,35,50,.05); }
-.ansicht { background: radial-gradient(120% 100% at 50% 0%, #f5f8fb 0%, #dde4eb 60%, #cdd6df 100%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.6); }
+.ansicht { background: var(--ansicht-bg); box-shadow: inset 0 0 0 1px rgba(255,255,255,.6); }
 #fangZeichen { position: absolute; z-index: 4; pointer-events: none; width: 0; height: 0; }
 #fangZeichen svg { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; overflow: visible; fill: none; stroke: #e0782b; stroke-width: 2; }
 #fangZeichen span { position: absolute; left: 14px; top: 10px; background: rgba(28, 38, 48, .9); color: #fff; font: 500 12px var(--font-body); padding: 1px 7px; border-radius: 3px; white-space: nowrap; }
 #wuerfelHit { position: absolute; top: 10px; right: 10px; width: 96px; height: 96px; z-index: 3; cursor: pointer; }
 .ansichtsknoepfe { top: 112px; right: 10px; flex-direction: column; width: 96px; gap: 4px; z-index: 3; }
-.ansichtsknoepfe button { text-align: center; text-transform: none; letter-spacing: 0; font: 500 12px var(--font-body); background: rgba(255,255,255,.85); }
+.ansichtsknoepfe button { text-align: center; text-transform: none; letter-spacing: 0; font: 500 12px var(--font-body); background: var(--glas); color: var(--fg); }
 .ansichtsknoepfe button[data-ansicht="oben"], .ansichtsknoepfe button[data-ansicht="vorne"], .ansichtsknoepfe button[data-ansicht="rechts"] { display: none; }
 .baum li button, .baum li { font-size: 13px; }
 
@@ -399,16 +405,16 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .browser .ptitel::after { content: "▾"; font-size: 10px; opacity: .6; transition: transform .15s; } .browser.zu .ptitel::after { transform: rotate(-90deg); }
 .browser.zu .baum { display: none; }
 .mitte.werkzu { grid-template-columns: minmax(0, 1fr) 0 !important; column-gap: 0; } .mitte.werkzu .werkstatt { display: none; }
-.kantenbar { position: absolute; left: 50%; transform: translateX(-50%); top: 10px; z-index: 7; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; max-width: calc(100% - 20px); background: color-mix(in srgb, var(--panel) 92%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid var(--accent); border-radius: 6px; box-shadow: 0 4px 18px rgba(20, 35, 50, .18); padding: 6px 10px; font-size: 13px; }
+.kantenbar { position: absolute; left: 50%; transform: translateX(-50%); top: 10px; z-index: 7; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; max-width: calc(100% - 20px); background: color-mix(in srgb, var(--panel) 92%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid var(--accent); border-radius: var(--r-m); box-shadow: 0 4px 18px rgba(20, 35, 50, .18); padding: 6px 10px; font-size: 13px; }
 .kantenbar input { width: 64px; padding: 2px 4px; } .kantenbar label { display: inline-flex; gap: 4px; align-items: center; }
 .plbaum { border-bottom: 1px solid var(--line); margin: 0 0 8px; padding-bottom: 6px; } .plbt { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-.plzeile { display: flex; gap: 6px; align-items: center; width: 100%; text-align: left; background: none; border: 0; padding: 3px 6px; font-size: 13px; cursor: pointer; border-radius: 4px; } .plzeile:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); } .plzeile.verborgen { opacity: .45; text-decoration: line-through; } .plkomp { font-weight: 600; }
-.abbaum { list-style: none; margin: 6px 0 0; padding: 0; } .abbaum li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 6px; } .abbaum li.abdatei { font-size: 13px; border-radius: 4px; } .abbaum li.abdatei:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.plzeile { display: flex; gap: 6px; align-items: center; width: 100%; text-align: left; background: none; border: 0; padding: 3px 6px; font-size: 13px; cursor: pointer; border-radius: var(--r-s); } .plzeile:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); } .plzeile.verborgen { opacity: .45; text-decoration: line-through; } .plkomp { font-weight: 600; }
+.abbaum { list-style: none; margin: 6px 0 0; padding: 0; } .abbaum li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 6px; } .abbaum li.abdatei { font-size: 13px; border-radius: var(--r-s); } .abbaum li.abdatei:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .abknopf { background: none; border: 0; cursor: pointer; font-size: 14px; padding: 3px 0; text-align: left; } .auto { font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
-.layerbox { position: absolute; right: 10px; bottom: 44px; z-index: 6; width: 400px; max-width: calc(100% - 20px); background: color-mix(in srgb, var(--panel) 90%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 4px 18px rgba(20, 35, 50, .14); padding: 6px 8px; font-size: 12px; }
+.layerbox { position: absolute; right: 10px; bottom: 44px; z-index: 6; width: 400px; max-width: calc(100% - 20px); background: color-mix(in srgb, var(--panel) 90%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: 0 4px 18px rgba(20, 35, 50, .14); padding: 6px 8px; font-size: 12px; }
 .layerbox .ltitel { font-weight: 600; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
 .layerbox .lrow { display: grid; grid-template-columns: auto auto 1fr 92px 104px 12px auto; gap: 4px; align-items: center; padding: 2px 0; }
-.layerbox .lrow.aktiv { background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 4px; }
+.layerbox .lrow.aktiv { background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: var(--r-s); }
 .layerbox input[type=text], .layerbox select { min-width: 0; padding: 2px 4px; font-size: 12px; }
 .layerbox .lfarbe { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line); }
 .layerbox .ltitel { cursor: pointer; user-select: none; } .layerbox.zu #layerListe, .layerbox.zu .lknoepfe { display: none; }
@@ -419,7 +425,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 @media (max-width: 1000px) { .mitte.werkzu { grid-template-rows: 60vh auto; } }
 @media (min-width: 1001px) {
   .mitte { grid-template-columns: minmax(0, 1fr) var(--werk-w, 300px); }
-  .browser { position: absolute; left: 10px; top: 10px; z-index: 5; width: 236px; max-height: calc(100% - 20px); border-radius: 6px;
+  .browser { position: absolute; left: 10px; top: 10px; z-index: 5; width: 236px; max-height: calc(100% - 20px); border-radius: var(--r-m);
     background: color-mix(in srgb, var(--panel) 58%, transparent); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1);
     border: 1px solid color-mix(in srgb, var(--line) 75%, transparent); box-shadow: 0 4px 18px rgba(20, 35, 50, .14); }
   .browser .ptitel { background: transparent; border-bottom-color: color-mix(in srgb, var(--line) 60%, transparent); }
@@ -627,7 +633,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <div class="layerbox" id="layerBox" hidden><div class="ltitel" id="lTitel" title="Layer-Leiste ein-/ausklappen">Layer ▾</div><div id="layerListe"></div>
         <div class="lknoepfe"><button class="knopf klein" id="lNeu">＋ Layer</button><button class="knopf klein" id="lZuw" title="Gewähltes Element auf den aktiven Layer legen">Element → Layer</button><button class="knopf klein haupt" id="lDxf" title="Zeichnung als DXF mit Layern, Farben und Linienarten speichern">DXF</button></div></div>
       <div id="messAnzeige" hidden></div>
-      <div id="status"></div>
+      <div id="status" role="status" aria-live="polite"></div>
     </section>
     <button class="knopf klein" id="werkAuf" title="Teil/Auftrag wieder aufklappen" aria-label="Teil und Auftrag aufklappen">« Teil / Auftrag</button>
     <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><button class="dklein" id="dKlein" title="Dialog einklappen – Ansicht frei zum Antippen" aria-label="Dialog einklappen">▾</button><div class="schritte" id="dSchritte" hidden></div><div class="inhalt" id="dInhalt"></div>
