@@ -43,3 +43,14 @@ CAD-Kern, OCCT/Worker/WASM, Mesh-Fallbacks, Löser, Feature-/Zeitleistenstruktur
 
 ## 8. Screenshots und Commits
 Vorher/Nachher: `docs/cad/ux/vorher/`, `docs/cad/ux/nachher/`. Commits: `git log main..ux/professionalisierung`.
+
+
+## Nachtrag: Kontextleiste (Branch `ux/kontextaktionen`)
+Das Programm erkennt jetzt, was gewählt ist, und bietet passende nächste Werkzeuge an (Details und Tabelle: `UX_Konzept.md`).
+- **Skizzen** sind im 3D anklickbar (Fläche oder Linie) und nach «Skizze beenden» gewählt: Extrudieren, Flächenblech, Drehen, Dach darauf; offener Linienzug: Blechprofil, Sweep.
+- **Bleche** (Flächenblech, Blechprofil, Vorlage, Freies Profil): Flansch, Umschlag, Kantenbaustein, Abwickeln; das Kanten-Werkzeug übernimmt das gewählte Blech.
+- **Körper/Kante/Fläche:** Kante anklicken → Abrunden/Fasen mit dieser Kante; Fläche anklicken → Skizze auf Fläche, Blech auf Fläche.
+- **Dach:** Dachbleche, Fenster/Kamin, Lukarne, Ziegel eindecken (gewähltes Dach vorbelegt). **Ebene:** Skizze auf Ebene.
+- Ableitungen: Skizze auf Körperfläche → Extrusion schlägt «Vereinigen» vor; Dialoge übernehmen gewählte Skizze/Dach; Doppelklick = Bearbeiten; «Mehr …» öffnet die Befehlssuche.
+- Tests: neu `kontext.mjs` (7 Szenarien), alle 45 App-Test-Dateien und `npm test` grün.
+- Bekannte Grenze: Beim Anklicken einer *Kante eines Flächenblechs* wird das Blech (nicht die einzelne Kante) vorgewählt; die Kante wählt man danach im Kanten-Werkzeug.

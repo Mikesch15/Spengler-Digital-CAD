@@ -11,6 +11,7 @@ import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
 import "./befehlssuche.js";
 import "./arbeitsbereich.js";
+import { initKontext, kontextAktionen } from "./kontext.js";
 import { zeigeMeldung } from "./meldungen.js";
 import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
@@ -131,6 +132,10 @@ function skizzenAusdruecke(f, P) {
 const teilFinden = (id) => { const [fid, i] = String(id ?? "").split(":"); return i == null ? null : finde(fid)?._teile?.[+i] || null; };
 const waehlbar = (id) => finde(id) || teilFinden(id);
 const hauptVon = (id) => finde(String(id ?? "").split(":")[0]);
+// Auswahl als Vorgabe für Dialoge: gewählte Skizze bzw. gewähltes Dach (sonst die jeweils letzte)
+const vorSk = (liste) => liste.find((x) => x.id === hauptVon(auswahl)?.id) ?? liste.at(-1);
+const vorDach = (liste) => { const f = hauptVon(auswahl), id = f?.typ === "dach" ? f.id : f?.dach; return liste.find((x) => x.id === id) ?? liste.at(-1); };
+let zeigerAuswahl = null; // gewählte Kante/Fläche eines Körpers: { art: "kante"|"flaeche", fid, a, b | ref }
 // Werkstatt-Einstellungen (pro Gerät): kalibrierte und eigene Materialien, Lagerformate
 const EINST = "sdcad-einstellungen";
 const standardEinst = () => JSON.parse(JSON.stringify({
@@ -1522,7 +1527,8 @@ $("featureMenue").onclick = (e) => {
 };
 $("rueckgaengig").addEventListener("click", () => { const f = doc.features[(doc.marke ?? doc.features.length) - 1]; if (f) entferneFeature(f); auswahl = null; regen(); });
 
-function waehle(id) {
+function waehle(id, behalteZeiger = false) { // behalteZeiger: Klick im Raum setzt Kante/Fläche vorher selbst
+  if (!behalteZeiger || (zeigerAuswahl && hauptVon(id)?.id !== zeigerAuswahl.fid)) zeigerAuswahl = null;
   auswahl = id; markiere(); zeigeWerkstatt();
   // nur die Markierung umschalten: ein Neuaufbau der Liste würde den Doppelklick zum Bearbeiten verschlucken
   document.querySelectorAll("#baum li[data-id]").forEach((li) => li.classList.toggle("aktiv", li.dataset.id === id || String(id).startsWith(li.dataset.id + ":")));
@@ -1973,7 +1979,7 @@ function extrusionDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && (schleifen(x).length || skizzenRegionen(x).length));
   if (!sk.length) return status("Zuerst eine Skizze mit geschlossenem Profil zeichnen (Rechteck, Kreis oder geschlossener Linienzug).");
-  f ||= { id: neueId(), typ: "extrusion", name: "Extrusion " + (doc.features.filter((x) => x.typ === "extrusion").length + 1), skizze: sk.at(-1).id, flaechen: [], abstand: 100, richtung: "eine", vorgang: "neu" };
+  f ||= { id: neueId(), typ: "extrusion", name: "Extrusion " + (doc.features.filter((x) => x.typ === "extrusion").length + 1), skizze: vorSk(sk).id, flaechen: [], abstand: 100, richtung: "eine", vorgang: finde(vorSk(sk).ebene)?.art === "flaeche" ? "verbinden" : "neu" }; // Skizze auf einer Körperfläche: sinnvoll ist meist «Vereinigen»
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: Array.isArray(f.flaechen) ? "Flächen in" : "Profil aus", wahl: Array.isArray(f.flaechen) ? "flaechen" : "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "abstand", label: f.richtung === "zwei" ? "Abstand 1" : "Abstand", einheit: "mm", wert: f.abstand },
@@ -2005,7 +2011,7 @@ function drehungDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
   if (!sk.length) return status("Zuerst eine Skizze mit geschlossenem Profil und einer Achse (z. B. Hilfslinie) zeichnen.");
-  f ||= { id: neueId(), typ: "drehung", name: "Drehung " + (doc.features.filter((x) => x.typ === "drehung").length + 1), skizze: sk.at(-1).id, achse: "V", winkel: 360, vorgang: "neu" };
+  f ||= { id: neueId(), typ: "drehung", name: "Drehung " + (doc.features.filter((x) => x.typ === "drehung").length + 1), skizze: vorSk(sk).id, achse: "V", winkel: 360, vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: "Profil aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "achse", label: "Achse", optionen: achsenOpt(finde(f.skizze)), wert: f.achse },
@@ -2018,11 +2024,11 @@ function blechDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
   if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: Blechmitte oder eine Blechoberfläche.");
-  f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: Math.max(0, ketten(sk.at(-1)).findIndex((k) => !k.mitBogen)), lage: einst.neu.lage, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
+  f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: vorSk(sk).id, kette: Math.max(0, ketten(vorSk(sk)).findIndex((k) => !k.mitBogen)), lage: einst.neu.lage, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
   const REGELN = [["Linienzug", () => true], ["Lage des Blechs", (id) => ["lage", "umkehren"].includes(id)], ["Material und Länge", (id) => ["material", "laenge", "laenge2", "stueck", "notiz", "richtung", "bis", "bisEbene", "bisKante"].includes(id)]];
   featureDialog(f, istNeu, (f) => mitSchritten([
     { id: "skizze", label: "Linienzug aus", wahl: "kette", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
-    { id: "kette", label: "Linienzug", optionen: ketten(finde(f.skizze) || sk.at(-1)).map((k, i) => [i, `Nr. ${i + 1}${k.mitBogen ? " (mit Bogen)" : ""}`]), wert: f.kette },
+    { id: "kette", label: "Linienzug", optionen: ketten(finde(f.skizze) || vorSk(sk)).map((k, i) => [i, `Nr. ${i + 1}${k.mitBogen ? " (mit Bogen)" : ""}`]), wert: f.kette },
     { id: "lage", label: "Blech zur Linie", optionen: LAGEN, wert: f.lage ?? "mitte" },
     { id: "umkehren", label: "Kante A", optionen: [["", "Am Anfang der Linie"], ["1", "Am Ende der Linie"]], wert: f.umkehren ? "1" : "" },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
@@ -2704,14 +2710,14 @@ function wandPlatte(punkte, innenNormal, t, g) {
 }
 function eindeckungDialog(f) {
   const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
-  const istNeu = !f; f ||= { id: neueId(), typ: "eindeckung", name: "Eindeckung " + (doc.features.filter((x) => x.typ === "eindeckung").length + 1), dach: daecher.at(-1).id };
+  const istNeu = !f; f ||= { id: neueId(), typ: "eindeckung", name: "Eindeckung " + (doc.features.filter((x) => x.typ === "eindeckung").length + 1), dach: vorDach(daecher).id };
   featureDialog(f, istNeu, (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "dach", label: "Dach", optionen: daecher.map((d) => [d.id, d.name]), wert: f.dach }], (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; },
     "Ziegel eindecken", "Zuerst alle Spenglerbleche zeichnen («Dachbleche»): die Eindeckung erkennt Kehle, Wangen-/Fussanschlüsse, Fenster, Kamine und Lukarnen und schneidet die Ziegel dort an. Deckbreite und Lattweite kommen aus der Deckung des Dachs (Einstellungen › Dach). Ziegel sind schematisch (Rechtecke ohne Falzform).",
     { info: () => f._fehler ? "⚠ " + f._fehler : f._ziegel ? (f._ohneBleche ? "⚠ Noch keine Dachbleche vor der Eindeckung – die Ziegel werden nur an Rand und Öffnungen geschnitten. " : "") + `Ziegel ${f._ziegel.anzahl} Stk. (davon ${f._ziegel.geschnitten} geschnitten) · Richtwert ${f._ziegel.richtwert}` : "" });
 }
 function lukarneDialog(f) {
   const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
-  const istNeu = !f; f ||= { id: neueId(), typ: "lukarne", name: "Lukarne " + (doc.features.filter((x) => x.typ === "lukarne").length + 1), dach: daecher.at(-1).id, flaeche: 0, masse: "aufmass", art: "sattel", bu: 1800, bo: 1800, hf: 1200, hL: 0, wL: 90, lL: 1500, hR: 0, wR: 90, lR: 1500, b: 1600, hw: 1100, neigung: 30, ueberstand: 200, wd: 150, dd: 250, x: 3000, y: 1500 };
+  const istNeu = !f; f ||= { id: neueId(), typ: "lukarne", name: "Lukarne " + (doc.features.filter((x) => x.typ === "lukarne").length + 1), dach: vorDach(daecher).id, flaeche: 0, masse: "aufmass", art: "sattel", bu: 1800, bo: 1800, hf: 1200, hL: 0, wL: 90, lL: 1500, hR: 0, wR: 90, lR: 1500, b: 1600, hw: 1100, neigung: 30, ueberstand: 200, wd: 150, dd: 250, x: 3000, y: 1500 };
   if (istNeu) { const fl0 = finde(f.dach)?._dach?.flaechen?.[0]; if (fl0) f.lL = f.lR = Math.round(f.hf / Math.tan((fl0.neigung * Math.PI) / 180)); } // Vorgabe: waagrechte Traufe bis zur Dachfläche
   const flOpt = (id) => (finde(id)?._dach?.flaechen || []).map((x, i) => [String(i), `Fläche ${i + 1}: ${x.neigung.toFixed(0)}°, ${x.flaeche.toFixed(1)} m²`]);
   const aufmass = (f) => f.masse === "aufmass";
@@ -2736,7 +2742,7 @@ function lukarneDialog(f) {
 }
 function dachelementDialog(f) {
   const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
-  const istNeu = !f; f ||= { id: neueId(), typ: "dachelement", name: "Dachfenster " + (doc.features.filter((x) => x.typ === "dachelement").length + 1), dach: daecher.at(-1).id, flaeche: 0, art: "fenster", velux: "MK04", b: 780, h: 978, x: 3000, y: 1500, hoehe: 1000 };
+  const istNeu = !f; f ||= { id: neueId(), typ: "dachelement", name: "Dachfenster " + (doc.features.filter((x) => x.typ === "dachelement").length + 1), dach: vorDach(daecher).id, flaeche: 0, art: "fenster", velux: "MK04", b: 780, h: 978, x: 3000, y: 1500, hoehe: 1000 };
   const flOpt = (id) => (finde(id)?._dach?.flaechen || []).map((x, i) => [String(i), `Fläche ${i + 1}: ${x.neigung.toFixed(0)}°, ${(x.flaeche).toFixed(1)} m²`]);
   const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "dach", label: "Dach", optionen: daecher.map((d) => [d.id, d.name]), wert: f.dach }, { id: "flaeche", label: "Dachfläche", optionen: flOpt(f.dach), wert: String(f.flaeche ?? 0) },
     { id: "art", label: "Art", optionen: Object.entries(ELEMENTARTEN), wert: f.art }, { id: "velux", label: "Velux-Grösse (nur Dachfenster)", optionen: [["", "frei (Masse unten)"], ...veluxListe().map((v) => [v.code, `${v.code} · ${v.b} × ${v.h}${v.bestaetigt ? "" : " (abgeleitet)"}`])], wert: f.velux || "" },
@@ -2751,7 +2757,7 @@ function dachelementDialog(f) {
 }
 function dachblecheDialog(f) {
   const daecher = doc.features.filter((x) => x.typ === "dach"); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
-  const istNeu = !f; f ||= { id: neueId(), typ: "dachbleche", name: "Dachbleche " + (doc.features.filter((x) => x.typ === "dachbleche").length + 1), dach: daecher.at(-1).id, material: neuMaterial(), arten: {}, params: {} };
+  const istNeu = !f; f ||= { id: neueId(), typ: "dachbleche", name: "Dachbleche " + (doc.features.filter((x) => x.typ === "dachbleche").length + 1), dach: vorDach(daecher).id, material: neuMaterial(), arten: {}, params: {} };
   const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "dach", label: "Dach", optionen: daecher.map((d) => [d.id, d.name]), wert: f.dach }, { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     ...Object.keys(BLECHARTEN).flatMap((a) => { const v = VORLAGE[BLECH_VORLAGE[a]], w = { ...standardwerte(v.id), ...(f.params?.[a] || {}) };
       return [{ id: "a_" + a, label: BLECHARTEN[a], optionen: [["ja", "ja – erstellen"], ["nein", "nein"]], wert: f.arten?.[a] === false ? "nein" : "ja" }, ...v.params.filter(([k]) => k !== "neigung").map(([k, l, e]) => ({ id: `p_${a}_${k}`, label: `${BLECHARTEN[a]}: ${l}`, einheit: e, wert: w[k] }))]; })];
@@ -2783,10 +2789,10 @@ function dachMasseUebernehmen(f, w) {
     f[ziel] = ov; if (w[auswahlId]) f[auswahlId] = w[auswahlId];
   }
 }
-function dachDialog(f) {
+function dachDialog(f, vor) { // vor: { skizze } = Grundriss aus der Kontextleiste
   const istNeu = !f; let g;
   if (istNeu) {
-    g = { id: neueId(), typ: "gebaeude", name: "Gebäude " + (doc.features.filter((x) => x.typ === "gebaeude").length + 1), breite: 10000, tiefe: 8000, traufhoehe: 3000, wandstaerke: 300, x: 0, z: 0 }; einfuegen(g);
+    g = { id: neueId(), typ: "gebaeude", name: "Gebäude " + (doc.features.filter((x) => x.typ === "gebaeude").length + 1), breite: 10000, tiefe: 8000, traufhoehe: 3000, wandstaerke: 300, x: 0, z: 0, ...(vor?.skizze ? { form: "skizze", skizze: vor.skizze, profil: 0 } : {}) }; einfuegen(g);
     f = { id: neueId(), typ: "dach", name: "Dach " + (doc.features.filter((x) => x.typ === "dach").length + 1), gebaeude: g.id, form: "sattel", firstRichtung: "laengs", neigung: 35, neigung2: 35, ueberstandTraufe: 400, ueberstandOrtgang: 300, deckung: dachEinst().standardDeckung, aufbau: dachEinst().standardAufbau };
   } else g = finde(f.gebaeude);
   if (!g) return status("Das Gebäude dieses Dachs fehlt.");
@@ -2920,11 +2926,11 @@ function flaecheDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && (schleifen(x).length || skizzenRegionen(x).length));
   if (!sk.length && !f) return status("Zuerst die Grundfläche des Blechs als geschlossenes Profil skizzieren (z. B. Rechteck oder Linienzug, Dachbahnen nebeneinander).");
-  f ||= { id: neueId(), typ: "flaeche", name: "Flächenblech " + (doc.features.filter((x) => x.typ === "flaeche").length + 1), skizze: sk.at(-1).id, flaechen: [],
+  f ||= { id: neueId(), typ: "flaeche", name: "Flächenblech " + (doc.features.filter((x) => x.typ === "flaeche").length + 1), skizze: vorSk(sk).id, flaechen: [],
     kanten: {}, material: neuMaterial(), stueck: einst.neu.stueck, sichtseite: 1 };
   const felder = (f) => [
     { id: "skizze", label: Array.isArray(f.flaechen) ? "Flächen in" : "Grundfläche aus", wahl: Array.isArray(f.flaechen) ? "flaechen" : "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
-    ...(Array.isArray(f.flaechen) ? [] : [{ id: "profil", label: "Flächen", optionen: [["alle", "Alle Flächen (je ein Blech)"], ...schleifen(finde(f.skizze) || sk.at(-1)).map((_, i) => [i, `Fläche ${i + 1}`])], wert: f.profil ?? "alle" }]),
+    ...(Array.isArray(f.flaechen) ? [] : [{ id: "profil", label: "Flächen", optionen: [["alle", "Alle Flächen (je ein Blech)"], ...schleifen(finde(f.skizze) || vorSk(sk)).map((_, i) => [i, `Fläche ${i + 1}`])], wert: f.profil ?? "alle" }]),
     { id: "name", label: "Name", text: true, wert: f.name },
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "sichtseite", label: "Richtung der Abkantungen / Sichtseite", optionen: [["1", "Vorne (Richtung Ebenen-Normale)"], ["-1", "Hinten (gegen die Normale)"]], wert: String(f.sichtseite ?? 1) },
@@ -3491,6 +3497,23 @@ function kantenBearbeiten(mesh, f) {
   return fehlt;
 }
 // Angeklickte Körperkante → ganze gerade Kante (zusammenhängende Stücke auf derselben Geraden)
+// Skizze im Raum anklicken: Linie (nah am Zeiger) oder Fläche einer geschlossenen Schleife; liegt ein Körper davor, gewinnt dieser
+function skizzenTreffer(e, koerper) {
+  const r = strahl.ray; let best = null, bd = Infinity;
+  const sm = smPos(e);
+  for (const sk of doc.features) {
+    if (sk.typ !== "skizze" || sk._aus || sk.versteckt || sk === skizze?.f || !ebene(sk.ebene) || !sk.elemente?.length) continue;
+    const t = r.intersectPlane(ebenenEbene(sk.ebene), new THREE.Vector3()); if (!t) continue;
+    const d = t.distanceTo(r.origin); if (koerper && d > koerper.distance + 0.5) continue; // hinter dem Körper
+    const uv = aufEbene(sk.ebene, t); let treffer = false;
+    const nah = (pts, zu) => { for (let i = 0; i < pts.length - (zu ? 0 : 1); i++) { const A = aufSchirm(zu3D(sk.ebene, pts[i]).toArray()), B = aufSchirm(zu3D(sk.ebene, pts[(i + 1) % pts.length]).toArray()); if (A[2] < 1 && B[2] < 1 && abstandStrecke(sm, A, B) < 9) return true; } return false; };
+    const ls = schleifen(sk);
+    if (ls.some((l) => nah(l, true)) || ketten(sk).some((k) => nah(k.pts, false))) treffer = true;
+    else if (!koerper || d < koerper.distance - 0.5) treffer = ls.some((l) => innen(uv, l));
+    if (treffer && d < bd) { bd = d; best = sk.id; }
+  }
+  return best;
+}
 function kanteAmKoerper(e) {
   const sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 24 : 10;
   for (const m of modell.children) {
@@ -3513,9 +3536,9 @@ function kanteAmKoerper(e) {
   const r3 = (v) => v.toArray().map((x) => +x.toFixed(4));
   return { fid: hauptVon(best.m.userData.fid)?.id, a: r3(A.clone().addScaledVector(t, lo)), b: r3(A.clone().addScaledVector(t, hi)) };
 }
-function kantenDialog(f) {
+function kantenDialog(f, vor) { // vor: { art, fid, a, b } = Kante aus der Kontextleiste
   const istNeu = !f;
-  f ||= { id: neueId(), typ: "kanten3d", name: "Kanten abrunden " + (doc.features.filter((x) => x.typ === "kanten3d").length + 1), art: "rund", mass: 5, kanten: [], ziel: null };
+  f ||= { id: neueId(), typ: "kanten3d", name: "Kanten abrunden " + (doc.features.filter((x) => x.typ === "kanten3d").length + 1), art: vor?.art || "rund", mass: 5, kanten: vor ? [{ a: vor.a, b: vor.b }] : [], ziel: vor?.fid ?? null };
   const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name },
     { id: "art", label: "Art", optionen: [["rund", "Abrunden (Radius)"], ["fase", "Fasen (Abstand)"]], wert: f.art },
     { id: "mass", label: f.art === "fase" ? "Fase" : "Radius", einheit: "mm", wert: f.mass }];
@@ -3715,7 +3738,7 @@ function loftGeometrie(skizzen, n = 96) {
 function sweepDialog(f) {
   const istNeu = !f, sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
   if (!sk.length) return status("Zuerst ein geschlossenes Profil skizzieren – und einen Pfad (Linie, Bogen, Linienzug oder Körperkante).");
-  f ||= { id: neueId(), typ: "sweep", name: "Sweep " + (doc.features.filter((x) => x.typ === "sweep").length + 1), skizze: sk.at(-1).id, pfad: "", vorgang: "neu" };
+  f ||= { id: neueId(), typ: "sweep", name: "Sweep " + (doc.features.filter((x) => x.typ === "sweep").length + 1), skizze: vorSk(sk).id, pfad: "", vorgang: "neu" };
   if (!f.pfad) f.pfad = pfadListe().find(([w]) => !w.startsWith(`L:${f.skizze}:`))?.[0] || ""; // Pfad nicht aus der Profilskizze
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: "Profil aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
@@ -3726,7 +3749,7 @@ function sweepDialog(f) {
 function loftDialog(f) {
   const istNeu = !f, sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
   if (sk.length < 2) return status("Für einen Übergang zwei Skizzen mit geschlossenem Profil auf verschiedenen Ebenen zeichnen.");
-  f ||= { id: neueId(), typ: "loft", name: "Übergang " + (doc.features.filter((x) => x.typ === "loft").length + 1), profil1: sk.at(-2).id, profil2: sk.at(-1).id, profil3: "", vorgang: "neu" };
+  f ||= { id: neueId(), typ: "loft", name: "Übergang " + (doc.features.filter((x) => x.typ === "loft").length + 1), profil1: sk.at(-2).id, profil2: vorSk(sk).id, profil3: "", vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
     { id: "profil1", wahl: "profil", label: "Profil 1", optionen: sk.map((s) => [s.id, s.name]), wert: f.profil1 },
     { id: "profil2", wahl: "profil", label: "Profil 2", optionen: sk.map((s) => [s.id, s.name]), wert: f.profil2 },
@@ -4495,8 +4518,9 @@ function beendeSkizze() {
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; steuerung.enableRotate = true; kamera.up.set(0, 1, 0);
   szene.remove(skizzenRaster); skizzenRaster = null; boden.visible = true;
   $("eingabe").hidden = true; leeren(live); labels = []; document.querySelectorAll(".massbox").forEach((b) => b.remove()); $("fgAnzeige").textContent = "";
-  status(f.elemente.length ? "Skizze fertig. Jetzt «Extrudieren» (geschlossene Profile) oder «Blechprofil» (offener Linienzug)." : "");
+  status(f.elemente.length ? "Skizze fertig – die passenden Werkzeuge stehen oben in der Kontextleiste." : "");
   regen();
+  if (f.elemente.length && doc.features.includes(f) && !modus2d) waehle(f.id); // fertige Skizze ist gewählt → Kontextleiste bietet Extrudieren / Flächenblech / Blechprofil an
 }
 
 // Punkt auf der Skizzenebene unter dem Mauszeiger, mit Fang
@@ -5480,10 +5504,19 @@ leinwand.addEventListener("pointerup", (e) => {
   strahl.setFromCamera(ndc(e), kamera);
   const treffer = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0]; // Körper vor Ebenen
   const ebenenTreffer = strahl.intersectObjects(modell.children.filter((o) => o.userData.ebene), true).find((x) => x.object.isMesh);
-  waehle(treffer ? treffer.object.userData.fid : ebenenTreffer ? ebenenTreffer.object.userData.ebene : null);
+  const skId = skizzenTreffer(e, treffer); zeigerAuswahl = null;
+  if (skId) return waehle(skId); // Skizzenfläche oder -linie angeklickt
+  { // Kante (auch am Rand des Körpers, wo der Strahl danebengeht) oder Fläche eines Körpers: Unterauswahl für die Kontextleiste, der Körper bleibt gewählt
+    const k = kanteAmKoerper(e);
+    if (k?.fid) { zeigerAuswahl = { art: "kante", fid: k.fid, a: k.a, b: k.b }; return waehle(k.fid, true); }
+    const fid = treffer && hauptVon(treffer.object.userData.fid)?.id;
+    if (fid) { const n = treffer.face.normal.clone().transformDirection(treffer.object.matrixWorld); zeigerAuswahl = { art: "flaeche", fid, ref: `F:${fmt3(treffer.point.toArray())};${fmt3(n.toArray())}` }; }
+  }
+  waehle(treffer ? treffer.object.userData.fid : ebenenTreffer ? ebenenTreffer.object.userData.ebene : null, true);
 });
 leinwand.addEventListener("dblclick", () => {
   if (skizze?.werkzeug === "linie" || skizze?.werkzeug === "spline") abschliessenLinie();
+  else if (!skizze && !dlg && !messen && !kantenWz && !modus2d && auswahl && !document.querySelector(".modal:not([hidden])")) { const f = hauptVon(auswahl); if (f && f.typ !== "ebene") bearbeite(f.typ === "flaechenteil" ? f.eltern : f); } // Doppelklick auf das Gewählte = Bearbeiten
   else if (skizze?.werkzeug === "auswahl" && skizze.sel?.art === "text") { // Text ändern: Inhalt, Höhe, Winkel
     const el = skizze.sel, t = prompt("Text", el.text); if (t == null) return;
     const h = parseFloat(String(prompt("Schrifthöhe in mm", el.hoehe)).replace(",", ".")), w = parseFloat(String(prompt("Drehwinkel in °", el.winkel || 0)).replace(",", "."));
@@ -6102,7 +6135,18 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { pruefeNeueVersion, kameraBlick: () => kamera.getWorldDirection(new THREE.Vector3()).toArray(), kameraQ: () => kamera.quaternion.toArray(), griffe: () => griffe.map((g) => ({ feld: g.feld, faktor: g.faktor, dir: g.dir.toArray(), pos: g.pos.toArray(), schirm: (() => { const r = leinwand.getBoundingClientRect(), A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos) * 0.7).toArray()); return { b: [r.left + B[0], r.top + B[1]], a: [r.left + A[0], r.top + A[1]] }; })() })), kameraZiel: () => { const t = flaechenTreffer(new THREE.Vector2(0, 0)); return { abstand: t ? t.distance : null, kamera: kamera.position.toArray(), min: Math.max(4, modellRadius() * 0.0004) }; }, maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+// Kontextleiste (siehe src/kontext.js): passende Werkzeuge zur Auswahl
+initKontext({
+  kontext: () => { const f = hauptVon(auswahl); return { feature: f?.typ === "flaechenteil" ? f.eltern : f, zeiger: zeigerAuswahl }; },
+  frei: () => !dlg && !skizze && !kantenWz && !messen && !modus2d,
+  signatur: () => [auswahl, JSON.stringify(zeigerAuswahl), doc.features.length, dlg ? 1 : 0, skizze ? 1 : 0, kantenWz ? 1 : 0, messen ? 1 : 0, modus2d ? 1 : 0, hauptVon(auswahl)?.elemente?.length ?? ""].join("|"),
+  skizzeArt: (f) => ({ geschlossen: schleifen(f).length > 0, offen: ketten(f).length > 0, leer: !f.elemente.length }),
+  bearbeite: (f) => bearbeite(f),
+  kanteAktion: (art) => kantenDialog(undefined, { ...zeigerAuswahl, art }),
+  dachAusSkizze: (id) => dachDialog(undefined, { skizze: id }),
+  flaecheSkizze: (ref) => neueSkizze(ref), flaecheBlech: (ref) => blechAufFlaeche(ref), ebeneSkizze: (id) => neueSkizze(id),
+});
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { kontext: kontextAktionen, zeigerAuswahl: () => zeigerAuswahl, pruefeNeueVersion, kameraBlick: () => kamera.getWorldDirection(new THREE.Vector3()).toArray(), kameraQ: () => kamera.quaternion.toArray(), griffe: () => griffe.map((g) => ({ feld: g.feld, faktor: g.faktor, dir: g.dir.toArray(), pos: g.pos.toArray(), schirm: (() => { const r = leinwand.getBoundingClientRect(), A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos) * 0.7).toArray()); return { b: [r.left + B[0], r.top + B[1]], a: [r.left + A[0], r.top + A[1]] }; })() })), kameraZiel: () => { const t = flaechenTreffer(new THREE.Vector2(0, 0)); return { abstand: t ? t.distance : null, kamera: kamera.position.toArray(), min: Math.max(4, modellRadius() * 0.0004) }; }, maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

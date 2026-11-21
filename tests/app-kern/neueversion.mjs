@@ -13,9 +13,10 @@ ok(await s.evaluate(() => /Neue Version 99\.9\.9/.test(document.querySelector("#
 ok(await s.evaluate(() => !!document.querySelector("#meldungen .meldung-toast .aktion")), "Meldung hat den Knopf «Jetzt neu laden»");
 await s.evaluate(() => window.sdcadTest.pruefeNeueVersion()); await s.waitForTimeout(300);
 ok(await s.evaluate(() => document.querySelectorAll("#meldungen .meldung-toast").length === 1), "dieselbe Version wird nicht mehrfach gemeldet");
+const echteVersion = await s.evaluate(() => document.getElementById("hVersion")?.textContent.match(/[0-9][0-9.]*/)?.[0] || ""); angebot = echteVersion; // nach dem Neuladen bietet der Server dieselbe Version an
 const geladen = s.waitForNavigation({ timeout: 5000 }).then(() => true).catch(() => false);
 await s.click("#meldungen .aktion"); ok(await geladen, "Knopf lädt die Seite neu");
-await s.waitForTimeout(1200); angebot = await s.evaluate(() => document.getElementById("hVersion")?.textContent.match(/[0-9][0-9.]*/)?.[0] || "");
+await s.waitForTimeout(1200);
 await s.evaluate(() => window.sdcadTest.pruefeNeueVersion()); await s.waitForTimeout(400);
 ok(await s.evaluate(() => !document.querySelector("#meldungen .meldung-toast")), "gleiche Version → keine Meldung (" + angebot + ")");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));

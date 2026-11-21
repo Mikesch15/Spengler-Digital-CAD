@@ -37,3 +37,21 @@ Vorhanden: Farben (`--bg --panel --panel-2 --line --fg --muted --accent --accent
 4. ✔ Verstellbare Panelbreite + «Arbeitsbereich zurücksetzen» (Tabellen im Teil-Panel lassen sich verbreitern), Warnmeldungen in der Statuszeile hervorgehoben, Werkzeugleiste mit Rand-Hinweis auf schmalen Displays. Offen: Icons vereinheitlichen, Meldungen als Toast statt nur Statuszeile.
 5. ✔ Esc bricht den Dialog ab, Enter = nächster Schritt bzw. OK. Offen: Tab-Reihenfolge prüfen, leere Zustände.
 6. Laufend: Tests nach jedem Schritt (`npm test`, `tests/app-kern/*.mjs`).
+
+## Kontextleiste (Branch `ux/kontextaktionen`)
+Das Programm erkennt, was gewählt ist, und bietet die passenden nächsten Werkzeuge direkt in der 3D-Ansicht an (`src/kontext.js`). Die Leiste hat keine eigene Werkzeuglogik: Aktionen lösen denselben Knopf wie die Werkzeugleiste aus, die Dialoge übernehmen die Auswahl als Vorgabe.
+
+| Auswahl | Angebotene Werkzeuge |
+|---|---|
+| Skizze (Fläche oder Linie anklicken, oder nach «Skizze beenden») geschlossen | Extrudieren, Flächenblech, Drehen, Dach darauf, Skizze bearbeiten |
+| Skizze mit offenem Linienzug | Blechprofil, Sweep, Skizze bearbeiten |
+| Flächenblech | Flansch, Umschlag, Kantenbaustein, Abwickeln/Falten, Bearbeiten |
+| Blechprofil / Vorlage / Freies Profil | Flansch, Umschlag, Kantenbaustein, Muster, Spiegeln, Bearbeiten, Kollision, Plan |
+| Körper | Kanten abrunden/fasen, Schale, Verschieben, Muster, Spiegeln, Teilen, Blech auf Körperfläche, Schnitt, Kollision, Plan |
+| Kante eines Körpers | Abrunden, Fasen (Kante vorbelegt), Schale |
+| Fläche eines Körpers | Skizze auf Fläche, Blech auf Fläche, Kanten abrunden |
+| Dach | Dachbleche, Fenster/Kamin, Lukarne, Ziegel eindecken |
+| Dachbleche / Lukarne / Fenster | Ziegel eindecken, Bearbeiten, Anschlussbleche |
+| Konstruktionsebene | Skizze auf Ebene |
+
+Weitere Ableitungen: Skizze auf einer Körperfläche → Extrusion schlägt «Vereinigen» vor; gewählte Skizze/Dach/Blech wird in den Dialogen vorbelegt; Doppelklick auf das Gewählte = Bearbeiten; mehr als 6 Aktionen → «Mehr …» öffnet die Befehlssuche. Auf kleinen Displays liegt die Leiste unten als wischbare Zeile.

@@ -513,6 +513,17 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 @media (max-width: 1000px) and (max-height: 520px) and (orientation: landscape) {
   .dialog { top: 8px; bottom: 8px; left: auto; right: 8px; width: min(360px, 46vw); max-height: none; }
 }
+
+/* Kontextleiste: passende Werkzeuge zur Auswahl (Skizze, Blech, Körper, Kante, Fläche, Dach …) */
+.kontextbar { position: absolute; left: 50%; transform: translateX(-50%); top: 10px; z-index: 7; display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; justify-content: center; max-width: min(760px, calc(100% - 260px)); padding: var(--sp-2) var(--sp-3); background: color-mix(in srgb, var(--panel) 92%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: var(--r-l); box-shadow: var(--sh-overlay); }
+.kontextbar .kk-titel { font: 600 var(--fs-s) var(--font-label); color: var(--muted); margin-right: var(--sp-2); }
+.kontextbar .kk-knopf { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--panel-2); color: var(--fg); font: 500 var(--fs-m) var(--font-body); cursor: pointer; }
+.kontextbar .kk-knopf svg { width: 18px; height: 18px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.kontextbar .kk-knopf svg .f { fill: color-mix(in srgb, var(--accent) 18%, transparent); }
+.kontextbar .kk-knopf.haupt { background: var(--accent); border-color: var(--accent); color: var(--on-accent); } .kontextbar .kk-knopf.haupt svg { stroke: var(--on-accent); }
+.kontextbar .kk-knopf:hover { border-color: var(--accent); }
+.kontextbar .kk-zu { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 var(--sp-1); }
+@media (max-width: 1000px) { .kontextbar { top: auto; bottom: 44px; left: 8px; right: 8px; transform: none; max-width: none; flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; gap: var(--sp-2); } .kontextbar .kk-titel { display: none; } .kontextbar .kk-knopf { padding: 10px 12px; white-space: nowrap; flex: none; } }
 </style>
 
 <a class="skip" href="#leinwand" id="skipLink">Zur 3D-Ansicht</a>
@@ -656,6 +667,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <div class="eingabe" id="eingabe" hidden>
         <label>L <input id="eLaenge" type="number" step="any"></label><label>∠ <input id="eWinkel" type="number" step="any"></label>
       </div>
+      <div class="kontextbar" id="kontextBar" role="toolbar" aria-label="Passende Werkzeuge zur Auswahl" hidden></div>
       <div class="kantenbar" id="kantenBar" hidden><b id="kbTitel"></b><span id="kbText"></span>
         <label id="kbWinkelL">Winkel <input id="kbWinkel" type="number" step="any" value="90">°</label><label>Länge <input id="kbLaenge" type="number" step="any" value="25"> mm</label>
         <span id="kbEnden" hidden><button class="knopf klein" id="kbA" title="Am Anfang des Profils ansetzen (Kante A)">Kante A</button><button class="knopf klein" id="kbB" title="Am Ende des Profils ansetzen (Kante B)">Kante B</button></span><button class="knopf klein" id="kbRichtung" title="Richtung der Abkantung: zur Sichtseite oder nach hinten">Richtung: Sichtseite ⇄</button><button class="knopf klein haupt" id="kbEnde">Fertig</button></div>
@@ -720,6 +732,14 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 </div></div>
 <div class="modal" id="hilfe" hidden><div class="modalbox" role="dialog" aria-labelledby="hTitel">
   <h3 id="hTitel">Kurzanleitung</h3><div class="inhalt hilfetext">
+    <h4>Kontextleiste – das Programm schlägt vor, was als Nächstes passt</h4>
+    <ul>
+      <li><b>Skizze anklicken</b> (Fläche oder Linie): geschlossen → Extrudieren, Flächenblech, Drehen, Dach darauf; offener Linienzug → Blechprofil, Sweep.</li>
+      <li><b>Blech anklicken</b> (Flächenblech, Blechprofil, Vorlage): Flansch, Umschlag, Kantenbaustein, Abwickeln – das gewählte Blech ist schon vorgewählt.</li>
+      <li><b>Körper</b>: Abrunden/Fasen, Schale, Muster, Spiegeln, Teilen. <b>Kante anklicken</b>: Abrunden oder Fasen mit dieser Kante. <b>Fläche anklicken</b>: Skizze auf der Fläche oder Blech auf Fläche.</li>
+      <li><b>Dach</b>: Dachbleche, Fenster/Kamin, Lukarne, Ziegel eindecken. <b>Ebene</b>: Skizze auf der Ebene.</li>
+      <li><b>Doppelklick</b> auf das Gewählte = Bearbeiten. «Mehr …» in der Leiste öffnet die Befehlssuche; × blendet die Leiste aus.</li>
+    </ul>
     <h4>Blechteil erstellen</h4>
     <ul>
       <li><b>Spengler-Vorlage</b>: Traufe, Ortgang, First, Rinnen … Masse eintippen, fertig.</li>
