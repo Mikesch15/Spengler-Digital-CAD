@@ -930,6 +930,7 @@ function beidseitig(f, feld, feld2) {
   return [{ plus: fern > 0, feld, faktor: vz, farbe }, { plus: fern < 0, feld, faktor: -vz, farbe }];
 }
 function griffeFuer(f) {
+  if (f.bis && f.bis !== "mass" && (f.typ === "extrusion" || ["blech", "vorlage", "profil"].includes(f.typ))) return []; // Ausdehnung folgt der gewählten Fläche/Kante
   const l = [], mitte = (ms) => { const bb = new THREE.Box3(); ms.forEach((m) => bb.expandByObject(m)); return bb.isEmpty() ? null : bb; };
   if (f.typ === "extrusion") {
     const sk = finde(f.skizze); if (!sk) return l;
@@ -1080,6 +1081,7 @@ function regen() {
         if (!f.versteckt && f !== skizze?.f) modell.add(skizzenObjekt(f));
       } else if (f.typ === "extrusion") {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
+        if (f.bis && f.bis !== "mass") { const uv = extrusionMitteUV(f, s); if (uv) f.abstand = bisWert(f, bisAbstand(f, E_(s.ebene).n, zu3D(s.ebene, uv))); }
         if (Array.isArray(f.flaechen) && !f.flaechen.length) throw new Error("Fläche in der Skizze anklicken");
         const fs = formen(s, undefined, f); if (!fs.length) throw new Error(Array.isArray(f.flaechen) ? "Gewählte Fläche gibt es nicht mehr – neu anklicken" : "Skizze hat kein geschlossenes Profil");
         const kr = doc.features.filter((x) => x.typ === "kantenrund" && x.ziel === f.id && !x._aus);
@@ -1155,6 +1157,7 @@ function regen() {
           vz0 = [kk[0][0] + e0[0] - eA[0], kk[0][1] + e0[1] - eA[1]]; f._res = ber(profilErweitern(oo, ext, m));
         }
         f._kernLage = { ebene: E_(s.ebene), versatz: vz0 }; // für den exakten CAD-Kern (gleiche Lage wie das Anzeige-Netz)
+        wendeBisAn(f, s.ebene, vz0);
         if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, vz0)], s.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id));
       } else if (f.typ === "vorlage") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
@@ -1162,7 +1165,7 @@ function regen() {
         const { start, ops } = profilErweitern(v.bau(f.params, m), profilErweiterungen(f, m), m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         f._kernLage = null;
-        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
+        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; wendeBisAn(f, f.ebene, vz); modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
       } else if (f.typ === "flaeche") {
         f._bleche = null; f._teile = null; f._mitAbwicklung = false;
         if (!f.kantenBasis) f.kantenBasis = { ...(f.kanten || {}) };
@@ -1282,7 +1285,7 @@ function regen() {
         const { start, ops } = profilErweitern(freiesProfil(f.start, f.zeilen, m), profilErweiterungen(f, m), m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         f._kernLage = null;
-        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
+        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; wendeBisAn(f, f.ebene, vz); modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
       }
     } catch (e) { f._fehler = e.message; }
   }
@@ -1853,6 +1856,23 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
   });
   setze(f, werte()); regen();
 }
+// «Bis»: Ausdehnung bis zu einer gewählten Fläche/Ebene oder Kante statt eines Masses
+const bisFelder = (f) => [{ id: "bis", label: "Bis", optionen: [["mass", "Mass (Abstand/Länge)"], ["ebene", "Bis Fläche / Ebene"], ["kante", "Bis Kante"]], wert: f.bis || "mass" },
+  ...(f.bis === "ebene" ? [{ id: "bisEbene", label: "Bis Fläche / Ebene", wahl: "ebene", optionen: ebenenOpt(f, f.bisEbene || "XY"), wert: f.bisEbene || "XY" }] : []),
+  ...(f.bis === "kante" ? [{ id: "bisKante", label: "Bis Kante", wahl: "kante", optionen: mitWert(kantenListe(f), f.bisKante), wert: f.bisKante || kantenListe(f)[0]?.[0] || "" }] : [])];
+// Abstand entlang der Normalen n vom Punkt c bis zur gewählten Fläche (Schnitt der Geraden c + t·n mit der Ebene) bzw. Kante (Mittelpunkt); vorzeichenbehaftet
+function bisAbstand(f, n, c) {
+  n = V(n).normalize(); c = V(c);
+  if (f.bis === "ebene") { const P = bezugEbene(f.bisEbene), n2 = V(P.n).normalize(), dn = n.dot(n2); if (Math.abs(dn) < 1e-6) throw new Error("Die gewählte Fläche liegt parallel zur Ausdehnungsrichtung – eine andere Fläche wählen"); return V(P.o).sub(c).dot(n2) / dn; }
+  const k = bezugKante(f.bisKante); return V(k.p).addScaledVector(V(k.d), 0.5).sub(c).dot(n);
+}
+// Wert des Masses (abstand bzw. laenge) bei «Bis»: Vorzeichen je nach Richtung des Features
+const wendeBisAn = (f, ebeneRef, versatz) => { if (!f.bis || f.bis === "mass") return; const E = E_(ebeneRef); f.laenge = bisWert(f, bisAbstand(f, E.n, zuWelt(E, versatz))); };
+function extrusionMitteUV(f, sk) { // Punkt im Profil (Schwerpunkt der ersten gewählten Fläche bzw. der grössten Schleife)
+  const regs = gewaehlteRegionen(f, sk); if (regs) return regs.length ? regs[0].innen : null;
+  const p = schleifen(sk).sort((a, b) => Math.abs(flaeche(b)) - Math.abs(flaeche(a)))[0]; return p ? [p.reduce((a, q) => a + q[0], 0) / p.length, p.reduce((a, q) => a + q[1], 0) / p.length] : null;
+}
+const bisWert = (f, t) => (f.richtung === "umgekehrt" ? -t : f.richtung === "symmetrisch" ? 2 * Math.abs(t) : t);
 const zweiFeld = (f, feld, label = "Länge") => (f.richtung === "zwei" ? [{ id: feld + "2", label: `${label} 2 (Gegenrichtung)`, einheit: "mm", wert: f[feld + "2"] ?? Math.round((+f[feld] || 100) / 2) }] : []);
 const RICHTUNGEN = [["eine", "Eine Seite"], ["umgekehrt", "Umgekehrt"], ["symmetrisch", "Symmetrisch"], ["zwei", "Zwei Seiten (verschieden lang)"]];
 const LAGEN = [["mitte", "Mitte"], ["links", "Links"], ["rechts", "Rechts"]];
@@ -1948,10 +1968,11 @@ function extrusionDialog(f) {
     { id: "abstand", label: f.richtung === "zwei" ? "Abstand 1" : "Abstand", einheit: "mm", wert: f.abstand },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
     ...zweiFeld(f, "abstand", "Abstand"),
+    ...bisFelder(f),
     ...vorgangFelder(f),
   ], (f, w) => { if (Array.isArray(f.flaechen) && w.skizze !== f.skizze) f.flaechen = []; Object.assign(f, w); }, "Extrudieren",
   "Fläche(n) in der Skizze anklicken (jede Teilfläche einzeln, auch Überlappungen und Inseln; nochmals anklicken = abwählen). Vorgang wie in Fusion: neuer Körper, vereinigen, ausschneiden oder schneiden.",
-  { neuBei: ["richtung"], pflicht: () => (Array.isArray(f.flaechen) && !f.flaechen.length ? "Zuerst mindestens eine Fläche in der Skizze anklicken." : "") });
+  { neuBei: ["richtung", "bis"], pflicht: () => (Array.isArray(f.flaechen) && !f.flaechen.length ? "Zuerst mindestens eine Fläche in der Skizze anklicken." : "") });
 }
 
 const VORGAENGE = [["neu", "Neuer Körper"], ["verbinden", "Vereinigen"], ["ausschneiden", "Ausschneiden"], ["schneiden", "Schneiden (Schnittmenge)"]];
@@ -1987,7 +2008,7 @@ function blechDialog(f) {
   const sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
   if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: Blechmitte oder eine Blechoberfläche.");
   f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: Math.max(0, ketten(sk.at(-1)).findIndex((k) => !k.mitBogen)), lage: einst.neu.lage, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
-  const REGELN = [["Linienzug", () => true], ["Lage des Blechs", (id) => ["lage", "umkehren"].includes(id)], ["Material und Länge", (id) => ["material", "laenge", "laenge2", "stueck", "notiz", "richtung"].includes(id)]];
+  const REGELN = [["Linienzug", () => true], ["Lage des Blechs", (id) => ["lage", "umkehren"].includes(id)], ["Material und Länge", (id) => ["material", "laenge", "laenge2", "stueck", "notiz", "richtung", "bis", "bisEbene", "bisKante"].includes(id)]];
   featureDialog(f, istNeu, (f) => mitSchritten([
     { id: "skizze", label: "Linienzug aus", wahl: "kette", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "kette", label: "Linienzug", optionen: ketten(finde(f.skizze) || sk.at(-1)).map((k, i) => [i, `Nr. ${i + 1}${k.mitBogen ? " (mit Bogen)" : ""}`]), wert: f.kette },
@@ -1999,8 +2020,9 @@ function blechDialog(f) {
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
     ...zweiFeld(f, "laenge"),
+    ...bisFelder(f),
   ], REGELN), (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1), umkehren: w.umkehren === "1" }), "Blechprofil",
-  "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Pfeilrichtung gesehen links bzw. rechts davon. In der Ansicht: grüner Punkt = Kante A, oranger Pfeil = Richtung.", { neuBei: ["richtung"] });
+  "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Pfeilrichtung gesehen links bzw. rechts davon. In der Ansicht: grüner Punkt = Kante A, oranger Pfeil = Richtung.", { neuBei: ["richtung", "bis"] });
 }
 
 function vorlageDialog(f) {
@@ -2014,6 +2036,7 @@ function vorlageDialog(f) {
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung || "eine" },
     ...zweiFeld(f, "laenge"),
+    ...bisFelder(f),
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
     { id: "ebene", label: "Querschnitt in", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
@@ -2025,10 +2048,10 @@ function vorlageDialog(f) {
     }
     f.name = w.name.trim() || f.name;
     for (const [k] of VORLAGE[f.vorlage].params) if (Number.isFinite(w["p_" + k])) f.params[k] = w["p_" + k];
-    Object.assign(f, { material: w.material, laenge: w.laenge, stueck: w.stueck, ebene: w.ebene, notiz: w.notiz, richtung: w.richtung || f.richtung || "eine" }); if (Number.isFinite(w.laenge2)) f.laenge2 = w.laenge2;
+    Object.assign(f, { material: w.material, laenge: w.laenge, stueck: w.stueck, ebene: w.ebene, notiz: w.notiz, richtung: w.richtung || f.richtung || "eine", bis: w.bis || "mass", ...(w.bisEbene ? { bisEbene: w.bisEbene } : {}), ...(w.bisKante ? { bisKante: w.bisKante } : {}) }); if (Number.isFinite(w.laenge2)) f.laenge2 = w.laenge2;
   };
-  const REGELN = [["Vorlage", () => true], ["Masse", (id) => id.startsWith("p_")], ["Material, Länge, Lage", (id) => ["material", "laenge", "laenge2", "richtung", "stueck", "notiz", "ebene"].includes(id)]];
-  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Spengler-Vorlage", "", { wahlNr: -1, neuBei: ["richtung"] });
+  const REGELN = [["Vorlage", () => true], ["Masse", (id) => id.startsWith("p_")], ["Material, Länge, Lage", (id) => ["material", "laenge", "laenge2", "richtung", "bis", "bisEbene", "bisKante", "stueck", "notiz", "ebene"].includes(id)]];
+  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Spengler-Vorlage", "", { wahlNr: -1, neuBei: ["richtung", "bis"] });
 }
 
 // Freies Profil: Schenkel als Tabelle, Winkel jeweils nach dem Schenkel
@@ -2044,6 +2067,7 @@ function profilDialog(f) {
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung || "eine" },
     ...zweiFeld(f, "laenge"),
+    ...bisFelder(f),
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
     { id: "ebene", label: "Querschnitt in", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
@@ -2078,7 +2102,7 @@ function profilDialog(f) {
   };
   featureDialog(f, istNeu, felder, setze, "Freies Profil",
     "Winkel nach dem Schenkel: + biegt nach oben (links), − nach unten (rechts). Umschlag = 180°, Vorzeichen gibt die Seite. Masse auf der Blechmitte.",
-    { zusatz: tabelle, binden, wahlNr: -1, neuBei: ["richtung"] });
+    { zusatz: tabelle, binden, wahlNr: -1, neuBei: ["richtung", "bis"] });
 }
 
 
@@ -4355,7 +4379,11 @@ function loescheSkizzenAuswahl() {
   else status("Zuerst ein Element anklicken (Werkzeug Auswahl).");
 }
 $("tEntf").onclick = () => { if (skizze && !skizze.sel && !skizze.bsel && skizze.werkzeug !== "auswahl") setzeWerkzeug("auswahl"); loescheSkizzenAuswahl(); };
-$("tHilfs").onclick = () => { if (!skizze?.sel) return status("Zuerst ein Element anklicken (Werkzeug Auswahl)."); skizze.sel.hilfs = !skizze.sel.hilfs; status(skizze.sel.hilfs ? "Hilfslinie." : "Normale Linie."); zeichneLive(); };
+function hilfslinieUmschalten() { // gewähltes Element, sonst das zuletzt Projizierte
+  const ziele = skizze.sel ? [skizze.sel] : (skizze.projNeu || []).filter((el) => skizze.f.elemente.includes(el)); if (!ziele.length) return;
+  const an = !ziele[0].hilfs; for (const el of ziele) el.hilfs = an; status(an ? "Hilfslinie." : "Normale Linie."); zeichneLive();
+}
+$("tHilfs").onclick = () => { if (!skizze?.sel && !skizze?.projNeu?.length) return status("Zuerst ein Element anklicken (Werkzeug Auswahl)."); hilfslinieUmschalten(); };
 function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
@@ -4899,12 +4927,42 @@ function trennen(uv, sm) {
 }
 // Projizieren: Körperkanten, Körperflächen (Umriss) oder Linien früherer Skizzen auf die Skizzenebene – fixiert
 let umschaltAn = false; addEventListener("keydown", (e) => { if (e.key === "Shift") umschaltAn = true; }); addEventListener("keyup", (e) => { if (e.key === "Shift") umschaltAn = false; }); addEventListener("blur", () => { umschaltAn = false; });
+// Randkanten der angeklickten ebenen Körperfläche (zusammenhängende koplanare Dreiecke), Weltkoordinaten
+function flaechenRand(hit) {
+  const pos = flaechenRegion(hit).attributes.position, n0 = hit.face.normal.clone().transformDirection(hit.object.matrixWorld), kanten = new Map();
+  const K = (v) => `${Math.round(v.x * 100)},${Math.round(v.y * 100)},${Math.round(v.z * 100)}`;
+  for (let i = 0; i + 2 < pos.count; i += 3) for (let k = 0; k < 3; k++) {
+    const a = new THREE.Vector3().fromBufferAttribute(pos, i + k), b = new THREE.Vector3().fromBufferAttribute(pos, i + ((k + 1) % 3)), ka = K(a), kb = K(b), key = ka < kb ? ka + "|" + kb : kb + "|" + ka, e = kanten.get(key);
+    if (e) e.n++; else kanten.set(key, { a, b, n: 1 });
+  }
+  return [...kanten.values()].filter((e) => e.n === 1).map((e) => [e.a.addScaledVector(n0, -0.04).toArray(), e.b.addScaledVector(n0, -0.04).toArray()]);
+}
+// Linienzug an scharfen Ecken (> 25°) in einzelne Elemente teilen; glatte Folgen (Kreisbogen aus Streckenzug) bleiben ein Element, Geraden werden auf die Endpunkte gekürzt
+function teileAnEcken(pts, zu) {
+  const n = pts.length; if (n < 2) return [];
+  const P = zu && gleich(pts[0], pts.at(-1)) ? pts.slice(0, -1) : pts.slice(), m = P.length;
+  const winkel = (i) => { const a = P[(i + m - 1) % m], b = P[i], c = P[(i + 1) % m], u = [b[0] - a[0], b[1] - a[1]], v = [c[0] - b[0], c[1] - b[1]]; return Math.abs(Math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1])) * 180 / Math.PI; };
+  const ecke = P.map((_, i) => (zu || (i > 0 && i < m - 1)) && winkel(i) > 25);
+  const gerade = (l) => l.length > 2 && l.every((q, i) => i === 0 || i === l.length - 1 || Math.abs((q[0] - l[0][0]) * (l.at(-1)[1] - l[0][1]) - (q[1] - l[0][1]) * (l.at(-1)[0] - l[0][0])) < 1e-6 * (abst(l[0], l.at(-1)) || 1));
+  const kurz = (l) => (gerade(l) ? [l[0], l.at(-1)] : l);
+  if (zu && !ecke.some(Boolean)) return [{ pts: P, zu: true }];
+  const start = zu ? ecke.indexOf(true) : 0, ordnung = zu ? [...P.slice(start), ...P.slice(0, start), P[start]] : P, eOrd = zu ? [...ecke.slice(start), ...ecke.slice(0, start), true] : ecke, out = [];
+  let akt = [ordnung[0]];
+  for (let i = 1; i < ordnung.length; i++) { akt.push(ordnung[i]); if (eOrd[i] && i < ordnung.length - 1 || i === ordnung.length - 1) { out.push({ pts: kurz(akt), zu: false }); akt = [ordnung[i]]; } }
+  return out.filter((o) => o.pts.length >= 2);
+}
 function projizieren(sm) {
   const f = skizze.f, E = E_(f.ebene), auf = (w) => zuLokal(E, w), kand = [];
   for (const [a, b] of koerperKanten()) kand.push({ a, b, zug: [a, b], name: "Körperkante" });
-  for (const sk of vorher(f).filter((x) => x.typ === "skizze" && ebene(x.ebene))) for (const el of sk.elemente) for (const pts of elGeo(el).linien) {
-    const w = pts.map((q) => zuWelt(E_(sk.ebene), q));
-    for (let i = 1; i < w.length; i++) kand.push({ a: w[i - 1], b: w[i], zug: w, zu: !!elGeo(el).kontur, name: sk.name, sk, el });
+  for (const sk of vorher(f).filter((x) => x.typ === "skizze" && ebene(x.ebene))) for (const el of sk.elemente) {
+    if (el.art === "linie" || el.art === "rechteck") { // jede Kante einzeln
+      for (const [a, b] of elementKanten(el)) { const A = zuWelt(E_(sk.ebene), a), B = zuWelt(E_(sk.ebene), b); kand.push({ a: A, b: B, zug: [A, B], zu: false, name: sk.name, sk, el }); }
+      continue;
+    }
+    for (const pts of elGeo(el).linien) {
+      const w = pts.map((q) => zuWelt(E_(sk.ebene), q));
+      for (let i = 1; i < w.length; i++) kand.push({ a: w[i - 1], b: w[i], zug: w, zu: !!elGeo(el).kontur, name: sk.name, sk, el });
+    }
   }
   let best = null, bd = 12;
   for (const k of kand) { const A = aufSchirm(k.a), B = aufSchirm(k.b); if (A[2] < 1 && B[2] < 1) { const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = k; } } }
@@ -4921,9 +4979,9 @@ function projizieren(sm) {
     strahl.setFromCamera(new THREE.Vector2((sm[0] / r.width) * 2 - 1, -(sm[1] / r.height) * 2 + 1), kamera);
     const hit = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
     if (!hit) return status("Körperkante, Körperfläche oder Linie einer anderen Skizze anklicken.");
-    const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld), o = hit.point, inEbene = (w) => Math.abs(V(w).sub(o).dot(n)) < 0.01;
-    const stuecke = koerperKanten().filter(([a, b]) => inEbene(a) && inEbene(b)).map(([a, b]) => ({ pts: [auf(a), auf(b)] }));
-    zuege = verbindeStuecke(stuecke).map((z) => ({ pts: z.pts, zu: z.geschlossen }));
+    // nur die angeklickte Fläche: ihre Randkanten, an den Ecken getrennt – jede Kante (bzw. glatte Kurve) ist ein eigenes Element
+    const stuecke = flaechenRand(hit).map(([a, b]) => ({ pts: [auf(a), auf(b)] }));
+    zuege = verbindeStuecke(stuecke).flatMap((z) => teileAnEcken(z.pts, z.geschlossen));
   }
   const neu = [];
   for (const e of exakt) { const el = { ...e, projiziert: true, id: neueElementId(f) }; f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); neu.push(el); }
@@ -4934,7 +4992,8 @@ function projizieren(sm) {
     const el = { art: "linie", pts, geschlossen: !!z.zu && pts.length > 2, projiziert: true, id: neueElementId(f) };
     f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); neu.push(el);
   }
-  status(neu.length ? `Projiziert: ${neu.length} Element${neu.length === 1 ? "" : "e"} (fixiert)${best?.sk && !umschaltAn ? " – mit Umschalt + Klick die ganze Skizze «" + best.sk.name + "»" : ""}.` : "Die Kante steht senkrecht zur Skizzenebene – nichts zu projizieren.");
+  skizze.projNeu = neu; // X macht das zuletzt Projizierte zur Hilfslinie
+  status(neu.length ? `Projiziert: ${neu.length} Element${neu.length === 1 ? "" : "e"} (fixiert, X = Hilfslinie)${best?.sk && !umschaltAn ? " – mit Umschalt + Klick die ganze Skizze «" + best.sk.name + "»" : ""}.` : "Die Kante steht senkrecht zur Skizzenebene – nichts zu projizieren.");
 }
 function abschliessenLinie() {
   if (skizze?.werkzeug === "linie" && skizze.pkt.length >= 2) erstelle([{ art: "linie", pts: skizze.pkt.slice(), geschlossen: false }], null, { hv: true });
@@ -5420,7 +5479,7 @@ document.addEventListener("keydown", (e) => {
   const imFeld = e.target.closest?.("#eingabe");
   if (e.key === "Escape" && (skizze.picks.length || skizze.bsel)) { skizze.picks = []; skizze.bsel = null; document.querySelectorAll(".massbox").forEach((b) => b.remove()); zeichneLive(); e.preventDefault(); return; }
   if (e.key === "Escape") { if (skizze.pkt.length || skizze.quelle) { abschliessenLinie(); skizze.pkt = []; skizze.quelle = null; zeichneLive(); } else if (skizze.werkzeug !== "auswahl") setzeWerkzeug("auswahl"); else { skizze.sel = null; zeichneLive(); } e.preventDefault(); return; }
-  if ((e.key === "x" || e.key === "X") && skizze.sel && !e.target.closest?.("input,select")) { skizze.sel.hilfs = !skizze.sel.hilfs; status(skizze.sel.hilfs ? "Hilfslinie." : "Normale Linie."); zeichneLive(); e.preventDefault(); return; }
+  if ((e.key === "x" || e.key === "X") && (skizze.sel || skizze.projNeu?.length) && !e.target.closest?.("input,select")) { hilfslinieUmschalten(); e.preventDefault(); return; }
   if ((e.key === "Delete" || e.key === "Backspace") && (skizze.bsel || skizze.sel) && !e.target.closest?.("input,select")) { loescheSkizzenAuswahl(); e.preventDefault(); return; }
   // Tastenkürzel wie in Fusion: L Linie, R Rechteck, C Kreis, D Bemassung
   const kurz = { l: "linie", r: "rechteck", c: "kreis", d: "mass" }[e.key];

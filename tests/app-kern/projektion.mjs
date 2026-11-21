@@ -19,6 +19,7 @@ await s.evaluate(() => document.getElementById("tProjizieren").click()); await s
 const p = await s.evaluate(() => window.sdcadTest.schirm([50, 0, 0]));
 await s.mouse.click(p[0], p[1]); await s.waitForTimeout(400);
 const n1 = await eltn(); ok(n1 >= 1, "Linie einer anderen Skizze (Rechteck) projiziert: " + n1 + " Element(e)");
+ok(await s.evaluate(() => { const l = window.sdcadTest.dok().features.find((f) => f.id === "s2").elemente; return l.length === 1 && l[0].pts?.length === 2; }), "Rechteck: nur die angeklickte Kante wird projiziert (eine Strecke)");
 const pk = await s.evaluate(() => window.sdcadTest.schirm([50, 85, 0]));
 await s.mouse.click(pk[0], pk[1]); await s.waitForTimeout(400);
 const n2 = await eltn(); ok(n2 > n1, "Einzelne Linie projiziert: " + n2 + " Elemente");
