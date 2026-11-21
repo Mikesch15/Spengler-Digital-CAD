@@ -1141,9 +1141,9 @@ function regen() {
       } else if (f.typ === "dach") { // Dachflächen mit Aufbau (Phase 1: eine Platte je Fläche von Sparrenunterkante bis Deckung)
         const g = finde(f.gebaeude); if (g?.typ !== "gebaeude") throw new Error("Gebäude fehlt"); if (doc.features.indexOf(g) > doc.features.indexOf(f)) throw new Error("Das Gebäude muss vor dem Dach stehen");
         const r = dachErgebnis(f, g); f._dach = r; const dk = deckungVon(f), au = aufbauVon(f); doc.dachVorlagen ||= { deckungen: [], aufbauten: [] };
-        for (const [l, id, q] of [[doc.dachVorlagen.deckungen, dk?.id, dk], [doc.dachVorlagen.aufbauten, au?.id, au]]) if (q && !l.some((x) => x.id === id)) l.push(JSON.parse(JSON.stringify(q)));
+        for (const [l, id, q] of [[doc.dachVorlagen.deckungen, dk?.id, deckungBasis(f)], [doc.dachVorlagen.aufbauten, au?.id, aufbauBasis(f)]]) if (q && !l.some((x) => x.id === id)) l.push(JSON.parse(JSON.stringify(q)));
         const sc = dachSchichten(au, dk); f._schichten = sc;
-        const detail = f.darstellung !== "platte", eind = doc.features.some((x) => x.typ === "eindeckung" && x.dach === f.id && !x._aus); const luks = doc.features.filter((x) => x.typ === "lukarne" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), els = doc.features.filter((x) => x.typ === "dachelement" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), au2 = aufbauVon(f);
+        const detail = f.darstellung !== "platte", eind = true; /* Deckung nur durch «Ziegel eindecken»: bis dahin sind Dachlatten sichtbar */ const luks = doc.features.filter((x) => x.typ === "lukarne" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), els = doc.features.filter((x) => x.typ === "dachelement" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), au2 = aufbauVon(f);
         f._koerper = r.flaechen.map((fl, i) => dachFlaechenKoerper(fl, sc, au2, dk, { deckungUnsichtbar: eind, ausschnitte: [...els.filter((x) => x.flaeche === i).map((x) => { const q = elementRechteck(fl, x); return { s0: q.s0, s1: q.s1, t0: q.t0, t1: q.t1, wechsel: au2.sparrenB, name: x.name }; }),
           ...luks.filter((x) => x.flaeche === i).flatMap((x) => { try { const q = lukarneGeo(fl, x, 0).rect; return [{ ...q, wechsel: au2.sparrenB, name: x.name }]; } catch { return []; } })] }));
         // Lukarnen: gleicher Schichtaufbau auf Gaubendach, Stirn und Wangen
@@ -1173,7 +1173,7 @@ function regen() {
         const bl = doc.features.find((x) => x.typ === "dachbleche" && x.dach === d.id && !x._aus && doc.features.indexOf(x) < doc.features.indexOf(f)); f._ohneBleche = !bl; const formen = bl?._formen || [];
         const luks = doc.features.filter((x) => x.typ === "lukarne" && x.dach === d.id && !x._aus && d._dach.flaechen[x.flaeche]), els = doc.features.filter((x) => x.typ === "dachelement" && x.dach === d.id && !x._aus && d._dach.flaechen[x.flaeche]);
         const prismen = []; let anz = 0, gesch = 0;
-        const decke = (fl, opt) => { const r = eindeckungKern(fl, { deckung: dk, ...opt }); for (const p of r.prismen) prismen.push(ziegelPrisma(r.S, p, D.von, D.bis)); anz += r.anzahl; gesch += r.geschnitten; };
+        const decke = (fl, opt) => { const r = eindeckungKern(fl, { deckung: dk, ...opt }); for (const p of r.prismen) prismen.push(ziegelPrisma(r.S, p, D, dk)); anz += r.anzahl; gesch += r.geschnitten; };
         d._dach.flaechen.forEach((fl, i) => decke(fl, { sperr: formen.filter((fo) => (fo.flaeche === i && fo.art === "kehle") || fo.hauptFlaeche === i && fo.ziel === "haupt").map((fo) => fo.punkte),
           ausschnitte: [...els.filter((x) => x.flaeche === i).map((x) => { const q = elementRechteck(fl, x); return { s0: q.s0, s1: q.s1, t0: q.t0, t1: q.t1 }; }), ...luks.filter((x) => x.flaeche === i).flatMap((x) => { try { return [lukarneGeo(fl, x, 0).rect]; } catch { return []; } })] }));
         for (const x of luks) { try { const lk = x._lukK?.lk || lukarneGeo(d._dach.flaechen[x.flaeche], x, 0); for (const j of lk.idx.dach) decke({ punkte: lk.formen[j].punkte, normale: lk.formen[j].normale }, { sperr: formen.filter((q) => q.lukId === x.id && q.ziel === j).map((q) => q.punkte) }); } catch {} }
@@ -1772,7 +1772,7 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
     ...extra,
     aendern: (w, feld) => {
       setze(f, w); merkeAusdruecke(f);
-      if (feld === "vorlage" || feld === "skizze" || feld === "vorgang") { const d = dlg; dialog({ ...d, felder: felder(f) }); setze(f, werte()); }
+      if (feld === "vorlage" || feld === "skizze" || feld === "vorgang" || extra.neuBei?.includes(feld)) { const d = dlg; dialog({ ...d, felder: felder(f) }); setze(f, werte()); }
       regen();
     },
     ok: (w) => { setze(f, w); merkeAusdruecke(f); auswahl = f.id; },
@@ -2387,8 +2387,8 @@ function partnerKante(f, key) {
 }
 // ------------------------------------------------------------ Dach-Modus (Phase 1): Gebäude-Ansatz + Dach aus Grundriss, Dachform und Aufbau
 const dachEinst = () => (einst.dach ||= dachGrund());
-const deckungVon = (f) => [...(doc.dachVorlagen?.deckungen || []), ...dachEinst().deckungen, ...DECKUNGEN_STANDARD].find((d) => d.id === f.deckung) || dachEinst().deckungen[0];
-const aufbauVon = (f) => [...(doc.dachVorlagen?.aufbauten || []), ...dachEinst().aufbauten, ...AUFBAU_STANDARD].find((a) => a.id === f.aufbau) || dachEinst().aufbauten[0];
+const deckungBasis = (f) => [...(doc.dachVorlagen?.deckungen || []), ...dachEinst().deckungen, ...DECKUNGEN_STANDARD].find((d) => d.id === f.deckung) || dachEinst().deckungen[0];
+const aufbauBasis = (f) => [...(doc.dachVorlagen?.aufbauten || []), ...dachEinst().aufbauten, ...AUFBAU_STANDARD].find((a) => a.id === f.aufbau) || dachEinst().aufbauten[0];
 const BLECH_VORLAGE = { traufe: "traufe", ortgang: "ortgang", first: "first", grat: "first", kehle: "kehle" }, BLECH_FARBE = { traufe: 0xb8733a, ortgang: 0xc0834a, first: 0xa9622f, grat: 0xa9622f, kehle: 0x9b5a2b };
 // Ebenes Polygon (Grundriss-Koordinaten u, v, h) beliebiger Lage um dicke entlang der Normale aufgedickt → Dreiecke in Weltkoordinaten
 function dachPlatte(punkte, normale, dicke, g) {
@@ -2438,6 +2438,9 @@ function skizzenGrundriss(g) {
   return gegenUhrzeiger(l[Math.min(+g.profil || 0, l.length - 1)]);
 }
 const gebaeudeUmriss = (g) => (g.form === "skizze" ? skizzenGrundriss(g) : grundrissForm(g).grundriss);
+// Werte der Vorlage, überschrieben mit den Massen, die beim Erstellen des Dachs eingegeben wurden (f.deckungW / f.aufbauW)
+const deckungVon = (f) => { const b = deckungBasis(f); return b ? { ...b, ...(f.deckungW || {}) } : b; };
+const aufbauVon = (f) => { const b = aufbauBasis(f); return b ? { ...b, ...(f.aufbauW || {}) } : b; };
 function dachErgebnis(f, g) {
   if (g.form === "skizze") return polygonDach({ grundriss: skizzenGrundriss(g), neigung: +f.neigung || 35, giebel: String(f.giebel ?? "").split(/[^\d]+/).filter(Boolean).map(Number), ueberstandTraufe: +f.ueberstandTraufe || 0, ueberstandOrtgang: +f.ueberstandOrtgang || 0, traufhoehe: g.traufhoehe });
   if (g.form && g.form !== "rechteck") return fluegelDach({ grundform: g, form: f.form || "sattel", neigung: +f.neigung || 35, neigung2: f.neigung2 ? +f.neigung2 : null, ueberstandTraufe: +f.ueberstandTraufe || 0, ueberstandOrtgang: +f.ueberstandOrtgang || 0, traufhoehe: g.traufhoehe });
@@ -2514,6 +2517,20 @@ function gebaeudeDialog(f) {
     { id: "traufhoehe", label: "Wandhöhe bis Traufe", einheit: "mm", wert: f.traufhoehe }, { id: "wandstaerke", label: "Wandstärke", einheit: "mm", wert: f.wandstaerke }, { id: "x", label: "Lage X", einheit: "mm", wert: f.x ?? 0 }, { id: "z", label: "Lage Z", einheit: "mm", wert: f.z ?? 0 }],
     (f, w) => { for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke", "x", "z", "fluegelBreite", "fluegelTiefe"]) if (Number.isFinite(w[k])) f[k] = w[k]; if (w.gform) f.form = w.gform; if (w.gskizze !== undefined) f.skizze = w.gskizze || null; if (Number.isFinite(+w.gprofil) && +w.gprofil >= 1) f.profil = +w.gprofil - 1; f.name = w.name?.trim() || f.name; }, "Gebäude (Ansatz)", "Rechteckiger Gebäudekörper: Wände bis zur Traufe, Giebel bis zum Dach. Später erweiterbar (Geschosse, Öffnungen).");
 }
+// Alle Masse des Dachaufbaus und der Deckung beim Erstellen eingeben: Vorlage wählen, einzelne Werte überschreiben (nur Abweichungen werden im Dach gespeichert)
+const AUFBAU_ZAHLEN = [["sparrenB", "Sparren: Breite"], ["sparrenH", "Sparren: Höhe"], ["achsabstand", "Sparren: Achsabstand"], ["daemmDicke", "Dämmung: Dicke"], ["unterdachDicke", "Unterdach: Dicke (Schalung)"], ["konterB", "Konterlattung: Breite"], ["konterH", "Konterlattung: Höhe"]];
+const DECKUNG_ZAHLEN = [["lattenB", "Dachlattung: Breite"], ["lattenH", "Dachlattung: Höhe"], ["lattweite", "Lattweite (Abstand der Latten)"], ["deckbreite", "Ziegel: Deckbreite"], ["ziegelLaenge", "Ziegel: Länge"], ["ziegelT", "Ziegel: Dicke"], ["ziegelDicke", "Deckung: Schichtdicke im Aufbau"], ["stueckProM2", "Stück je m²"], ["gewichtProM2", "Gewicht je m²"], ["mindestNeigung", "Mindestneigung"]];
+const dachAufbauFelder = (f) => { const a = aufbauVon(f) || {}; return [{ id: "aw_daemmung", label: "Dämmung", optionen: [["zwischen", "zwischen den Sparren"], ["aufsparren", "auf den Sparren"]], wert: a.daemmung || "zwischen" }, { id: "aw_unterdach", label: "Unterdach", optionen: [["schalung", "Schalung + Bahn"], ["bahn", "diffusionsoffene Bahn"]], wert: a.unterdach || "schalung" }, ...AUFBAU_ZAHLEN.map(([k, l]) => ({ id: "aw_" + k, label: l, einheit: "mm", wert: a[k] }))]; };
+const dachDeckungFelder = (f) => { const d = deckungVon(f) || {}; return DECKUNG_ZAHLEN.map(([k, l]) => ({ id: "dw_" + k, label: l, einheit: k === "mindestNeigung" ? "°" : k === "stueckProM2" ? "" : k === "gewichtProM2" ? "kg" : "mm", wert: d[k] })); };
+function dachMasseUebernehmen(f, w) {
+  for (const [auswahlId, basisFn, feldPraefix, ziel, zahlen, texte] of [["aufbau", aufbauBasis, "aw_", "aufbauW", AUFBAU_ZAHLEN, ["daemmung", "unterdach"]], ["deckung", deckungBasis, "dw_", "deckungW", DECKUNG_ZAHLEN, []]]) {
+    if (w[auswahlId] && w[auswahlId] !== f[auswahlId]) { f[auswahlId] = w[auswahlId]; f[ziel] = {}; continue; } // andere Vorlage: eigene Masse verwerfen
+    const basis = basisFn(f); if (!basis) { if (w[auswahlId]) f[auswahlId] = w[auswahlId]; continue; }
+    const ov = {}; for (const [k] of zahlen) { const v = w[feldPraefix + k]; if (Number.isFinite(v) && v > 0 && v !== basis[k]) ov[k] = v; }
+    for (const k of texte) { const v = w[feldPraefix + k]; if (v && v !== basis[k]) ov[k] = v; }
+    f[ziel] = ov; if (w[auswahlId]) f[auswahlId] = w[auswahlId];
+  }
+}
 function dachDialog(f) {
   const istNeu = !f; let g;
   if (istNeu) {
@@ -2526,17 +2543,19 @@ function dachDialog(f) {
     { id: "form", label: "Dachform", optionen: Object.entries(DACHFORMEN), wert: f.form }, { id: "firstRichtung", label: "First / Gefälle", optionen: [["laengs", "First längs (Länge)"], ["quer", "First quer (Tiefe)"]], wert: f.firstRichtung || "laengs" },
     { id: "neigung", label: "Neigung", einheit: "°", wert: f.neigung }, { id: "giebel", label: "Giebelkanten Nr. (nur Grundform «Aus Skizze», z. B. 2,4)", text: true, wert: f.giebel ?? "" }, ...(["sattel", "walm"].includes(f.form) ? [{ id: "neigung2", label: "Neigung 2. Seite", einheit: "°", wert: f.neigung2 ?? f.neigung }] : []),
     { id: "ueberstandTraufe", label: "Überstand Traufe", einheit: "mm", wert: f.ueberstandTraufe }, { id: "ueberstandOrtgang", label: "Überstand Ortgang", einheit: "mm", wert: f.ueberstandOrtgang },
-    { id: "deckung", label: "Deckung", optionen: dachEinst().deckungen.map((d) => [d.id, d.name]), wert: f.deckung }, { id: "aufbau", label: "Dachaufbau", optionen: dachEinst().aufbauten.map((a) => [a.id, a.name]), wert: f.aufbau },
+    { id: "aufbau", label: "Dachaufbau (Vorlage)", optionen: dachEinst().aufbauten.map((a) => [a.id, a.name]), wert: f.aufbau }, ...dachAufbauFelder(f),
+    { id: "deckung", label: "Deckung (Vorlage)", optionen: dachEinst().deckungen.map((d) => [d.id, d.name]), wert: f.deckung }, ...dachDeckungFelder(f),
     { id: "darstellung", label: "Darstellung", optionen: [["detail", "Aufbau detailliert (Sparren, Dämmung, Latten …)"], ["platte", "Nur Platte (schnell)"]], wert: f.darstellung || "detail" }];
   const setze = (f, w) => {
     for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke", "fluegelBreite", "fluegelTiefe"]) if (w[k] > 0) g[k] = w[k]; if (w.gform) g.form = w.gform; if (w.gskizze !== undefined) g.skizze = w.gskizze || null; if (Number.isFinite(+w.gprofil) && +w.gprofil >= 1) g.profil = +w.gprofil - 1;
     for (const k of ["neigung", "neigung2", "ueberstandTraufe", "ueberstandOrtgang"]) if (Number.isFinite(w[k]) && w[k] >= 0) f[k] = w[k];
-    for (const k of ["form", "firstRichtung", "deckung", "aufbau", "darstellung"]) if (w[k]) f[k] = w[k]; if (w.giebel !== undefined) f.giebel = w.giebel;
+    dachMasseUebernehmen(f, w);
+    for (const k of ["form", "firstRichtung", "darstellung"]) if (w[k]) f[k] = w[k]; if (w.giebel !== undefined) f.giebel = w.giebel;
     f.name = w.name?.trim() || f.name; if (f.neigung > 80) f.neigung = 80; if (f.neigung2 > 80) f.neigung2 = 80;
   };
   featureDialog(f, istNeu, felder, setze, "Dach automatisch",
     "Grundform (Rechteck) mit Massen, Dachform, Neigung, Überstände, Deckung und Aufbau – alles andere rechnet das Programm. Deckungs- und Aufbauwerte stellst du in den Einstellungen › Dach ein.",
-    { info: () => { const r = f._dach; if (f._fehler) return "⚠ " + f._fehler; if (!r) return ""; const m = pruefeDach({ neigungen: r.flaechen.map((x) => x.neigung), deckung: deckungVon(f) }), A = r.flaechen.reduce((s, x) => s + x.flaeche, 0), L = (a) => r.linien.filter((l) => l.art === a).reduce((s, l) => s + l.laenge, 0) / 1000;
+    { neuBei: ["deckung", "aufbau"], info: () => { const r = f._dach; if (f._fehler) return "⚠ " + f._fehler; if (!r) return ""; const m = pruefeDach({ neigungen: r.flaechen.map((x) => x.neigung), deckung: deckungVon(f) }), A = r.flaechen.reduce((s, x) => s + x.flaeche, 0), L = (a) => r.linien.filter((l) => l.art === a).reduce((s, l) => s + l.laenge, 0) / 1000;
         return (m.length ? "⚠ " + m[0] + " " : "") + (r.hinweise?.length ? "⚠ " + r.hinweise[0] + " " : "") + `Dachfläche ${A.toFixed(1)} m² · First ${L("first").toFixed(1)} m · Grate ${L("grat").toFixed(1)} m${L("kehle") ? ` · Kehlen ${L("kehle").toFixed(1)} m` : ""} · Firsthöhe ${(r.firsthoehe / 1000).toFixed(2)} m`; } });
   if (istNeu) { const d = dlg, alt = d.abbrechen; d.abbrechen = () => { alt(); entferneFeature(g); }; setTimeout(() => $("zoomAlles").click(), 50); }
 }
@@ -3817,8 +3836,8 @@ function zeigeEinst() {
     <div class="reihe ohnerand"><button class="knopf" id="eNeuBaustein">+ Baustein</button><button class="knopf" id="eBausteineStandard">Standard-Bausteine ergänzen</button></div>`,
     dach: `<h4>Dachdeckung</h4>
     <p class="hinweis">Richtwerte – vor dem Einsatz am gewählten Produkt prüfen und hier anpassen. Beim Erstellen eines Dachs wählst du die Deckung; die Werte werden ins Projekt übernommen.</p>
-    <div class="tabwrap"><table class="zeilen"><thead><tr><th>Name</th><th>Lattweite</th><th>Deckbreite</th><th>Ziegeldicke</th><th>Stück/m²</th><th>kg/m²</th><th>Min.-Neigung °</th><th>Latte b</th><th>Latte h</th><th></th></tr></thead><tbody>
-    ${(e.dach ||= dachGrund()).deckungen.map((d, i) => `<tr>${[["name", "text"], ["lattweite"], ["deckbreite"], ["ziegelDicke"], ["stueckProM2"], ["gewichtProM2"], ["mindestNeigung"], ["lattenB"], ["lattenH"]].map(([k, t]) => `<td><input data-dach="d:${i}:${k}" type="${t || "number"}" step="any" value="${esc(d[k] ?? "")}" aria-label="${k}"></td>`).join("")}<td>${e.dach.deckungen.length > 1 ? `<button class="weg" data-dweg="d:${i}" aria-label="entfernen">×</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
+    <div class="tabwrap"><table class="zeilen"><thead><tr><th>Name</th><th>Lattweite</th><th>Deckbreite</th><th>Schichtdicke</th><th>Ziegellänge</th><th>Ziegeldicke</th><th>Stück/m²</th><th>kg/m²</th><th>Min.-Neigung °</th><th>Latte b</th><th>Latte h</th><th></th></tr></thead><tbody>
+    ${(e.dach ||= dachGrund()).deckungen.map((d, i) => `<tr>${[["name", "text"], ["lattweite"], ["deckbreite"], ["ziegelDicke"], ["ziegelLaenge"], ["ziegelT"], ["stueckProM2"], ["gewichtProM2"], ["mindestNeigung"], ["lattenB"], ["lattenH"]].map(([k, t]) => `<td><input data-dach="d:${i}:${k}" type="${t || "number"}" step="any" value="${esc(d[k] ?? "")}" aria-label="${k}"></td>`).join("")}<td>${e.dach.deckungen.length > 1 ? `<button class="weg" data-dweg="d:${i}" aria-label="entfernen">×</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
     <button class="knopf" data-dneu="d">+ Deckung (Kopie der letzten)</button>
     <h4>Dachaufbau</h4>
     <div class="tabwrap"><table class="zeilen"><thead><tr><th>Name</th><th>Sparren b</th><th>Sparren h</th><th>Achsabstand</th><th>Dämmung</th><th>Dämmdicke</th><th>Unterdach</th><th>Konterlatte b</th><th>Konterlatte h</th><th></th></tr></thead><tbody>

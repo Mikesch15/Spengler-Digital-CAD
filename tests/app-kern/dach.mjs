@@ -22,7 +22,13 @@ ok(!/Mindestneigung/.test(await info()), "40° mit Biber doppelt: kein Hinweis")
 await s.selectOption("#d_gform", "L"); await s.waitForTimeout(700);
 ok(/Kehlen [\d.]+ m/.test(await info()), "L-Form (Walm): Kehle in der Info – " + (await info()));
 await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(400); await s.screenshot({ path: "/tmp/t/dach.png" });
+// Alle Masse beim Erstellen: Vorlage wechseln setzt die Werte der Vorlage, eigene Werte werden als Abweichung gespeichert
+await s.selectOption("#d_aufbau", "aufsparren-120"); await s.waitForTimeout(600);
+ok((await s.inputValue("#d_aw_sparrenH")) === "160", "Vorlage «Aufsparren 120» setzt Sparrenhöhe 160");
+await s.selectOption("#d_aufbau", "standard-200"); await s.waitForTimeout(600);
+await s.fill("#d_aw_sparrenH", "180"); await s.dispatchEvent("#d_aw_sparrenH", "input"); await s.fill("#d_dw_lattweite", "320"); await s.dispatchEvent("#d_dw_lattweite", "input"); await s.waitForTimeout(600);
 await s.click("#dOk"); await s.waitForTimeout(400);
+{ const dd = (await s.evaluate(() => window.sdcadTest.dok())).features.find((f) => f.typ === "dach"); ok(dd.aufbauW?.sparrenH === 180 && dd.deckungW?.lattweite === 320 && !("sparrenB" in dd.aufbauW), "Eigene Masse (Sparren 180, Lattweite 320) im Dach gespeichert, nur als Abweichung"); }
 // Phase 2: einzelne Körper (Sparren, Dämmung, Unterdach, Latten, Deckung) + Holzliste im Werkstatt-Panel
 const nDetail = await koerper(); ok(nDetail >= 11, `Aufbau detailliert: ${nDetail} Körper (je Art ein Netz)`);
 await s.evaluate(() => { const t = window.sdcadTest, f = t.dok().features.find((x) => x.typ === "dach"); t.waehle?.(f.id); });

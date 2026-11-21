@@ -159,6 +159,9 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   ok(mit.flaeche < frei.flaeche - lk.flaeche * 0.9, "Ziegelfläche um die Öffnung der Lukarne kleiner");
   const ohneBlech = eindeckung(f2, { deckung: dk, ausschnitte: [lk.rect] });
   ok(mit.flaeche < ohneBlech.flaeche - 0.3, `Die Blechflächen nehmen Ziegelfläche weg (${ohneBlech.flaeche.toFixed(2)} → ${mit.flaeche.toFixed(2)} m²)`);
+  const { ziegelPrisma } = await import("../kern/dach/eindeckung.js"), e1 = eindeckung(f2, { deckung: dk }), pr = ziegelPrisma(e1.S, e1.prismen.find((z) => z.poly.length === 4 && z.tk > 1000), sc.liste.find((l) => l.id === "deckung"), dk);
+  const nrm = e1.S.n, hs = pr.unten.map((p) => p.reduce((a, x, k) => a + x * nrm[k], 0)), tilt = Math.max(...hs) - Math.min(...hs);
+  ok(tilt > 20 && tilt < 60, `Geschuppt: Ziegel liegt geneigt, unten auf dem Ziegel darunter, oben an der Latte (Hub ${tilt.toFixed(0)} mm senkrecht zur Dachfläche)`);
   const d = dachSchnitt({ art: "traufe", neigung: 35, schichten: sc, aufbau: au }), t = d.masse.filter((x) => !x.gesamt).map((x) => +x.text);
   ok(t.length >= 5 && t.includes(200), "Detail: Schichtdicken einzeln bemasst (" + t.join(", ") + ") und Gesamtmass");
   ok(lk.flaps.some((q) => q.art === "luk-kehle") && lk.fenster && lk.rect.poly.length === 5, "Lukarne: Blechflächen, Fenster, fünfeckige Öffnung");

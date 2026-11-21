@@ -1,9 +1,9 @@
 // Spengler Digital CAD – Kern: Vorlagen für Dachdeckung und Dachaufbau (Richtwerte, in den Grundeinstellungen änderbar)
 // Alle Masse in mm; Neigungen in Grad. Die Werte sind Richtwerte aus gängigen Herstellerangaben – vor dem Einsatz am gewählten Produkt prüfen.
 export const DECKUNGEN_STANDARD = [
-  { id: "schiebeziegel", name: "Schiebeziegel (Falzziegel)", art: "schiebeziegel", lattweite: 340, deckbreite: 200, ziegelDicke: 25, stueckProM2: 14.7, gewichtProM2: 42, mindestNeigung: 22, lattenB: 40, lattenH: 60, richtwert: true },
-  { id: "biber-einfach", name: "Biberschwanz – Einfachdeckung (Spiess)", art: "biber-einfach", lattweite: 300, deckbreite: 180, ziegelDicke: 14, stueckProM2: 18.5, gewichtProM2: 45, mindestNeigung: 40, lattenB: 30, lattenH: 50, richtwert: true },
-  { id: "biber-doppel", name: "Biberschwanz – Doppeldeckung", art: "biber-doppel", lattweite: 150, deckbreite: 180, ziegelDicke: 28, stueckProM2: 37, gewichtProM2: 75, mindestNeigung: 30, lattenB: 30, lattenH: 50, richtwert: true },
+  { id: "schiebeziegel", name: "Schiebeziegel (Falzziegel)", art: "schiebeziegel", lattweite: 340, deckbreite: 200, ziegelDicke: 25, ziegelT: 25, ziegelLaenge: 420, stueckProM2: 14.7, gewichtProM2: 42, mindestNeigung: 22, lattenB: 40, lattenH: 60, richtwert: true },
+  { id: "biber-einfach", name: "Biberschwanz – Einfachdeckung (Spiess)", art: "biber-einfach", lattweite: 300, deckbreite: 180, ziegelDicke: 14, ziegelT: 14, ziegelLaenge: 380, stueckProM2: 18.5, gewichtProM2: 45, mindestNeigung: 40, lattenB: 30, lattenH: 50, richtwert: true },
+  { id: "biber-doppel", name: "Biberschwanz – Doppeldeckung", art: "biber-doppel", lattweite: 150, deckbreite: 180, ziegelDicke: 28, ziegelT: 14, ziegelLaenge: 380, stueckProM2: 37, gewichtProM2: 75, mindestNeigung: 30, lattenB: 30, lattenH: 50, richtwert: true },
 ];
 export const AUFBAU_STANDARD = [
   { id: "standard-200", name: "Sparren 8/20, Zwischensparrendämmung 200", sparrenB: 80, sparrenH: 200, achsabstand: 700, daemmung: "zwischen", daemmDicke: 200, unterdach: "schalung", unterdachDicke: 24, konterB: 60, konterH: 40, richtwert: true },

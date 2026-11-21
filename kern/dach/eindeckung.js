@@ -15,15 +15,15 @@ const ccw = (p) => (flaecheVon(p) < 0 ? p.slice().reverse() : p.slice());
 
 // fl: Dachfläche { punkte | stuecke, normale }; sperr: Polygone [[u, v, h] …] auf dieser Fläche (Blechflächen); ausschnitte: Rechtecke { s0, s1, t0, t1 }
 export function eindeckung(fl, { deckung, sperr = [], ausschnitte = [], versatz = null }) {
-  const R = flaechenRahmen(fl), S = R.S, lw = deckung.lattweite, db = deckung.deckbreite, biber = versatz ?? /biber/.test(deckung.art || "");
+  const R = flaechenRahmen(fl), S = R.S, lw = deckung.lattweite, db = deckung.deckbreite, ZL = Math.max(+deckung.ziegelLaenge || lw * 1.25, lw + 10), biber = versatz ?? /biber/.test(deckung.art || "");
   if (!(lw > 0 && db > 0)) throw new Error("Deckung braucht Lattweite und Deckbreite");
   const proj = (poly) => poly.map((p) => { const d = sub(p, S.o); return [dot(d, S.q), dot(d, S.up)]; });
   const sperren = [...sperr.map(proj), ...ausschnitte.map((a) => a.poly || [[a.s0, a.t0], [a.s1, a.t0], [a.s1, a.t1], [a.s0, a.t1]])].map(ccw).filter((p) => Math.abs(flaecheVon(p)) > 100);
   const stuecke = R.stuecke.map(ccw).map((b) => ({ hps: kantenEbenen(b), x0: Math.min(...b.map((p) => p[0])), x1: Math.max(...b.map((p) => p[0])), y0: Math.min(...b.map((p) => p[1])), y1: Math.max(...b.map((p) => p[1])) }));
   const sp = sperren.map((poly) => ({ hps: kantenEbenen(poly), x0: Math.min(...poly.map((p) => p[0])), x1: Math.max(...poly.map((p) => p[0])), y0: Math.min(...poly.map((p) => p[1])), y1: Math.max(...poly.map((p) => p[1])) }));
-  const voll = (db - 3) * (lw - 3), prismen = []; let geschnitten = 0, flaeche = 0;
+  const voll = (db - 3) * ZL, prismen = []; let geschnitten = 0, flaeche = 0; // Ziegel überlappen: Länge = Lattweite + Überdeckung
   for (let k = 0; R.t0 + k * lw < R.t1 - 30; k++) {
-    const tlo = R.t0 + k * lw + 1.5, thi = R.t0 + (k + 1) * lw - 1.5, off = biber && k % 2 ? db / 2 : 0;
+    const tlo = R.t0 + k * lw, thi = tlo + ZL, off = biber && k % 2 ? db / 2 : 0;
     for (let j = Math.floor((R.s0 - off) / db) - 1; R.s0 + off + j * db < R.s1; j++) {
       const a = R.s0 + off + j * db + 1.5, b = R.s0 + off + (j + 1) * db - 1.5; if (b < R.s0 || a > R.s1) continue;
       for (const st of stuecke) { // Ziegel ∩ Dachfläche (konvexes Stück), dann abzüglich der Blech- und Öffnungsflächen
@@ -33,11 +33,15 @@ export function eindeckung(fl, { deckung, sperr = [], ausschnitte = [], versatz 
         if (p.length < 3) continue;
         let teile = [p];
         for (const q of sp) { if (b < q.x0 || a > q.x1 || thi < q.y0 || tlo > q.y1) continue; teile = teile.flatMap((t) => abziehenKlein(t, q.hps)); }
-        for (const t of teile) { const f = Math.abs(flaecheVon(t)); if (f < 0.12 * voll) continue; if (f < 0.97 * voll) geschnitten++; flaeche += f; prismen.push(t); }
+        for (const t of teile) { const f = Math.abs(flaecheVon(t)); if (f < 0.12 * voll) continue; if (f < 0.97 * voll) geschnitten++; flaeche += f; prismen.push({ poly: t, tk: tlo }); }
       }
     }
   }
   return { prismen, anzahl: prismen.length, geschnitten, S, flaeche: flaeche / 1e6 };
 }
-// Ecken eines Ziegels (Vieleck in s, t) von Dicke von…bis: { unten: [[u, v, h]…], oben: [[u, v, h]…] }
-export const ziegelPrisma = (S, poly, von, bis) => ({ unten: poly.map(([s, t]) => S.punkt(s, t, von)), oben: poly.map(([s, t]) => S.punkt(s, t, bis)) });
+// Ziegel liegt geneigt: oben an der Latte (Nase), unten auf dem Ziegel darunter (geschuppt). { unten, oben }: Ecken [u, v, h]
+export function ziegelPrisma(S, z, D, deckung) {
+  const lw = deckung.lattweite, ZL = Math.max(+deckung.ziegelLaenge || lw * 1.25, lw + 10), T = +deckung.ziegelT || +deckung.ziegelDicke || 20, Rh = (T * ZL) / lw;
+  const unten = z.poly.map(([s, t]) => S.punkt(s, t, D.von + Rh * (1 - Math.min(1, Math.max(0, (t - z.tk) / ZL)))));
+  return { unten, oben: z.poly.map(([s, t], i) => { const p = S.punkt(s, t, D.von + Rh * (1 - Math.min(1, Math.max(0, (t - z.tk) / ZL))) + T); return p; }) };
+}
