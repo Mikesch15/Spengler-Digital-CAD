@@ -16,9 +16,9 @@ let doc = await s.evaluate(() => window.sdcadTest.dok()), dach = doc.features.fi
 ok(dach.quelle === "skizzen" && dach.flaechenSkizzen.length === 2 && doc.features.filter((f) => f.typ === "ebene" && f.art === "punkte").length === 2, "Dach hat 2 Dachflächen-Skizzen auf Ebenen durch 3 Punkte");
 const sk = doc.features.find((f) => f.id === dach.flaechenSkizzen[0]); ok(sk.elemente[0].pts.length === 4 && sk.elemente[0].geschlossen, "Skizze der Dachfläche: geschlossenes Vieleck mit 4 Ecken");
 await s.click("#dOk"); await s.waitForTimeout(400);
-// Eine Ecke am First um 20 mm verschieben: Warnung über die gemeinsame Kante
+// Eine Ecke am First um 20 mm quer zur Kante verschieben (die Nachbarfläche folgt nur entlang der Kante): Warnung über die gemeinsame Kante
 const sk0 = JSON.parse(JSON.stringify(doc.features.find((f) => f.id === dach.flaechenSkizzen[0]))), P = sk0.elemente[0].pts, k = P.map((p) => p[1]).indexOf(Math.max(...P.map((p) => p[1])));
-const sk1 = JSON.stringify(doc).replace(JSON.stringify(P), JSON.stringify(P.map((p, i) => (i === k ? [p[0] + 20, p[1]] : p))));
+const sk1 = JSON.stringify(doc).replace(JSON.stringify(P), JSON.stringify(P.map((p, i) => (i === k ? [p[0], p[1] - 20] : p))));
 await s.close(); const s2 = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr2 = []; s2.on("pageerror", (e) => pr2.push(e.message));
 await s2.addInitScript((d) => localStorage.setItem("sdcad-doc-0.2", d), sk1); await s2.goto("http://localhost:8797/index.html?test"); await s2.waitForTimeout(1200);
 await s2.evaluate((id) => window.sdcadTest.bearbeite(id), dach.id); await s2.waitForSelector("#d_quelle", { timeout: 6000 }); await s2.waitForTimeout(600);

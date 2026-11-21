@@ -17,6 +17,17 @@ const hull = (pts) => { const P = pts.slice().sort((x, y) => x[0] - y[0] || x[1]
   for (const p of P) { while (h.length >= 2 && cr(h.at(-2), h.at(-1), p) <= 0) h.pop(); h.push(p); } const n = h.length;
   for (let i = P.length - 2; i >= 0; i--) { const p = P[i]; while (h.length > n && cr(h.at(-2), h.at(-1), p) <= 0) h.pop(); h.push(p); } h.pop(); return h; };
 
+// Rahmen der Lukarne auf der Dachfläche (für Umrechnungen zwischen Welt- und lokalen Koordinaten)
+function rahmen(fl, el, oben) {
+  const R = flaechenRahmen(fl), S = R.S, w = norm([S.up[0], S.up[1], 0]), q = [S.q[0], S.q[1], 0], sC = R.s0 + (+el.x || 0), tA = R.t0 + (+el.y || 0), C0 = S.punkt(sC, tA, oben);
+  return { R, S, w, q, C0, P: (X, Y, Z) => [C0[0] + X * q[0] + Y * w[0], C0[1] + X * q[1] + Y * w[1], C0[2] + Z], lokal: (p) => { const d = sub(p, C0); return [dot(d, q), dot(d, w), d[2]]; } };
+}
+// Umkehrung der Seitenwand-Messung: aus dem Punkt, an dem die Traufe auf die Dachfläche trifft (Grundriss-Koordinaten), Winkel oben und Trauflänge der Seite (-1 links, 1 rechts)
+export function aufmassAusPunkt(fl, el, oben, seite, punkt) {
+  const { lokal } = rahmen(fl, el, oben), bu = +el.bu || 0, bo = +el.bo || bu, h = (seite < 0 ? +el.hL : +el.hR) || +el.hf || 0;
+  const A = [seite * bu / 2, 0, 0], Bp = [seite * bo / 2, 0, h], p = norm(sub(A, Bp)), d = sub(lokal(punkt), Bp), L = len(d), dn = d.map((x) => x / (L || 1));
+  return { winkel: (Math.atan2(dot(dn, [0, 1, 0]), dot(dn, p)) * 180) / Math.PI, laenge: L };
+}
 export function lukarneAufmass(fl, el, oben = 0) {
   const R = flaechenRahmen(fl), S = R.S, bu = +el.bu || 0, bo = +el.bo || bu, hf = +el.hf || 0, art = el.art || "sattel", hinweise = [], wd = +el.wd || 150, dd = +el.dd || 250;
   if (!(bu > 0 && bo > 0 && hf > 0)) throw new Error("Breite unten, Breite oben und Höhe der Front müssen grösser als 0 sein");
@@ -92,5 +103,5 @@ export function lukarneAufmass(fl, el, oben = 0) {
   const poly = plan.map(([X, Y]) => [sC + X, tA + Y / cosM]), innen = poly.every((p) => R.stuecke.some((st) => innenPunkt(st, p)));
   if (!innen) hinweise.push("Die Lukarne ragt über den Rand der Dachfläche (First/Seite) – tiefer setzen oder kleiner messen.");
   const sx = poly.map((p) => p[0]), tx = poly.map((p) => p[1]);
-  return { innen, hinweise, flaps, fenster, idx, rect: { s0: Math.min(...sx), s1: Math.max(...sx), t0: Math.min(...tx), t1: Math.max(...tx), poly }, flaeche: Math.abs(poly.reduce((a, p, i) => { const r = poly[(i + 1) % poly.length]; return a + p[0] * r[1] - r[0] * p[1]; }, 0)) / 2 / 1e6, formen, bleche, firsthoehe: Math.max(...formen.flatMap((f) => f.punkte.map((p) => p[2]))), aufmass: { links: info[-1], rechts: info[1] } };
+  return { innen, hinweise, flaps, fenster, idx, eave: { links: { E: P(...Ep[-1]), B: P(...Bp[-1]) }, rechts: { E: P(...Ep[1]), B: P(...Bp[1]) } }, rect: { s0: Math.min(...sx), s1: Math.max(...sx), t0: Math.min(...tx), t1: Math.max(...tx), poly }, flaeche: Math.abs(poly.reduce((a, p, i) => { const r = poly[(i + 1) % poly.length]; return a + p[0] * r[1] - r[0] * p[1]; }, 0)) / 2 / 1e6, formen, bleche, firsthoehe: Math.max(...formen.flatMap((f) => f.punkte.map((p) => p[2]))), aufmass: { links: info[-1], rechts: info[1] } };
 }

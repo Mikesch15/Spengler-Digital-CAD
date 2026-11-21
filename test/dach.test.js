@@ -207,4 +207,13 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   ok(lukarne(r.flaechen[0], { ...m, dachFlaechen: ov2 }, 0).hinweise.some((h) => /Ebene/.test(h)) || true, "Verschobener Dachpunkt wird übernommen");
   let fe = ""; try { lukarne(r.flaechen[0], { ...m, dachFlaechen: [ov[0]] }, 0); } catch (e) { fe = e.message; } ok(/Fläche\(n\) nötig/.test(fe), "Satteldachgaube braucht zwei gezeichnete Dachflächen");
 }
+
+// ---- Kopplung Seitenwand ⇄ Gaubendach: Umkehrung der Messung aus dem Traufende
+{
+  const { lukarne } = await import("../kern/dach/lukarne.js"), { aufmassAusPunkt } = await import("../kern/dach/lukarneAufmass.js"), r = rechteckDach({ breite: 12000, tiefe: 9000, form: "sattel", neigung: 35, ueberstandTraufe: 0, ueberstandOrtgang: 0 });
+  const m = { masse: "aufmass", art: "schlepp", bu: 1800, bo: 1700, hf: 1200, hL: 1250, wL: 93, lL: 1800, wR: 88, lR: 1600, x: 6000, y: 800 }, l = lukarne(r.flaechen[0], m, 0);
+  const li = aufmassAusPunkt(r.flaechen[0], m, 0, -1, l.eave.links.E), re = aufmassAusPunkt(r.flaechen[0], m, 0, 1, l.eave.rechts.E);
+  ok(nah(li.winkel, 93, 0.01) && nah(re.winkel, 88, 0.01), `Aus dem Traufende zurückgerechnet: Winkel links ${li.winkel.toFixed(2)}° (93), rechts ${re.winkel.toFixed(2)}° (88)`);
+  ok(nah(li.laenge, l.aufmass.links.lBerechnet, 0.01), `Trauflänge aus dem Traufende = Länge bis zur Dachfläche (${li.laenge.toFixed(1)} mm)`);
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);

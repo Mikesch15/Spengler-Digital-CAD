@@ -11,6 +11,7 @@ import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
+import { aufmassAusPunkt } from "../kern/dach/lukarneAufmass.js";
 import { eindeckung as eindeckungKern, ziegelPrisma } from "../kern/dach/eindeckung.js";
 import { lukarne as lukarneKern, LUKARNENARTEN } from "../kern/dach/lukarne.js";
 import { elementRechteck, elementKoerper, elementFlaeche, kaminBleche, veluxListe, ELEMENTARTEN } from "../kern/dach/elemente.js";
@@ -2468,14 +2469,81 @@ const gebaeudeUmriss = (g) => (g.form === "skizze" ? skizzenGrundriss(g) : grund
 // Werte der Vorlage, überschrieben mit den Massen, die beim Erstellen des Dachs eingegeben wurden (f.deckungW / f.aufbauW)
 const deckungVon = (f) => { const b = deckungBasis(f); return b ? { ...b, ...(f.deckungW || {}) } : b; };
 const aufbauVon = (f) => { const b = aufbauBasis(f); return b ? { ...b, ...(f.aufbauW || {}) } : b; };
+// Ebene einer Skizze direkt berechnet (nicht aus dem Zwischenspeicher der letzten Berechnung): die Dachberechnung braucht die aktuelle Lage in jeder Reihenfolge
+function ebeneAktuell(id) { const eb = finde(id); if (eb?.typ === "ebene") { try { return baueEbene(eb); } catch {} } return E_(id); }
+const weltAkt = (sk, q) => zuWelt(ebeneAktuell(sk.ebene), q);
+const dist3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]), r2k = (x) => Math.round(x * 100) / 100;
+const dachKoordinaten = (w, g) => [w[0] - (+g.x || 0), -(w[2] - (+g.z || 0)), w[1]]; // Welt → Grundriss-Koordinaten (u, v, h) des Dachs
+// Einzelnes geschlossenes Vieleck einer Skizze (so wie die Umwandlung es anlegt) – nur dort ist die Zuordnung der Ecken eindeutig
+function skizzenVieleck(sk) { const els = profilElemente(sk).filter((el) => el.art === "linie" && el.geschlossen); return els.length === 1 && els[0].pts.length >= 3 ? els[0] : null; }
+// Dachflächen koppeln: gemeinsame Ecken zweier (oder mehrerer) Flächen bleiben beisammen. Bewegst du eine Ecke in einer Skizze, folgen die Nachbarflächen – die Ecke wird in deren Ebene gelegt.
+// Das ist genau (und die Kante bleibt gemeinsam), wenn die Ecke entlang der gemeinsamen Kante wandert, z. B. First länger oder kürzer; quer dazu bleibt eine Abweichung und der Hinweis «gemeinsame Kante weicht ab».
+function dachKoppeln(f) {
+  const info = new Map();
+  for (const id of f.flaechenSkizzen || []) { const sk = finde(id); if (sk?.typ !== "skizze") continue; const el = skizzenVieleck(sk); if (!el) continue; const E = ebeneAktuell(sk.ebene); info.set(id, { sk, el, E, p3: el.pts.map((q) => zuWelt(E, q)) }); }
+  let gr = (f.kopplung || []).filter((g) => g.m.every((x) => Array.isArray(x[2]))).map((g) => ({ n: g.n, m: g.m.map((x) => x.slice()) })); // m: [Skizze, Ecke, zuletzt abgeglichene Lage]
+  const gueltig = (g) => g.m.map(([sid, i, rem]) => { const x = info.get(sid); return x && x.el.pts.length === g.n[sid] ? { x, i, rem, pos: x.p3[i], eintrag: [sid, i] } : null; }).filter(Boolean);
+  for (const g of gr) {
+    const mem = gueltig(g); if (mem.length < 2) continue;
+    const bewegt = mem.filter((m) => dist3(m.pos, m.rem) > 0.3); if (bewegt.length !== 1) continue; // genau eine Ecke wurde verschoben: sie führt
+    const master = bewegt[0];
+    for (const m of mem) if (m !== master) { const lok = zuLokal(m.x.E, master.pos).map(r2k); m.x.el.pts[m.i] = lok; m.x.p3[m.i] = zuWelt(m.x.E, lok); m.pos = m.x.p3[m.i]; }
+    g.m = g.m.map(([sid, i]) => { const m = mem.find((q) => q.eintrag[0] === sid && q.eintrag[1] === i); return [sid, i, (m ? m.pos : [0, 0, 0]).map(r2k)]; }); // neue Lage als Stand merken (kein Hin und Her)
+  }
+  // neue Gruppen: Ecken verschiedener Flächen, die zusammenfallen (1 mm)
+  const belegt = new Set(gr.flatMap((g) => g.m.map(([s, i]) => s + ":" + i)));
+  const ecken = [...info.values()].flatMap((x) => x.p3.map((p, i) => ({ sid: x.sk.id, i, p }))).filter((e) => !belegt.has(e.sid + ":" + e.i)), vergeben = new Set();
+  ecken.forEach((a, ia) => { if (vergeben.has(ia)) return; const grp = [a], sk = new Set([a.sid]); ecken.forEach((b, ib) => { if (ib > ia && !vergeben.has(ib) && !sk.has(b.sid) && dist3(a.p, b.p) < 1) { grp.push(b); sk.add(b.sid); vergeben.add(ib); } });
+    if (grp.length >= 2) { vergeben.add(ia); gr.push({ m: grp.map((e) => [e.sid, e.i, e.p.map(r2k)]), n: Object.fromEntries(grp.map((e) => [e.sid, info.get(e.sid).el.pts.length])) }); } });
+  gr = gr.filter((g) => gueltig(g).length >= 2);
+  if (JSON.stringify(gr) !== JSON.stringify(f.kopplung || [])) f.kopplung = gr;
+}
+// Lukarne: Traufende der Seitenwand ⇄ Ecke des Gaubendachs (nächstgelegene Ecke der Dachskizzen)
+function lukarneKopplungSetzen(x, lk, ids) {
+  x.dachKopplung = {};
+  for (const seite of ["links", "rechts"]) { const E = lk.eave[seite].E; let best = null;
+    lk.idx.dach.forEach((j, a) => lk.formen[j].punkte.forEach((p, i) => { const dd = dist3(p, E); if (!best || dd < best.d) best = { d: dd, sk: ids[a], i, n: lk.formen[j].punkte.length, pos: p.map(r2k) }; }));
+    if (best && best.d < 400) x.dachKopplung[seite] = { sk: best.sk, i: best.i, n: best.n, posS: best.pos, posM: E.map(r2k) }; } // posS = Ecke der Skizze, posM = Traufende aus dem Aufmass (beim letzten Abgleich)
+  x.dachSnap = lukarneSkizzenStand(x);
+}
+const lukarneSkizzenStand = (x) => JSON.stringify((x.dachSkizzen || []).map((id) => { const sk = finde(id), el = sk && skizzenVieleck(sk); return el ? el.pts : null; }));
+// Dachskizzen neu aus dem Aufmass erzeugen (Ebenen und Eckpunkte werden überschrieben, Namen und Verknüpfungen bleiben)
+function lukarneDachNeu(fl, x, oben) {
+  const d = finde(x.dach), g = d && finde(d.gebaeude), lk = lukarneKern(fl, { ...x, dachFlaechen: null }, oben); if (!g || lk.idx.dach.length !== (x.dachSkizzen || []).length) return false;
+  lk.idx.dach.forEach((j, a) => { const [eb, sk] = skizzeAusFlaeche({ punkte: lk.formen[j].punkte, normale: lk.formen[j].normale }, g, "x"), alt = finde(x.dachSkizzen[a]), ebAlt = alt && finde(alt.ebene);
+    if (!alt || ebAlt?.typ !== "ebene") return; Object.assign(ebAlt, { p1: eb.p1, p2: eb.p2, p3: eb.p3 }); alt.elemente = sk.elemente; delete alt.bedingungen; delete alt.ausdruecke; });
+  lukarneKopplungSetzen(x, lk, x.dachSkizzen); return true;
+}
+// Seitenwand und Gaubendach bleiben verbunden:
+//  · Ecke in der Dachskizze verschoben → die Seitenwand rechnet Winkel oben und Trauflänge neu.
+//  · Aufmass der Seitenwand/Front geändert → ist die Dachskizze noch unverändert, wird sie neu aus dem Aufmass erzeugt; wurde sie von Hand verfeinert, bleibt sie und der Hinweis «weicht ab» erscheint.
+function lukarneKoppeln(fl, x, oben) {
+  const k = x.dachKopplung, d = finde(x.dach), g = d && finde(d.gebaeude); x._kopplungHinweis = null; if (!k || !g) return;
+  for (let durchlauf = 0; durchlauf < 3; durchlauf++) {
+    const basis = lukarneKern(fl, { ...x, dachFlaechen: null }, oben); let geaendert = false, abweichung = false;
+    for (const seite of ["links", "rechts"]) {
+      const e = k[seite], sk = e && finde(e.sk), el = sk && skizzenVieleck(sk); if (!el || el.pts.length !== e.n) continue;
+      const cur = dachKoordinaten(zuWelt(ebeneAktuell(sk.ebene), el.pts[e.i]), g), mess = basis.eave[seite].E;
+      if (e.nachgefuehrt) { e.posM = mess.map(r2k); delete e.nachgefuehrt; continue; } // nach dem Nachführen der Seitenwand: neuer Stand des Aufmasses
+      const dM = dist3(mess, e.posM), dS = dist3(cur, e.posS);
+      if (dS > 0.3 && dM <= 0.3) { const m = aufmassAusPunkt(fl, x, oben, seite === "links" ? -1 : 1, cur); x[seite === "links" ? "wL" : "wR"] = r2k(m.winkel); x[seite === "links" ? "lL" : "lR"] = r2k(m.laenge); e.posS = cur.map(r2k); e.nachgefuehrt = true; x.dachSnap = null; geaendert = true; }
+      else if (dM > 0.3 && dS <= 0.3) abweichung = true;
+    }
+    if (abweichung && !geaendert) { // Aufmass geändert
+      if (x.dachSnap && lukarneSkizzenStand(x) === x.dachSnap && lukarneDachNeu(fl, x, oben)) geaendert = true; else x._kopplungHinweis = "Aufmass der Seitenwand geändert, die von Hand angepasste Dachskizze folgt nicht – Eckpunkt der Skizze prüfen oder «Gaubendach» neu erzeugen.";
+    }
+    if (!geaendert) break;
+  }
+}
 // Lukarne: Gaubendach optional aus Skizzen (mm-genau, Längen und Diagonalen); sonst aus Neigung und Aufmass berechnet
 function lukarneGeo(fl, x, oben) {
   let ov = null;
   if (x.masse === "aufmass" && x.dachQuelle === "skizzen") {
     const d = finde(x.dach), g = d && finde(d.gebaeude); if (!g) throw new Error("Dach fehlt");
+    lukarneKoppeln(fl, x, oben);
     ov = [];
     for (const id of x.dachSkizzen || []) { const sk = finde(id); if (sk?.typ !== "skizze") throw new Error("Eine Skizze des Gaubendachs fehlt"); if (doc.features.indexOf(sk) > doc.features.indexOf(d)) throw new Error(`«${sk.name}» muss vor dem Dach stehen`);
-      for (const l of schleifen(sk)) ov.push(l.map((q) => { const w = welt(sk, q); return [w[0] - (+g.x || 0), -(w[2] - (+g.z || 0)), w[1]]; })); }
+      for (const l of schleifen(sk)) ov.push(l.map((q) => dachKoordinaten(weltAkt(sk, q), g))); }
   }
   return lukarneKern(fl, ov ? { ...x, dachFlaechen: ov } : x, oben);
 }
@@ -2495,15 +2563,17 @@ function lukarneDachZuSkizzen(f) {
   lk.idx.dach.forEach((j, i) => { const [eb, sk] = skizzeAusFlaeche({ punkte: lk.formen[j].punkte, normale: lk.formen[j].normale }, g, `${f.name} · ${namen[i]}`); neu.push(eb, sk); ids.push(sk.id); });
   const idx = doc.features.indexOf(d); doc.features.splice(idx, 0, ...neu); if (doc.marke != null && doc.marke > idx) doc.marke += neu.length; // vor dem Dach: dessen Öffnungen brauchen die Skizzen
   f.dachSkizzen = ids; f.dachQuelle = "skizzen";
+  lukarneKopplungSetzen(f, lk, ids);
 }
 // Dach aus frei gezeichneten Dachflächen: jede geschlossene Fläche der gewählten Skizzen (auf geneigten Ebenen) ist eine Dachfläche
 function dachAusSkizzen(f, g) {
+  dachKoppeln(f);
   const flaechen = [];
   for (const id of f.flaechenSkizzen || []) {
     const sk = finde(id); if (sk?.typ !== "skizze") throw new Error("Eine Skizze der Dachflächen fehlt");
     if (doc.features.indexOf(sk) > doc.features.indexOf(f)) throw new Error(`«${sk.name}» muss vor dem Dach stehen`);
     const loops = schleifen(sk);
-    loops.forEach((l, k) => flaechen.push({ name: loops.length > 1 ? `${sk.name} ${k + 1}` : sk.name, punkte: l.map((q) => { const w = welt(sk, q); return [w[0] - (+g.x || 0), -(w[2] - (+g.z || 0)), w[1]]; }) }));
+    loops.forEach((l, k) => flaechen.push({ name: loops.length > 1 ? `${sk.name} ${k + 1}` : sk.name, punkte: l.map((q) => dachKoordinaten(weltAkt(sk, q), g)) }));
   }
   const r = dachAusFlaechen({ flaechen, grundriss: gebaeudeUmriss(g), traufhoehe: g.traufhoehe });
   return r;
@@ -2570,7 +2640,7 @@ function lukarneDialog(f) {
     for (const k of ["bu", "bo", "hf", "hL", "wL", "lL", "hR", "wR", "lR", "b", "hw", "neigung", "ueberstand", "wd", "dd", "x", "y"]) if (Number.isFinite(w[k])) f[k] = w[k]; };
   featureDialog(f, istNeu, felder, setze, "Lukarne", "Aufmass wie am Objekt: Front (Breite unten, Breite oben, Höhe) und je Seitenwand links/rechts die vordere Höhe, der Winkel oben an der vorderen Höhe zur Traufe und die Trauflänge – genau wie die Massaufnahme «Lukarne Seitenwand». Die Unterkante der Seitenwand liegt auf der Dachfläche. Im Hauptdach werden Sparren und Latten unterbrochen, Wechsel eingefügt und die Fläche abgezogen; die Anschlussbleche erscheinen bei den Dachblechen. Das Gaubendach ist eine einfache Platte.",
     { neuBei: ["masse", "dachQuelle"], info: () => { if (f._fehler) return "⚠ " + f._fehler; const l = f._luk; if (!l) return ""; const am = l.aufmass, seite = (n, x) => `${n}: Schräge ${x.schraege.toFixed(0)}, Tiefe ${x.tiefe.toFixed(0)}, Fläche ${x.flaeche.toFixed(2)} m²`;
-      return (l.hinweise.length ? "⚠ " + l.hinweise.join(" · ") + " " : "") + (am ? `${seite("Links", am.links)} · ${seite("Rechts", am.rechts)} · ` : "") + `Öffnung ${l.flaeche.toFixed(2)} m² · höchster Punkt ${(l.firsthoehe / 1000).toFixed(2)} m`; } });
+      return (f._kopplungHinweis ? "⚠ " + f._kopplungHinweis + " " : "") + (l.hinweise.length ? "⚠ " + l.hinweise.join(" · ") + " " : "") + (am ? `${seite("Links", am.links)} · ${seite("Rechts", am.rechts)} · ` : "") + `Öffnung ${l.flaeche.toFixed(2)} m² · höchster Punkt ${(l.firsthoehe / 1000).toFixed(2)} m`; } });
 }
 function dachelementDialog(f) {
   const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
