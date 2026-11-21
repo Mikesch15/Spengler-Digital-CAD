@@ -10,6 +10,7 @@ import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
+import { eindeckung as eindeckungKern, ziegelPrisma } from "../kern/dach/eindeckung.js";
 import { lukarne as lukarneGeo, LUKARNENARTEN } from "../kern/dach/lukarne.js";
 import { elementRechteck, elementKoerper, elementFlaeche, kaminBleche, veluxListe, ELEMENTARTEN } from "../kern/dach/elemente.js";
 import { dachBleche, dachSegmente, BLECHARTEN } from "../kern/dach/bleche.js";
@@ -1142,15 +1143,15 @@ function regen() {
         const r = dachErgebnis(f, g); f._dach = r; const dk = deckungVon(f), au = aufbauVon(f); doc.dachVorlagen ||= { deckungen: [], aufbauten: [] };
         for (const [l, id, q] of [[doc.dachVorlagen.deckungen, dk?.id, dk], [doc.dachVorlagen.aufbauten, au?.id, au]]) if (q && !l.some((x) => x.id === id)) l.push(JSON.parse(JSON.stringify(q)));
         const sc = dachSchichten(au, dk); f._schichten = sc;
-        const detail = f.darstellung !== "platte", ziegel = detail && (f.darstellung || DARST_STANDARD) !== "detail"; const luks = doc.features.filter((x) => x.typ === "lukarne" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), els = doc.features.filter((x) => x.typ === "dachelement" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), au2 = aufbauVon(f);
-        f._koerper = r.flaechen.map((fl, i) => dachFlaechenKoerper(fl, sc, au2, dk, { ziegel, ausschnitte: [...els.filter((x) => x.flaeche === i).map((x) => { const q = elementRechteck(fl, x); return { s0: q.s0, s1: q.s1, t0: q.t0, t1: q.t1, wechsel: au2.sparrenB, name: x.name }; }),
+        const detail = f.darstellung !== "platte", eind = doc.features.some((x) => x.typ === "eindeckung" && x.dach === f.id && !x._aus); const luks = doc.features.filter((x) => x.typ === "lukarne" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), els = doc.features.filter((x) => x.typ === "dachelement" && x.dach === f.id && !x._aus && r.flaechen[x.flaeche]), au2 = aufbauVon(f);
+        f._koerper = r.flaechen.map((fl, i) => dachFlaechenKoerper(fl, sc, au2, dk, { deckungUnsichtbar: eind, ausschnitte: [...els.filter((x) => x.flaeche === i).map((x) => { const q = elementRechteck(fl, x); return { s0: q.s0, s1: q.s1, t0: q.t0, t1: q.t1, wechsel: au2.sparrenB, name: x.name }; }),
           ...luks.filter((x) => x.flaeche === i).flatMap((x) => { try { const q = lukarneGeo(fl, x, 0).rect; return [{ ...q, wechsel: au2.sparrenB, name: x.name }]; } catch { return []; } })] }));
         // Lukarnen: gleicher Schichtaufbau auf Gaubendach, Stirn und Wangen
-        for (const x of luks) { x._lukK = null; try { const lk = lukarneGeo(r.flaechen[x.flaeche], x, 0); x._lukK = { lk, koerper: lk.formen.map((fo) => dachFlaechenKoerper({ punkte: fo.punkte, normale: fo.normale }, sc, au2, dk, { ziegel })) }; } catch {} }
+        for (const x of luks) { x._lukK = null; try { const lk = lukarneGeo(r.flaechen[x.flaeche], x, 0); x._lukK = { lk, koerper: lk.formen.map((fo) => { const k = dachFlaechenKoerper({ punkte: fo.punkte, normale: fo.normale }, sc, au2, dk, { deckungUnsichtbar: eind && fo.art === "dach" }); if (fo.art !== "dach") for (const b of k.koerper) if (b.art === "deckung") b.art = "verkleidung"; return k; }) }; } catch {} }
         f._mengen = dachMengen([...f._koerper, ...luks.flatMap((x) => x._lukK?.koerper || [])], dk, r.linien, els.reduce((a, x) => a + elementFlaeche(x), 0) + luks.reduce((a, x) => a + (x._lukK?.lk.flaeche || 0), 0));
         if (!f.versteckt) {
           if (!detail) for (const fl of r.flaechen) for (const st of fl.stuecke || [fl.punkte]) modell.add(koerperMesh(dachPrisma(st, fl.normale, sc.unten, sc.oben, g), 0xb5543a, f.id));
-          else { const zuviel = f._mengen.ziegelGezeichnet > 20000; f._ziegelHinweis = zuviel ? "Mehr als 20 000 Ziegel – nur als Platte gezeichnet (Darstellung «detailliert»)." : ""; zeigeDachKoerper(f._koerper, g, f.id, zuviel); }
+          else zeigeDachKoerper(f._koerper, g, f.id);
         }
       } else if (f.typ === "dachbleche") { // Spengler-Brücke: Anschlussbleche aus den Dachflächen (Profilvorlagen mit Abwicklung)
         f._teile = null; const d = finde(f.dach); if (d?.typ !== "dach" || !d._dach) throw new Error("Dach fehlt – das Dach muss vor den Dachblechen stehen und fehlerfrei sein");
@@ -1160,9 +1161,24 @@ function regen() {
         const kam = doc.features.filter((x) => x.typ === "dachelement" && x.dach === d.id && x.art === "kamin" && !x._aus && d._dach.flaechen[x.flaeche] && elementRechteck(d._dach.flaechen[x.flaeche], x).innen).flatMap((x) => kaminBleche(x, +par.traufe.dach || 150).map((t) => ({ ...t, neigung: 0, name: `${t.name} (${x.name})` })));
         const lukB = doc.features.filter((x) => x.typ === "lukarne" && x.dach === d.id && !x._aus && d._dach.flaechen[x.flaeche]).flatMap((x) => { try { const lk = lukarneGeo(d._dach.flaechen[x.flaeche], x, 0); return lk.innen ? lk.bleche.map((t) => ({ ...t, name: `${t.name} (${x.name})` })) : []; } catch { return []; } });
         br.teile.push(...kam, ...lukB);
+        const abst = d._schichten?.oben ?? 0, lukF = doc.features.filter((x) => x.typ === "lukarne" && x.dach === d.id && !x._aus && d._dach.flaechen[x.flaeche]).flatMap((x) => { try { return lukarneGeo(d._dach.flaechen[x.flaeche], x, 0).flaps.map((fp) => ({ art: fp.art, punkte: fp.punkte.map((p) => p.map((v, i) => v + fp.normale[i] * abst)), normale: fp.normale, ziel: fp.ziel, lukId: x.id, hauptFlaeche: x.flaeche })); } catch { return []; } });
+        f._formen = [...br.formen, ...lukF];
         f._teile = br.teile.map((t, i) => { const vid = { kamin: "kamin", "luk-wand": "wand", "luk-kehle": "kehle" }[t.art] || BLECH_VORLAGE[t.art], { start, ops } = VORLAGE[vid].bau({ ...(BLECH_VORLAGE[t.art] ? par[t.art] : { ...standardwerte(vid), ...(par[vid] || {}) }), neigung: t.neigung }, m);
           return { id: `${f.id}:${i}`, typ: "dachblech", eltern: f, name: `${t.name} ${t.laenge} mm`, material: f.material, laenge: t.laenge, stueck: t.stueck, notiz: `Neigung ${t.neigung}° · aus «${d.name}»`, _res: berechne(start, ops, m.t, m.ri, m.k) }; });
-        if (!f.versteckt && gd) for (const fo of br.formen) modell.add(koerperMesh(dachPlatte(fo.punkte, fo.normale, 4, gd), BLECH_FARBE[fo.art], f.id));
+        if (!f.versteckt && gd) for (const fo of f._formen) modell.add(koerperMesh(dachPlatte(fo.punkte, fo.normale, 4, gd), BLECH_FARBE[fo.art] || 0xa9622f, f.id));
+      } else if (f.typ === "eindeckung") { // Ziegel einzeln eindecken – nach den Spenglerblechen: die Ziegel werden an Kehle, Anschlüssen und Öffnungen geschnitten
+        f._ziegel = null; const d = finde(f.dach); if (d?.typ !== "dach" || !d._dach) throw new Error("Dach fehlt – das Dach muss vor der Eindeckung stehen und fehlerfrei sein");
+        if (doc.features.indexOf(d) > doc.features.indexOf(f)) throw new Error("Das Dach muss vor der Eindeckung stehen");
+        const dk = deckungVon(d), D = d._schichten?.liste.find((l) => l.id === "deckung"); if (!D) throw new Error("Der Dachaufbau hat keine Deckung");
+        const bl = doc.features.find((x) => x.typ === "dachbleche" && x.dach === d.id && !x._aus && doc.features.indexOf(x) < doc.features.indexOf(f)); f._ohneBleche = !bl; const formen = bl?._formen || [];
+        const luks = doc.features.filter((x) => x.typ === "lukarne" && x.dach === d.id && !x._aus && d._dach.flaechen[x.flaeche]), els = doc.features.filter((x) => x.typ === "dachelement" && x.dach === d.id && !x._aus && d._dach.flaechen[x.flaeche]);
+        const prismen = []; let anz = 0, gesch = 0;
+        const decke = (fl, opt) => { const r = eindeckungKern(fl, { deckung: dk, ...opt }); for (const p of r.prismen) prismen.push(ziegelPrisma(r.S, p, D.von, D.bis)); anz += r.anzahl; gesch += r.geschnitten; };
+        d._dach.flaechen.forEach((fl, i) => decke(fl, { sperr: formen.filter((fo) => (fo.flaeche === i && fo.art === "kehle") || fo.hauptFlaeche === i && fo.ziel === "haupt").map((fo) => fo.punkte),
+          ausschnitte: [...els.filter((x) => x.flaeche === i).map((x) => { const q = elementRechteck(fl, x); return { s0: q.s0, s1: q.s1, t0: q.t0, t1: q.t1 }; }), ...luks.filter((x) => x.flaeche === i).flatMap((x) => { try { return [lukarneGeo(fl, x, 0).rect]; } catch { return []; } })] }));
+        for (const x of luks) { try { const lk = x._lukK?.lk || lukarneGeo(d._dach.flaechen[x.flaeche], x, 0); for (const j of lk.idx.dach) decke({ punkte: lk.formen[j].punkte, normale: lk.formen[j].normale }, { sperr: formen.filter((q) => q.lukId === x.id && q.ziel === j).map((q) => q.punkte) }); } catch {} }
+        f._ziegel = { anzahl: anz, geschnitten: gesch, richtwert: d._mengen?.ziegel ?? 0, deckung: dk.name };
+        const gd = finde(d.gebaeude); if (!f.versteckt && gd && prismen.length) { const [zg, , , zk] = dachZiegelGeo(prismen, gd); modell.add(koerperMesh(zg, /biber/.test(dk.art || "") ? 0xa04a35 : 0xb5543a, f.id, zk)); }
       } else if (f.typ === "dachelement") { // Dachfenster / Kamin auf einer Dachfläche (Öffnung, Wechsel, Anschlussbleche)
         f._rect = null; const d = finde(f.dach); if (d?.typ !== "dach" || !d._dach) throw new Error("Dach fehlt");
         const fl = d._dach.flaechen[f.flaeche]; if (!fl) throw new Error("Diese Dachfläche gibt es nicht (mehr) – andere Fläche wählen");
@@ -1176,7 +1192,8 @@ function regen() {
         const lk = lukarneGeo(fl, f, 0); f._luk = lk;
         if (!lk.innen) throw new Error(lk.hinweise[0]);
         const gd = finde(d.gebaeude), ko = f._lukK?.koerper;
-        if (!f.versteckt && gd && ko) zeigeDachKoerper(ko, gd, f.id); // gleicher Aufbau wie das Hauptdach (Sparren, Dämmung, Unterdach, Latten, Ziegel)
+        if (!f.versteckt && gd && ko) { zeigeDachKoerper(ko, gd, f.id); // gleicher Aufbau wie das Hauptdach (Sparren, Dämmung, Unterdach, Latten, Deckung)
+          if (lk.fenster) { const o = d._schichten?.oben ?? 0, fp = lk.fenster.punkte.map((p) => p.map((v, i) => v + lk.fenster.normale[i] * (o + 5))); modell.add(koerperMesh(dachPlatte(fp, lk.fenster.normale, -70, gd), 0x6f93b0, f.id)); } }
       } else if (f.typ === "kante") { // Flansch/Umschlag/Baustein an einer Kante: wirkt über das Flächenblech (berechneKanten)
         const z = finde(f.ziel); if (z?.typ !== "flaeche") throw new Error("Flächenblech fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
@@ -1300,7 +1317,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
@@ -1374,6 +1391,7 @@ $("wAbwickeln").onclick = () => abwickelnSchalten();
 $("wDachAuto").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); dachDialog(); };
 $("wDachBleche").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); dachblecheDialog(); };
 $("wDachElement").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); dachelementDialog(); };
+$("wEindeckung").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); eindeckungDialog(); };
 $("wLukarne").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); lukarneDialog(); };
 $("wGebaeude").onclick = () => { if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden."); gebaeudeDialog(); };
 $("wTeilMenue").onclick = () => { const f = hauptVon(auswahl); if (!f) return status("Zuerst ein Teil im Browser, in der Zeitleiste oder in der Ansicht anwählen."); const r = $("wTeilMenue").getBoundingClientRect(); featureMenue(f, r.left, r.bottom + 6); };
@@ -1539,6 +1557,8 @@ function zeigeWerkstatt() {
     return;
   }
   if (f?.typ === "dach" && f._mengen) return zeigeDachListe(w, f);
+  if (f?.typ === "eindeckung" && f._ziegel) { const z = f._ziegel;
+    w.innerHTML = `<div class="unter" style="padding-top:12px">${esc(f.name)} · ${esc(z.deckung)}</div><table class="liste"><tbody><tr><td>Ziegel gezeichnet</td><td class="num">${z.anzahl}</td></tr><tr><td>davon geschnitten</td><td class="num">${z.geschnitten}</td></tr><tr><td>Richtwert aus Stück/m²</td><td class="num">${z.richtwert}</td></tr></tbody></table>${f._ohneBleche ? '<p class="fehler">Noch keine Dachbleche vor dieser Eindeckung – die Ziegel werden nur an Rand und Öffnungen geschnitten.</p>' : '<p class="leer">Geschnittene Ziegel: an Kehle, Wangen-/Fussanschluss, Fenster, Kamin und Lukarne.</p>'}`; return; }
   if (f?.typ === "dachbleche" && f._teile) { const lm = f._teile.reduce((s, t) => s + t.laenge * t.stueck, 0) / 1000;
     w.innerHTML = `<div class="unter" style="padding-top:12px">${esc(f.name)} · ${f._teile.length} Blechsorten · ${lm.toFixed(1)} m Länge</div><table class="liste"><thead><tr><th>Blech</th><th class="num">Länge</th><th class="num">Stk.</th><th class="num">Zuschnitt</th></tr></thead><tbody>${f._teile.map((t) => `<tr data-teil="${t.id}"><td>${esc(t.name.replace(/ \d+ mm$/, ""))}</td><td class="num">${t.laenge}</td><td class="num">${t.stueck}</td><td class="num">${f1(t._res.zuschnitt)}</td></tr>`).join("")}</tbody></table><p class="leer">Teil in der Zeitleiste oder Stückliste wählen für Abkantliste und DXF. 3D-Darstellung schematisch.</p><div class="reihe"><button class="knopf haupt" id="kBlechCsv">Liste kopieren (CSV)</button></div>`;
     $("kBlechCsv").onclick = () => { const t = [["Blech", "Länge mm", "Stück", "Zuschnitt mm"], ...f._teile.map((x) => [x.name.replace(/ \d+ mm$/, ""), x.laenge, x.stueck, f1(x._res.zuschnitt)])].map((r) => r.join(";")).join("\n"); navigator.clipboard?.writeText(t).then(() => status("Blechliste kopiert."), () => status("Kopieren nicht möglich.")); };
@@ -1789,6 +1809,7 @@ function bearbeite(f) {
   if (f.typ === "dachbleche") return dachblecheDialog(f);
   if (f.typ === "dachelement") return dachelementDialog(f);
   if (f.typ === "lukarne") return lukarneDialog(f);
+  if (f.typ === "eindeckung") return eindeckungDialog(f);
   if (f.typ === "gebaeude") { const d = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id); return d ? dachDialog(d) : gebaeudeDialog(f); }
   if (f.typ === "abwickeln" || f.typ === "falten") return status(f.typ === "abwickeln" ? "Abwickeln: das Blech liegt flach, bis «Falten» folgt. Dazwischen Skizze + Extrusion «Ausschneiden»." : "Falten: bildet die Ausschnitte der Abwicklung aufs gekantete Blech ab.");
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
@@ -2379,11 +2400,10 @@ function dachPlatte(punkte, normale, dicke, g) {
   const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return nachAussen(geo);
 }
 // Körper je Art (Sparren, Dämmung, …, einzelne Ziegel) zu je einem Netz zusammenfassen und anzeigen
-function zeigeDachKoerper(liste, g, fid, ohneZiegel = false) {
-  for (const art of DACH_ARTEN) { if (ohneZiegel && art.id === "ziegel") continue; const boxen = liste.flatMap((x) => x.koerper.filter((k) => k.art === art.id && (ohneZiegel || !k.unsichtbar))); if (boxen.length) modell.add(koerperMesh(dachBoxenGeo(boxen, g), art.farbe, fid, dachBoxenKanten(boxen, g))); }
+function zeigeDachKoerper(liste, g, fid) {
+  for (const art of DACH_ARTEN) { const boxen = liste.flatMap((x) => x.koerper.filter((k) => k.art === art.id && !k.unsichtbar)); if (boxen.length) modell.add(koerperMesh(dachBoxenGeo(boxen, g), art.farbe, fid, dachBoxenKanten(boxen, g))); }
 }
-const DARST_STANDARD = new URLSearchParams(location.search).has("test") ? "detail" : "ziegel"; // im Test ohne Einzelziegel (Software-Rendering ist langsam)
-const DACH_ARTEN = [{ id: "ziegel", name: "Ziegel", farbe: 0xb5543a }, { id: "wechsel", name: "Wechsel", farbe: 0xa07a3a }, { id: "sparren", name: "Sparren", farbe: 0xc9a26b }, { id: "daemmung", name: "Dämmung", farbe: 0xe6cf55 }, { id: "unterdach", name: "Unterdach", farbe: 0x7d6444 }, { id: "konter", name: "Konterlattung", farbe: 0xb98b55 }, { id: "lattung", name: "Dachlattung", farbe: 0xa87a48 }, { id: "deckung", name: "Deckung", farbe: 0xb5543a }];
+const DACH_ARTEN = [{ id: "verkleidung", name: "Verkleidung", farbe: 0xcfc6b8 }, { id: "wechsel", name: "Wechsel", farbe: 0xa07a3a }, { id: "sparren", name: "Sparren", farbe: 0xc9a26b }, { id: "daemmung", name: "Dämmung", farbe: 0xe6cf55 }, { id: "unterdach", name: "Unterdach", farbe: 0x7d6444 }, { id: "konter", name: "Konterlattung", farbe: 0xb98b55 }, { id: "lattung", name: "Dachlattung", farbe: 0xa87a48 }, { id: "deckung", name: "Deckung", farbe: 0xb5543a }];
 // Quader (8 Ecken [u, v, h], Index = Normale·4 + t·2 + s) → Dreiecke in Weltkoordinaten; Umlaufsinn über das Volumen nach aussen
 function dachBoxenGeo(boxen, g) {
   const F = [[0, 2, 6, 4], [1, 5, 7, 3], [0, 4, 5, 1], [2, 3, 7, 6], [0, 1, 3, 2], [4, 6, 7, 5]], pos = [];
@@ -2396,6 +2416,16 @@ function dachBoxenGeo(boxen, g) {
   const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return geo;
 }
 // Kanten der Quader direkt (12 je Körper) – viel schneller als die Winkelsuche über das ganze Netz
+// Ziegel (konvexe Vielecke mit Dicke) → Netz und Umrisslinien
+function dachZiegelGeo(prismen, g) {
+  const pos = [], lin = [], W = (p) => dachWelt(g, p);
+  for (const { unten, oben } of prismen) {
+    const n = unten.length, U = unten.map(W), O = oben.map(W);
+    for (let i = 1; i + 1 < n; i++) { pos.push(...O[0], ...O[i], ...O[i + 1], ...U[0], ...U[i + 1], ...U[i]); }
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; pos.push(...U[i], ...U[j], ...O[j], ...U[i], ...O[j], ...O[i]); lin.push(...O[i], ...O[j]); }
+  }
+  const geo = new THREE.BufferGeometry(), kg = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); kg.setAttribute("position", new THREE.Float32BufferAttribute(lin, 3)); return [geo, undefined, undefined, kg];
+}
 function dachBoxenKanten(boxen, g) {
   const E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]], pos = [];
   for (const b of boxen) { const W = b.ecken.map((p) => dachWelt(g, p)); for (const [i, j] of E) pos.push(...W[i], ...W[j]); }
@@ -2432,6 +2462,13 @@ function wandPlatte(punkte, innenNormal, t, g) {
   for (const [i, j, k] of tri) { T(a[i], a[j], a[k]); T(b[i], b[k], b[j]); }
   for (let i = 0; i < a.length; i++) { const j = (i + 1) % a.length; T(a[i], a[j], b[j]); T(a[i], b[j], b[i]); }
   const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return nachAussen(geo);
+}
+function eindeckungDialog(f) {
+  const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
+  const istNeu = !f; f ||= { id: neueId(), typ: "eindeckung", name: "Eindeckung " + (doc.features.filter((x) => x.typ === "eindeckung").length + 1), dach: daecher.at(-1).id };
+  featureDialog(f, istNeu, (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "dach", label: "Dach", optionen: daecher.map((d) => [d.id, d.name]), wert: f.dach }], (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; },
+    "Ziegel eindecken", "Zuerst alle Spenglerbleche zeichnen («Dachbleche»): die Eindeckung erkennt Kehle, Wangen-/Fussanschlüsse, Fenster, Kamine und Lukarnen und schneidet die Ziegel dort an. Deckbreite und Lattweite kommen aus der Deckung des Dachs (Einstellungen › Dach). Ziegel sind schematisch (Rechtecke ohne Falzform).",
+    { info: () => f._fehler ? "⚠ " + f._fehler : f._ziegel ? (f._ohneBleche ? "⚠ Noch keine Dachbleche vor der Eindeckung – die Ziegel werden nur an Rand und Öffnungen geschnitten. " : "") + `Ziegel ${f._ziegel.anzahl} Stk. (davon ${f._ziegel.geschnitten} geschnitten) · Richtwert ${f._ziegel.richtwert}` : "" });
 }
 function lukarneDialog(f) {
   const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
@@ -2490,7 +2527,7 @@ function dachDialog(f) {
     { id: "neigung", label: "Neigung", einheit: "°", wert: f.neigung }, { id: "giebel", label: "Giebelkanten Nr. (nur Grundform «Aus Skizze», z. B. 2,4)", text: true, wert: f.giebel ?? "" }, ...(["sattel", "walm"].includes(f.form) ? [{ id: "neigung2", label: "Neigung 2. Seite", einheit: "°", wert: f.neigung2 ?? f.neigung }] : []),
     { id: "ueberstandTraufe", label: "Überstand Traufe", einheit: "mm", wert: f.ueberstandTraufe }, { id: "ueberstandOrtgang", label: "Überstand Ortgang", einheit: "mm", wert: f.ueberstandOrtgang },
     { id: "deckung", label: "Deckung", optionen: dachEinst().deckungen.map((d) => [d.id, d.name]), wert: f.deckung }, { id: "aufbau", label: "Dachaufbau", optionen: dachEinst().aufbauten.map((a) => [a.id, a.name]), wert: f.aufbau },
-    { id: "darstellung", label: "Darstellung", optionen: [["ziegel", "Aufbau mit einzelnen Ziegeln"], ["detail", "Aufbau detailliert (Deckung als Platte)"], ["platte", "Nur Platte (schnell)"]], wert: f.darstellung || DARST_STANDARD }];
+    { id: "darstellung", label: "Darstellung", optionen: [["detail", "Aufbau detailliert (Sparren, Dämmung, Latten …)"], ["platte", "Nur Platte (schnell)"]], wert: f.darstellung || "detail" }];
   const setze = (f, w) => {
     for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke", "fluegelBreite", "fluegelTiefe"]) if (w[k] > 0) g[k] = w[k]; if (w.gform) g.form = w.gform; if (w.gskizze !== undefined) g.skizze = w.gskizze || null; if (Number.isFinite(+w.gprofil) && +w.gprofil >= 1) g.profil = +w.gprofil - 1;
     for (const k of ["neigung", "neigung2", "ueberstandTraufe", "ueberstandOrtgang"]) if (Number.isFinite(w[k]) && w[k] >= 0) f[k] = w[k];
@@ -2499,7 +2536,7 @@ function dachDialog(f) {
   };
   featureDialog(f, istNeu, felder, setze, "Dach automatisch",
     "Grundform (Rechteck) mit Massen, Dachform, Neigung, Überstände, Deckung und Aufbau – alles andere rechnet das Programm. Deckungs- und Aufbauwerte stellst du in den Einstellungen › Dach ein.",
-    { info: () => { const r = f._dach; if (f._fehler) return "⚠ " + f._fehler; if (!r) return ""; if (f._ziegelHinweis) return "⚠ " + f._ziegelHinweis; const m = pruefeDach({ neigungen: r.flaechen.map((x) => x.neigung), deckung: deckungVon(f) }), A = r.flaechen.reduce((s, x) => s + x.flaeche, 0), L = (a) => r.linien.filter((l) => l.art === a).reduce((s, l) => s + l.laenge, 0) / 1000;
+    { info: () => { const r = f._dach; if (f._fehler) return "⚠ " + f._fehler; if (!r) return ""; const m = pruefeDach({ neigungen: r.flaechen.map((x) => x.neigung), deckung: deckungVon(f) }), A = r.flaechen.reduce((s, x) => s + x.flaeche, 0), L = (a) => r.linien.filter((l) => l.art === a).reduce((s, l) => s + l.laenge, 0) / 1000;
         return (m.length ? "⚠ " + m[0] + " " : "") + (r.hinweise?.length ? "⚠ " + r.hinweise[0] + " " : "") + `Dachfläche ${A.toFixed(1)} m² · First ${L("first").toFixed(1)} m · Grate ${L("grat").toFixed(1)} m${L("kehle") ? ` · Kehlen ${L("kehle").toFixed(1)} m` : ""} · Firsthöhe ${(r.firsthoehe / 1000).toFixed(2)} m`; } });
   if (istNeu) { const d = dlg, alt = d.abbrechen; d.abbrechen = () => { alt(); entferneFeature(g); }; setTimeout(() => $("zoomAlles").click(), 50); }
 }
@@ -5721,7 +5758,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

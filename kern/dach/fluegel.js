@@ -20,10 +20,10 @@ const hoehe = (e, p) => e.a + e.b * p[0] + e.c * p[1];
 const flaechePoly = (p) => Math.abs(flaecheVon(p));
 const gleich = (e, g) => Math.abs(e.a - g.a) < 1e-3 && Math.abs(e.b - g.b) < 1e-9 && Math.abs(e.c - g.c) < 1e-9;
 // Konvexes Polygon (CCW) → Halbebenen [c0, c1, c2] mit c0 + c1·u + c2·v ≥ 0 (innen)
-const kantenEbenen = (poly) => poly.map((a, i) => { const b = poly[(i + 1) % poly.length], du = b[0] - a[0], dv = b[1] - a[1]; return [dv * a[0] - du * a[1], -dv, du]; }); // links der Kante a→b
+export const kantenEbenen = (poly) => poly.map((a, i) => { const b = poly[(i + 1) % poly.length], du = b[0] - a[0], dv = b[1] - a[1]; return [dv * a[0] - du * a[1], -dv, du]; }); // links der Kante a→b
 const inHuelle = (poly, p) => poly.every((a, i) => { const b = poly[(i + 1) % poly.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) / L >= -1e-3; });
 // Teil von poly ausserhalb des konvexen Bereichs {alle Halbebenen ≥ 0}: disjunkte konvexe Stücke
-function abziehen(poly, hps) {
+export function abziehen(poly, hps) {
   const out = []; let cur = poly;
   for (const g of hps) {
     const aussen = beschneide(cur, [-g[0], -g[1], -g[2]]); if (aussen.length >= 3 && flaechePoly(aussen) > 500) out.push(aussen);

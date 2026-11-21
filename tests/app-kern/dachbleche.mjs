@@ -9,7 +9,7 @@ const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280
 await s.addInitScript(() => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Test", nr: "X", zaehler: 5, features: [{ id: "sk", typ: "skizze", name: "Grundriss", ebene: "XZ", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [12000, 7000] }] }] })));
 await s.goto("http://localhost:8797/index.html?test"); await s.waitForTimeout(900);
 await s.evaluate(() => document.getElementById("wDachAuto").click()); await s.waitForSelector("#d_neigung", { timeout: 4000 });
-await s.selectOption("#d_darstellung", "detail"); await s.selectOption("#d_gform", "skizze"); await s.selectOption("#d_gskizze", "sk"); await s.waitForTimeout(600);
+await s.selectOption("#d_gform", "skizze"); await s.selectOption("#d_gskizze", "sk"); await s.waitForTimeout(600);
 const info = () => s.textContent("#dInfo");
 ok(/Dachfläche [\d.]+ m²/.test(await info()), "Grundriss aus Skizze: " + (await info()));
 await s.selectOption("#d_form", "sattel"); await s.fill("#d_giebel", "2,4"); await s.dispatchEvent("#d_giebel", "input"); await s.waitForTimeout(600);
@@ -51,6 +51,14 @@ await s.click("#dOk"); await s.waitForTimeout(500);
 await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(500); await s.screenshot({ path: "/tmp/t/lukarne.png" });
 await s.evaluate((i) => window.sdcadTest.waehle(i), id); await s.waitForTimeout(300);
 ok(/Lukarne Kehle/.test(await s.textContent("#werkstatt")) && /Wangenanschluss/.test(await s.textContent("#werkstatt")), "Dachbleche: Lukarne Kehle und Wangenanschluss");
+// Eindeckung: Ziegel einzeln, nach den Blechen
+await s.evaluate(() => document.getElementById("wEindeckung").click()); await s.waitForSelector("#d_dach", { timeout: 90000 }); await s.waitForTimeout(2500);
+ok(/Ziegel \d+ Stk\. \(davon \d+ geschnitten\)/.test(await info()), "Eindeckung: " + (await info()));
+await s.click("#dOk"); await s.waitForTimeout(500);
+const eid = await s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.typ === "eindeckung")?.id);
+await s.evaluate((i) => window.sdcadTest.waehle(i), eid); await s.waitForTimeout(300);
+ok(/Ziegel gezeichnet/.test(await s.textContent("#werkstatt")) && /geschnitten/.test(await s.textContent("#werkstatt")), "Werkstatt: Ziegelzahl und geschnittene Ziegel");
+const ml = await s.evaluate((i) => window.sdcadTest.maxLinie(i), eid); ok(ml.n > 500 && ml.max < 500 && ml.bad === 0, `Ziegel-Netz sauber (${ml.n} Kantenstücke, längste ${ml.max.toFixed(0)} mm)`);
 // Phase 6: Details aus dem Dach und Dachaufsicht im Plan
 await s.evaluate(() => document.getElementById("wPlan").click()); await s.waitForTimeout(800);
 await s.evaluate(() => document.getElementById("plNeuDetail").click()); await s.waitForTimeout(300);

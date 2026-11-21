@@ -80,7 +80,7 @@ export function dachBleche(flaechen, { abstand = 0, arten = {}, params = {} } = 
     const d = unit(sub(s.bis, s.von)), p = params[s.art === "grat" ? "first" : s.art] || {}, breite = s.art === "traufe" || s.art === "ortgang" ? +p.dach || 100 : +p.schenkel || 150;
     for (const { i, e } of s.seiten.slice(0, s.art === "traufe" || s.art === "ortgang" ? 1 : 2)) {
       const n = flaechen[i].normale, h = mul(n, abstand), a = add(s.von, h), b = add(s.bis, h);
-      formen.push({ art: s.art, punkte: [a, b, add(b, mul(e, breite)), add(a, mul(e, breite))], normale: n });
+      formen.push({ art: s.art, punkte: [a, b, add(b, mul(e, breite)), add(a, mul(e, breite))], normale: n, flaeche: i });
       if (s.art === "traufe" || s.art === "ortgang") { // Stirn: senkrecht nach unten, auf der Aussenseite
         const st = +p.stirn || 50, aus = unit([-e[0], -e[1], 0]);
         formen.push({ art: s.art, punkte: [a, b, [b[0], b[1], b[2] - st], [a[0], a[1], a[2] - st]], normale: aus });
