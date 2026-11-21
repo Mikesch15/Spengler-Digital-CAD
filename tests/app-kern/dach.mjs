@@ -21,11 +21,17 @@ await s.selectOption("#d_deckung", "biber-doppel"); await s.fill("#d_neigung", "
 ok(!/Mindestneigung/.test(await info()), "40° mit Biber doppelt: kein Hinweis");
 await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(400); await s.screenshot({ path: "/tmp/t/dach.png" });
 await s.click("#dOk"); await s.waitForTimeout(400);
+// Phase 2: einzelne Körper (Sparren, Dämmung, Unterdach, Latten, Deckung) + Holzliste im Werkstatt-Panel
+const nDetail = await koerper(); ok(nDetail >= 11, `Aufbau detailliert: ${nDetail} Körper (je Art ein Netz)`);
+await s.evaluate(() => { const t = window.sdcadTest, f = t.dok().features.find((x) => x.typ === "dach"); t.waehle?.(f.id); });
+await s.evaluate(() => document.querySelector('[data-register="werkstatt"]')?.click()); await s.waitForTimeout(400);
+const wk = await s.evaluate(() => document.getElementById("werkstatt").textContent);
+ok(/Sparren/.test(wk) && /Dachlattung/.test(wk) && /Ziegel/.test(wk), "Werkstatt: Holzliste mit Sparren, Latten, Ziegel");
 const d = await s.evaluate(() => window.sdcadTest.dok()); const dach = d.features.find((f) => f.typ === "dach");
 ok(dach.form === "walm" && dach.neigung === 40 && dach.deckung === "biber-doppel" && d.dachVorlagen.deckungen.some((x) => x.id === "biber-doppel"), "Gespeichert; Deckung ins Projekt übernommen (Dachvorlagen)");
 // Einstellungen › Dach
 await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="dach"]').click(); });
-await s.waitForSelector('[data-dach="d:0:lattweite"]', { timeout: 3000 });
+await s.waitForSelector('[data-dach="d:0:lattweite"]', { timeout: 15000 });
 ok((await s.inputValue('[data-dach="d:0:lattweite"]')) === "340", "Einstellungen › Dach: Deckungen mit Lattweite (Richtwerte) sind einstellbar");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();

@@ -10,6 +10,7 @@ import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
+import { flaechenKoerper as dachFlaechenKoerper, dachMengen } from "../kern/dach/koerper.js";
 import { DECKUNGEN_STANDARD, AUFBAU_STANDARD, grundeinstellung as dachGrund, schichten as dachSchichten, pruefeDach } from "../kern/dach/vorlagen.js";
 import { FARBEN, LINIENARTEN, farbeHex, standardLayer, skizzenDxf } from "../kern/zeichnung2d.js";
 import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
@@ -459,9 +460,10 @@ function oberflaechenMaterial(art, geo) {
 }
 const darstellungVon = (f, m) => f?.darstellung || (m ? oberflaecheFuer(m) : "grau");
 const csg = new Evaluator(); csg.attributes = ["position", "normal"]; csg.useGroups = false;
-function koerperMesh(geo, farbe, fid) {
-  const mesh = new THREE.Mesh(geo, oberflaechenMaterial(farbe, geo)); mesh.userData.art = farbe;
-  mesh.add(new THREE.LineSegments(kantenGeometrie(geo), new THREE.LineBasicMaterial({ color: 0x2c3a46, transparent: true, opacity: 0.45 })));
+function koerperMesh(geo, farbe, fid, kanten) {
+  let mat; if (kanten) { geo.computeVertexNormals(); mat = new THREE.MeshStandardMaterial({ color: farbe, metalness: 0.2, roughness: 0.7, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }); } // vorgegebene Kanten: Quader, flach schattiert (schnell)
+  const mesh = new THREE.Mesh(geo, mat || oberflaechenMaterial(farbe, geo)); mesh.userData.art = farbe;
+  mesh.add(new THREE.LineSegments(kanten || kantenGeometrie(geo), new THREE.LineBasicMaterial({ color: 0x2c3a46, transparent: true, opacity: 0.45 })));
   mesh.userData.fid = fid; return mesh;
 }
 // Vereinigen, Ausschneiden, Schneiden (wie in Fusion) – Geometrie des Zielkörpers wird ersetzt
@@ -1135,7 +1137,11 @@ function regen() {
         const r = dachErgebnis(f, g); f._dach = r; const dk = deckungVon(f), au = aufbauVon(f); doc.dachVorlagen ||= { deckungen: [], aufbauten: [] };
         for (const [l, id, q] of [[doc.dachVorlagen.deckungen, dk?.id, dk], [doc.dachVorlagen.aufbauten, au?.id, au]]) if (q && !l.some((x) => x.id === id)) l.push(JSON.parse(JSON.stringify(q)));
         const sc = dachSchichten(au, dk); f._schichten = sc;
-        if (!f.versteckt) for (const fl of r.flaechen) modell.add(koerperMesh(dachPrisma(fl.punkte, fl.normale, sc.unten, sc.oben, g), 0xb5543a, f.id));
+        const detail = f.darstellung !== "platte"; f._koerper = r.flaechen.map((fl) => dachFlaechenKoerper(fl, sc, aufbauVon(f), dk)); f._mengen = dachMengen(f._koerper, dk);
+        if (!f.versteckt) {
+          if (!detail) for (const fl of r.flaechen) modell.add(koerperMesh(dachPrisma(fl.punkte, fl.normale, sc.unten, sc.oben, g), 0xb5543a, f.id));
+          else for (const art of DACH_ARTEN) { const boxen = f._koerper.flatMap((x) => x.koerper.filter((k) => k.art === art.id)); if (boxen.length) modell.add(koerperMesh(dachBoxenGeo(boxen, g), art.farbe, f.id, dachBoxenKanten(boxen, g))); }
+        }
       } else if (f.typ === "kante") { // Flansch/Umschlag/Baustein an einer Kante: wirkt über das Flächenblech (berechneKanten)
         const z = finde(f.ziel); if (z?.typ !== "flaeche") throw new Error("Flächenblech fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
@@ -1461,6 +1467,23 @@ function zeigeAuftrag(w) {
     abwicklungenDxf(blechteile().map((f) => ({ res: f._res, abw: f._blech?.abw, laenge: f.laenge, titel: `${f.name} ${f.stueck ?? 1} Stk ${material(f.material).name}` })), einst.skizze.abstand), "application/dxf");
   $("kCsv").onclick = () => herunterladen(`${doc.nr || "auftrag"} Stückliste.csv`, stuecklisteCsv(a, [["Objekt", doc.objekt], ["Nr.", doc.nr], []]) + bedarfCsv(), "text/csv");
 }
+// Dach: Holzliste, Latten, Flächen, Ziegel (Werkstatt-Panel, CSV)
+function dachListeZeilen(f) {
+  const m = f._mengen, dk = deckungVon(f), z = [["Art", "Querschnitt mm", "Länge", "Menge"]];
+  for (const h of m.sparren) z.push(["Sparren", h.querschnitt, h.laenge + " mm", h.stueck + " Stk."]);
+  for (const h of m.konter) z.push(["Konterlattung", h.querschnitt, h.meter + " m", h.stueck + " Stk."]);
+  for (const h of m.lattung) z.push(["Dachlattung", h.querschnitt, h.meter + " m", h.stueck + " Stk."]);
+  z.push(["Dämmung", "", "", m.daemmung + " m²"], ["Unterdach", "", "", m.unterdach + " m²"], ["Deckung " + dk.name, "", "", m.deckflaeche + " m²"], ["Ziegel (Richtwert)", "", "", m.ziegel + " Stk. · " + m.gewichtKg + " kg"]);
+  return z;
+}
+function zeigeDachListe(w, f) {
+  const z = dachListeZeilen(f), r = f._dach;
+  w.innerHTML = `<div class="unter" style="padding-top:12px">${esc(f.name)} · Holz- und Mengenliste</div>
+    <table class="liste"><thead><tr>${z[0].map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${z.slice(1).map((r) => `<tr>${r.map((c, i) => `<td${i > 1 ? ' class="num"' : ""}>${esc(String(c))}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    <p class="leer">Dachfläche ${r.flaechen.reduce((s, x) => s + x.flaeche, 0).toFixed(1)} m² · Sparren ohne Gehrung (Grat/Kehle folgen) · Deckungswerte sind Richtwerte.</p>
+    <div class="reihe"><button class="knopf haupt" id="kDachCsv">Liste kopieren (CSV)</button></div>`;
+  $("kDachCsv").onclick = () => { const t = z.map((r) => r.join(";")).join("\n"); navigator.clipboard?.writeText(t).then(() => status("Holzliste kopiert."), () => status("Kopieren nicht möglich.")); };
+}
 function zeigeWerkstatt() {
   const f = waehlbar(auswahl);
   const w = $("werkstatt");
@@ -1474,6 +1497,7 @@ function zeigeWerkstatt() {
     if ($("kSkizzeHier")) $("kSkizzeHier").onclick = () => neueSkizze(f.id);
     return;
   }
+  if (f?.typ === "dach" && f._mengen) return zeigeDachListe(w, f);
   if (f?.typ === "flaeche" && f._teile?.length) return waehle(f._teile[0].id);
   if (f?._blech) return zeigeFlaechenteil(w, f);
   if (f?.typ === "rundblech" && f._rund) return zeigeRund(w, f);
@@ -2296,6 +2320,24 @@ function partnerKante(f, key) {
 const dachEinst = () => (einst.dach ||= dachGrund());
 const deckungVon = (f) => [...(doc.dachVorlagen?.deckungen || []), ...dachEinst().deckungen, ...DECKUNGEN_STANDARD].find((d) => d.id === f.deckung) || dachEinst().deckungen[0];
 const aufbauVon = (f) => [...(doc.dachVorlagen?.aufbauten || []), ...dachEinst().aufbauten, ...AUFBAU_STANDARD].find((a) => a.id === f.aufbau) || dachEinst().aufbauten[0];
+const DACH_ARTEN = [{ id: "sparren", name: "Sparren", farbe: 0xc9a26b }, { id: "daemmung", name: "Dämmung", farbe: 0xe6cf55 }, { id: "unterdach", name: "Unterdach", farbe: 0x7d6444 }, { id: "konter", name: "Konterlattung", farbe: 0xb98b55 }, { id: "lattung", name: "Dachlattung", farbe: 0xa87a48 }, { id: "deckung", name: "Deckung", farbe: 0xb5543a }];
+// Quader (8 Ecken [u, v, h], Index = Normale·4 + t·2 + s) → Dreiecke in Weltkoordinaten; Umlaufsinn über das Volumen nach aussen
+function dachBoxenGeo(boxen, g) {
+  const F = [[0, 2, 6, 4], [1, 5, 7, 3], [0, 4, 5, 1], [2, 3, 7, 6], [0, 1, 3, 2], [4, 6, 7, 5]], pos = [];
+  for (const b of boxen) {
+    const W = b.ecken.map((p) => dachWelt(g, p)), t = [];
+    for (const [a, c, d, e] of F) t.push([W[a], W[c], W[d]], [W[a], W[d], W[e]]);
+    const vol = t.reduce((v, [a, c, d]) => v + (a[0] * (c[1] * d[2] - c[2] * d[1]) - a[1] * (c[0] * d[2] - c[2] * d[0]) + a[2] * (c[0] * d[1] - c[1] * d[0])), 0);
+    for (const [a, c, d] of t) pos.push(...(vol < 0 ? [a, d, c] : [a, c, d]).flat());
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return geo;
+}
+// Kanten der Quader direkt (12 je Körper) – viel schneller als die Winkelsuche über das ganze Netz
+function dachBoxenKanten(boxen, g) {
+  const E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]], pos = [];
+  for (const b of boxen) { const W = b.ecken.map((p) => dachWelt(g, p)); for (const [i, j] of E) pos.push(...W[i], ...W[j]); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return geo;
+}
 function dachErgebnis(f, g) {
   return rechteckDach({ breite: g.breite, tiefe: g.tiefe, form: f.form || "sattel", neigung: +f.neigung || 35, neigung2: f.neigung2 ? +f.neigung2 : null, ueberstandTraufe: +f.ueberstandTraufe || 0, ueberstandOrtgang: +f.ueberstandOrtgang || 0, firstRichtung: f.firstRichtung || "laengs", traufhoehe: g.traufhoehe });
 }
@@ -2336,11 +2378,12 @@ function dachDialog(f) {
     { id: "form", label: "Dachform", optionen: Object.entries(DACHFORMEN), wert: f.form }, { id: "firstRichtung", label: "First / Gefälle", optionen: [["laengs", "First längs (Länge)"], ["quer", "First quer (Tiefe)"]], wert: f.firstRichtung || "laengs" },
     { id: "neigung", label: "Neigung", einheit: "°", wert: f.neigung }, ...(["sattel", "walm"].includes(f.form) ? [{ id: "neigung2", label: "Neigung 2. Seite", einheit: "°", wert: f.neigung2 ?? f.neigung }] : []),
     { id: "ueberstandTraufe", label: "Überstand Traufe", einheit: "mm", wert: f.ueberstandTraufe }, { id: "ueberstandOrtgang", label: "Überstand Ortgang", einheit: "mm", wert: f.ueberstandOrtgang },
-    { id: "deckung", label: "Deckung", optionen: dachEinst().deckungen.map((d) => [d.id, d.name]), wert: f.deckung }, { id: "aufbau", label: "Dachaufbau", optionen: dachEinst().aufbauten.map((a) => [a.id, a.name]), wert: f.aufbau }];
+    { id: "deckung", label: "Deckung", optionen: dachEinst().deckungen.map((d) => [d.id, d.name]), wert: f.deckung }, { id: "aufbau", label: "Dachaufbau", optionen: dachEinst().aufbauten.map((a) => [a.id, a.name]), wert: f.aufbau },
+    { id: "darstellung", label: "Darstellung", optionen: [["detail", "Aufbau detailliert (Sparren, Dämmung, Latten …)"], ["platte", "Nur Platte (schnell)"]], wert: f.darstellung || "detail" }];
   const setze = (f, w) => {
     for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke"]) if (w[k] > 0) g[k] = w[k];
     for (const k of ["neigung", "neigung2", "ueberstandTraufe", "ueberstandOrtgang"]) if (Number.isFinite(w[k]) && w[k] >= 0) f[k] = w[k];
-    for (const k of ["form", "firstRichtung", "deckung", "aufbau"]) if (w[k]) f[k] = w[k];
+    for (const k of ["form", "firstRichtung", "deckung", "aufbau", "darstellung"]) if (w[k]) f[k] = w[k];
     f.name = w.name?.trim() || f.name; if (f.neigung > 80) f.neigung = 80; if (f.neigung2 > 80) f.neigung2 = 80;
   };
   featureDialog(f, istNeu, felder, setze, "Dach automatisch",

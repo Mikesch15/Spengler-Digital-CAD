@@ -1,6 +1,6 @@
 # Dach-Modus (zweiter Grundaufbau) – Plan
 
-Stand: 21.11.2026 · nur Planung, noch nichts gebaut.
+Stand: 21.11.2026 · Phase 1 und 2 gebaut (Gebäude, Dachflächen, Sparren/Dämmung/Unterdach/Latten als Körper, Holzliste); Phase 3–6 offen.
 
 ## Entscheide (vom Besitzer)
 1. **Details** sollen sich aus dem Dach erstellen lassen (Schnitte durch Traufe, First, Ortgang, Grat, Kehle, Kamin, Fenster, Lukarne – massstäblich im Plan, mit Schichtenaufbau und Blechprofilen).

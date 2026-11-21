@@ -48,4 +48,26 @@ ok(sc.liste.map((l) => l.id).join() === "daemmung,sparren,unterdach,konter,lattu
 ok(sc.unten === -200 && sc.oben === 24 + 40 + 60 + 25 && sc.dicke === 200 + 149, `Aufbau: ${sc.dicke} mm gesamt (Sparren 200 + 149 darüber)`);
 ok(pruefeDach({ neigungen: [18, 35], deckung: DECKUNGEN_STANDARD[0] }).length === 1 && pruefeDach({ neigungen: [35], deckung: DECKUNGEN_STANDARD[0] }).length === 0, "Prüfung Mindestneigung: 18° zu flach für Schiebeziegel, 35° in Ordnung");
 ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 15 Latten");
+
+// ---- Phase 2: Aufbau als Körper + Mengen
+{
+  const { flaechenKoerper, dachMengen } = await import("../kern/dach/koerper.js");
+  const V = await import("../kern/dach/vorlagen.js");
+  const au = V.AUFBAU_STANDARD[0], dk = V.DECKUNGEN_STANDARD[0], sc = V.schichten(au, dk);
+  const r = rechteckDach({ breite: 10000, tiefe: 8000, form: "sattel", neigung: 35, ueberstandTraufe: 0, ueberstandOrtgang: 0, traufhoehe: 3000 });
+  const fl = r.flaechen.map((f) => flaechenKoerper(f, sc, au, dk)), m = dachMengen(fl, dk);
+  
+  const n = (a) => fl[0].koerper.filter((k) => k.art === a).length;
+  ok(n("sparren") === 15, "Sparren-Anzahl 10 m / e 700 = 15, war " + n("sparren"));
+  const sp = fl[0].koerper.find((k) => k.art === "sparren");
+  ok(Math.abs(sp.laenge - 4000 / Math.cos(35 * Math.PI / 180)) < 2, "Sparrenlänge " + sp.laenge);
+  ok(n("konter") === 15, "Konterlatten"); ok(n("lattung") >= 14 && n("lattung") <= 16, "Latten " + n("lattung"));
+  ok(Math.abs(m.deckflaeche - 2 * 10 * 4 / Math.cos(35 * Math.PI / 180)) < 0.2, "Deckfläche " + m.deckflaeche);
+  ok(m.ziegel === Math.ceil(m.deckflaeche * 14.7), "Ziegel"); ok(m.daemmung < m.deckflaeche && m.daemmung > 0.8 * m.deckflaeche, "Dämmung zwischen < Fläche, war " + m.daemmung);
+  ok(m.sparren.reduce((s, x) => s + x.stueck, 0) === 30, "30 Sparren");
+  const ar = rechteckDach({ breite: 10000, tiefe: 8000, form: "walm", neigung: 35, ueberstandTraufe: 0, ueberstandOrtgang: 0, traufhoehe: 3000 }).flaechen.map((f) => flaechenKoerper(f, V.schichten(V.AUFBAU_STANDARD[1], dk), V.AUFBAU_STANDARD[1], dk));
+  ok(ar.length === 4 && ar.every((f) => f.koerper.some((k) => k.art === "sparren")), "Walm: Sparren auf allen Flächen");
+  
+}
+
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);
