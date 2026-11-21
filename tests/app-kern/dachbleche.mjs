@@ -26,6 +26,21 @@ await s.evaluate((i) => window.sdcadTest.waehle(i), id); await s.waitForTimeout(
 ok(/Blechsorten/.test(await s.textContent("#werkstatt")), "Werkstatt: Liste der Bleche");
 await s.evaluate((i) => window.sdcadTest.waehle(i + ":0"), id); await s.waitForTimeout(300);
 const w = await s.textContent("#werkstatt"); ok(/Traufblech/.test(w) && /Biegungen/.test(w), "Einzelnes Blech: Abwicklung mit Biegungen");
+// Phase 4: Dachfenster und Kamin
+await s.evaluate(() => document.getElementById("wDachElement").click()); await s.waitForSelector("#d_velux", { timeout: 4000 }); await s.waitForTimeout(400);
+ok(/Öffnung 780 × 978/.test(await info()), "Dachfenster MK04 (Velux): " + (await info()));
+await s.click("#dOk"); await s.waitForTimeout(400);
+await s.evaluate(() => document.getElementById("wDachElement").click()); await s.waitForSelector("#d_velux", { timeout: 4000 });
+await s.selectOption("#d_art", "kamin"); await s.selectOption("#d_velux", ""); await s.fill("#d_b", "500"); await s.dispatchEvent("#d_b", "input"); await s.fill("#d_h", "500"); await s.dispatchEvent("#d_h", "input");
+await s.fill("#d_x", "9000"); await s.dispatchEvent("#d_x", "input"); await s.fill("#d_y", "1200"); await s.dispatchEvent("#d_y", "input"); await s.waitForTimeout(500);
+ok(/Öffnung 500 × 500/.test(await info()), "Kamin 500 × 500: " + (await info()));
+await s.click("#dOk"); await s.waitForTimeout(400);
+const dachId = await s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.typ === "dach")?.id);
+await s.evaluate((i) => window.sdcadTest.waehle(i), dachId); await s.waitForTimeout(300);
+await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(500); await s.screenshot({ path: "/tmp/t/elemente.png" });
+ok(/Wechsel/.test(await s.textContent("#werkstatt")), "Holzliste: Wechsel für Fenster und Kamin");
+await s.evaluate((i) => window.sdcadTest.waehle(i), id); await s.waitForTimeout(300);
+ok(/Kaminanschluss/.test(await s.textContent("#werkstatt")), "Dachbleche: Kaminanschluss");
 // Phase 6: Details aus dem Dach und Dachaufsicht im Plan
 await s.evaluate(() => document.getElementById("wPlan").click()); await s.waitForTimeout(800);
 await s.evaluate(() => document.getElementById("plNeuDetail").click()); await s.waitForTimeout(300);

@@ -115,4 +115,19 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   const t = dachSchnitt({ art: "traufe", neigung: 30, schichten: sc, aufbau: au, ueberstand: 400 }), xs = t.polys.filter((p) => p.id !== "wand").flatMap((p) => p.pts.map((q) => q[0]));
   ok(Math.max(...xs) <= 400.01 && Math.max(...xs) > 399, "Traufe: Schichten enden am Überstand (400 mm)");
 }
+
+// ---- Phase 4: Dachfenster / Kamin (Öffnung, Wechsel, Mengen)
+{
+  const { flaechenKoerper, dachMengen } = await import("../kern/dach/koerper.js"), E = await import("../kern/dach/elemente.js"), V = await import("../kern/dach/vorlagen.js");
+  const au = V.AUFBAU_STANDARD[0], dk = V.DECKUNGEN_STANDARD[0], sc = V.schichten(au, dk), r = rechteckDach({ breite: 10000, tiefe: 8000, form: "sattel", neigung: 35, ueberstandTraufe: 0, ueberstandOrtgang: 0 });
+  const el = { art: "fenster", b: 780, h: 978, x: 5000, y: 1500 }, q = E.elementRechteck(r.flaechen[0], el);
+  ok(q.innen, "Fenster liegt in der Dachfläche");
+  ok(!E.elementRechteck(r.flaechen[0], { ...el, x: 100 }).innen, "Fenster am Rand ausserhalb erkannt");
+  const a = { s0: q.s0, s1: q.s1, t0: q.t0, t1: q.t1, wechsel: au.sparrenB }, f0 = flaechenKoerper(r.flaechen[0], sc, au, dk), f1 = flaechenKoerper(r.flaechen[0], sc, au, dk, { ausschnitte: [a] }), n = (f, art) => f.koerper.filter((k) => k.art === art).length;
+  ok(n(f1, "wechsel") === 2 && n(f1, "sparren") > n(f0, "sparren"), "Öffnung: 2 Wechsel, Sparren unterbrochen (" + n(f0, "sparren") + " → " + n(f1, "sparren") + ")");
+  ok(n(f1, "lattung") > n(f0, "lattung"), "Latten über der Öffnung unterbrochen");
+  const m = dachMengen([f1, flaechenKoerper(r.flaechen[1], sc, au, dk)], dk, [], E.elementFlaeche(el)), m0 = dachMengen([f0, flaechenKoerper(r.flaechen[1], sc, au, dk)], dk);
+  ok(nah(m0.deckflaeche - m.deckflaeche, 0.76, 0.01) && m.wechsel[0].stueck === 2, "Deckfläche um die Öffnung (0,76 m²) kleiner; Wechsel in der Liste");
+  ok(E.veluxListe().find((v) => v.code === "MK04").b === 780 && E.kaminBleche({ b: 500, h: 500 }).length === 3, "Velux-Liste und Kaminbleche");
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);
