@@ -103,4 +103,16 @@ ok(lattenAnzahl(4891, 340) === 15, "Latten: Fallinie 4,89 m, Lattweite 340 → 1
   ok(l.teile.filter((t) => t.art === "kehle").reduce((n, t) => n + t.stueck, 0) === 2, "L-Form Satteldach: 2 Kehlbleche");
   ok(dachBleche(a.flaechen, { arten: { traufe: false } }).teile.every((t) => t.art !== "traufe"), "Blechart abschaltbar");
 }
+
+// ---- Phase 6: Details aus dem Dach (Schnitt durch den Aufbau)
+{
+  const { dachSchnitt, dachSchnittSvg } = await import("../kern/dach/detail.js"), V = await import("../kern/dach/vorlagen.js");
+  const au = V.AUFBAU_STANDARD[0], dk = V.DECKUNGEN_STANDARD[0], sc = V.schichten(au, dk);
+  for (const art of ["traufe", "ortgang", "first", "grat", "kehle"]) {
+    const d = dachSchnitt({ art, neigung: 35, schichten: sc, aufbau: au }), r = dachSchnittSvg(d, { M: 10 });
+    ok(d.polys.length >= 5 && d.zuege.length >= 1 && /^<svg/.test(r.svg) && r.b > 20 && r.h > 20, `Dachdetail ${art}: ${d.polys.length} Schichten, Blechzug, SVG ${r.b} × ${r.h} mm`);
+  }
+  const t = dachSchnitt({ art: "traufe", neigung: 30, schichten: sc, aufbau: au, ueberstand: 400 }), xs = t.polys.filter((p) => p.id !== "wand").flatMap((p) => p.pts.map((q) => q[0]));
+  ok(Math.max(...xs) <= 400.01 && Math.max(...xs) > 399, "Traufe: Schichten enden am Überstand (400 mm)");
+}
 console.log(fehler ? `${fehler} Fehler` : "Dach (Form): alle Tests bestanden"); process.exit(fehler ? 1 : 0);

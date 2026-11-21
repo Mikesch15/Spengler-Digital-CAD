@@ -26,6 +26,17 @@ await s.evaluate((i) => window.sdcadTest.waehle(i), id); await s.waitForTimeout(
 ok(/Blechsorten/.test(await s.textContent("#werkstatt")), "Werkstatt: Liste der Bleche");
 await s.evaluate((i) => window.sdcadTest.waehle(i + ":0"), id); await s.waitForTimeout(300);
 const w = await s.textContent("#werkstatt"); ok(/Traufblech/.test(w) && /Biegungen/.test(w), "Einzelnes Blech: Abwicklung mit Biegungen");
+// Phase 6: Details aus dem Dach und Dachaufsicht im Plan
+await s.evaluate(() => document.getElementById("wPlan").click()); await s.waitForTimeout(800);
+await s.evaluate(() => document.getElementById("plNeuDetail").click()); await s.waitForTimeout(300);
+const dm = await s.textContent("#plDetailMenue"); ok(/Traufe 30°|Traufe 35°/.test(dm) && /Ortgang/.test(dm) && /First/.test(dm), "Plan › Detail: Dachaufbau-Schnitte – " + dm.replace(/\s+/g, " ").slice(0, 160));
+await s.evaluate(() => document.querySelector("#plDetailMenue [data-detail^='dach|']").click()); await s.waitForTimeout(500);
+ok(await s.evaluate(() => [...document.querySelectorAll("svg")].some((v) => /Dachlattung|Unterdach|Sparren/.test(v.textContent))), "Detail «Traufe» mit Schichten im Plan");
+await s.evaluate(() => document.getElementById("plNeuAnsicht").click()); await s.waitForTimeout(300);
+ok(/Dachaufsicht/.test(await s.textContent("#plAnsichtMenue")), "Plan › Ansicht: Dachaufsicht wählbar");
+await s.evaluate(() => document.querySelector("#plAnsichtMenue [data-plskizze^='dach:']").click()); await s.waitForTimeout(600);
+await s.screenshot({ path: "/tmp/t/plan.png" });
+ok(await s.evaluate(() => (document.querySelector("#plan, #planBlatt, [id^=plan]")?.innerHTML.length ?? 0) > 500), "Dachaufsicht gezeichnet");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Dachbleche (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

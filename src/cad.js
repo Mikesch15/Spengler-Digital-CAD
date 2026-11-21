@@ -10,7 +10,8 @@ import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
-import { dachBleche, BLECHARTEN } from "../kern/dach/bleche.js";
+import { dachBleche, dachSegmente, BLECHARTEN } from "../kern/dach/bleche.js";
+import { dachSchnitt, dachSchnittSvg, DETAILARTEN } from "../kern/dach/detail.js";
 import { fluegelDach, polygonDach, grundrissForm, GRUNDFORMEN } from "../kern/dach/fluegel.js";
 import { flaechenKoerper as dachFlaechenKoerper, dachMengen } from "../kern/dach/koerper.js";
 import { DECKUNGEN_STANDARD, AUFBAU_STANDARD, grundeinstellung as dachGrund, schichten as dachSchichten, pruefeDach } from "../kern/dach/vorlagen.js";
@@ -1511,7 +1512,8 @@ function zeigeWerkstatt() {
   }
   if (f?.typ === "dach" && f._mengen) return zeigeDachListe(w, f);
   if (f?.typ === "dachbleche" && f._teile) { const lm = f._teile.reduce((s, t) => s + t.laenge * t.stueck, 0) / 1000;
-    w.innerHTML = `<div class="unter" style="padding-top:12px">${esc(f.name)} · ${f._teile.length} Blechsorten · ${lm.toFixed(1)} m Länge</div><table class="liste"><thead><tr><th>Blech</th><th class="num">Länge</th><th class="num">Stk.</th><th class="num">Zuschnitt</th></tr></thead><tbody>${f._teile.map((t) => `<tr data-teil="${t.id}"><td>${esc(t.name.replace(/ \d+ mm$/, ""))}</td><td class="num">${t.laenge}</td><td class="num">${t.stueck}</td><td class="num">${f1(t._res.zuschnitt)}</td></tr>`).join("")}</tbody></table><p class="leer">Teil in der Zeitleiste oder Stückliste wählen für Abkantliste und DXF. 3D-Darstellung schematisch.</p>`;
+    w.innerHTML = `<div class="unter" style="padding-top:12px">${esc(f.name)} · ${f._teile.length} Blechsorten · ${lm.toFixed(1)} m Länge</div><table class="liste"><thead><tr><th>Blech</th><th class="num">Länge</th><th class="num">Stk.</th><th class="num">Zuschnitt</th></tr></thead><tbody>${f._teile.map((t) => `<tr data-teil="${t.id}"><td>${esc(t.name.replace(/ \d+ mm$/, ""))}</td><td class="num">${t.laenge}</td><td class="num">${t.stueck}</td><td class="num">${f1(t._res.zuschnitt)}</td></tr>`).join("")}</tbody></table><p class="leer">Teil in der Zeitleiste oder Stückliste wählen für Abkantliste und DXF. 3D-Darstellung schematisch.</p><div class="reihe"><button class="knopf haupt" id="kBlechCsv">Liste kopieren (CSV)</button></div>`;
+    $("kBlechCsv").onclick = () => { const t = [["Blech", "Länge mm", "Stück", "Zuschnitt mm"], ...f._teile.map((x) => [x.name.replace(/ \d+ mm$/, ""), x.laenge, x.stueck, f1(x._res.zuschnitt)])].map((r) => r.join(";")).join("\n"); navigator.clipboard?.writeText(t).then(() => status("Blechliste kopiert."), () => status("Kopieren nicht möglich.")); };
     w.querySelectorAll("[data-teil]").forEach((r) => (r.onclick = () => waehle(r.dataset.teil))); return; }
   if (f?.typ === "flaeche" && f._teile?.length) return waehle(f._teile[0].id);
   if (f?._blech) return zeigeFlaechenteil(w, f);
@@ -3507,7 +3509,35 @@ function abwicklungPlanAnsicht(ref, k) {
   return { breite: (x1 - x0) * k, hoehe: (y1 - y0) * k, layer, sichtbar: layer.flatMap((l) => l.linien), verdeckt: [], flaechen: [], massstab: 1 / k, abbild: (w) => T(w), punkte, kreise: [] };
 }
 // Skizzen als Zeichnung im Plan: Linien je Layer (Farbe, Linienart), Eckpunkte/Mittelpunkte zum Bemassen, Kreise für Ø/R; Papier-mm = Skizzen-mm · k
+// Details aus dem Dach: Schnitt durch den Aufbau mit Anschlussblech an Traufe, Ortgang, First, Grat, Kehle (je Dach und Neigung)
+function dachDetails() {
+  return doc.features.filter((f) => f.typ === "dach" && f._dach && f._schichten && !f._aus).flatMap((f) => {
+    const gesehen = new Set(), out = [];
+    for (const sg of dachSegmente(f._dach.flaechen)) { const n = Math.round(sg.neigung); if (gesehen.has(sg.art + n)) continue; gesehen.add(sg.art + n); out.push([`dach|${f.id}|${sg.art}|${n}`, `${f.name} · ${DETAILARTEN[sg.art]} ${n}° (Dachaufbau)`]); }
+    return out.sort((a, b) => Object.keys(DETAILARTEN).findIndex((k) => a[0].includes("|" + k + "|")) - Object.keys(DETAILARTEN).findIndex((k) => b[0].includes("|" + k + "|")));
+  });
+}
+function dachDetailSvg(ref, M) {
+  const [, id, art, n] = String(ref).split("|"), f = finde(id); if (f?.typ !== "dach" || !f._schichten) return null;
+  const bl = doc.features.find((x) => x.typ === "dachbleche" && x.dach === id), par = { ...standardwerte(BLECH_VORLAGE[art]), ...(bl?.params?.[art] || {}) };
+  const sch = dachSchnitt({ art, neigung: +n || 35, schichten: f._schichten, aufbau: aufbauVon(f), wandstaerke: finde(f.gebaeude)?.wandstaerke || 300, ueberstand: art === "ortgang" ? +f.ueberstandOrtgang || 0 : +f.ueberstandTraufe || 0, blech: par });
+  return dachSchnittSvg(sch, { M: Math.max(1, M), blechDicke: material(bl?.material).t });
+}
+// Dachaufsicht im Plan: Aussenkanten, First, Grate, Kehlen (Linienarten) und Gebäudeumriss; Eckpunkte zum Bemassen
+function dachAufsichtAnsicht(id, k) {
+  const f = finde(id), r = f?._dach, g = f && finde(f.gebaeude); if (!r || !g) return null;
+  const P = (p) => [p[0] + (+g.x || 0), p[1] - (+g.z || 0)], segs = dachSegmente(r.flaechen), pts = new Map();
+  const art = (a) => segs.filter((x) => x.art === a).map((x) => [P(x.von), P(x.bis)]), umriss = gebaeudeUmriss(g).map(P);
+  const gruppen = [{ farbe: "#888888", strich: "1.5 1", segs: umriss.map((a, i) => [a, umriss[(i + 1) % umriss.length]]) }, { farbe: "#000000", strich: "", segs: [...art("traufe"), ...art("ortgang")] }, { farbe: "#e02424", strich: "", segs: art("first") },
+    { farbe: "#7a3fb0", strich: "4 1.2 0.4 1.2", segs: art("grat") }, { farbe: "#1f5fbf", strich: "3 1.5", segs: art("kehle") }].filter((x) => x.segs.length);
+  const alle = gruppen.flatMap((x) => x.segs).flat(); if (!alle.length) return null;
+  const x0 = Math.min(...alle.map((p) => p[0])), x1 = Math.max(...alle.map((p) => p[0])), y0 = Math.min(...alle.map((p) => p[1])), y1 = Math.max(...alle.map((p) => p[1])), T = (p) => [(p[0] - x0) * k, (y1 - p[1]) * k];
+  for (const p of alle) pts.set(`${Math.round(p[0])},${Math.round(p[1])}`, p);
+  const layer = gruppen.map((x) => ({ farbe: x.farbe, strich: x.strich, linien: x.segs.map(([a, b]) => [...T(a), ...T(b)]) }));
+  return { breite: (x1 - x0) * k, hoehe: (y1 - y0) * k, layer, sichtbar: layer.flatMap((l) => l.linien), verdeckt: [], flaechen: [], massstab: 1 / k, abbild: (w) => T(w), punkte: [...pts.values()].map((p) => { const [x, y] = T(p); return { x, y, w: [p[0], p[1], 0] }; }), kreise: [] };
+}
 function skizzenPlanAnsicht(id, k) {
+  if (String(id).startsWith("dach:")) return dachAufsichtAnsicht(String(id).slice(5), k);
   const sks = id === "alle" ? doc.features.filter((x) => x.typ === "skizze" && !x.versteckt && !x._aus) : [finde(id)].filter((x) => x?.typ === "skizze");
   const gruppen = new Map(), punkte = [], kreise = [], strich = { gestrichelt: "3 1.5", strichpunkt: "4 1.2 0.4 1.2", mittellinie: "8 1.5 1.5 1.5", verdeckt: "1.5 1", gepunktet: "0.3 1.2" };
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -3538,16 +3568,17 @@ const plaene = planModul({
   koerperBaum: () => { const ids = new Set(); for (const o of modell.children) if (o.isMesh && o.userData.fid != null) { const h = hauptVon(o.userData.fid); if (h) ids.add(h.id); } return [...ids].map((id) => finde(id)).filter(Boolean).map((f) => ({ id: f.id, name: f.name, komp: f.komponente || "" })); },
   groesse: () => { const b = alleBox(); return b.isEmpty() ? 1000 : Math.max(...b.getSize(new THREE.Vector3()).toArray()); },
   // Schnitte = Querschnitte der Kantenbausteine an Flächenblechen («fid|Blech:Kante»), massstäblich
-  details: () => doc.features.filter((f) => f.typ === "flaeche" && f._bleche && !f._aus).flatMap((f) => Object.keys(f.kanten || {}).filter((k) => kantenProfil(f, k))
-    .map((k) => [`${f.id}|${k}`, `${f.name} · ${kantenName(f, k)} · ${kantenProfil(f, k).name}`])),
+  details: () => [...dachDetails(), ...doc.features.filter((f) => f.typ === "flaeche" && f._bleche && !f._aus).flatMap((f) => Object.keys(f.kanten || {}).filter((k) => kantenProfil(f, k))
+    .map((k) => [`${f.id}|${k}`, `${f.name} · ${kantenName(f, k)} · ${kantenProfil(f, k).name}`]))],
   detailSvg: (ref, M) => {
+    if (String(ref).startsWith("dach|")) return dachDetailSvg(ref, M);
     const [fid, k] = String(ref).split("|"), f = finde(fid), p = f && k && kantenProfil(f, k); if (!p) return null;
     const { w, h } = bausteinGrenzen(p), rand = 5, b = w / M + 2 * rand, hh = h / M + 2 * rand;
     return { svg: bausteinSvg(p, material(f.material).t, { breite: b, hoehe: hh, rand, schrift: 2.5, massstab: 1 / M, papier: true }), b, h: hh, name: `Schnitt ${kantenName(f, k)} · ${p.name}` };
   },
   abwicklungen: () => blechteile().filter((x) => x._blech?.abw || x._res).map((x) => [String(x.id), x.name]),
   abwicklungAnsicht: (ref, k) => abwicklungPlanAnsicht(ref, k),
-  skizzen: () => doc.features.filter((x) => x.typ === "skizze" && !x._aus && x.elemente.some((el) => !el.hilfs && el.art !== "punkt")).map((x) => [x.id, x.name]),
+  skizzen: () => [...doc.features.filter((x) => x.typ === "dach" && x._dach && !x._aus).map((x) => ["dach:" + x.id, "Dachaufsicht " + x.name]), ...doc.features.filter((x) => x.typ === "skizze" && !x._aus && x.elemente.some((el) => !el.hilfs && el.art !== "punkt")).map((x) => [x.id, x.name])],
   skizzenAnsicht: (id, k) => skizzenPlanAnsicht(id, k),
   ablageKopie: (n, i, art) => ablage?.kopie(n, i, art),
   drucken: (html) => { $("druck").innerHTML = html; window.print(); },

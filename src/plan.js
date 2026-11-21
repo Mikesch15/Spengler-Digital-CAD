@@ -340,7 +340,7 @@ ${out.join("\n")}
         if (schnitt) { const d = new THREE.Vector3(...RICHTUNGEN[art].d), bx = new THREE.Box3(); ctx.meshes().forEach((m) => bx.expandByObject(m)); a.schnitt = { lage: bx.isEmpty() ? 0 : Math.round(bx.getCenter(new THREE.Vector3()).dot(d)), buchstabe: String.fromCharCode(65 + plan.ansichten.filter((x) => x.schnitt).length) }; }
         if (vorige) { const r = ansicht(vorige); a.x = vorige.x + (r?.breite || 50) + 35; a.y = vorige.y; }
         plan.ansichten.push(a); sel = a.id; $("plAnsichtMenue").hidden = true; zeige();
-      } else if (b.dataset.detail) { plan.details.push({ id: neuId(), fid: b.dataset.detail, massstab: 1, x: 40, y: 150 }); $("plDetailMenue").hidden = true; zeige(); }
+      } else if (b.dataset.detail) { plan.details.push({ id: neuId(), fid: b.dataset.detail, massstab: String(b.dataset.detail).startsWith("dach|") ? 10 : 1, x: 40, y: 150 }); $("plDetailMenue").hidden = true; zeige(); }
       else if (b.dataset.plskizze) { // Zeichnung aus einer Skizze (oder allen) mit Layern; Massstab passend zum Blatt
         const F = FORMATE[plan.format], vorige = plan.ansichten.filter((x) => !x.lupe).at(-1), r1 = ctx.skizzenAnsicht(b.dataset.plskizze, 1);
         if (!r1) { $("plAnsichtMenue").hidden = true; return ctx.status("Die Skizze ist leer."); }
@@ -358,7 +358,7 @@ ${out.join("\n")}
         plan.ansichten.push(a); sel = a.id; $("plAnsichtMenue").hidden = true; zeige();
       }
       else if (b.id === "plNeuAnsicht") { const m = $("plAnsichtMenue"); m.querySelectorAll("[data-plskizze],[data-plabw],.plsk").forEach((x) => x.remove());
-        const ab = ctx.abwicklungen(); if (ab.length) m.insertAdjacentHTML("beforeend", `<div class="kmgruppe plsk">Abwicklung (Zuschnitt, Biegelinien)</div>` + ab.map(([id, n]) => `<button data-plabw="${esc(id)}">Abwicklung: ${esc(n)}</button>`).join("")); const sk = ctx.skizzen(); if (sk.length) m.insertAdjacentHTML("beforeend", `<div class="kmgruppe plsk">Zeichnung aus Skizze (mit Layern)</div>` + [["alle", "Alle Skizzen"], ...sk].map(([id, n]) => `<button data-plskizze="${esc(id)}">Skizze: ${esc(n)}</button>`).join("")); m.hidden = !m.hidden; }
+        const ab = ctx.abwicklungen(); if (ab.length) m.insertAdjacentHTML("beforeend", `<div class="kmgruppe plsk">Abwicklung (Zuschnitt, Biegelinien)</div>` + ab.map(([id, n]) => `<button data-plabw="${esc(id)}">Abwicklung: ${esc(n)}</button>`).join("")); const sk = ctx.skizzen(); if (sk.length) m.insertAdjacentHTML("beforeend", `<div class="kmgruppe plsk">Zeichnung aus Skizze (mit Layern)</div>` + [["alle", "Alle Skizzen"], ...sk].map(([id, n]) => `<button data-plskizze="${esc(id)}">${String(id).startsWith("dach:") ? "" : "Skizze: "}${esc(n)}</button>`).join("")); m.hidden = !m.hidden; }
       else if (b.id === "plNeuDetail") { const d = ctx.details(); $("plDetailMenue").innerHTML = d.length ? d.map(([id, n]) => `<button data-detail="${id}">${esc(n)}</button>`).join("") : '<p class="hinweis">Noch keine Kanten mit Baustein – Flächenblech wählen und Kanten antippen.</p>'; $("plDetailMenue").hidden = !$("plDetailMenue").hidden; }
       else if (b.id === "plNeu") { plan = neuerPlan(); sel = null; box = null; zeige(); }
       else if (b.id === "plZoomPlus") { const bx = aktBox(); zoomUm([bx.x + bx.w / 2, bx.y + bx.h / 2], 1.4); }
