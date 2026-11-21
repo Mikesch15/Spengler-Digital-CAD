@@ -1,0 +1,22 @@
+// Tests Cloud-Ablage: Ordnerstruktur Projekte/<Jahr>/<Projekt>/{Modelle,Exporte,Pläne}
+import { ordnerPlan, zuordnung, findeProjektOrdner, baum, ordnerName, projektOrdnerName, modellDateiName } from "../kern/cloud/ablage.js";
+let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
+const p = ordnerPlan({ jahr: 2026, auftrag: "2026-114", name: "Dach Müller" });
+ok(p.projekt === "Projekte/2026/2026-114 Dach Müller" && p.modelle.endsWith("/Modelle") && p.exporte.endsWith("/Exporte") && p.plaene.endsWith("/Pläne"), "Plan: Projekte/2026/«2026-114 Dach Müller»/{Modelle, Exporte, Pläne}");
+ok(p.alle.length === 6 && p.alle[0] === "Projekte" && p.alle[1] === "Projekte/2026", "Reihenfolge: Hauptordner, Jahr, Projekt, 3 Unterordner");
+let z = zuordnung([], { projectId: 7, auftrag: "2026-114", name: "Dach Müller", jahr: 2026 });
+ok(!z.vorhanden && z.neu.length === 6, "Leere Ablage: alle 6 Ordner werden angelegt");
+const ordner = z.alle.map((pfad, i) => ({ pfad, project_id: i === 2 ? 7 : null }));
+z = zuordnung(ordner, { projectId: 7, auftrag: "2026-114", name: "Dach Müller", jahr: 2027 });
+ok(z.vorhanden && z.neu.length === 0 && z.projekt === p.projekt, "Projekt gibt es schon (auch aus dem Vorjahr): nichts wird angelegt, kein zweiter Ordner im neuen Jahr");
+z = zuordnung(ordner.map((o) => ({ ...o, project_id: null })), { projectId: 9, auftrag: "2026-114", name: "Dach Müller (umbenannt)", jahr: 2027 });
+ok(z.vorhanden && z.projekt === p.projekt, "Wiedererkennung über die Auftrags-Nr., wenn der Projektname geändert wurde");
+z = zuordnung(ordner.filter((o) => !o.pfad.endsWith("Pläne")), { projectId: 7, auftrag: "2026-114", name: "Dach Müller", jahr: 2026 });
+ok(z.vorhanden && z.neu.length === 1 && z.neu[0].endsWith("/Pläne"), "Fehlender Unterordner wird nachgelegt");
+z = zuordnung([{ pfad: "Projekte" }, { pfad: "Projekte/2026" }], { projectId: 8, auftrag: "2026-200", name: "Neu", jahr: 2026 });
+ok(!z.vorhanden && z.neu.length === 4 && !z.neu.includes("Projekte") && !z.neu.includes("Projekte/2026"), "Hauptordner und Jahr vorhanden: nur Projekt + 3 Unterordner neu");
+ok(ordnerName('A/B:C*D?"E<F>G|H') === "A-B-C-D-E-F-G-H" && projektOrdnerName({ auftrag: "", name: "Nur Name" }) === "Nur Name" && ordnerName("  ") === "Ohne Name", "Ordnernamen ohne verbotene Zeichen");
+const b = baum([...ordner, { pfad: "Projekte/2025" }, { pfad: "Projekte/2025/X/Modelle" }], [{ ordner: p.modelle, name: "a.sdcad", geloescht: false }, { ordner: p.modelle, name: "weg.sdcad", geloescht: true }]);
+ok(b[0].pfad === "Projekte" && b[1].pfad === "Projekte/2026" && b.find((o) => o.pfad === p.modelle).dateien.length === 1, "Baum: Jahre absteigend, gelöschte Dateien verborgen");
+ok(modellDateiName({ nr: "2026-114", objekt: "Dach / Müller" }) === "2026-114 Dach - Müller.sdcad", "Modell-Dateiname");
+console.log(fehler ? `${fehler} Fehler` : "Ablage: alle Tests bestanden"); process.exit(fehler ? 1 : 0);

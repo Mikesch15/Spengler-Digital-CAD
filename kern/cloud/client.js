@@ -67,6 +67,22 @@ export class CloudClient {
   async projektAnlegen({ name, auftrag = null, daten }) { const r = await this._mitToken("/rest/v1/cad_projekte", { methode: "POST", kopf: { Prefer: "return=representation" }, body: { company_id: this.sitzung.firma, name, auftrag, daten, version: 1, schema_version: 1, geloescht: false } }); return r?.[0]; }
   // Speichern nur auf der erwarteten Version; null = jemand anderes war schneller (Konflikt)
   async projektSpeichern(id, erwartet, { name, auftrag, daten, geloescht = false }) { const r = await this._mitToken(`/rest/v1/cad_projekte?id=eq.${id}&version=eq.${erwartet}`, { methode: "PATCH", kopf: { Prefer: "return=representation" }, body: { name, auftrag, daten, version: erwartet + 1, geloescht } }); return r?.[0] || null; }
+  // ---- Cloud-Ablage (cad_ordner, cad_dateien): Projekte / Jahr / Projekt / { Modelle, Exporte, Pläne } ----
+  async ordnerListe() { return this._mitToken(`/rest/v1/cad_ordner?select=pfad,project_id&company_id=eq.${this.sitzung.firma}&order=pfad.asc&limit=5000`); }
+  // legt die Pfade an, die es noch nicht gibt (vorhandene werden nicht verändert); projektId nur am Projektordner
+  async ordnerAnlegen(pfade, projektPfad = null, projektId = null) {
+    if (!pfade.length) return [];
+    return this._mitToken("/rest/v1/cad_ordner?on_conflict=company_id,pfad", { methode: "POST", kopf: { Prefer: "return=representation,resolution=ignore-duplicates" }, body: pfade.map((pfad) => ({ company_id: this.sitzung.firma, pfad, project_id: pfad === projektPfad && projektId != null ? String(projektId) : null })) });
+  }
+  async dateiListe(ordner = null) { const f = ordner ? `&ordner=like.${encodeURIComponent(ordner + "*")}` : ""; return this._mitToken(`/rest/v1/cad_dateien?select=id,ordner,name,art,mime,kodierung,groesse,version,geloescht,geaendert&company_id=eq.${this.sitzung.firma}&geloescht=eq.false${f}&order=ordner.asc,name.asc&limit=5000`); }
+  async dateiLaden(id) { const r = await this._mitToken(`/rest/v1/cad_dateien?select=*&id=eq.${id}`); if (!r?.[0]) throw new CloudFehler("Datei nicht gefunden.", 404, "server"); return r[0]; }
+  // speichert eine Datei im Ordner: neu anlegen oder – bei gleichem Namen – eine neue Version (nur auf der erwarteten Version, sonst Konflikt = null)
+  async dateiSpeichern({ ordner, name, art, mime = null, inhalt, kodierung = "text" }) {
+    const vorh = (await this._mitToken(`/rest/v1/cad_dateien?select=id,version&company_id=eq.${this.sitzung.firma}&ordner=eq.${encodeURIComponent(ordner)}&name=eq.${encodeURIComponent(name)}`))?.[0];
+    if (vorh) { const r = await this._mitToken(`/rest/v1/cad_dateien?id=eq.${vorh.id}&version=eq.${vorh.version}`, { methode: "PATCH", kopf: { Prefer: "return=representation" }, body: { inhalt, mime, kodierung, art, version: vorh.version + 1, geloescht: false } }); return r?.[0] ?? null; }
+    const r = await this._mitToken("/rest/v1/cad_dateien", { methode: "POST", kopf: { Prefer: "return=representation" }, body: { company_id: this.sitzung.firma, ordner, name, art, mime, kodierung, inhalt } }); return r?.[0] ?? null;
+  }
+  async dateiLoeschen(id) { return this._mitToken(`/rest/v1/cad_dateien?id=eq.${id}`, { methode: "PATCH", kopf: { Prefer: "return=representation" }, body: { geloescht: true } }); }
   // ---- Verbindung zur Spengler-Digital-App ----
   // Projekte der App (Tabelle projects): Auftragsnummer = order_no
   async appProjekte({ archiviert = false } = {}) { return this._mitToken(`/rest/v1/projects?select=id,name,order_no,customer,object,hinweis,status,archived,updated_at${archiviert ? "" : "&archived=eq.false"}&order=name.asc&limit=1000`); }

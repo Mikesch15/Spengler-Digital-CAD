@@ -8,6 +8,7 @@ import { projekteModul } from "./projekte.js";
 import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern/vorlagen/detail3d.js";
 import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
+import { ablageModul } from "./ablage.js";
 import { FARBEN, LINIENARTEN, farbeHex, standardLayer, skizzenDxf } from "../kern/zeichnung2d.js";
 import { sichere, geloeschte, inPapierkorb, zurueckholen, einspielen } from "../kern/sicherung.js";
 import { bausteinFolge, hatAusdruck, pruefeEignung, parameterText, parameterAusText } from "../kern/vorlagen/parameter.js";
@@ -1582,8 +1583,9 @@ async function kopiere(text) {
 const pc = window.__TAURI__?.core;
 const DATEITYPEN = { sdcad: "Spengler-Digital-CAD-Projekt", dxf: "DXF-Zeichnung", csv: "CSV-Tabelle", json: "Einstellungen" };
 const dateiname = (pfad) => pfad.split(/[\\/]/).pop();
-async function herunterladen(name, inhalt, typ, pfad = null) {
+async function herunterladen(name, inhalt, typ, pfad = null, ablageArt = "export", ohneAblage = false) {
   const endung = name.split(".").pop();
+  if (!ohneAblage && endung !== "sdcad") ablage?.kopie(name, inhalt, ablageArt); // Kopie in der Cloud-Ablage (Exporte bzw. Pläne), wenn angemeldet und ein Projekt zugeordnet ist
   if (pc) {
     try {
       const ziel = await pc.invoke("datei_speichern", { name, inhalt, filter: DATEITYPEN[endung] || endung, endungen: [endung], pfad });
@@ -3382,6 +3384,7 @@ const plaene = planModul({
   abwicklungAnsicht: (ref, k) => abwicklungPlanAnsicht(ref, k),
   skizzen: () => doc.features.filter((x) => x.typ === "skizze" && !x._aus && x.elemente.some((el) => !el.hilfs && el.art !== "punkt")).map((x) => [x.id, x.name]),
   skizzenAnsicht: (id, k) => skizzenPlanAnsicht(id, k),
+  ablageKopie: (n, i, art) => ablage?.kopie(n, i, art),
   drucken: (html) => { $("druck").innerHTML = html; window.print(); },
   fertig: () => { merke(); status("Pläne gespeichert – sie gehören zum Projekt."); },
 });
@@ -5005,6 +5008,7 @@ async function projektSpeichern(unter = false) {
   const inhalt = JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v), 1);
   const ziel = await herunterladen(`${doc.nr || "projekt"}.sdcad`, inhalt, "application/json", unter ? null : projektPfad);
   if (ziel) { projektPfad = ziel; titel(); merkeDatei(ziel); }
+  if (ziel || !pc) ablage?.nachSpeichern(); // Cloud-Ablage: Modelle/<Projekt>.sdcad
 }
 function ladeProjekt(text, pfad = null) {
   try {
@@ -5022,7 +5026,7 @@ async function projektOeffnen() {
 $("wSpeichern").onclick = () => projektSpeichern();
 $("wOeffnen").onclick = projektOeffnen;
 // ------------------------------------------------------------ Konto & Cloud (Spengler-Digital-App)
-function setzeAuftrag({ nr, objekt, appProjekt }) { doc.nr = nr; doc.objekt = objekt; if (appProjekt) doc.appProjekt = appProjekt; else delete doc.appProjekt; $("aNr").value = nr; $("aObjekt").value = objekt; auftragAnzeige(); speichern(); }
+function setzeAuftrag({ nr, objekt, appProjekt }) { doc.nr = nr; doc.objekt = objekt; if (appProjekt) doc.appProjekt = appProjekt; else delete doc.appProjekt; $("aNr").value = nr; $("aObjekt").value = objekt; auftragAnzeige(); speichern(); if (appProjekt) ablage?.sicherstellen(); } // Projekt zugeordnet: Cloud-Ordner anlegen (falls es sie noch nicht gibt)
 const cloud = cloudModul({
   esc, status, getEinst: () => einst, setEinst: (e) => { einst = e; if (entwurf) entwurf = JSON.parse(JSON.stringify(einst)); }, einstSpeichern, getDoc: () => doc, regen,
   projektAktualisieren: () => projekte.aktualisiere(), projekteOeffnen: () => { $("einst").hidden = true; entwurf = null; projekte.oeffnen(); },
@@ -5039,6 +5043,9 @@ const cloud = cloudModul({
 const projekte = projekteModul({ esc, status, getDoc: () => doc, client: () => cloud.client, angemeldet: () => cloud.angemeldet,
   setzeAuftrag, zumKonto: () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); einstRegister = "konto"; zeigeEinst(); $("einst").hidden = false; } });
 projekte.binden();
+const ablage = ablageModul({ esc, status, getDoc: () => doc, client: () => cloud.client, angemeldet: () => cloud.angemeldet, projektText: () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v), 1), ladeProjektText: (x) => ladeProjekt(x), herunterladen });
+ablage.binden();
+$("wAblage").onclick = () => { if (dlg) $("dAbbrechen").click(); ablage.oeffnen(); };
 function auftragAnzeige() { // zugeordnetes Projekt: Objekt und Nummer kommen aus der App (nur dort änderbar)
   const z = !!doc.appProjekt; $("aProjektName").textContent = z ? doc.appProjekt.name : "nicht zugeordnet";
   for (const id of ["aObjekt", "aNr"]) { $(id).readOnly = z; $(id).title = z ? "Kommt aus dem App-Projekt – im Projekt ändern (Datei › Projekte)" : ""; }
@@ -5442,7 +5449,7 @@ ansicht("iso");
 kernAnzeige();
 (function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

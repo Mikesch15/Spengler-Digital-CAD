@@ -368,7 +368,7 @@ ${out.join("\n")}
       else if (b.id === "plUmbenennen") { const n = prompt("Name des Plans", plan.name); if (n?.trim()) { plan.name = n.trim(); zeige(); } }
       else if (b.id === "plWeg") { if (!confirm(`«${plan.name}» löschen?`)) return; plaene().splice(plaene().indexOf(plan), 1); plan = plaene()[0] || neuerPlan(); zeige(); }
       else if (b.id === "plDruck") drucken();
-      else if (b.id === "plSvg") ctx.herunterladen(`${ctx.doc().nr} ${plan.name}.svg`, blattSvg(plan, { nr: plaene().indexOf(plan) + 1, von: plaene().length }), "image/svg+xml");
+      else if (b.id === "plSvg") ctx.herunterladen(`${ctx.doc().nr} ${plan.name}.svg`, blattSvg(plan, { nr: plaene().indexOf(plan) + 1, von: plaene().length }), "image/svg+xml", null, "plan");
       else if (b.id === "plZu") { $("planEditor").hidden = true; ctx.fertig(); }
     });
     $("plBlatt").onchange = (e) => { plan = plaene()[+e.target.value]; sel = null; box = null; zeige(); };
@@ -417,6 +417,7 @@ ${out.join("\n")}
   };
   function drucken(alle = true) {
     const p = alle ? plaene() : [plan];
+    p.forEach((x, i) => ctx.ablageKopie?.(`${ctx.doc().nr} ${x.name}.svg`, blattSvg(x, { nr: i + 1, von: p.length }), "plan")); // Plan auch in die Cloud-Ablage (Pläne)
     ctx.drucken(p.map((x, i) => `<section class="planblatt plan${x.format}">${blattSvg(x, { nr: i + 1, von: p.length })}</section>`).join(""));
   }
   return { oeffnen, binden, blattSvg, drucken };
