@@ -9,6 +9,8 @@ import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern
 import { selbsttest } from "../kern/selbsttest.js";
 import { regionen, inRegion } from "../kern/regionen.js";
 import { ablageModul } from "./ablage.js";
+import "./befehlssuche.js";
+import "./arbeitsbereich.js";
 import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";

@@ -411,7 +411,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .register { position: relative; } #werkZu { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); padding: 2px 8px; }
 @media (max-width: 1000px) { .mitte.werkzu { grid-template-rows: 60vh auto; } }
 @media (min-width: 1001px) {
-  .mitte { grid-template-columns: minmax(0, 1fr) 300px; }
+  .mitte { grid-template-columns: minmax(0, 1fr) var(--werk-w, 300px); }
   .browser { position: absolute; left: 10px; top: 10px; z-index: 5; width: 236px; max-height: calc(100% - 20px); border-radius: 6px;
     background: color-mix(in srgb, var(--panel) 58%, transparent); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1);
     border: 1px solid color-mix(in srgb, var(--line) 75%, transparent); box-shadow: 0 4px 18px rgba(20, 35, 50, .14); }
@@ -431,16 +431,47 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 #pjInhalt .feld { display: grid; gap: 2px; margin: 6px 0; } #pjInhalt .feld span { color: var(--muted); font-size: 12px; } #pjInhalt input[type=text], #pjInhalt input[type=search], #pjInhalt textarea, #pjInhalt select { width: 100%; }
 .projzeile { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; justify-content: space-between; } .projzeile .knopf { white-space: nowrap; } #aProjektName { font-weight: 600; color: var(--fg); }
 
-.schritte{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin:0 0 8px;font-size:12px}
+.schritte{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin:0;padding:8px 12px 2px;font-size:12px}
 .schritte button{border:1px solid var(--line);background:transparent;color:inherit;border-radius:12px;padding:2px 9px;cursor:pointer;font:inherit}
 .schritte button.jetzt{background:var(--accent);color:#fff;border-color:transparent}
 .schritte .titel{flex-basis:100%;font-weight:600;font-size:13px;margin-bottom:2px}
 .dialog .feld[hidden]{display:none}
+
+/* Dialoge angedockt (Desktop): eigene Spalte rechts statt Überdeckung der 3D-Ansicht; Teil/Auftrag weicht solange */
+@media (min-width: 1001px) {
+  .mitte > .dialog { position: static; grid-column: 2; grid-row: 1; width: auto; max-width: none; top: auto; right: auto; align-self: stretch; display: flex; flex-direction: column; min-height: 0; border-radius: 6px; box-shadow: none; }
+  .mitte > .dialog .inhalt { max-height: none; overflow: auto; flex: 1 1 auto; min-height: 0; }
+  .mitte:has(> .dialog:not([hidden])) > .werkstatt, .mitte:has(> .dialog:not([hidden])) > #werkAuf { display: none; }
+  .mitte:has(> .dialog:not([hidden])) { grid-template-columns: minmax(0, 1fr) max(var(--werk-w, 300px), 340px) !important; column-gap: 8px !important; }
+  .mitte > .dialog.klein { align-self: start; }
+}
+
+/* Befehlssuche (Strg + K) */
+.bs-hinter { position: fixed; inset: 0; z-index: 60; background: rgb(10 20 30 / .35); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.bs { width: min(560px, calc(100% - 24px)); background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 50px rgb(0 0 0 / .35); overflow: hidden; display: flex; flex-direction: column; max-height: 70vh; }
+.bs input { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 14px 16px; font-size: 16px; background: transparent; color: inherit; outline: none; }
+.bs ul { list-style: none; margin: 0; padding: 4px; overflow: auto; }
+.bs li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+.bs li svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.bs li svg .f { fill: color-mix(in srgb, var(--accent) 18%, transparent); }
+.bs li .bs-name { flex: 1; } .bs li .bs-gruppe { color: var(--muted); font-size: 12px; }
+.bs li.aktiv { background: var(--accent-soft); } .bs li:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.bs .bs-leer { padding: 16px; color: var(--muted); } .bs .bs-fuss { padding: 6px 14px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+
+/* Verstellbare Breite der rechten Spalte */
+.teiler { display: none; }
+@media (min-width: 1001px) {
+  .teiler { display: block; position: absolute; top: 0; bottom: 0; right: calc(var(--werk-w, 300px) - 2px); width: 10px; z-index: 9; cursor: col-resize; touch-action: none; }
+  .teiler::after { content: ""; position: absolute; top: 50%; left: 3px; width: 4px; height: 44px; margin-top: -22px; border-radius: 2px; background: var(--line); opacity: 0; transition: opacity .15s; }
+  .teiler:hover::after, .teiler:active::after { opacity: 1; }
+  .mitte.werkzu .teiler, .mitte:has(> .dialog:not([hidden])) .teiler { display: none; }
+}
 </style>
 
 <div class="app">
   <nav class="leiste" aria-label="Werkzeuge" id="leiste">
     <div class="marke"><img src="logo.png" alt="" width="32" height="32">Spengler Digital <span>CAD</span></div>
+    <button class="wz" id="wSuche" title="Befehlssuche: Werkzeug nach Name suchen und starten (Strg + K oder /)"><svg viewBox="0 0 24 24"><circle class="f" cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>Suchen</button>
     <div class="aktivwz" id="aktivWz" hidden></div>
     <div class="gruppe" id="gHaupt"><div class="knoepfe">
       <button class="wz" id="wSkizze"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="4" width="18" height="16" rx="2"/><path d="M7 15l3.5-6 3 4 3.5-5"/><circle cx="7" cy="15" r="1" fill="currentColor"/><circle cx="17" cy="8" r="1" fill="currentColor"/></svg>Skizze</button>
@@ -577,8 +608,6 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <div class="eingabe" id="eingabe" hidden>
         <label>L <input id="eLaenge" type="number" step="any"></label><label>∠ <input id="eWinkel" type="number" step="any"></label>
       </div>
-      <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><button class="dklein" id="dKlein" title="Dialog einklappen – Ansicht frei zum Antippen" aria-label="Dialog einklappen">▾</button><div class="schritte" id="dSchritte" hidden></div><div class="inhalt" id="dInhalt"></div>
-        <div class="fuss"><span id="dInfo" role="status"></span><button class="knopf weg" id="dLoeschen" hidden>Löschen</button><button class="knopf" id="dAbbrechen">Abbrechen</button><button class="knopf" id="dZurueck" hidden>‹ Zurück</button><button class="knopf haupt" id="dWeiter" hidden>Weiter ›</button><button class="knopf haupt" id="dOk">OK</button></div></div>
       <div class="kantenbar" id="kantenBar" hidden><b id="kbTitel"></b><span id="kbText"></span>
         <label id="kbWinkelL">Winkel <input id="kbWinkel" type="number" step="any" value="90">°</label><label>Länge <input id="kbLaenge" type="number" step="any" value="25"> mm</label>
         <span id="kbEnden" hidden><button class="knopf klein" id="kbA" title="Am Anfang des Profils ansetzen (Kante A)">Kante A</button><button class="knopf klein" id="kbB" title="Am Ende des Profils ansetzen (Kante B)">Kante B</button></span><button class="knopf klein" id="kbRichtung" title="Richtung der Abkantung: zur Sichtseite oder nach hinten">Richtung: Sichtseite ⇄</button><button class="knopf klein haupt" id="kbEnde">Fertig</button></div>
@@ -588,6 +617,8 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <div id="status"></div>
     </section>
     <button class="knopf klein" id="werkAuf" title="Teil/Auftrag wieder aufklappen" aria-label="Teil und Auftrag aufklappen">« Teil / Auftrag</button>
+    <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><button class="dklein" id="dKlein" title="Dialog einklappen – Ansicht frei zum Antippen" aria-label="Dialog einklappen">▾</button><div class="schritte" id="dSchritte" hidden></div><div class="inhalt" id="dInhalt"></div>
+        <div class="fuss"><span id="dInfo" role="status"></span><button class="knopf weg" id="dLoeschen" hidden>Löschen</button><button class="knopf" id="dAbbrechen">Abbrechen</button><button class="knopf" id="dZurueck" hidden>‹ Zurück</button><button class="knopf haupt" id="dWeiter" hidden>Weiter ›</button><button class="knopf haupt" id="dOk">OK</button></div></div>
     <aside class="panel werkstatt"><div class="register" role="tablist" aria-label="Werkstatt">
       <button role="tab" data-register="teil" aria-selected="true">Teil</button><button role="tab" data-register="auftrag" aria-selected="false">Auftrag</button><button class="knopf klein" id="werkZu" title="Teil/Auftrag zuklappen – mehr Platz für die Ansicht" aria-label="Teil und Auftrag zuklappen">»</button></div><div id="werkstatt"></div>
       <div class="auftrag">
@@ -735,6 +766,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     </ul>
     <h4>Tastenkürzel</h4>
     <table class="liste kuerzel"><tbody>
+      <tr><td>Strg+K oder /</td><td>Befehlssuche: Werkzeug nach Name suchen und starten</td></tr>
       <tr><td>Strg+S / Strg+Umschalt+S</td><td>Speichern / Speichern unter</td></tr>
       <tr><td>Strg+O</td><td>Öffnen</td></tr>
       <tr><td>Strg+P</td><td>Stückliste und Werkstattblätter drucken</td></tr>
