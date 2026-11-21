@@ -4239,7 +4239,7 @@ const WERKZEUGE = {
   drehen: { aendern: true, knopf: "tVerschieben", ein: () => ["∠"], immer: true, text: "Drehen: Elemente anklicken, dann Drehpunkt; Winkel eintippen und Enter – oder Bezugs- und Zielrichtung anklicken." },
   musterR: { aendern: true, knopf: "tMuster", text: "Rechteckiges Muster: Elemente anklicken, dann auf eine freie Stelle klicken (oder Enter) – Anzahl und Abstände eingeben." },
   musterK: { aendern: true, knopf: "tMuster", text: "Kreisförmiges Muster: Elemente anklicken, dann den Mittelpunkt anklicken – Anzahl und Winkel eingeben." },
-  projizieren: { aendern: true, knopf: "tProjizieren", text: "Projizieren: Körperkante oder Linie einer anderen Skizze anklicken – oder eine Körperfläche (ihr Umriss). Projizierte Linien sind fixiert (violett)." },
+  projizieren: { aendern: true, knopf: "tProjizieren", text: "Projizieren: Körperkante oder Linie einer anderen Skizze anklicken (Umschalt + Klick: die ganze Skizze) – oder eine Körperfläche (ihr Umriss). Kreise und Bögen parallel liegender Skizzen bleiben Kreise/Bögen. Projizierte Linien sind fixiert (violett)." },
   // Abhängigkeiten und Bemassung: Auswahlmuster P = Punkt, L = Linie (Kante, Achse), K = Kreis/Bogen/Langloch
   abhHV: { knopf: "tAbh", muster: ["L", "PP"], text: "Horizontal/Vertikal: Linie anklicken – oder zwei Punkte. Die Richtung ergibt sich aus der Lage." },
   abhKoinzident: { knopf: "tAbh", muster: ["PP", "PL", "PK"], text: "Koinzident: Punkt anklicken, dann zweiten Punkt – oder Linie/Kreis/Bogen (Punkt liegt darauf)." },
@@ -4835,17 +4835,24 @@ function trennen(uv, sm) {
   status(`In ${teile.length} Stücke getrennt.`);
 }
 // Projizieren: Körperkanten, Körperflächen (Umriss) oder Linien früherer Skizzen auf die Skizzenebene – fixiert
+let umschaltAn = false; addEventListener("keydown", (e) => { if (e.key === "Shift") umschaltAn = true; }); addEventListener("keyup", (e) => { if (e.key === "Shift") umschaltAn = false; }); addEventListener("blur", () => { umschaltAn = false; });
 function projizieren(sm) {
   const f = skizze.f, E = E_(f.ebene), auf = (w) => zuLokal(E, w), kand = [];
   for (const [a, b] of koerperKanten()) kand.push({ a, b, zug: [a, b], name: "Körperkante" });
   for (const sk of vorher(f).filter((x) => x.typ === "skizze" && ebene(x.ebene))) for (const el of sk.elemente) for (const pts of elGeo(el).linien) {
     const w = pts.map((q) => zuWelt(E_(sk.ebene), q));
-    for (let i = 1; i < w.length; i++) kand.push({ a: w[i - 1], b: w[i], zug: w, zu: !!elGeo(el).kontur, name: sk.name });
+    for (let i = 1; i < w.length; i++) kand.push({ a: w[i - 1], b: w[i], zug: w, zu: !!elGeo(el).kontur, name: sk.name, sk, el });
   }
   let best = null, bd = 12;
   for (const k of kand) { const A = aufSchirm(k.a), B = aufSchirm(k.b); if (A[2] < 1 && B[2] < 1) { const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = k; } } }
-  let zuege = [];
-  if (best) zuege = [{ pts: best.zug.map(auf), zu: best.zu }];
+  let zuege = [], exakt = [];
+  // Ebenen parallel: Kreise und Bögen bleiben echte Kreise/Bögen (sonst Linienzug)
+  const parallel = (sk) => Math.abs(V(E_(sk.ebene).n).dot(V(E.n))) > 0.99999;
+  const exaktes = (sk, el) => { if (!parallel(sk) || (el.art !== "kreis" && el.art !== "bogen")) return null; const Es = E_(sk.ebene), P = (q) => auf(zuWelt(Es, q)); return el.art === "kreis" ? { art: "kreis", c: P(el.c), r: el.r } : { art: "bogen", a: P(el.a), b: P(el.b), m: P(el.m) }; };
+  if (best && umschaltAn && best.sk) { // Umschalt: die ganze Skizze (alle Linien, Kreise, Bögen)
+    for (const el of best.sk.elemente) { if (el.hilfs || el.art === "punkt") continue; const e = exaktes(best.sk, el); if (e) { exakt.push(e); continue; }
+      for (const pts of elGeo(el).linien) zuege.push({ pts: pts.map((q) => auf(zuWelt(E_(best.sk.ebene), q))), zu: !!elGeo(el).kontur }); }
+  } else if (best) { const e = best.sk && exaktes(best.sk, best.el); if (e) exakt.push(e); else zuege = [{ pts: best.zug.map(auf), zu: best.zu }]; }
   else { // Fläche angeklickt: alle Körperkanten in ihrer Ebene
     const r = leinwand.getBoundingClientRect();
     strahl.setFromCamera(new THREE.Vector2((sm[0] / r.width) * 2 - 1, -(sm[1] / r.height) * 2 + 1), kamera);
@@ -4856,6 +4863,7 @@ function projizieren(sm) {
     zuege = verbindeStuecke(stuecke).map((z) => ({ pts: z.pts, zu: z.geschlossen }));
   }
   const neu = [];
+  for (const e of exakt) { const el = { ...e, projiziert: true, id: neueElementId(f) }; f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); neu.push(el); }
   for (const z of zuege) {
     const pts = z.pts.filter((q, i) => !i || abst(q, z.pts[i - 1]) > 1e-6);
     if (z.zu && pts.length > 2 && gleich(pts[0], pts.at(-1))) pts.pop();
@@ -4863,7 +4871,7 @@ function projizieren(sm) {
     const el = { art: "linie", pts, geschlossen: !!z.zu && pts.length > 2, projiziert: true, id: neueElementId(f) };
     f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); neu.push(el);
   }
-  status(neu.length ? `Projiziert: ${neu.length} Linienzug${neu.length === 1 ? "" : "züge"} (fixiert).` : "Die Kante steht senkrecht zur Skizzenebene – nichts zu projizieren.");
+  status(neu.length ? `Projiziert: ${neu.length} Element${neu.length === 1 ? "" : "e"} (fixiert)${best?.sk && !umschaltAn ? " – mit Umschalt + Klick die ganze Skizze «" + best.sk.name + "»" : ""}.` : "Die Kante steht senkrecht zur Skizzenebene – nichts zu projizieren.");
 }
 function abschliessenLinie() {
   if (skizze?.werkzeug === "linie" && skizze.pkt.length >= 2) erstelle([{ art: "linie", pts: skizze.pkt.slice(), geschlossen: false }], null, { hv: true });
