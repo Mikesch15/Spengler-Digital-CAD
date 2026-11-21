@@ -6,6 +6,7 @@ const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "applicat
 const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8791);
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
+{ const f0 = s.fill.bind(s); s.fill = async (sel, v, o) => (o?.force ? s.evaluate(([q, w]) => { const e = document.querySelector(q); e.value = w; e.dispatchEvent(new Event("input", { bubbles: true })); }, [sel, v]) : f0(sel, v, o)); }
 const pj = { objekt: "K", nr: "K-1", zaehler: 10, features: [
   { id: "sk", typ: "skizze", name: "Blech", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [200, 100] }] },
   { id: "fl", typ: "flaeche", name: "Blech 1", skizze: "sk", material: "zink07", flaechen: [[10, 10]], kanten: {} }] };
@@ -43,8 +44,8 @@ await s.keyboard.press("Escape"); await s.evaluate(() => window.sdcadTest.bearbe
 await s.click('[data-rev="0:2"]'); await s.waitForTimeout(300); k = await kanten(); ok(k["0:2"]?.werkzeug?.seite === 1, "«⇅ Richtung» im Dialog kehrt die Kante um");
 await s.click("#dOk"); await s.waitForTimeout(300);
 // Schritt in der Zeitleiste bearbeiten: Dialog wirkt live
-const id = (await feats()).find((f) => f.key === "0:2").id; await s.evaluate((i) => window.sdcadTest.bearbeite(i), id); await s.waitForSelector("#d_laenge", { timeout: 4000 });
-await s.fill("#d_laenge", "55"); await s.waitForTimeout(300); k = await kanten(); ok(k["0:2"]?.werkzeug?.laenge === 55, "Dialog des Schritts: Länge 55 wirkt sofort am Blech");
+const id = (await feats()).find((f) => f.key === "0:2").id; await s.evaluate((i) => window.sdcadTest.bearbeite(i), id); await s.waitForSelector("#d_laenge", { state: "attached", timeout: 4000 });
+await s.fill("#d_laenge", "55", { force: true }); await s.waitForTimeout(300); k = await kanten(); ok(k["0:2"]?.werkzeug?.laenge === 55, "Dialog des Schritts: Länge 55 wirkt sofort am Blech");
 ok((await s.evaluate(() => window.sdcadTest.kantenAn())).includes("0:2"), "Im Dialog leuchtet die Kante des Schritts");
 await s.click("#dOk"); await s.waitForTimeout(200);
 ok(!(await s.isVisible("#layerBox")), "Layer-Leiste ist ohne aktive Skizze nicht da");

@@ -6,27 +6,28 @@ const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "applicat
 const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8797);
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
+{ const f0 = s.fill.bind(s); s.fill = async (sel, v, o) => (o?.force ? s.evaluate(([q, w]) => { const e = document.querySelector(q); e.value = w; e.dispatchEvent(new Event("input", { bubbles: true })); }, [sel, v]) : f0(sel, v, o)); }
 await s.goto("http://localhost:8797/index.html?test"); await s.waitForTimeout(900);
 ok(await s.evaluate(() => !!document.querySelector('[data-klapp="dach"] #wDachAuto')), "Register «Dach» mit «Dach automatisch» ist da");
-await s.evaluate(() => document.getElementById("wDachAuto").click()); await s.waitForSelector("#d_neigung", { timeout: 4000 }); await s.waitForTimeout(500);
+await s.evaluate(() => document.getElementById("wDachAuto").click()); await s.waitForSelector("#d_neigung", { state: "attached", timeout: 4000 }); await s.waitForTimeout(500);
 const feats = () => s.evaluate(() => window.sdcadTest.dok().features.map((f) => f.typ).filter((t) => t === "gebaeude" || t === "dach"));
 ok((await feats()).join() === "gebaeude,dach", "Legt Gebäude und Dach an");
 const info = () => s.textContent("#dInfo"), koerper = () => s.evaluate(() => window.sdcadTest.sichtbareKoerper());
 let n1 = await koerper(); ok(n1 >= 6, `Satteldach: ${n1} Körper (2 Dachflächen + Wände)`);
 ok(/Dachfläche [\d.]+ m² · First 10\.6 m/.test(await info()), "Info: " + (await info()));
-await s.selectOption("#d_form", "walm"); await s.waitForTimeout(500); const n2 = await koerper(); ok(/Grate [12]\d\.\d m/.test(await info()) && n2 >= 8, `Walmdach: Grate in der Info, ${n2} Körper`);
-await s.fill("#d_neigung", "15"); await s.dispatchEvent("#d_neigung", "input"); await s.waitForTimeout(500);
+await s.selectOption("#d_form", "walm", { force: true }); await s.waitForTimeout(500); const n2 = await koerper(); ok(/Grate [12]\d\.\d m/.test(await info()) && n2 >= 8, `Walmdach: Grate in der Info, ${n2} Körper`);
+await s.fill("#d_neigung", "15", { force: true }); await s.dispatchEvent("#d_neigung", "input"); await s.waitForTimeout(500);
 ok(/Richtwert-Mindestneigung/.test(await info()), "15° ist zu flach für Schiebeziegel – Hinweis");
-await s.selectOption("#d_deckung", "biber-doppel"); await s.fill("#d_neigung", "40"); await s.dispatchEvent("#d_neigung", "input"); await s.waitForTimeout(500);
+await s.selectOption("#d_deckung", "biber-doppel", { force: true }); await s.fill("#d_neigung", "40", { force: true }); await s.dispatchEvent("#d_neigung", "input"); await s.waitForTimeout(500);
 ok(!/Mindestneigung/.test(await info()), "40° mit Biber doppelt: kein Hinweis");
-await s.selectOption("#d_gform", "L"); await s.waitForTimeout(700);
+await s.selectOption("#d_gform", "L", { force: true }); await s.waitForTimeout(700);
 ok(/Kehlen [\d.]+ m/.test(await info()), "L-Form (Walm): Kehle in der Info – " + (await info()));
 await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(400); await s.screenshot({ path: "/tmp/t/dach.png" });
 // Alle Masse beim Erstellen: Vorlage wechseln setzt die Werte der Vorlage, eigene Werte werden als Abweichung gespeichert
-await s.selectOption("#d_aufbau", "aufsparren-120"); await s.waitForTimeout(600);
+await s.selectOption("#d_aufbau", "aufsparren-120", { force: true }); await s.waitForTimeout(600);
 ok((await s.inputValue("#d_aw_sparrenH")) === "160", "Vorlage «Aufsparren 120» setzt Sparrenhöhe 160");
-await s.selectOption("#d_aufbau", "standard-200"); await s.waitForTimeout(600);
-await s.fill("#d_aw_sparrenH", "180"); await s.dispatchEvent("#d_aw_sparrenH", "input"); await s.fill("#d_dw_lattweite", "320"); await s.dispatchEvent("#d_dw_lattweite", "input"); await s.waitForTimeout(600);
+await s.selectOption("#d_aufbau", "standard-200", { force: true }); await s.waitForTimeout(600);
+await s.fill("#d_aw_sparrenH", "180", { force: true }); await s.dispatchEvent("#d_aw_sparrenH", "input"); await s.fill("#d_dw_lattweite", "320", { force: true }); await s.dispatchEvent("#d_dw_lattweite", "input"); await s.waitForTimeout(600);
 await s.click("#dOk"); await s.waitForTimeout(400);
 { const dd = (await s.evaluate(() => window.sdcadTest.dok())).features.find((f) => f.typ === "dach"); ok(dd.aufbauW?.sparrenH === 180 && dd.deckungW?.lattweite === 320 && !("sparrenB" in dd.aufbauW), "Eigene Masse (Sparren 180, Lattweite 320) im Dach gespeichert, nur als Abweichung"); }
 // Phase 2: einzelne Körper (Sparren, Dämmung, Unterdach, Latten, Deckung) + Holzliste im Werkstatt-Panel

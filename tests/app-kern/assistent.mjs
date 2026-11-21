@@ -1,0 +1,31 @@
+// App-Test Schritt-Assistent der Dialoge
+// node tests/app-kern/assistent.mjs (nach node build.mjs; Playwright/Chromium)
+import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
+const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
+const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8797);
+let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
+const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
+await s.goto("http://localhost:8797/index.html?test"); await s.waitForTimeout(1200);
+await s.evaluate(() => document.getElementById("wDachAuto").click()); await s.waitForSelector("#d_neigung", { state: "attached", timeout: 4000 }); await s.waitForTimeout(500);
+const sicht = () => s.evaluate(() => [...document.querySelectorAll("#dInhalt .feld")].filter((e) => !e.hidden).length);
+const titel = () => s.evaluate(() => document.querySelector("#dSchritte .titel")?.textContent || "");
+ok(/Schritt 1 von 5/.test(await titel()), "Dach: Assistent startet bei Schritt 1 von 5 (" + await titel() + ")");
+const n1 = await sicht(); ok(n1 > 0 && n1 <= 10, "Schritt 1 zeigt wenige Felder (" + n1 + ")");
+ok(await s.evaluate(() => document.getElementById("dZurueck").hidden && !document.getElementById("dWeiter").hidden), "Zurück versteckt, Weiter sichtbar");
+await s.evaluate(() => document.getElementById("dWeiter").click());
+ok(/Schritt 2/.test(await titel()) && await s.evaluate(() => !document.getElementById("d_neigung").closest(".feld").hidden && document.getElementById("d_breite").closest(".feld").hidden), "Schritt 2 zeigt die Dachform, Gebäudefelder sind weg");
+await s.evaluate(() => { const e = document.getElementById("d_neigung"); e.value = "40"; e.dispatchEvent(new Event("input", { bubbles: true })); }); await s.waitForTimeout(600);
+ok(/Schritt 2/.test(await titel()), "Live-Änderung bleibt im Schritt");
+for (let i = 0; i < 3; i++) await s.evaluate(() => document.getElementById("dWeiter").click());
+ok(/Schritt 5/.test(await titel()) && await s.evaluate(() => document.getElementById("dWeiter").hidden), "Letzter Schritt: Weiter weg");
+await s.evaluate(() => document.getElementById("dOk").click()); await s.waitForTimeout(400);
+ok(await s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.typ === "dach").neigung) === 40, "OK übernimmt Werte aus allen Schritten");
+await s.evaluate(() => document.getElementById("wLukarne").click()); await s.waitForTimeout(600);
+ok(/von 6/.test(await titel()), "Lukarne: Assistent mit 6 Schritten (" + await titel() + ")");
+await s.evaluate(() => document.getElementById("dAbbrechen").click());
+await s.evaluate(() => document.getElementById("wDachBleche").click()); await s.waitForTimeout(600);
+ok(/von 6/.test(await titel()), "Dachbleche: Assistent (" + await titel() + ")");
+ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
+await b.close(); srv.close();
+console.log(fehler ? `${fehler} Fehler` : "Assistent (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

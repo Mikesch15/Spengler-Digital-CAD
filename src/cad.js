@@ -1751,20 +1751,40 @@ function dialog(opt) {
   $("dTitel").textContent = opt.titel;
   $("dInfo").textContent = "";
   $("dLoeschen").hidden = !opt.loeschen;
+  opt.schritt ??= 0;
   $("dInhalt").innerHTML = opt.felder.map((fd) => {
     const inp = fd.optionen
       ? `<select id="d_${fd.id}">${fd.optionen.map(([w, t]) => `<option value="${w}" ${String(w) === String(fd.wert) ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>`
       : fd.text ? `<input id="d_${fd.id}" type="text" value="${esc(fd.wert)}">`
       : `<input id="d_${fd.id}" type="text" class="zahlfeld" inputmode="${(doc.parameter || []).length ? "text" : "decimal"}" autocomplete="off" value="${esc(opt.feature?.ausdruecke?.[fd.id] ?? fd.wert)}">`;
-    return `<div class="feld"${fd.wahl ? ` data-wahl="${fd.wahl}" data-feld="${fd.id}"` : ""}><label for="d_${fd.id}">${fd.wahl ? "⊕ " : ""}${fd.label}${fd.einheit ? ` (${fd.einheit})` : ""}</label>${inp}</div>`;
+    return `<div class="feld" data-s="${esc(fd.schritt || "")}"${fd.wahl ? ` data-wahl="${fd.wahl}" data-feld="${fd.id}"` : ""}><label for="d_${fd.id}">${fd.wahl ? "⊕ " : ""}${fd.label}${fd.einheit ? ` (${fd.einheit})` : ""}</label>${inp}</div>`;
   }).join("") + (opt.zusatz ? `<div id="dZusatz">${opt.zusatz()}</div>` : "") + (opt.hinweis ? `<p class="hinweis">${opt.hinweis}</p>` : "");
   $("dialog").hidden = false;
+  zeigeSchritt();
   opt.felder.forEach((fd) => $("d_" + fd.id).addEventListener(fd.optionen ? "change" : "input", () => opt.aendern?.(werte(), fd.id)));
   opt.binden?.($("dZusatz"));
   // Wahlfelder: das aktive Feld nimmt den nächsten Klick in der Ansicht auf
   document.querySelectorAll("#dInhalt .feld[data-wahl]").forEach((el) => el.addEventListener("pointerdown", () => { dlg.wahlNr = opt.felder.filter((fd) => fd.wahl).findIndex((fd) => fd.id === el.dataset.feld); zeigeWahl(); }));
   zeigeWahl();
 }
+// Assistent: Felder mit gleichem fd.schritt bilden eine Seite; die Dialoge führen so Schritt für Schritt durch die Eingabe (alle Felder bleiben im DOM, nur die Sichtbarkeit wechselt)
+const schrittNamen = (o = dlg) => [...new Set((o?.felder || []).map((fd) => fd.schritt).filter(Boolean))];
+function zeigeSchritt(nr) {
+  const o = dlg, namen = schrittNamen(o), viele = namen.length > 1;
+  if (nr != null) o.schritt = Math.max(0, Math.min(namen.length - 1, nr));
+  const i = viele ? Math.min(o.schritt ?? 0, namen.length - 1) : 0;
+  $("dSchritte").hidden = !viele; $("dZurueck").hidden = !viele || i === 0; $("dWeiter").hidden = !viele || i === namen.length - 1;
+  document.querySelectorAll("#dInhalt .feld").forEach((el) => { el.hidden = viele && el.dataset.s !== namen[i]; });
+  const zus = $("dZusatz"); if (zus) zus.hidden = viele && i !== namen.length - 1;
+  const hin = document.querySelector("#dInhalt .hinweis"); if (hin) hin.hidden = viele && i !== 0;
+  if (viele) $("dSchritte").innerHTML = `<span class="titel">Schritt ${i + 1} von ${namen.length}: ${esc(namen[i])}</span>` + namen.map((n, k) => `<button type="button" data-k="${k}" class="${k === i ? "jetzt" : ""}" title="${esc(n)}">${k + 1}</button>`).join("");
+  $("dSchritte").querySelectorAll("button").forEach((b) => (b.onclick = () => zeigeSchritt(+b.dataset.k)));
+  if (viele) { const w = o.felder.filter((fd) => fd.wahl && fd.schritt === namen[i]); o.wahlNr = o.wahlNr === -1 ? -1 : (w.length ? o.felder.filter((fd) => fd.wahl).indexOf(w[0]) : o.wahlNr); if (nr != null) zeigeWahl(); }
+}
+$("dZurueck").onclick = () => zeigeSchritt((dlg?.schritt ?? 0) - 1);
+$("dWeiter").onclick = () => zeigeSchritt((dlg?.schritt ?? 0) + 1);
+// Felder den Schritten zuordnen: regeln = [[Schrittname, (id) => Bedingung], …]; das erste passende gilt, sonst der vorige Schritt
+const mitSchritten = (felder, regeln) => { let akt = regeln[0][0]; return felder.map((fd) => { const r = regeln.slice(1).find(([, test]) => test(fd.id)); if (r) akt = r[0]; return { ...fd, schritt: akt }; }); };
 const werte = () => Object.fromEntries(dlg.felder.map((fd) => { const v = $("d_" + fd.id).value; return [fd.id, fd.optionen || fd.text ? v : zahlAus(v)]; }));
 // Formeln der Zahlenfelder (keine reinen Zahlen) → f.ausdruecke; ungültige Formeln rot markieren
 function merkeAusdruecke(f) {
@@ -1940,7 +1960,8 @@ function blechDialog(f) {
   const sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
   if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: Blechmitte oder eine Blechoberfläche.");
   f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: sk.at(-1).id, kette: Math.max(0, ketten(sk.at(-1)).findIndex((k) => !k.mitBogen)), lage: einst.neu.lage, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
-  featureDialog(f, istNeu, (f) => [
+  const REGELN = [["Linienzug", () => true], ["Lage des Blechs", (id) => ["lage", "umkehren"].includes(id)], ["Material und Länge", (id) => ["material", "laenge", "stueck", "notiz", "richtung"].includes(id)]];
+  featureDialog(f, istNeu, (f) => mitSchritten([
     { id: "skizze", label: "Linienzug aus", wahl: "kette", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "kette", label: "Linienzug", optionen: ketten(finde(f.skizze) || sk.at(-1)).map((k, i) => [i, `Nr. ${i + 1}${k.mitBogen ? " (mit Bogen)" : ""}`]), wert: f.kette },
     { id: "lage", label: "Blech zur Linie", optionen: LAGEN, wert: f.lage ?? "mitte" },
@@ -1950,7 +1971,7 @@ function blechDialog(f) {
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
-  ], (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1), umkehren: w.umkehren === "1" }), "Blechprofil",
+  ], REGELN), (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1), umkehren: w.umkehren === "1" }), "Blechprofil",
   "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Pfeilrichtung gesehen links bzw. rechts davon. In der Ansicht: grüner Punkt = Kante A, oranger Pfeil = Richtung.");
 }
 
@@ -1976,7 +1997,8 @@ function vorlageDialog(f) {
     for (const [k] of VORLAGE[f.vorlage].params) if (Number.isFinite(w["p_" + k])) f.params[k] = w["p_" + k];
     Object.assign(f, { material: w.material, laenge: w.laenge, stueck: w.stueck, ebene: w.ebene, notiz: w.notiz });
   };
-  featureDialog(f, istNeu, felder, setze, "Spengler-Vorlage", "", { wahlNr: -1 });
+  const REGELN = [["Vorlage", () => true], ["Masse", (id) => id.startsWith("p_")], ["Material, Länge, Lage", (id) => ["material", "laenge", "stueck", "notiz", "ebene"].includes(id)]];
+  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Spengler-Vorlage", "", { wahlNr: -1 });
 }
 
 // Freies Profil: Schenkel als Tabelle, Winkel jeweils nach dem Schenkel
@@ -2076,7 +2098,8 @@ function rundDialog(f) {
     { id: "ebene", label: "Grundfläche in", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene },
   ];
   const setze = (f, w) => { const alt = f.art; Object.assign(f, w, { name: w.name.trim() || f.name }); if (alt !== f.art) setTimeout(() => { const d = dlg; if (d) dialog({ ...d, felder: felder(f) }); }); };
-  featureDialog(f, istNeu, felder, setze, "Rund-/Kegelblech",
+  const REGELN = [["Form und Masse", () => true], ["Material und Lage", (id) => ["zugabe", "material", "stueck", "notiz", "ebene"].includes(id)]];
+  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Rund-/Kegelblech",
     "Masse auf der Blechmitte. Die Abwicklung wird exakt auf der K-Faser des Materials gerechnet (Zylinder und Kegel sind abwickelbar). Zugabe = Überlappung an der Naht.");
 }
 function zeigeRund(w, f) {
@@ -2638,7 +2661,9 @@ function lukarneDialog(f) {
   const setze = (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; if (w.flaeche !== undefined) f.flaeche = +w.flaeche || 0; if (w.art) f.art = w.art; if (w.masse) f.masse = w.masse;
     if (w.dachQuelle === "skizzen" && f.dachQuelle !== "skizzen") { if (f.dachSkizzen?.length) f.dachQuelle = "skizzen"; else lukarneDachZuSkizzen(f); } else if (w.dachQuelle === "auto" && f.dachQuelle === "skizzen") f.dachQuelle = "auto";
     for (const k of ["bu", "bo", "hf", "hL", "wL", "lL", "hR", "wR", "lR", "b", "hw", "neigung", "ueberstand", "wd", "dd", "x", "y"]) if (Number.isFinite(w[k])) f[k] = w[k]; };
-  featureDialog(f, istNeu, felder, setze, "Lukarne", "Aufmass wie am Objekt: Front (Breite unten, Breite oben, Höhe) und je Seitenwand links/rechts die vordere Höhe, der Winkel oben an der vorderen Höhe zur Traufe und die Trauflänge – genau wie die Massaufnahme «Lukarne Seitenwand». Die Unterkante der Seitenwand liegt auf der Dachfläche. Im Hauptdach werden Sparren und Latten unterbrochen, Wechsel eingefügt und die Fläche abgezogen; die Anschlussbleche erscheinen bei den Dachblechen. Das Gaubendach ist eine einfache Platte.",
+  const REGELN = [["Art und Lage", () => true], ["Front", (id) => ["bu", "bo", "hf", "b", "hw"].includes(id)], ["Seitenwand links", (id) => ["hL", "wL", "lL"].includes(id)], ["Seitenwand rechts", (id) => ["hR", "wR", "lR"].includes(id)],
+    ["Gaubendach und Aufbau", (id) => ["dachQuelle", "neigung", "ueberstand", "wd", "dd"].includes(id)], ["Lage am Dach", (id) => id === "x" || id === "y"]];
+  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Lukarne", "Aufmass wie am Objekt: Front (Breite unten, Breite oben, Höhe) und je Seitenwand links/rechts die vordere Höhe, der Winkel oben an der vorderen Höhe zur Traufe und die Trauflänge – genau wie die Massaufnahme «Lukarne Seitenwand». Die Unterkante der Seitenwand liegt auf der Dachfläche. Im Hauptdach werden Sparren und Latten unterbrochen, Wechsel eingefügt und die Fläche abgezogen; die Anschlussbleche erscheinen bei den Dachblechen. Das Gaubendach ist eine einfache Platte.",
     { neuBei: ["masse", "dachQuelle"], info: () => { if (f._fehler) return "⚠ " + f._fehler; const l = f._luk; if (!l) return ""; const am = l.aufmass, seite = (n, x) => `${n}: Schräge ${x.schraege.toFixed(0)}, Tiefe ${x.tiefe.toFixed(0)}, Fläche ${x.flaeche.toFixed(2)} m²`;
       return (f._kopplungHinweis ? "⚠ " + f._kopplungHinweis + " " : "") + (l.hinweise.length ? "⚠ " + l.hinweise.join(" · ") + " " : "") + (am ? `${seite("Links", am.links)} · ${seite("Rechts", am.rechts)} · ` : "") + `Öffnung ${l.flaeche.toFixed(2)} m² · höchster Punkt ${(l.firsthoehe / 1000).toFixed(2)} m`; } });
 }
@@ -2653,7 +2678,8 @@ function dachelementDialog(f) {
   const setze = (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; if (w.flaeche !== undefined) f.flaeche = +w.flaeche || 0; if (w.art) f.art = w.art; f.velux = w.velux || ""; if (f.art === "kamin") f.name = f.name.replace(/^Dachfenster (\d+)$/, "Kamin $1"); else f.name = f.name.replace(/^Kamin (\d+)$/, "Dachfenster $1");
     for (const k of ["b", "h", "hoehe", "x", "y"]) if (Number.isFinite(w[k])) f[k] = w[k];
     const v = f.art === "fenster" && f.velux && veluxListe().find((q) => q.code === f.velux); if (v) { f.b = v.b; f.h = v.h; } };
-  featureDialog(f, istNeu, felder, setze, "Dachfenster / Kamin", "Öffnung in der Dachfläche: Sparren, Konter- und Dachlatten werden unterbrochen, Wechsel oben und unten eingefügt, Fläche aus Dämmung/Unterdach/Deckung abgezogen. Velux: Aussenmasse des Blendrahmens – Eindeckrahmen und Dachöffnung je Deckung sind noch nicht berücksichtigt. Kamin: Anschlussbleche erscheinen bei den Dachblechen.",
+  const REGELN = [["Art und Dachfläche", () => true], ["Masse", (id) => ["velux", "b", "h", "hoehe"].includes(id)], ["Lage", (id) => id === "x" || id === "y"]];
+  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Dachfenster / Kamin", "Öffnung in der Dachfläche: Sparren, Konter- und Dachlatten werden unterbrochen, Wechsel oben und unten eingefügt, Fläche aus Dämmung/Unterdach/Deckung abgezogen. Velux: Aussenmasse des Blendrahmens – Eindeckrahmen und Dachöffnung je Deckung sind noch nicht berücksichtigt. Kamin: Anschlussbleche erscheinen bei den Dachblechen.",
     { info: () => f._fehler ? "⚠ " + f._fehler : f._rect ? `Öffnung ${f.b} × ${f.h} mm · ${(elementFlaeche(f)).toFixed(2)} m²` : "" });
 }
 function dachblecheDialog(f) {
@@ -2664,14 +2690,16 @@ function dachblecheDialog(f) {
       return [{ id: "a_" + a, label: BLECHARTEN[a], optionen: [["ja", "ja – erstellen"], ["nein", "nein"]], wert: f.arten?.[a] === false ? "nein" : "ja" }, ...v.params.filter(([k]) => k !== "neigung").map(([k, l, e]) => ({ id: `p_${a}_${k}`, label: `${BLECHARTEN[a]}: ${l}`, einheit: e, wert: w[k] }))]; })];
   const setze = (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; if (w.material) f.material = w.material; f.arten = {}; f.params = {};
     for (const a of Object.keys(BLECHARTEN)) { f.arten[a] = w["a_" + a] !== "nein"; f.params[a] = {}; for (const [k] of VORLAGE[BLECH_VORLAGE[a]].params) if (Number.isFinite(w[`p_${a}_${k}`])) f.params[a][k] = w[`p_${a}_${k}`]; } };
-  featureDialog(f, istNeu, felder, setze, "Dachbleche (Spengler-Brücke)", "Aus den Dachflächen entstehen automatisch Traufblech, Ortgangblech, Firstblech, Gratblech und Kehlblech mit Abwicklung, Stückliste und DXF. Schenkelmasse je Blechart sind einstellbar; Neigung und Länge kommen aus dem Dach.",
+  const REGELN = [["Dach und Material", () => true], ...Object.keys(BLECHARTEN).map((a) => [BLECHARTEN[a], (id) => id === "a_" + a || id.startsWith(`p_${a}_`)])];
+  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Dachbleche (Spengler-Brücke)", "Aus den Dachflächen entstehen automatisch Traufblech, Ortgangblech, Firstblech, Gratblech und Kehlblech mit Abwicklung, Stückliste und DXF. Schenkelmasse je Blechart sind einstellbar; Neigung und Länge kommen aus dem Dach.",
     { info: () => f._fehler ? "⚠ " + f._fehler : f._teile ? f._teile.map((t) => `${t.name} × ${t.stueck}`).join(" · ") : "" });
 }
 function gebaeudeDialog(f) {
   const istNeu = !f; f ||= { id: neueId(), typ: "gebaeude", name: "Gebäude " + (doc.features.filter((x) => x.typ === "gebaeude").length + 1), breite: 10000, tiefe: 8000, traufhoehe: 3000, wandstaerke: 300, x: 0, z: 0 };
-  featureDialog(f, istNeu, (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "breite", label: "Breite (Länge)", einheit: "mm", wert: f.breite }, { id: "tiefe", label: "Tiefe", einheit: "mm", wert: f.tiefe },
+  const REGELN = [["Abmessungen", () => true], ["Grundform", (id) => ["gform", "gskizze", "gprofil", "fluegelBreite", "fluegelTiefe"].includes(id)], ["Höhe und Lage", (id) => ["traufhoehe", "wandstaerke", "x", "z"].includes(id)]];
+  featureDialog(f, istNeu, (f) => mitSchritten([{ id: "name", label: "Name", text: true, wert: f.name }, { id: "breite", label: "Breite (Länge)", einheit: "mm", wert: f.breite }, { id: "tiefe", label: "Tiefe", einheit: "mm", wert: f.tiefe },
     { id: "gform", label: "Grundform", optionen: Object.entries(GRUNDFORMEN), wert: f.form || "rechteck" }, { id: "gskizze", label: "Skizze (bei «Aus Skizze»)", optionen: [["", "–"], ...doc.features.filter((x) => x.typ === "skizze").map((x) => [x.id, x.name])], wert: f.skizze || "" }, { id: "gprofil", label: "Fläche Nr. in der Skizze", wert: (f.profil ?? 0) + 1 }, { id: "fluegelBreite", label: "Querflügel: Breite", einheit: "mm", wert: f.fluegelBreite ?? 4000 }, { id: "fluegelTiefe", label: "Querflügel: ragt über Rückseite", einheit: "mm", wert: f.fluegelTiefe ?? 5000 }, 
-    { id: "traufhoehe", label: "Wandhöhe bis Traufe", einheit: "mm", wert: f.traufhoehe }, { id: "wandstaerke", label: "Wandstärke", einheit: "mm", wert: f.wandstaerke }, { id: "x", label: "Lage X", einheit: "mm", wert: f.x ?? 0 }, { id: "z", label: "Lage Z", einheit: "mm", wert: f.z ?? 0 }],
+    { id: "traufhoehe", label: "Wandhöhe bis Traufe", einheit: "mm", wert: f.traufhoehe }, { id: "wandstaerke", label: "Wandstärke", einheit: "mm", wert: f.wandstaerke }, { id: "x", label: "Lage X", einheit: "mm", wert: f.x ?? 0 }, { id: "z", label: "Lage Z", einheit: "mm", wert: f.z ?? 0 }], REGELN),
     (f, w) => { for (const k of ["breite", "tiefe", "traufhoehe", "wandstaerke", "x", "z", "fluegelBreite", "fluegelTiefe"]) if (Number.isFinite(w[k])) f[k] = w[k]; if (w.gform) f.form = w.gform; if (w.gskizze !== undefined) f.skizze = w.gskizze || null; if (Number.isFinite(+w.gprofil) && +w.gprofil >= 1) f.profil = +w.gprofil - 1; f.name = w.name?.trim() || f.name; }, "Gebäude (Ansatz)", "Rechteckiger Gebäudekörper: Wände bis zur Traufe, Giebel bis zum Dach. Später erweiterbar (Geschosse, Öffnungen).");
 }
 // Alle Masse des Dachaufbaus und der Deckung beim Erstellen eingeben: Vorlage wählen, einzelne Werte überschreiben (nur Abweichungen werden im Dach gespeichert)
@@ -2716,7 +2744,9 @@ function dachDialog(f) {
     for (const k of ["form", "firstRichtung", "darstellung"]) if (w[k]) f[k] = w[k]; if (w.giebel !== undefined) f.giebel = w.giebel;
     f.name = w.name?.trim() || f.name; if (f.neigung > 80) f.neigung = 80; if (f.neigung2 > 80) f.neigung2 = 80;
   };
-  featureDialog(f, istNeu, felder, setze, "Dach automatisch",
+  const REGELN = [["Gebäude", () => true], ["Dachform", (id) => ["quelle", "fAdd", "fDel", "form", "firstRichtung", "neigung", "giebel", "neigung2", "ueberstandTraufe", "ueberstandOrtgang"].includes(id)],
+    ["Aufbau (Sparren, Dämmung, Unterdach)", (id) => id === "aufbau" || id.startsWith("aw_")], ["Deckung (Latten, Ziegel)", (id) => id === "deckung" || id.startsWith("dw_")], ["Darstellung", (id) => id === "darstellung"]];
+  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Dach automatisch",
     "Grundform (Rechteck) mit Massen, Dachform, Neigung, Überstände, Deckung und Aufbau – alles andere rechnet das Programm. Deckungs- und Aufbauwerte stellst du in den Einstellungen › Dach ein.",
     { neuBei: ["deckung", "aufbau", "quelle", "fAdd", "fDel"], info: () => { const r = f._dach; if (f._fehler) return "⚠ " + f._fehler; if (!r) return ""; const m = pruefeDach({ neigungen: r.flaechen.map((x) => x.neigung), deckung: deckungVon(f) }), A = r.flaechen.reduce((s, x) => s + x.flaeche, 0), L = (a) => r.linien.filter((l) => l.art === a).reduce((s, l) => s + l.laenge, 0) / 1000;
         return (m.length ? "⚠ " + m[0] + " " : "") + (r.hinweise?.length ? "⚠ " + r.hinweise[0] + " " : "") + `Dachfläche ${A.toFixed(1)} m² · First ${L("first").toFixed(1)} m · Grate ${L("grat").toFixed(1)} m${L("kehle") ? ` · Kehlen ${L("kehle").toFixed(1)} m` : ""} · Firsthöhe ${(r.firsthoehe / 1000).toFixed(2)} m`; } });

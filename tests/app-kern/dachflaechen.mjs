@@ -7,9 +7,9 @@ const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
 await s.goto("http://localhost:8797/index.html?test"); await s.waitForTimeout(900);
-await s.evaluate(() => document.getElementById("wDachAuto").click()); await s.waitForSelector("#d_quelle", { timeout: 6000 }); await s.waitForTimeout(500);
+await s.evaluate(() => document.getElementById("wDachAuto").click()); await s.waitForSelector("#d_quelle", { state: "attached", timeout: 6000 }); await s.waitForTimeout(500);
 const info = () => s.textContent("#dInfo"), a0 = (await info()).match(/Dachfläche ([\d.]+) m²/)?.[1];
-await s.selectOption("#d_quelle", "skizzen"); await s.waitForSelector("#d_fAdd", { timeout: 6000 }); await s.waitForTimeout(800);
+await s.selectOption("#d_quelle", "skizzen", { force: true }); await s.waitForSelector("#d_fAdd", { state: "attached", timeout: 6000 }); await s.waitForTimeout(800);
 const a1 = (await info()).match(/Dachfläche ([\d.]+) m²/)?.[1];
 ok(a0 && a0 === a1 && !/⚠/.test(await info()), `Umwandlung in Skizzen: gleiche Dachfläche (${a0} → ${a1} m²), keine Warnung`);
 let doc = await s.evaluate(() => window.sdcadTest.dok()), dach = doc.features.find((f) => f.typ === "dach");
@@ -21,7 +21,7 @@ const sk0 = JSON.parse(JSON.stringify(doc.features.find((f) => f.id === dach.fla
 const sk1 = JSON.stringify(doc).replace(JSON.stringify(P), JSON.stringify(P.map((p, i) => (i === k ? [p[0], p[1] - 20] : p))));
 await s.close(); const s2 = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr2 = []; s2.on("pageerror", (e) => pr2.push(e.message));
 await s2.addInitScript((d) => localStorage.setItem("sdcad-doc-0.2", d), sk1); await s2.goto("http://localhost:8797/index.html?test"); await s2.waitForTimeout(1200);
-await s2.evaluate((id) => window.sdcadTest.bearbeite(id), dach.id); await s2.waitForSelector("#d_quelle", { timeout: 6000 }); await s2.waitForTimeout(600);
+await s2.evaluate((id) => window.sdcadTest.bearbeite(id), dach.id); await s2.waitForSelector("#d_quelle", { state: "attached", timeout: 6000 }); await s2.waitForTimeout(600);
 const i2 = await s2.textContent("#dInfo"); ok(/gemeinsame Kante weicht um/.test(i2), "Verschobene Ecke: Warnung «gemeinsame Kante weicht ab» – " + i2.slice(0, 110));
 // Weitere Teile rechnen auf den Skizzen-Flächen weiter
 await s2.click("#dOk"); await s2.waitForTimeout(500);
