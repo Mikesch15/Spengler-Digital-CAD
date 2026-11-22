@@ -891,18 +891,35 @@ function zeigeWahl() {
 const hoverGruppe = new THREE.Group(); szene.add(hoverGruppe);
 const HOVERFARBE = 0xff8a1f, hoverMat = () => new THREE.MeshBasicMaterial({ color: HOVERFARBE, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 const hoverCache = new WeakMap(); // Geometrie → Dreiecke je Eckpunkt (für zusammenhängende ebene Flächen)
-function flaechenRegion(hit) { // alle zusammenhängenden, koplanaren Dreiecke der Fläche unter dem Zeiger (Weltkoordinaten)
+function flaechenRegion(hit) { // alle zusammenhängenden Dreiecke der Fläche unter dem Zeiger (Weltkoordinaten): ebene Fläche oder gebogene Fläche (Biegung eines Blechs)
   const m = hit.object, geo = m.geometry, pos = geo.attributes.position, idx = geo.index, n = (idx ? idx.count : pos.count) / 3;
   const vi = (t, k) => (idx ? idx.getX(t * 3 + k) : t * 3 + k), P = (t, k) => new THREE.Vector3().fromBufferAttribute(pos, vi(t, k)).applyMatrix4(m.matrixWorld);
   let adj = hoverCache.get(geo);
   if (!adj) { adj = new Map(); const key = (t, k) => { const v = new THREE.Vector3().fromBufferAttribute(pos, vi(t, k)); return `${Math.round(v.x * 100)},${Math.round(v.y * 100)},${Math.round(v.z * 100)}`; };
     for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) { const s = key(t, k); if (!adj.has(s)) adj.set(s, []); adj.get(s).push(t); }
     adj.key = key; hoverCache.set(geo, adj); }
-  const tri = hit.faceIndex, nrm = (t) => new THREE.Triangle(P(t, 0), P(t, 1), P(t, 2)).getNormal(new THREE.Vector3()), n0 = nrm(tri), p0 = P(tri, 0), d0 = n0.dot(p0);
-  const gleich = (t) => { const nn = nrm(t); return nn.dot(n0) > 0.9995 && Math.abs(nn.dot(P(t, 0)) - d0) < 0.02; };
-  const gesehen = new Set([tri]), warte = [tri];
-  while (warte.length) { const t = warte.pop(); for (let k = 0; k < 3; k++) for (const u of adj.get(adj.key(t, k)) || []) if (!gesehen.has(u) && gleich(u)) { gesehen.add(u); warte.push(u); } }
-  const out = []; for (const t of gesehen) for (let k = 0; k < 3; k++) out.push(P(t, k).addScaledVector(n0, 0.04));
+  const nrm = (t) => new THREE.Triangle(P(t, 0), P(t, 1), P(t, 2)).getNormal(new THREE.Vector3());
+  const ebeneVon = (tri) => { // koplanare, zusammenhängende Dreiecke
+    const n0 = nrm(tri), d0 = n0.dot(P(tri, 0)), gleich = (t) => { const nn = nrm(t); return nn.dot(n0) > 0.9995 && Math.abs(nn.dot(P(t, 0)) - d0) < 0.02; };
+    const gesehen = new Set([tri]), warte = [tri];
+    while (warte.length) { const t = warte.pop(); for (let k = 0; k < 3; k++) for (const u of adj.get(adj.key(t, k)) || []) if (!gesehen.has(u) && gleich(u)) { gesehen.add(u); warte.push(u); } }
+    return gesehen;
+  };
+  const streifen = (c) => { // schmaler, langer Streifen = Teil einer gebogenen Fläche
+    let A = 0, rand = new Map(); for (const t of c) { A += new THREE.Triangle(P(t, 0), P(t, 1), P(t, 2)).getArea(); for (let k = 0; k < 3; k++) { const a = adj.key(t, k), b = adj.key(t, (k + 1) % 3), e = a < b ? a + "|" + b : b + "|" + a; rand.set(e, (rand.get(e) || 0) + 1); } }
+    let per = 0, lang = 0; for (const t of c) for (let k = 0; k < 3; k++) { const a = adj.key(t, k), b = adj.key(t, (k + 1) % 3), e = a < b ? a + "|" + b : b + "|" + a; if (rand.get(e) === 1) { const l = P(t, k).distanceTo(P(t, (k + 1) % 3)); per += l; lang = Math.max(lang, l); } }
+    return per > 0 && (2 * A) / per < 0.04 * lang;
+  };
+  let alle = ebeneVon(hit.faceIndex);
+  if (streifen(alle) && alle.size <= 8) { // gebogen: benachbarte Streifen mit leicht abweichender Normale gehören zur selben Fläche
+    const zu = new Set(alle), warte = [alle]; let rund = 0;
+    while (warte.length && rund++ < 400) {
+      const c = warte.pop();
+      for (const t of c) for (let k = 0; k < 3; k++) { const a = adj.key(t, k), b = adj.key(t, (k + 1) % 3); for (const u of adj.get(a) || []) if (!zu.has(u) && (adj.get(b) || []).includes(u) && nrm(u).dot(nrm(t)) > 0.906) { const c2 = ebeneVon(u); if (streifen(c2) && c2.size <= 8) { for (const x of c2) zu.add(x); warte.push(c2); } } }
+    }
+    alle = zu;
+  }
+  const out = []; for (const t of alle) { const nt = nrm(t); for (let k = 0; k < 3; k++) out.push(P(t, k).addScaledVector(nt, 0.04)); }
   return new THREE.BufferGeometry().setFromPoints(out);
 }
 const waehlGruppe = new THREE.Group(); szene.add(waehlGruppe);
@@ -3102,6 +3119,8 @@ $("kbRichtung").onclick = () => { if (!kantenWz) return; kantenWz.seite = kanten
 for (const id of ["kbWinkel", "kbLaenge"]) $(id).addEventListener("input", () => { const l = kantenWz?.letzte; if (!l || !finde(l.id) || !l.wert?.werkzeug) return; const wk = { ...l.wert.werkzeug }, a = parseFloat($("kbWinkel").value), c = parseFloat($("kbLaenge").value); if (a > 0 && wk.typ === "flansch") wk.winkel = a; if (c > 0) wk.laenge = c; l.wert = werkzeugNeu(l.wert, wk, material(kantenWz.f.material)); regen(); zeigeKanten(); });
 $("kbEnde").onclick = endeKantenWz;
 $("kbOk").onclick = uebernehmeKanten;
+$("pbOk").onclick = () => projizierenBestaetigen();
+$("pbAbbr").onclick = () => projWahlLeeren();
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && kantenWz?.sel?.length && !dlg && !skizze && !e.target.closest?.("#kantenMenue")) { e.preventDefault(); uebernehmeKanten(); } });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && kantenWz && !dlg && !skizze) { endeKantenWz(); status(""); } });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && quetschWz && !dlg && !skizze) { endeQuetschWz(); status(""); } });
@@ -4549,7 +4568,7 @@ const WERKZEUGE = {
   drehen: { aendern: true, knopf: "tVerschieben", ein: () => ["∠"], immer: true, text: "Drehen: Elemente anklicken, dann Drehpunkt; Winkel eintippen und Enter – oder Bezugs- und Zielrichtung anklicken." },
   musterR: { aendern: true, knopf: "tMuster", text: "Rechteckiges Muster: Elemente anklicken, dann auf eine freie Stelle klicken (oder Enter) – Anzahl und Abstände eingeben." },
   musterK: { aendern: true, knopf: "tMuster", text: "Kreisförmiges Muster: Elemente anklicken, dann den Mittelpunkt anklicken – Anzahl und Winkel eingeben." },
-  projizieren: { aendern: true, knopf: "tProjizieren", text: "Projizieren: Körperkante oder Linie einer anderen Skizze anklicken (Umschalt + Klick: die ganze Skizze) – oder eine Körperfläche (ihr Umriss). Kreise und Bögen parallel liegender Skizzen bleiben Kreise/Bögen. Projizierte Linien sind fixiert (violett)." },
+  projizieren: { aendern: true, knopf: "tProjizieren", text: "Projizieren: Körperkante, Körperfläche (auch Blech und Biegungen) oder Linie einer anderen Skizze anklicken – sie leuchtet orange; mehrere wählen, dann «OK» (Enter) projiziert (Umschalt + Klick: ganze Skizze). Kreise und Bögen parallel liegender Skizzen bleiben Kreise/Bögen. Projizierte Linien sind fixiert (violett)." },
   // Abhängigkeiten und Bemassung: Auswahlmuster P = Punkt, L = Linie (Kante, Achse), K = Kreis/Bogen/Langloch
   abhHV: { knopf: "tAbh", muster: ["L", "PP"], text: "Horizontal/Vertikal: Linie anklicken – oder zwei Punkte. Die Richtung ergibt sich aus der Lage." },
   abhKoinzident: { knopf: "tAbh", muster: ["PP", "PL", "PK"], text: "Koinzident: Punkt anklicken, dann zweiten Punkt – oder Linie/Kreis/Bogen (Punkt liegt darauf)." },
@@ -4584,10 +4603,12 @@ function eingabeBeschriften() {
 }
 function setzeWerkzeug(w) {
   if (!skizze) return;
+  skizze.projWahl = []; skizze.projHover = null; leeren(projGruppe);
   skizze.werkzeug = w; skizze.pkt = []; skizze.quelle = null; skizze.picks = []; skizze.fangRefs = []; skizze.mehr = new Set(); skizze.basis = null; skizze.basis2 = null;
   document.querySelectorAll(".massbox").forEach((b) => b.remove());
   const knopf = WERKZEUGE[w].knopf;
   document.querySelectorAll("#gSkizze .wz[id^='t']").forEach((b) => b.setAttribute("aria-pressed", b.id === knopf));
+  projBarZeigen();
   $("eLaenge").value = w === "abrunden" ? skizze.radius : ""; $("eWinkel").value = "";
   const ein = $("eingabe");
   ein.hidden = !WERKZEUGE[w].immer;
@@ -4696,6 +4717,7 @@ function beendeSkizze() {
   if (!skizze) return;
   abschliessenLinie();
   const f = skizze.f;
+  leeren(projGruppe); $("projBar").hidden = true;
   skizze = null;
   if (!f.elemente.length) entferneFeature(f);
   $("gSkizze").hidden = true; setTimeout(leisteZustand); setTimeout(layerZeigen);
@@ -5178,37 +5200,69 @@ function teileAnEcken(pts, zu) {
   for (let i = 1; i < ordnung.length; i++) { akt.push(ordnung[i]); if (eOrd[i] && i < ordnung.length - 1 || i === ordnung.length - 1) { out.push({ pts: kurz(akt), zu: false }); akt = [ordnung[i]]; } }
   return out.filter((o) => o.pts.length >= 2);
 }
-function projizieren(sm) {
-  const f = skizze.f, E = E_(f.ebene), auf = (w) => zuLokal(E, w), kand = [];
-  for (const [a, b] of koerperKanten()) kand.push({ a, b, zug: [a, b], name: "Körperkante" });
+// ---- Projizieren: Kanten, Flächen und Skizzenlinien wählen (leuchten orange); erst «OK» (Enter) projiziert ----
+const projGruppe = new THREE.Group(); szene.add(projGruppe);
+const projLinienSchluessel = (pts) => pts.map((q) => q.map((v) => Math.round(v * 10)).join(",")).join(">");
+function projKandidat(sm) {
+  const f = skizze.f, kand = [];
+  for (const [a, b] of koerperKanten()) kand.push({ typ: "kante", key: "k:" + [projLinienSchluessel([a]), projLinienSchluessel([b])].sort().join("|"), zug: [a, b], zu: false, vis: [[a, b]], a, b });
   for (const sk of vorher(f).filter((x) => x.typ === "skizze" && ebene(x.ebene))) for (const el of sk.elemente) {
     if (el.art === "linie" || el.art === "rechteck") { // jede Kante einzeln
-      for (const [a, b] of elementKanten(el)) { const A = zuWelt(E_(sk.ebene), a), B = zuWelt(E_(sk.ebene), b); kand.push({ a: A, b: B, zug: [A, B], zu: false, name: sk.name, sk, el }); }
+      elementKanten(el).forEach(([a, b], n) => { const A = zuWelt(E_(sk.ebene), a), B = zuWelt(E_(sk.ebene), b); kand.push({ typ: "skel", key: `s:${sk.id}:${el.id}:${n}`, sk, el, zug: [A, B], zu: false, vis: [[A, B]], a: A, b: B }); });
       continue;
     }
-    for (const pts of elGeo(el).linien) {
-      const w = pts.map((q) => zuWelt(E_(sk.ebene), q));
-      for (let i = 1; i < w.length; i++) kand.push({ a: w[i - 1], b: w[i], zug: w, zu: !!elGeo(el).kontur, name: sk.name, sk, el });
-    }
+    for (const pts of elGeo(el).linien) { const w = pts.map((q) => zuWelt(E_(sk.ebene), q)), zu = !!elGeo(el).kontur; for (let n = 1; n < w.length; n++) kand.push({ typ: "skel", key: `s:${sk.id}:${el.id}`, sk, el, zug: w, zu, vis: [w], a: w[n - 1], b: w[n] }); }
   }
-  let best = null, bd = 12;
+  let best = null, bd = e_projRadius();
   for (const k of kand) { const A = aufSchirm(k.a), B = aufSchirm(k.b); if (A[2] < 1 && B[2] < 1) { const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = k; } } }
-  let zuege = [], exakt = [];
-  // Ebenen parallel: Kreise und Bögen bleiben echte Kreise/Bögen (sonst Linienzug)
+  if (best && umschaltAn && best.sk) { // Umschalt: die ganze Skizze
+    const vis = best.sk.elemente.filter((el) => !el.hilfs && el.art !== "punkt").flatMap((el) => elGeo(el).linien.map((pts) => pts.map((q) => zuWelt(E_(best.sk.ebene), q))));
+    return { typ: "skizze", key: "S:" + best.sk.id, sk: best.sk, vis };
+  }
+  if (best) return best;
+  const r = leinwand.getBoundingClientRect();
+  strahl.setFromCamera(new THREE.Vector2((sm[0] / r.width) * 2 - 1, -(sm[1] / r.height) * 2 + 1), kamera);
+  const hit = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0]; if (!hit) return null;
+  const rand = flaechenRand(hit); if (!rand.length) return null;
+  return { typ: "flaeche", key: "F:" + projLinienSchluessel(rand.flat().slice(0, 6)) + ":" + rand.length, rand, vis: rand };
+}
+const e_projRadius = () => (leinwandTouch ? 30 : 12);
+function projZeichnen() {
+  leeren(projGruppe); if (!skizze) return;
+  const dist = kamera.position.distanceTo(steuerung.target), hoehe = 2 * dist * Math.tan(kamera.fov * Math.PI / 360), r = Math.max(0.2, hoehe / 380);
+  const zeige = (item, farbe, dick) => { for (const pts of item.vis) for (let i = 1; i < pts.length; i++) {
+    const a = V(pts[i - 1]), b = V(pts[i]); if (a.distanceTo(b) < 1e-9) continue;
+    const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(a, b), 1, r * dick, 5), new THREE.MeshBasicMaterial({ color: farbe, depthTest: false, transparent: true, opacity: 0.9 })); m.renderOrder = 15; projGruppe.add(m); } };
+  if (skizze.projHover && !(skizze.projWahl || []).some((x) => x.key === skizze.projHover.key)) zeige(skizze.projHover, 0xf5b97a, 1);
+  for (const it of skizze.projWahl || []) zeige(it, 0xe0782b, 1.6);
+}
+let projHoverWartet = false, leinwandTouch = false;
+leinwand.addEventListener("pointerdown", (e) => { leinwandTouch = e.pointerType === "touch"; }, true);
+function projHover(e) {
+  if (projHoverWartet) return; projHoverWartet = true; const sm = smPos(e);
+  requestAnimationFrame(() => { projHoverWartet = false; if (!skizze || skizze.werkzeug !== "projizieren") return; const k = projKandidat(sm); if ((k?.key || null) !== (skizze.projHover?.key || null)) { skizze.projHover = k; projZeichnen(); } });
+}
+function projBarZeigen() {
+  const an = !!skizze && skizze.werkzeug === "projizieren", n = skizze?.projWahl?.length || 0; $("projBar").hidden = !an; if (!an) return;
+  $("pbText").textContent = n ? `${n} gewählt – «OK» (Enter) projiziert, nochmals anklicken hebt die Wahl auf. Umschalt + Klick: ganze Skizze.` : "Kanten, Flächen oder Skizzenlinien anklicken (sie leuchten orange).";
+  $("pbOk").disabled = !n; $("pbOk").textContent = n ? `OK (${n})` : "OK";
+}
+function projWahlLeeren() { if (skizze) { skizze.projWahl = []; skizze.projHover = null; } leeren(projGruppe); projBarZeigen(); }
+function projizieren(sm) { // Klick: Element wählen bzw. abwählen
+  const k = projKandidat(sm); if (!k) return status("Körperkante, Körperfläche oder Linie einer anderen Skizze anklicken.");
+  skizze.projWahl ||= []; const i = skizze.projWahl.findIndex((x) => x.key === k.key); if (i >= 0) skizze.projWahl.splice(i, 1); else skizze.projWahl.push(k);
+  projZeichnen(); projBarZeigen();
+}
+function projizierenBestaetigen() {
+  const items = skizze?.projWahl || []; if (!items.length) return;
+  const f = skizze.f, E = E_(f.ebene), auf = (w) => zuLokal(E, w); let zuege = [], exakt = []; const gesehen = new Set();
   const parallel = (sk) => Math.abs(V(E_(sk.ebene).n).dot(V(E.n))) > 0.99999;
   const exaktes = (sk, el) => { if (!parallel(sk) || (el.art !== "kreis" && el.art !== "bogen")) return null; const Es = E_(sk.ebene), P = (q) => auf(zuWelt(Es, q)); return el.art === "kreis" ? { art: "kreis", c: P(el.c), r: el.r } : { art: "bogen", a: P(el.a), b: P(el.b), m: P(el.m) }; };
-  if (best && umschaltAn && best.sk) { // Umschalt: die ganze Skizze (alle Linien, Kreise, Bögen)
-    for (const el of best.sk.elemente) { if (el.hilfs || el.art === "punkt") continue; const e = exaktes(best.sk, el); if (e) { exakt.push(e); continue; }
-      for (const pts of elGeo(el).linien) zuege.push({ pts: pts.map((q) => auf(zuWelt(E_(best.sk.ebene), q))), zu: !!elGeo(el).kontur }); }
-  } else if (best) { const e = best.sk && exaktes(best.sk, best.el); if (e) exakt.push(e); else zuege = [{ pts: best.zug.map(auf), zu: best.zu }]; }
-  else { // Fläche angeklickt: alle Körperkanten in ihrer Ebene
-    const r = leinwand.getBoundingClientRect();
-    strahl.setFromCamera(new THREE.Vector2((sm[0] / r.width) * 2 - 1, -(sm[1] / r.height) * 2 + 1), kamera);
-    const hit = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
-    if (!hit) return status("Körperkante, Körperfläche oder Linie einer anderen Skizze anklicken.");
-    // nur die angeklickte Fläche: ihre Randkanten, an den Ecken getrennt – jede Kante (bzw. glatte Kurve) ist ein eigenes Element
-    const stuecke = flaechenRand(hit).map(([a, b]) => ({ pts: [auf(a), auf(b)] }));
-    zuege = verbindeStuecke(stuecke).flatMap((z) => teileAnEcken(z.pts, z.geschlossen));
+  for (const it of items) {
+    if (it.typ === "kante") zuege.push({ pts: [auf(it.a), auf(it.b)], zu: false });
+    else if (it.typ === "skel") { if (gesehen.has(it.key)) continue; gesehen.add(it.key); const e = exaktes(it.sk, it.el); if (e) exakt.push(e); else zuege.push({ pts: it.zug.map(auf), zu: it.zu }); }
+    else if (it.typ === "skizze") { for (const el of it.sk.elemente) { if (el.hilfs || el.art === "punkt") continue; const e = exaktes(it.sk, el); if (e) { exakt.push(e); continue; } for (const pts of elGeo(el).linien) zuege.push({ pts: pts.map((q) => auf(zuWelt(E_(it.sk.ebene), q))), zu: !!elGeo(el).kontur }); } }
+    else if (it.typ === "flaeche") { const stuecke = it.rand.map(([a, b]) => ({ pts: [auf(a), auf(b)] })); zuege.push(...verbindeStuecke(stuecke).flatMap((z) => teileAnEcken(z.pts, z.geschlossen))); }
   }
   const neu = [];
   for (const e of exakt) { const el = { ...e, projiziert: true, id: neueElementId(f) }; f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); neu.push(el); }
@@ -5220,7 +5274,8 @@ function projizieren(sm) {
     f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); neu.push(el);
   }
   skizze.projNeu = neu; // X macht das zuletzt Projizierte zur Hilfslinie
-  status(neu.length ? `Projiziert: ${neu.length} Element${neu.length === 1 ? "" : "e"} (fixiert, X = Hilfslinie)${best?.sk && !umschaltAn ? " – mit Umschalt + Klick die ganze Skizze «" + best.sk.name + "»" : ""}.` : "Die Kante steht senkrecht zur Skizzenebene – nichts zu projizieren.");
+  projWahlLeeren(); sichereIds(f); bereinige(f); zeichneLive();
+  status(neu.length ? `Projiziert: ${neu.length} Element${neu.length === 1 ? "" : "e"} (fixiert, X = Hilfslinie).` : "Die gewählten Kanten stehen senkrecht zur Skizzenebene – nichts zu projizieren.");
 }
 function abschliessenLinie() {
   if (skizze?.werkzeug === "linie" && skizze.pkt.length >= 2) erstelle([{ art: "linie", pts: skizze.pkt.slice(), geschlossen: false }], null, { hv: true });
@@ -5670,6 +5725,7 @@ leinwand.addEventListener("pointermove", (e) => {
     loeseSkizze(skizze.f, { ziel }); zeichneLive();
     return;
   }
+  if (skizze.werkzeug === "projizieren") projHover(e);
   const r = ebenenPunkt(e); if (!r) return fangZeigen(null);
   fangZeigen(r.art ? r : null); skizze.maus = r.uv; zeichneLive();
   if (braucheEingabe(skizze)) {
@@ -5714,6 +5770,10 @@ leinwand.addEventListener("dblclick", () => {
 document.addEventListener("keydown", (e) => {
   if (!skizze) return;
   const imFeld = e.target.closest?.("#eingabe");
+  if (skizze.werkzeug === "projizieren" && skizze.projWahl?.length && !e.target.closest?.("input,select,textarea")) {
+    if (e.key === "Enter") { projizierenBestaetigen(); e.preventDefault(); return; }
+    if (e.key === "Escape") { projWahlLeeren(); e.preventDefault(); return; }
+  }
   if (e.key === "Escape" && (skizze.picks.length || skizze.bsel)) { skizze.picks = []; skizze.bsel = null; document.querySelectorAll(".massbox").forEach((b) => b.remove()); zeichneLive(); e.preventDefault(); return; }
   if (e.key === "Escape") { if (skizze.pkt.length || skizze.quelle) { abschliessenLinie(); skizze.pkt = []; skizze.quelle = null; zeichneLive(); } else if (skizze.werkzeug !== "auswahl") setzeWerkzeug("auswahl"); else { skizze.sel = null; zeichneLive(); } e.preventDefault(); return; }
   if ((e.key === "x" || e.key === "X") && (skizze.sel || skizze.projNeu?.length) && !e.target.closest?.("input,select")) { hilfslinieUmschalten(); e.preventDefault(); return; }

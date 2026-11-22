@@ -722,6 +722,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
         <label>L <input id="eLaenge" type="number" step="any"></label><label>∠ <input id="eWinkel" type="number" step="any"></label>
       </div>
       <div class="kontextbar" id="kontextBar" role="toolbar" aria-label="Passende Werkzeuge zur Auswahl" hidden></div>
+      <div class="kantenbar" id="projBar" hidden><b>Projizieren</b><span id="pbText"></span><button class="knopf klein haupt" id="pbOk" disabled>OK</button><button class="knopf klein" id="pbAbbr">Abbrechen</button></div>
       <div class="kantenbar" id="kantenBar" hidden><b id="kbTitel"></b><span id="kbText"></span>
         <label id="kbWinkelL">Winkel <input id="kbWinkel" type="number" step="any" value="90">°</label><label>Länge <input id="kbLaenge" type="number" step="any" value="25"> mm</label>
         <button class="knopf klein" id="kbRichtung" title="Richtung der Abkantung: zur Sichtseite oder nach hinten">Richtung: Sichtseite ⇄</button><button class="knopf klein haupt" id="kbOk" disabled>Übernehmen</button><button class="knopf klein" id="kbEnde">Fertig</button></div>

@@ -16,7 +16,7 @@ await s.evaluate(() => window.sdcadTest.bearbeite("s2")); await s.waitForTimeout
 await s.evaluate(() => document.getElementById("tProjizieren").click()); await s.waitForTimeout(200);
 const els = () => s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.id === "s2").elemente);
 // obere Fläche des Körpers (z = 100) anklicken: nur ihr Umriss, jede Kante ein eigenes Element
-const p = await s.evaluate(() => window.sdcadTest.schirm([25, 20, 100])); await s.mouse.click(p[0], p[1]); await s.waitForTimeout(500);
+const p = await s.evaluate(() => window.sdcadTest.schirm([25, 20, 100])); await s.mouse.click(p[0], p[1]); await s.waitForTimeout(500); await s.evaluate(() => document.getElementById("pbOk").click()); await s.waitForTimeout(400);
 let e = await els(); ok(e.length === 4 && e.every((x) => x.art === "linie" && x.pts.length === 2 && x.projiziert), "Fläche: Umriss als 4 einzelne Kanten (" + e.length + " Elemente)");
 await s.keyboard.press("x"); await s.waitForTimeout(300); e = await els();
 ok(e.every((x) => x.hilfs), "X macht das zuletzt Projizierte zur Hilfslinie");
