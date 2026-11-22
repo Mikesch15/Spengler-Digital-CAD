@@ -110,3 +110,17 @@ test("Bericht enthält Hinweis, Ergebnis und Lager", () => {
   const h = berichtHtml({ studie: { name: "T", lager: [{ art: "eingespannt", sel: { art: "kante" } }], lasten: [{ art: "druck", p: 0.001, sel: { art: "flaeche" }, lastfall: "a", vorzeichen: 1 }], lastfaelle: [{ id: "a", name: "Schnee", art: "Q" }] }, ergebnisse: [{ name: "K1", smax: 100, zul: 200, umax: 2, hoechstlast: 2, faktoren: { a: 1 } }], massgebend: { name: "K1", smax: 100, zul: 200, umax: 2, hoechstlast: 2 } });
   assert.match(h, /kein statischer Nachweis/); assert.match(h, /Einspannung/); assert.match(h, /2-fachen/);
 });
+
+test("Gleichgewicht am gefalteten Blech (Platte + Flansch, feines Netz): Summe der Reaktionen = Last", () => {
+  const m = { t: 0.6, ri: 1, k: 0.4 }, bl = flaechenblech([[0, 0], [400, 0], [400, 200], [0, 200]], [{ name: "x", folge: "90 30", versatz: 0 }, null, null, null], m), E = { o: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] };
+  const M = baueModell([{ art: "flaeche", name: "FB", t: 0.6, pts: bl.pts, gruppen: bl.gruppen, profile: bl.profile, ebene: E, seite: 1 }], 8);
+  const r = rechneStudie(M, { lager: [{ sel: { art: "kante", p: [200, 200, 0] }, fest: LAGER_ARTEN.eingespannt }], lasten: [{ art: "druck", sel: { art: "flaeche", p: [200, 100, 0] }, p: 0.001, modus: "richtung", dir: [0, 0, -1] }] }, { E: 210000, nu: 0.3, rp: 250, dichte: 7.85e-9 }).ergebnisse[0];
+  near(r.summeReaktion[2], 80, 0.01, "Rz"); assert.ok(Math.abs(r.summeReaktion[0]) < 0.5 && Math.abs(r.summeReaktion[1]) < 0.5, "keine Querkräfte");
+});
+
+test("Auswahl Querschnitt: Stirn eines Profils fest, Kraft am anderen Ende – Reaktion = Kraft", () => {
+  const E = { o: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] };
+  const M = baueModell([{ art: "profil", name: "U", t: 2, pfad: [{ typ: "linie", p1: [0, 30], p2: [0, 0] }, { typ: "linie", p1: [0, 0], p2: [60, 0] }, { typ: "linie", p1: [60, 0], p2: [60, 30] }], ebene: E, z0: 0, z1: 600 }], 8);
+  const r = rechneStudie(M, { lager: [{ sel: { art: "ebene", p: [0, 0, 0], n: [0, 0, 1] }, fest: LAGER_ARTEN.eingespannt }], lasten: [{ art: "kraft", sel: { art: "ebene", p: [0, 0, 600], n: [0, 0, 1] }, F: [0, -100, 0] }] }, { E: 210000, nu: 0.3, rp: 250, dichte: 7.85e-9 }).ergebnisse[0];
+  near(r.summeReaktion[1], 100, 0.01, "Ry"); assert.ok(r.umax > 0 && r.smax > 0);
+});

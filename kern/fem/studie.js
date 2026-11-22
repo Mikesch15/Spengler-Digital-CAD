@@ -38,6 +38,10 @@ export function auswahl(M, G, sel) {
     for (const e of q) for (const i of tris[e]) add(i, G.fl[e] / 3);
     return { knoten: w, elemente: q };
   }
+  if (sel.art === "ebene") { // Querschnitt: alle Knoten in der Ebene durch p mit Normale n (Stirn eines Profils)
+    const n = nrm(sel.n || [0, 0, 1]), tol = sel.tol || Math.max(1e-3, (M.h || 1) * 0.02); for (let i = 0; i < nodes.length; i++) if (Math.abs(dot(sub(nodes[i], sel.p), n)) <= tol) add(i, 1);
+    return { knoten: w, elemente: [] };
+  }
   if (sel.art === "kante") { // freie Ränder und Knicklinien
     const kand = G.kanten.filter((k) => k.e.length === 1 || (k.e.length === 2 && Math.abs(dot(G.nor[k.e[0]], G.nor[k.e[1]])) < Math.cos((20 * Math.PI) / 180)));
     let best = null, bd = Infinity; for (const k of kand) { const d = abstSeg(sel.p, nodes[k.a], nodes[k.b]); if (d < bd) { bd = d; best = k; } }

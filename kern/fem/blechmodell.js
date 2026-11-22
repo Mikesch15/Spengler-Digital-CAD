@@ -44,6 +44,7 @@ function groesse(q) {
 export function baueModell(quellen, h = null, zielKnoten = 2500) {
   const A = quellen.reduce((s, q) => s + groesse(q), 0), dicken = quellen.map((q) => q.t);
   let hh = h && h > 0 ? h : Math.sqrt(A / zielKnoten), M;
+  if (!(hh > 0) || !Number.isFinite(hh) || !dicken.every((t) => t > 0)) throw new Error("Blech lässt sich nicht vernetzen – Abmessungen und Blechdicke prüfen");
   for (let versuch = 0; versuch < 6; versuch++) {
     M = new Modell(); M.h = hh; M.quellen = [];
     for (const q of quellen) { const ids = q.art === "profil" ? [profilQuelle(M, q, hh)] : flaechenQuelle(M, q, hh); M.quellen.push({ name: q.name, flaechen: ids }); }

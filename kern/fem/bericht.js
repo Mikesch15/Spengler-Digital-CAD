@@ -4,9 +4,9 @@ const z = (v, n = 2) => (Number.isFinite(v) ? (+v).toFixed(n).replace(/\.?0+$/, 
 
 export const HINWEIS = "Richtwert, kein statischer Nachweis: Die Berechnung (lineare Schalen-FEM, Mittelfläche des Blechs, vereinfachte Ecken und Biegezonen) ersetzt keinen Tragsicherheitsnachweis nach Norm. Spannungsspitzen an Punktlagern und Einzelkräften sind rechnerische Singularitäten.";
 
-export function lagerText(l) { const a = { eingespannt: "Einspannung (alle 6 Freiheitsgrade)", gelenkig: "Gelenkig (Verschiebungen gesperrt)", gleitX: "Gleitlager, frei in X", gleitY: "Gleitlager, frei in Y", gleitZ: "Gleitlager, frei in Z", nurX: "nur X gesperrt", nurY: "nur Y gesperrt", nurZ: "nur Z gesperrt", vorgabe: "Vorgegebene Verschiebung" }[l.art] || l.art; return `${a} · ${({ flaeche: "Fläche", kante: "Kante", punkt: "Punkt" })[l.sel?.art] || ""}${l.weg?.some((x) => x) ? ` · Weg ${l.weg.map((x) => z(x)).join("/")} mm` : ""}`; }
+export function lagerText(l) { const a = { eingespannt: "Einspannung (alle 6 Freiheitsgrade)", gelenkig: "Gelenkig (Verschiebungen gesperrt)", gleitX: "Gleitlager, frei in X", gleitY: "Gleitlager, frei in Y", gleitZ: "Gleitlager, frei in Z", nurX: "nur X gesperrt", nurY: "nur Y gesperrt", nurZ: "nur Z gesperrt", vorgabe: "Vorgegebene Verschiebung" }[l.art] || l.art; return `${a} · ${({ flaeche: "Fläche", kante: "Kante", punkt: "Punkt", ebene: "Querschnitt" })[l.sel?.art] || ""}${l.weg?.some((x) => x) ? ` · Weg ${l.weg.map((x) => z(x)).join("/")} mm` : ""}`; }
 export function lastText(l) {
-  const r = { flaeche: "Fläche", kante: "Kante", punkt: "Punkt" }[l.sel?.art] || "";
+  const r = { flaeche: "Fläche", kante: "Kante", punkt: "Punkt", ebene: "Querschnitt" }[l.sel?.art] || "";
   if (l.art === "kraft") return `Kraft ${z(Math.hypot(...l.F))} N (${l.F.map((x) => z(x, 1)).join(" / ")}) auf ${r}`;
   if (l.art === "druck") return `Flächenlast ${z(l.p * 1000)} kN/m² ${l.modus === "richtung" ? `in Richtung ${(l.dir || []).map((x) => z(x, 2)).join("/")}${l.projiziert ? " (auf Grundriss bezogen)" : ""}` : l.vorzeichen === -1 ? "(Sog)" : "(auf die Fläche)"}`;
   if (l.art === "strecke") return `Linienlast ${z(Math.hypot(...l.q))} N/mm auf ${r}`;

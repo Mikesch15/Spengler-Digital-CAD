@@ -38,11 +38,12 @@ export function system(nodes, tris, dicke, mat, fix) {
       if (j === i) { if (!(s > 1e-10 * spur)) throw new Error("Modell nicht ausreichend gelagert (Starrkörperbewegung) – Lager prüfen"); A[idx(i, i)] = Math.sqrt(s); } else A[idx(i, j)] = s / A[idx(j, j)];
     }
   }
+  let bmax = 0; for (let i = 0; i < m; i++) if (bw[i] > bmax) bmax = bw[i];
   const solveEq = (b) => {
     const y = new Float64Array(m);
     for (let i = 0; i < m; i++) { let s = b[i]; for (let k = i - bw[i]; k < i; k++) s -= A[idx(i, k)] * y[k]; y[i] = s / A[idx(i, i)]; }
     const x = new Float64Array(m);
-    for (let i = m - 1; i >= 0; i--) { let s = y[i]; for (let k = i + 1; k < m && k - bw[k] <= i; k++) s -= A[idx(k, i)] * x[k]; x[i] = s / A[idx(i, i)]; }
+    for (let i = m - 1; i >= 0; i--) { let s = y[i]; for (let k = i + 1; k < Math.min(m, i + bmax + 1); k++) if (k - bw[k] <= i) s -= A[idx(k, i)] * x[k]; x[i] = s / A[idx(i, i)]; }
     return x;
   };
   const mulK = (u) => { const r = new Float64Array(N); for (let e = 0; e < tris.length; e++) { const K = elK[e], d = elD[e]; for (let i = 0; i < 18; i++) { let s = 0; for (let j = 0; j < 18; j++) s += K[i][j] * u[d[j]]; r[d[i]] += s; } } return r; };

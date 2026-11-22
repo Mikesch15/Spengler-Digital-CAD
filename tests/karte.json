@@ -3,6 +3,8 @@
   "schnelltest": ["assistent", "kontext", "bedienung", "dach", "projektdatei", "kantenwz", "befehlssuche"],
   "regeln": [
     { "muster": "src/kontext.js", "tests": ["kontext"] },
+    { "muster": "src/simulation.js", "tests": ["simulation"] },
+    { "muster": "kern/fem/", "tests": ["simulation"] },
     { "muster": "kern/dach/", "tests": ["dach", "dachbleche", "dachflaechen", "kopplung", "griffe"] },
     { "muster": "kern/stirnflansch", "tests": ["stirnflansch", "blechkanten"] },
     { "muster": "kern/quetschfalte", "tests": ["quetschfalte"] },

@@ -451,6 +451,17 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .schritte .titel{flex-basis:100%;font-weight:600;font-size:13px;margin-bottom:2px}
 .dialog .feld[hidden]{display:none}
 
+
+/* Simulation */
+#simLegende { position: absolute; left: 12px; bottom: 44px; z-index: 6; background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: var(--r-s); padding: 6px 10px; font-size: 12px; box-shadow: var(--sh-panel); pointer-events: none; }
+#simLegende .lgrow { display: flex; gap: 6px; margin: 4px 0; height: 120px; } #simLegende .lgbar { width: 14px; border-radius: 3px; } #simLegende .lgtick { display: flex; flex-direction: column; justify-content: space-between; font: 11px var(--font-num); }
+#simInhalt .simkopf { font: 600 11px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 6px; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; } #simInhalt .simkopf .knopf { margin-left: auto; } #simInhalt .simkopf .knopf + .knopf { margin-left: 0; }
+#simInhalt .simzeile { display: flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: var(--r-s); background: var(--panel-2); } #simInhalt .simname { flex: 1; text-align: left; border: 0; background: none; color: var(--fg); font: 12px var(--font-body); padding: 5px 8px; cursor: pointer; } #simInhalt .simzeile .weg { margin-right: 4px; }
+#simInhalt .simreihe { display: flex; gap: 6px; flex-wrap: wrap; } #simInhalt .simteil { font-size: 13px; display: flex; gap: 6px; align-items: center; }
+#simInhalt .simergebnis { padding: 8px 10px; border-radius: var(--r-s); border: 1px solid var(--line); } #simInhalt .simergebnis.ok { border-color: #2a9d5f; background: color-mix(in srgb, #2a9d5f 12%, transparent); } #simInhalt .simergebnis.bad { border-color: #c0392b; background: color-mix(in srgb, #c0392b 12%, transparent); }
+#simInhalt .simtab { width: 100%; border-collapse: collapse; font-size: 12px; } #simInhalt .simtab td, #simInhalt .simtab th { border-bottom: 1px solid var(--line); padding: 3px 4px; text-align: left; cursor: pointer; } #simInhalt .simtab tr.jetzt { background: var(--accent-soft); } #simInhalt .simtab .bad { color: #c0392b; font-weight: 700; }
+#simInhalt .simwarn { font-size: 11px; color: var(--muted); }
+
 /* Dialoge angedockt (Desktop): eigene Spalte rechts statt Überdeckung der 3D-Ansicht; Teil/Auftrag weicht solange */
 @media (min-width: 1001px) {
   .mitte > .dialog { position: static; grid-column: 2; grid-row: 1; width: auto; max-width: none; top: auto; right: auto; align-self: stretch; display: flex; flex-direction: column; min-height: 0; border-radius: var(--r-m); box-shadow: var(--sh-panel); }
@@ -534,7 +545,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf svg, .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf .kpfeil { display: none; }
   .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-soft); }
   [data-klapp="datei"] > .klappknopf { order: 1; } [data-klapp="koerper"] > .klappknopf { order: 2; } [data-klapp="blech"] > .klappknopf { order: 3; } [data-klapp="dach"] > .klappknopf { order: 4; }
-  [data-klapp="kanten"] > .klappknopf { order: 5; } [data-klapp="aendern"] > .klappknopf { order: 6; } [data-klapp="pruefen"] > .klappknopf { order: 7; } [data-klapp="werkstatt"] > .klappknopf { order: 8; }
+  [data-klapp="kanten"] > .klappknopf { order: 5; } [data-klapp="aendern"] > .klappknopf { order: 6; } [data-klapp="simulation"] > .klappknopf { order: 7; } [data-klapp="pruefen"] > .klappknopf { order: 8; } [data-klapp="werkstatt"] > .klappknopf { order: 9; }
   .leiste:not(.imSkizze):not(.imDialog) .marke { order: 21; border-right: 0; margin: 0 0 0 8px; padding: 6px 0 0; }
   .leiste:not(.imSkizze):not(.imDialog) #wSuche { order: 20; margin-left: auto; flex-direction: row; min-width: 0; padding: 6px 12px; }
   .leiste:not(.imSkizze):not(.imDialog) #wSuche svg { width: 16px; height: 16px; }
@@ -723,6 +734,31 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <input type="file" id="dxfDatei" accept=".dxf" hidden>
       <input type="file" id="einstDatei" accept=".json,application/json" hidden>
     </div></div>
+    <div class="klapp" data-klapp="simulation"><button class="wz klappknopf" aria-haspopup="true" title="Tragfähigkeit von Blechen: Lager, Lasten, Spannung, Verformung, Beulen"><svg viewBox="0 0 24 24"><path class="f" d="M3 19h18"/><path d="M5 15l4-4 3 2 6-7"/></svg><span class="kz"><span class="kl">Simulation</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
+      <div class="mgr" data-titel="Studie">
+      <button class="wz" id="wSimFenster" data-sim title="Simulationsfenster: Studie, Modell, Lager, Lasten, Ergebnis"><svg viewBox="0 0 24 24"><rect class="f" x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Simulation</button>
+      </div><div class="mgr" data-titel="Lager">
+      <button class="wz" id="wSimFest" data-sim title="Einspannung: Fläche, Kante oder Punkt fest halten"><svg viewBox="0 0 24 24"><path d="M4 4v16"/><path class="f" d="M4 8h12v8H4z"/><path d="M4 6l-2 2M4 10l-2 2M4 14l-2 2M4 18l-2 2"/></svg>Einspannung</button>
+      <button class="wz" id="wSimGelenk" data-sim title="Gelenkiges Auflager (Verschiebungen gesperrt, Drehung frei)"><svg viewBox="0 0 24 24"><path class="f" d="M12 8l5 9H7z"/><path d="M4 20h16"/></svg>Gelenkig</button>
+      <button class="wz" id="wSimGleit" data-sim title="Gleitlager (in einer Richtung verschiebbar)"><svg viewBox="0 0 24 24"><path class="f" d="M12 8l5 8H7z"/><circle cx="8" cy="19" r="1.6"/><circle cx="16" cy="19" r="1.6"/></svg>Gleitlager</button>
+      <button class="wz" id="wSimWeg" data-sim title="Vorgegebene Verschiebung"><svg viewBox="0 0 24 24"><path d="M4 12h12M12 8l4 4-4 4"/><path d="M20 5v14" stroke-dasharray="2 2.5"/></svg>Verschiebung</button>
+      </div><div class="mgr" data-titel="Lasten">
+      <button class="wz" id="wSimKraft" data-sim title="Einzelkraft auf Punkt, Kante oder Fläche"><svg viewBox="0 0 24 24"><path d="M12 3v14M7 12l5 5 5-5"/><path class="f" d="M7 19h10v2H7z"/></svg>Kraft</button>
+      <button class="wz" id="wSimDruck" data-sim title="Flächenlast (Druck, Schnee, Wind, Nutzlast)"><svg viewBox="0 0 24 24"><path d="M6 4v9M12 4v9M18 4v9M3.5 10.5L6 13l2.5-2.5M9.5 10.5L12 13l2.5-2.5M15.5 10.5L18 13l2.5-2.5"/><path class="f" d="M3 16h18v4H3z"/></svg>Druck</button>
+      <button class="wz" id="wSimStrecke" data-sim title="Linienlast entlang einer Kante"><svg viewBox="0 0 24 24"><path d="M5 5v8M10 5v8M15 5v8M20 5v8"/><path class="f" d="M3 16h18v3H3z"/></svg>Linienlast</button>
+      <button class="wz" id="wSimGrav" data-sim title="Eigengewicht (Schwerkraft)"><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="8" r="4"/><path d="M12 14v7M9 18l3 3 3-3"/></svg>Eigengewicht</button>
+      <button class="wz" id="wSimNorm" data-sim title="Normlasten: Schnee, Wind, Person, Nutzlast mit Kombinationen"><svg viewBox="0 0 24 24"><path d="M4 15a5 5 0 0 1 3-9 6 6 0 0 1 11 2 4 4 0 0 1 1 7z"/><path d="M8 19v2M12 19v2M16 19v2"/></svg>Normlast</button>
+      <button class="wz" id="wSimLF" data-sim title="Lastfall hinzufügen (ständig oder veränderlich)"><svg viewBox="0 0 24 24"><rect class="f" x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="13" width="16" height="6" rx="1"/></svg>Lastfall</button>
+      </div><div class="mgr" data-titel="Rechnen">
+      <button class="wz" id="wSimRechnen" data-sim title="Berechnen (lineare Schalen-FEM) – Richtwert, kein Nachweis"><svg viewBox="0 0 24 24"><path class="f" d="M7 4l13 8-13 8z"/></svg>Berechnen</button>
+      </div><div class="mgr" data-titel="Ergebnis">
+      <button class="wz" id="wSimSpannung" data-sim title="Vergleichsspannung (von Mises) farbig"><svg viewBox="0 0 24 24"><path class="f" d="M3 17c4-10 14-10 18 0z"/></svg>Spannung</button>
+      <button class="wz" id="wSimVerschiebung" data-sim title="Verschiebung/Durchbiegung überhöht"><svg viewBox="0 0 24 24"><path d="M3 17h18"/><path class="f" d="M3 17c4-8 14-8 18 0"/></svg>Verschiebung</button>
+      <button class="wz" id="wSimSicherheit" data-sim title="Sicherheit zulässig / vorhanden"><svg viewBox="0 0 24 24"><path class="f" d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/></svg>Sicherheit</button>
+      <button class="wz" id="wSimBeulform" data-sim title="Beulform und kritischer Lastfaktor (mit «Beulen mitrechnen»)"><svg viewBox="0 0 24 24"><path d="M4 12c3-8 5 8 8 0s5 8 8 0"/></svg>Beulform</button>
+      <button class="wz" id="wSimBericht" data-sim title="Bericht drucken oder als PDF speichern"><svg viewBox="0 0 24 24"><rect class="f" x="5" y="3" width="14" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Bericht</button>
+      </div>
+    </div></div>
     <div class="klapp" data-klapp="werkstatt"><button class="wz klappknopf" aria-haspopup="true" title="Einstellungen, Hilfe"><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg><span class="kz"><span class="kl">Werkstatt</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
       <button class="wz" id="wEinst" title="Materialien kalibrieren, Lagerformate"><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>Einstellungen</button>
       <button class="wz" id="wHilfe" title="Kurzanleitung und Tastenkürzel (F1)"><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="9"/><path d="M9.5 9.6a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.7M12 17v.2"/></svg>Hilfe</button>
@@ -790,6 +826,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       
       <div class="layerbox" id="layerBox" hidden><div class="ltitel" id="lTitel" title="Layer-Leiste ein-/ausklappen">Layer ▾</div><div id="layerListe"></div>
         <div class="lknoepfe"><button class="knopf klein" id="lNeu">＋ Layer</button><button class="knopf klein" id="lZuw" title="Gewähltes Element auf den aktiven Layer legen">Element → Layer</button><button class="knopf klein haupt" id="lDxf" title="Zeichnung als DXF mit Layern, Farben und Linienarten speichern">DXF</button></div></div>
+      <div id="simLegende" hidden></div>
       <div id="status" role="status" aria-live="polite"></div>
     </section>
     <button class="knopf klein" id="werkAuf" title="Teil/Auftrag wieder aufklappen" aria-label="Teil und Auftrag aufklappen">« Teil / Auftrag</button>
@@ -805,6 +842,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <div class="fuss"><button class="knopf" id="kbAbbr">Abbrechen</button><button class="knopf" id="kbEnde">Fertig</button><button class="knopf haupt" id="kbOk" disabled>Übernehmen</button></div></div>
     <div class="dialog" id="projBar" hidden><h3>Projizieren</h3><button class="dklein" data-gen title="Fenster einklappen – Ansicht frei zum Antippen" aria-label="Fenster einklappen">▾</button><div class="inhalt"><p class="hinweis" id="pbText"></p></div>
       <div class="fuss"><button class="knopf" id="pbAbbr">Abbrechen</button><button class="knopf haupt" id="pbOk" disabled>OK</button></div></div>
+    <div class="dialog" id="simFenster" hidden><h3>Simulation</h3><button class="dklein" data-gen title="Fenster einklappen – Ansicht frei zum Antippen" aria-label="Fenster einklappen">▾</button><div class="inhalt" id="simInhalt"></div><div class="fuss" id="simFuss"></div></div>
     <div class="dialog" id="messAnzeige" hidden><h3>Messen</h3><button class="dklein" data-gen title="Fenster einklappen – Ansicht frei zum Antippen" aria-label="Fenster einklappen">▾</button><div class="inhalt" id="messInhalt"></div><div class="fuss"><button class="knopf haupt" id="messZu">Beenden</button></div></div>
     <div class="dialog" id="wkFenster" hidden><h3 id="wkTitel"></h3><button class="dklein" data-gen title="Fenster einklappen – Ansicht frei zum Antippen" aria-label="Fenster einklappen">▾</button><div class="inhalt"><p class="hinweis" id="wkText"></p></div><div class="fuss"><button class="knopf haupt" id="wkAbbr">Abbrechen</button></div></div>
     <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><button class="dklein" id="dKlein" title="Dialog einklappen – Ansicht frei zum Antippen" aria-label="Dialog einklappen">▾</button><div class="schritte" id="dSchritte" hidden></div><div class="inhalt" id="dInhalt"></div>
@@ -942,6 +980,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <li><b>Extrudieren</b> und <b>Drehen</b> (Profil um Skizzenachse oder gerade Hilfslinie) mit Vorgang: neuer Körper, vereinigen, ausschneiden, schneiden.</li>
       <li><b>Parameter</b> (Ändern): benannte Werte und Formeln – in jedem Zahlenfeld und Skizzenmass nutzbar, z. B. «breite / 3». Ändert man einen Parameter, rechnet das ganze Modell nach (Masse mit «fx»).</li>
       <li><b>Prüfen</b>: Messen (Abstand und ΔX/ΔY/ΔZ zwischen Ecken, Kantenmitten, Flächen) und Schnittanalyse an einer Ebene.</li>
+      <li><b>Simulation</b> (Reiter Simulation): wie viel Last hält ein Blech? <b>Fenster «Simulation»</b> öffnen, <b>Lager</b> setzen (Einspannung, gelenkig, Gleitlager, vorgegebene Verschiebung – Fläche, Kante oder Punkt im Modell anklicken), <b>Lasten</b> setzen (Kraft, Flächenlast mit Richtung, Linienlast, Eigengewicht, Normlasten Schnee/Wind/Person), <b>Berechnen</b>. Ergebnis: Spannung und Verschiebung farbig, Sicherheit, <b>Höchstlast</b> (Vielfaches der angesetzten Last), optional Beulen. Mehrere <b>Lastfälle</b> werden einzeln gerechnet und nach GZT/GZG kombiniert; <b>Bericht</b> druckt alles samt Bildern. Gerechnet wird mit einer Schalen-FEM auf der Blechmitte – ein <b>Richtwert, kein statischer Nachweis</b>.</li>
       <li><b>Konstruieren ▾</b>: Ebenen, Achsen (durch Kante, zwei Punkte, senkrecht zur Ebene, Schnitt zweier Ebenen) und Punkte (Koordinaten, Kantenmitte, zwischen zwei Punkten, Kante × Ebene).</li>
       <li><b>Profil anklicken</b>: Bei Extrudieren, Drehen, Sweep, Übergang und Flächenblech einfach in die geschlossene Skizzenfläche (oder auf ihre Linie) tippen, beim Blechprofil auf den Linienzug – wie in Fusion.</li>
       <li><b>Sweep</b> (Profil entlang Pfad) und <b>Übergang</b> (Loft zwischen zwei Profilen).</li>
