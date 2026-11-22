@@ -566,6 +566,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <button class="wz" data-kantenwz="flansch" title="Einfacher Flansch (Winkel, Länge): Blech anklicken, dann Kante – auch an einem bestehenden Baustein/Flansch"><svg viewBox="0 0 24 24"><path class="f" d="M3 19h13V8h3v14H3z"/></svg><span><b>Flansch</b><small>Winkel, Länge · Blech, dann Kante</small></span></button>
       <button class="wz" data-kantenwz="umschlag" title="Umschlag (Saum): Blech anklicken, dann Kante"><svg viewBox="0 0 24 24"><path d="M3 18h13a4 4 0 0 0 0-8H8"/></svg><span><b>Umschlag</b><small>Länge · Blech, dann Kante</small></span></button>
       <button class="wz" data-kantenwz="baustein" title="Spenglerbaustein aus der Bibliothek (Falz, Traufe, Ortgang …): Baustein wählen, Blech anklicken, dann Kante"><svg viewBox="0 0 24 24"><path class="f" d="M4 18l4-10h8l4 10z"/></svg><span><b>Kantenbaustein …</b><small>Falz, Traufe, Ortgang …</small></span></button>
+      <button class="wz" id="wQuetsch" title="Quetschfalte an der Ecke zweier Aufkantungen eines Flächenblechs: Blech wählen, dann Ecke anklicken"><svg viewBox="0 0 24 24"><path class="f" d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/></svg><span><b>Quetschfalte</b><small>Ecke zweier Aufkantungen</small></span></button>
     </div></div>
       <button class="wz" id="wEbene" title="Konstruktionsebene: versetzt, unter Winkel, Mitte, zwei Kanten, drei Punkte, tangential, entlang Pfad"><svg viewBox="0 0 24 24"><path class="f" d="M3 16l6-6h12l-6 6z"/><path d="M12 10V3M9.5 5.5L12 3l2.5 2.5"/></svg><span class="kz">Ebene<span class="kpfeil">▾</span></span></button>
     <div class="klapp" data-klapp="aendern"><button class="wz klappknopf" aria-haspopup="true" title="Abrunden, Schale, Muster, Spiegeln, Parameter"><svg viewBox="0 0 24 24"><rect class="f" x="3.5" y="5" width="17" height="14" rx="5.5"/></svg><span class="kz"><span class="kl">Ändern</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
@@ -750,6 +751,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <ul>
       <li>Blechprofil anklicken, dann <b>Flansch</b>, <b>Umschlag</b> oder <b>Kantenbaustein</b> wählen und die Kante <b>direkt am Modell</b> anklicken: die Längsseiten (A/B) oder jede Stirnkante einzeln. Die Kante unter dem Zeiger leuchtet orange auf.</li>
       <li>Die Stirnkante gilt je gerader Schenkel – jeden Schenkel wählt man durch Anklicken seiner Kante. Die Abwicklung (DXF) zeigt die Laschen mit Biegelinien.</li>
+      <li><b>Quetschfalte</b> (Kanten-Menü): Flächenblech mit Flanschen an zwei benachbarten Kanten wählen, dann die <b>Ecke</b> anklicken (orange Punkte). Der Überschuss der Ecke wird an seiner Winkelhalbierenden 180° gefaltet und liegt auf einer Aufkantung (Dialog: hinten links/rechts). Die Oberkanten beider Flansche müssen sich an der Ecklinie treffen (gleiche Höhe bei 90°). Zuschnitt der Ecke: Teil-Panel → «DXF Quetschfalte». Aussenmasse bis zu den virtuellen Kanten, Biegezugaben sind nicht eingerechnet.</li>
     </ul>
     <h4>Flächenblech mit Kantenbausteinen</h4>
     <ul>

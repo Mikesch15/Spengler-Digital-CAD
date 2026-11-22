@@ -15,6 +15,7 @@ import { initKontext, kontextAktionen } from "./kontext.js";
 import { zeigeMeldung } from "./meldungen.js";
 import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
 import { stirnLaschen, schenkelBereiche, laschenStart, laschenEnde } from "../kern/stirnflansch.js";
+import { quetschZuschnitt, quetschDreieck, quetschDxf, faltenPruefen } from "../kern/quetschfalte.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
 import { aufmassAusPunkt } from "../kern/dach/lukarneAufmass.js";
@@ -1273,6 +1274,12 @@ function regen() {
         f._teile = br.teile.map((t, i) => { const vid = { kamin: "kamin", "luk-wand": "wand", "luk-kehle": "kehle" }[t.art] || BLECH_VORLAGE[t.art], { start, ops } = VORLAGE[vid].bau({ ...(BLECH_VORLAGE[t.art] ? par[t.art] : { ...standardwerte(vid), ...(par[vid] || {}) }), neigung: t.neigung }, m);
           return { id: `${f.id}:${i}`, typ: "dachblech", eltern: f, name: `${t.name} ${t.laenge} mm`, material: f.material, laenge: t.laenge, stueck: t.stueck, notiz: `Neigung ${t.neigung}° · aus «${d.name}»`, _res: berechne(start, ops, m.t, m.ri, m.k) }; });
         if (!f.versteckt && gd) for (const fo of f._formen) modell.add(koerperMesh(dachPlatte(fo.punkte, fo.normale, 4, gd), BLECH_FARBE[fo.art] || 0xa9622f, f.id));
+      } else if (f.typ === "quetschfalte") { // Quetschfalte an der Ecke zweier Aufkantungen eines Flächenblechs (Überschuss 180° gefaltet, liegt auf einer Wand)
+        f._q = null;
+        const z = finde(f.ziel); if (z?.typ !== "flaeche") throw new Error("Flächenblech fehlt");
+        if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
+        f._q = quetschGeo(z, f);
+        if (!f.versteckt) modell.add(quetschMesh(z, f));
       } else if (f.typ === "profilkante") { // Flansch/Umschlag/Baustein, nachträglich an Kante A oder B eines Blechprofils – wirkt im Profil (profilErweiterungen)
         const z = finde(f.ziel); if (!z || (z.typ !== "profil" && z.typ !== "vorlage" && z.typ !== "blech")) throw new Error("Das Blechprofil fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Blechprofil muss vor diesem Schritt stehen");
@@ -1428,7 +1435,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { quetschfalte: "Quetschfalte", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
@@ -1968,6 +1975,7 @@ function bearbeite(f) {
   if (f.typ === "lukarne") return lukarneDialog(f);
   if (f.typ === "eindeckung") return eindeckungDialog(f);
   if (f.typ === "profilkante") return kanteDialog(f);
+  if (f.typ === "quetschfalte") return quetschDialog(f);
   if (f.typ === "gebaeude") { const d = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id); return d ? dachDialog(d) : gebaeudeDialog(f); }
   if (f.typ === "abwickeln" || f.typ === "falten") return status(f.typ === "abwickeln" ? "Abwickeln: das Blech liegt flach, bis «Falten» folgt. Dazwischen Skizze + Extrusion «Ausschneiden»." : "Falten: bildet die Ausschnitte der Abwicklung aufs gekantete Blech ab.");
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
@@ -2406,6 +2414,7 @@ let kantenLabels = [];
 const kantenName = (f, key) => { const [pi, k] = key.split(":").map(Number); return `${f._bleche?.length > 1 ? `B${pi + 1} ` : ""}K${k + 1}`; };
 function zeigeKanten() {
   leeren(kantenZeiger); kantenLabels = [];
+  if (quetschWz && !skizze) { zeigeQuetschEcken(quetschWz.f); return; }
   if (kantenWz?.schritt === "kante" && istProfil(kantenWz.f) && !skizze) return zeigeProfilKanten(kantenWz.f);
   const kd = dlg?.feature?.typ === "kante" ? dlg.feature : null; // Dialog eines Schritts «Kante»: dessen Kante leuchtet
   const f = kd ? finde(kd.ziel) : dlg?.feature?.typ === "flaeche" ? dlg.feature : hauptVon(auswahl);
@@ -2935,6 +2944,57 @@ function wendeProfilKante(key) { // Schritt «Profilkante» in der Zeitleiste an
   einfuegen(n); w.letzte = n; regen(); menueKante = { fid: f.id, key }; zeigeKanten();
   status(f._fehler ? "⚠ " + f._fehler : f._stirnFehler ? "⚠ " + f._stirnFehler : `${ort} von «${f.name}»${""}: «${titel}» angesetzt (Schritt in der Zeitleiste). Weitere Kante wählen oder «Fertig».`);
 }
+// ---- Quetschfalte (Ecke zweier Aufkantungen eines Flächenblechs) ----
+let quetschWz = null; // { f } – Werkzeug aktiv: Ecke eines Flächenblechs anklicken
+function quetschGeo(z, f) {
+  const [pi, k] = String(f.ecke).split(":").map(Number), bl = z._bleche?.find((b) => b.pi === pi); if (!bl) throw new Error("Die Ecke gibt es nicht mehr – neu wählen");
+  const n = bl.gruppen.length, kv = (k - 1 + n) % n, gk = bl.gruppen[k], gv = bl.gruppen[kv]; if (!gk || !gv || gk.punkte.length < 2 || gv.punkte.length < 2) throw new Error("Die Ecke gibt es nicht mehr – neu wählen");
+  const O = gk.punkte[0], nr = (a, b) => { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
+  const dn = nr(O, gk.punkte[1]), dp = nr(O, gv.punkte.at(-2)), beta = Math.atan2(dn[0] * dp[1] - dn[1] * dp[0], dn[0] * dp[0] + dn[1] * dp[1]) * 180 / Math.PI;
+  if (!(beta > 0)) throw new Error("Eine Quetschfalte gibt es nur an einer Aussenecke (konvex)");
+  const fl = (p) => { const pf = p?.res?.pfad, bg = pf?.find((e) => e.typ === "bogen"), li = pf?.filter((e) => e.typ === "linie")[1]; return bg && li ? { phi: Math.abs(bg.winkel), vz: Math.sign(bg.winkel), h: Math.hypot(li.p2[0] - li.p1[0], li.p2[1] - li.p1[1]) } : null; };
+  const Fa = fl(bl.profile[k]), Fb = fl(bl.profile[kv]); if (!Fa || !Fb) throw new Error("An beiden Kanten der Ecke muss ein Flansch sitzen");
+  if (Fa.vz !== Fb.vz) throw new Error("Beide Flansche müssen zur selben Seite abgekantet sein");
+  const seite = z.sichtseite === -1 ? -1 : 1, Zs = Fa.vz * seite, tausch = Zs < 0; // von der Rückseite gesehen vertauschen sich die Kanten
+  const E1 = tausch ? dp : dn, F1 = tausch ? Fb : Fa, F2 = tausch ? Fa : Fb;
+  const zus = quetschZuschnitt(beta, F1.h, F1.phi, F2.phi);
+  if (Math.abs(zus.hoehe2 - F2.h) > 0.5) throw new Error(`Die Oberkanten der Flansche müssen sich an der Ecklinie treffen: der zweite Flansch müsste ${f1(zus.hoehe2)} mm hoch sein (ist ${f1(F2.h)} mm).`);
+  const Z3 = [0, 0, Zs], X3 = [E1[0], E1[1], 0], Y3 = [Z3[1] * X3[2] - Z3[2] * X3[1], Z3[2] * X3[0] - Z3[0] * X3[2], 0];
+  return { zus, O, X3, Y3, Z3, pruefung: faltenPruefen(zus), wand: f.richtung === "rechts" ? "wand2" : "wand1" };
+}
+function quetschMesh(z, f) {
+  const q = f._q, m = material(z.material), t = m.t, B = basis(blechEbene(finde(z.skizze).ebene, z, m)), tri = quetschDreieck(q.zus, q.wand), g = q.zus.geometrie;
+  const v = (a) => new THREE.Vector3(...a), P = v(tri.P).sub(v(tri.O)), C = v(tri.C).sub(v(tri.O)), e = v(q.wand === "wand1" ? g.e1 : g.e2), d = v(q.wand === "wand1" ? g.d1 : g.d2);
+  let n = new THREE.Vector3().crossVectors(e, d).normalize(); if (n.dot(new THREE.Vector3(Math.cos(g.beta * Math.PI / 360), Math.sin(g.beta * Math.PI / 360), 0)) > 0) n.negate(); // nach aussen
+  const u = P.clone().normalize(), y = new THREE.Vector3().crossVectors(n, u), pts = [[0, 0], [P.dot(u), P.dot(y)], [C.dot(u), C.dot(y)]].map(([a, b]) => new THREE.Vector2(a, b));
+  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: 2 * t, bevelEnabled: false });
+  geo.applyMatrix4(new THREE.Matrix4().makeBasis(u, y, n).setPosition(n.clone().multiplyScalar(t / 2)));
+  geo.applyMatrix4(new THREE.Matrix4().makeBasis(v(q.X3), v(q.Y3), v(q.Z3)).setPosition(q.O[0], q.O[1], 0)); geo.applyMatrix4(B);
+  return koerperAusGeo(geo, darstellungVon(z, m), f.id);
+}
+const quetschEcken = (z) => (z._bleche || []).flatMap((bl) => bl.gruppen.map((g, k) => ({ key: `${bl.pi}:${k}`, p: g.punkte[0] })));
+function zeigeQuetschEcken(z) {
+  const s = finde(z.skizze), B = basis(blechEbene(s.ebene, z, material(z.material)));
+  for (const e of quetschEcken(z)) { const w = new THREE.Vector3(e.p[0], e.p[1], 0).applyMatrix4(B); const r = new THREE.Mesh(new THREE.SphereGeometry(3, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe0782b, depthTest: false, transparent: true })); r.position.copy(w); r.renderOrder = 13; r.scale.setScalar(Math.max(1, kamera.position.distanceTo(w) / 120)); kantenZeiger.add(r); }
+}
+function starteQuetschWz() {
+  if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
+  const h = hauptVon(auswahl); if (h?.typ !== "flaeche" || h.versteckt) return status("Zuerst ein Flächenblech mit Flanschen an zwei Kanten anklicken.");
+  quetschWz = { f: h }; zeigeKanten(); status("Quetschfalte: Ecke des Flächenblechs anklicken (orange Punkte) – Esc bricht ab.");
+}
+function endeQuetschWz() { quetschWz = null; zeigeKanten(); }
+function quetschKlick(e) {
+  const z = quetschWz.f, s = finde(z.skizze), B = basis(blechEbene(s.ebene, z, material(z.material))), sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 36 : 20;
+  for (const c of quetschEcken(z)) { const w = aufSchirm(new THREE.Vector3(c.p[0], c.p[1], 0).applyMatrix4(B).toArray()); const d = Math.hypot(w[0] - sm[0], w[1] - sm[1]); if (d < bd) { bd = d; best = c; } }
+  if (!best) { status("Eine Ecke des Flächenblechs anklicken (orange Punkte)."); return true; }
+  const n = { id: neueId(), typ: "quetschfalte", name: `Quetschfalte ${z.name} · Ecke ${best.key}`, ziel: z.id, ecke: best.key, richtung: "links" };
+  quetschWz = null; einfuegen(n); regen(); zeigeKanten(); waehle(n.id); status(n._fehler ? "⚠ " + n._fehler : "Quetschfalte angesetzt (Schritt in der Zeitleiste)."); return true;
+}
+function quetschDialog(f) {
+  featureDialog(f, false, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "richtung", label: "Falte liegt auf", optionen: [["links", "hinten links (Wand 1)"], ["rechts", "hinten rechts (Wand 2)"]], wert: ff.richtung || "links" }],
+    (ff, w) => { if (w.name != null) ff.name = w.name; if (w.richtung) ff.richtung = w.richtung; }, "Quetschfalte", "Der Überschuss der Ecke wird an seiner Winkelhalbierenden 180° gefaltet und liegt auf der gewählten Aufkantung (von der Sichtseite aus gesehen).",
+    { info: () => (f._fehler ? "⚠ " + f._fehler : f._q ? `Überschuss ${f1(f._q.zus.psi)}° · Ecklinie ${f1(f._q.zus.ell)} mm · Falte ${f1(f._q.zus.m)} mm lang · Faltprobe ${f._q.pruefung.ok ? "ok" : "FEHLER"} · DXF der Ecke im Teil-Panel` : "") });
+}
 function starteKantenWz(typ, x = 200, y = 80) {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
   const los = (baustein) => { kantenWz = { typ, baustein, seite: 1, schritt: "blech", f: null }; const h = hauptVon(auswahl); if ((h?.typ === "flaeche" || istProfil(h)) && !h.versteckt) { kantenWz.f = h; kantenWz.schritt = "kante"; zeigeKanten(); } kantenBarZeigen(); status(kantenWzText()); };
@@ -2992,11 +3052,13 @@ function kanteDialog(f) {
   featureDialog(f, false, felder, setze, "Kante bearbeiten", "Ändert den Flansch bzw. Baustein dieser Kante – das Blech passt sich sofort an. Richtung auch per Rechtsklick › «Richtung umkehren».", { wahlNr: -1, aktiveKante: f.key, nachRegen: () => zeigeKanten() });
   zeigeKanten();
 }
+$("wQuetsch").addEventListener("click", () => setTimeout(starteQuetschWz, 0));
 document.querySelectorAll("[data-kantenwz]").forEach((b) => b.addEventListener("click", () => { const r = b.getBoundingClientRect(); setTimeout(() => starteKantenWz(b.dataset.kantenwz, r.right + 6, r.top), 0); }));
 $("kbRichtung").onclick = () => { if (!kantenWz) return; kantenWz.seite = kantenWz.seite === -1 ? 1 : -1; kantenBarZeigen(); if (kantenWz.letzte && finde(kantenWz.letzte.id)) kanteUmkehren(kantenWz.letzte, kantenWz.letzte.key); };
 for (const id of ["kbWinkel", "kbLaenge"]) $(id).addEventListener("input", () => { const l = kantenWz?.letzte; if (!l || !finde(l.id) || !l.wert?.werkzeug) return; const wk = { ...l.wert.werkzeug }, a = parseFloat($("kbWinkel").value), c = parseFloat($("kbLaenge").value); if (a > 0 && wk.typ === "flansch") wk.winkel = a; if (c > 0) wk.laenge = c; l.wert = werkzeugNeu(l.wert, wk, material(kantenWz.f.material)); regen(); zeigeKanten(); });
 $("kbEnde").onclick = endeKantenWz;
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && kantenWz && !dlg && !skizze) { endeKantenWz(); status(""); } });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && quetschWz && !dlg && !skizze) { endeQuetschWz(); status(""); } });
 function flaecheDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && (schleifen(x).length || skizzenRegionen(x).length));
@@ -3084,7 +3146,7 @@ function belegteKanten(bl) {
   return bl.gruppen.map((g, k) => ({ k, g, p: bl.profile[k] })).filter((x) => x.p);
 }
 function zeigeFlaechenteil(w, f) {
-  const bl = f._blech, a = bl.abw, m = material(f.material), q = quelle(a.breite, einst);
+  const bl = f._blech, a = bl.abw, m = material(f.material), q = quelle(a.breite, einst), quetschen = doc.features.filter((x) => x.typ === "quetschfalte" && x.ziel === f.eltern.id && x._q && !x._aus);
   w.innerHTML = `<div class="zahl zwei"><b>${f1(a.breite)} × ${f1(a.laenge)}</b><span>mm Zuschnitt</span></div>
     <div class="unter"><button class="knopf klein" id="kZumDetail">← ${esc(f.eltern.name)}</button> · ${f2(a.flaeche)} m² · ${f._res.biegungen.length} Biegungen</div>
     ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
@@ -3095,10 +3157,11 @@ function zeigeFlaechenteil(w, f) {
       <td class="num">${f1(b.anschlag)}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.art === "Umschlag" ? "U " : ""}${b.winkel > 0 ? "Sicht" : "hinten"}</td></tr>`).join("")).join("") || '<tr><td colspan="5" class="hinweis">Noch keine Kantenbausteine – «Bearbeiten», dann Kante anklicken.</td></tr>'}
     </tbody></table>
     <p class="hinweis unter">Anschlag ab der Schnittkante des Zuschnitts, je Kante in Reihenfolge der Abkantfolge.</p>
-    <div class="reihe"><button class="knopf haupt" id="kFlBearb">Bearbeiten</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button></div>`;
+    <div class="reihe"><button class="knopf haupt" id="kFlBearb">Bearbeiten</button><button class="knopf" id="kDxf">DXF speichern</button>${quetschen.map((q, i) => `<button class="knopf" data-qdxf="${i}">DXF ${esc(q.name.replace(/^Quetschfalte .* · /, "Quetschfalte "))}</button>`).join("")}<button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button></div>`;
   $("kZumDetail").onclick = () => bearbeite(f.eltern);
   $("kFlBearb").onclick = () => bearbeite(f.eltern);
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, flaecheDxf(a, f.name), "application/dxf");
+  w.querySelectorAll("[data-qdxf]").forEach((bt) => { const q = quetschen[+bt.dataset.qdxf]; bt.onclick = () => herunterladen(`${doc.nr} ${q.name}.dxf`, quetschDxf(q._q.zus, q.name), "application/dxf"); });
   $("kDruck").onclick = () => drucke([f]);
   $("kKopie").onclick = () => dupliziere(f.eltern);
 }
@@ -5575,6 +5638,7 @@ leinwand.addEventListener("pointerup", (e) => {
   if (messen && !skizze) { messKlick(e); return; }
   if (dlg?.kantenWahl?.(e)) return;
   if (uebernimmWahl(e)) return;
+  if (quetschWz && !dlg && quetschKlick(e)) return;
   if (kantenWz && !dlg && kantenWzKlick(e)) return;
   strahl.setFromCamera(ndc(e), kamera);
   const treffer = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0]; // Körper vor Ebenen

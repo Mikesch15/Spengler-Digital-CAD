@@ -5,6 +5,7 @@
     { "muster": "src/kontext.js", "tests": ["kontext"] },
     { "muster": "kern/dach/", "tests": ["dach", "dachbleche", "dachflaechen", "kopplung", "griffe"] },
     { "muster": "kern/stirnflansch", "tests": ["stirnflansch", "blechkanten"] },
+    { "muster": "kern/quetschfalte", "tests": ["quetschfalte"] },
     { "muster": "kern/profile.js", "tests": ["profilkante", "stirnflansch", "blechkanten"] },
     { "muster": "kern/flansch.js", "tests": ["kantenwz", "flansch", "blechkanten"] },
     { "muster": "kern/flaechenblech.js", "tests": ["flaechen", "kantenwz", "blechkanten", "abwickeln"] },

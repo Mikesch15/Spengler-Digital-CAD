@@ -39,686 +39,700 @@ Format: `Zeile name` (fn = Funktion, § = Abschnitt)
 64 fn schliesse
 
 ## src/cad.js
-62 zuWeltK
-65 VERSION
-66 SPEICHER
-68 § Ebenen
-70 EBENEN
-75 V
-76 ebene
-77 E_
-78 ebenenName
-79 basis
-80 zu3D
-81 ebenenEbene
-82 aufEbene
-84 § Dokument
-85 doc
-87 speichern
-88 neueId
-90 fn entferneFeature
-94 fn einfuegen
-99 fn bezuegeVon
-110 finde
-112 paramWerte
-113 zahlAus
-114 fn wendeAusdrueckeAn
-123 fn skizzenAusdruecke
-133 teilFinden
-134 waehlbar
-135 hauptVon
-137 vorSk
-138 vorDach
-139 zeigerAuswahl
-141 EINST
-142 standardEinst
-151 GRUPPEN
-153 fn mitStandard
-162 einst
-165 rastern
-167 darstellung
-174 neuMaterial
-175 SICHERUNG
-176 sichLesen
-177 sichSchreiben
-179 fn sichereEinst
-180 einstSpeichern
-182 material
-183 matOpt
-184 auswahl
-186 § Szene
-187 leinwand
-188 renderer
-190 szene
-191 kamera
-192 steuerung
-198 drehPivot
-218 modellRadius
-219 flaechenTreffer
-220 fn ziehNahe
-235 rollZug
-247 licht
-248 licht2
-249 boden
-251 modell
-252 skizzenRaster
-254 WUERFEL
-255 wuerfelSzene
-256 wuerfelMat
-260 wuerfel
-262 wuerfelHit
-263 fn wuerfelTreffer
-270 fn zeichneWuerfel
-277 fn groesse
-289 leeren
-291 § Skizzengeometrie
-294 schrift
-295 TEXTE
-296 fn textKonturen
-309 fn elGeo
-325 profilElemente
-327 verbunden
-328 fn zugPunkte
-334 fn schleifen
-341 ketten
-352 flaeche
-353 fn innen
-362 REGIONEN
-363 fn skizzenRegionen
-374 fn gewaehlteRegionen
-381 fn exakteProfile
-392 fn formen
-414 § Blech aus Linienzug
-415 fn blechAusKette
-416 fn blechOps
-435 § Körper erzeugen
-436 § Darstellung (wie «Erscheinungsbild» in Fusion): Metalle der Spenglerei, Holz, Beton
-437 OBERFLAECHEN
-454 oberflaecheFuer
-455 farbe
-456 TEXTUREN
-457 fn textur
-470 fn wuerfelUV
-481 fn glatteNormalen
-499 fn oberflaechenMaterial
-507 darstellungVon
-508 csg
-509 fn koerperMesh
-516 fn verknuepfe
-524 nurPos
-527 fn koerperGeometrie
-535 fn drehGeometrie
-559 fn zusammen
-566 fn nachAussen
-574 fn spiegleFlaechen
-575 fn stirnMeshes
-587 fn stirnAnhaengen
-594 fn koerper
-600 fn koerperAusGeo
-606 konturForm
-608 dunkelModus
-609 § Layer (2D): Farbe und Linienart je Layer, Elemente verweisen mit el.layer
-610 layerListe
-611 layerVon
-612 fn skizzenObjekt
-643 § Konstruktionsebenen: Darstellung und Bezüge
-644 EBENEN_ARTEN
-649 fn ebenenObjekt
-658 grundebenen
-660 fn ebenenGroesse
-670 zahl3
-671 fmt3
-672 elementPunkte
-674 ELEMENTNAME
-675 elementKanten
-684 elementPfad
-685 skizzeElement
-686 welt
-687 ACHSEN_EBENE
-689 fn bezugEbene
-693 fn bezugKante
-703 fn bezugPunkt
-712 fn bezugZylinder
-720 fn bezugPfad
-726 fn baueEbene
-741 vorher
-742 SCHNAPP
-743 mitWert
-744 ebenenOpt
-745 fn kantenListe
-751 fn punkteListe
-757 fn zylinderListe
-765 pfadListe
-767 § Auswahl im 3D-Raum (Bezüge in Dialogen, Skizzierebene)
-768 aufSchirm
-769 abstandStrecke
-770 fn koerperKanten
-778 fn waehleImRaum
-853 aktiveWahl
-854 fn zeigeWahl
-863 hoverGruppe
-864 HOVERFARBE
-865 hoverCache
-866 fn flaechenRegion
-880 waehlGruppe
-881 fn regionMesh
-888 fn zeichneGewaehlt
-893 hoverWartet
-894 fn hoverWahl
-898 fn hoverLoeschen
-899 fn hoverZeichnen
-924 fn uebernimmWahl
-954 § Ziehpfeile (wie in Fusion): Masse im Dialog zusätzlich mit einem Pfeil in der Ansicht ziehen
-955 griffGruppe
-956 griffe
-958 fn beidseitig
-965 fn griffeFuer
-983 regen-Zweig kmuster
-991 regen-Zweig schale
-1014 griffLaenge
-1015 fn zeichneGriffe
-1029 fn griffAn
-1051 griffEnde
-1055 § Neuaufbau (parametrisch, in Reihenfolge der Zeitleiste)
-1056 fn regen
-1102 regen-Zweig ebene
-1106 regen-Zweig achse
-1109 regen-Zweig konpunkt
-1112 regen-Zweig skizze
-1116 regen-Zweig extrusion
-1124 regen-Zweig bild
-1127 regen-Zweig import
-1131 regen-Zweig detail3d
-1139 regen-Zweig kehle
-1142 regen-Zweig kanten3d
-1148 regen-Zweig kantenrund
-1151 regen-Zweig schale
-1157 regen-Zweig teilen
-1159 regen-Zweig drehung
-1164 regen-Zweig sweep
-1167 regen-Zweig loft
-1171 regen-Zweig blech
-1197 regen-Zweig vorlage
-1205 regen-Zweig flaeche
-1224 regen-Zweig gebaeude
-1229 regen-Zweig dach
-1244 regen-Zweig dachbleche
-1257 regen-Zweig profilkante
-1260 regen-Zweig eindeckung
-1273 regen-Zweig dachelement
-1280 regen-Zweig lukarne
-1288 regen-Zweig kante
-1291 regen-Zweig abwickeln
-1298 regen-Zweig falten
-1310 regen-Zweig rundblech
-1315 regen-Zweig detail
-1317 regen-Zweig profil
-1341 § Rückgängig / Wiederholen
-1343 verlauf
-1344 zustand
-1345 fn merke
-1356 fn springe
-1364 fn zeigeVerlauf
-1378 fn markiere
-1389 richtung
-1390 fn zeigeRichtung
-1405 richtungSkalieren
-1411 § Browser und Zeitleiste
-1412 NAMEN
-1413 AUGE
-1414 fn zeigeBrowser
-1439 fn zeigeZeit
-1449 gezogen
-1459 fn verschiebeFeature
-1471 fn abwickelnSchalten
-1491 istAbgewickelt
-1493 fn featureMenue
-1558 fn waehle
-1565 § Werkstatt
-1566 f1
-1567 register
-1569 blechteile
-1571 rundteile
-1575 fn auftrag
-1578 f2
-1580 bedarf
-1581 fn bedarfCsv
-1590 fn bedarfHtml
-1601 fn zeigeAuftrag
-1620 fn dachListeZeilen
-1630 fn zeigeDachListe
-1639 fn zeigeWerkstatt
-1698 fn dupliziere
-1708 § Druck: Werkstattblatt je Blechteil (A4)
-1709 kopf
-1710 fn werkstattblatt
-1734 fn stuecklisteBlatt
-1750 fn druckeEtiketten
-1764 fn drucke
-1770 esc
-1773 hinweisZeit
-1774 fn status
-1781 fn kopiere
-1784 § Dateien
-1786 pc
-1787 DATEITYPEN
-1788 dateiname
-1789 fn herunterladen
-1816 § Befehlsdialog
-1817 dlg
-1819 fn dialog
-1844 schrittNamen
-1845 fn zeigeSchritt
-1860 mitSchritten
-1861 werte
-1863 fn merkeAusdruecke
-1876 fn schliesse
-1885 fn featureDialog
-1905 bisFelder
-1909 fn bisAbstand
-1915 wendeBisAn
-1916 fn extrusionMitteUV
-1920 bisWert
-1921 zweiFeld
-1922 RICHTUNGEN
-1923 LAGEN
-1925 fn bearbeite
-1959 fn ebeneDialog
-2006 fn extrusionDialog
-2023 VORGAENGE
-2024 vorgangFelder
-2029 fn drehAchse
-2036 achsenOpt
-2038 fn drehungDialog
-2051 fn blechDialog
-2073 fn vorlageDialog
-2103 fn profilDialog
-2154 § Rund-/Kegelblech (Zylinder- oder Kegelmantel mit exakter Abwicklung)
-2156 rohrNeigung
-2158 fn rohrSchnitt
-2162 fn rohrSchnittWerkzeug
-2166 fn rundMeridian
-2175 fn rundGeometrie
-2183 fn rundDialog
-2206 fn zeigeRund
-2226 § Flächenblech: Grundfläche aus der Skizze, Kantenbausteine je Kante
-2227 alleBausteine
-2228 bausteinFuer
-2229 bausteinName
-2231 fn bausteinKontur
-2243 fn prisma
-2257 fn sweepGlatt
-2288 boxUeberlappt
-2290 fn flachKoerper
-2304 fn kantenBeschneiden
-2319 fn lochRaender
-2324 fn schneideAus
-2339 fn blechEbene
-2343 fn flaechenKoerper
-2384 kantenZeiger
-2385 menueKante
-2386 kantenLabels
-2387 kantenName
-2388 fn zeigeKanten
-2411 fn kanteUnterMaus
-2422 § Komponenten: Lage (verschieben/drehen als Ganzes) und Kollisionsprüfung
-2424 fn lageMatrix
-2431 lageVon
-2432 fn wendeKomponentenLageAn
-2440 fn komponenteDialog
-2452 kollisionen
-2453 fn pruefeKollision
-2474 fn kantenProfil
-2480 fn berechneKanten
-2490 kantenSchritte
-2491 fn setzeKanteRoh
-2499 fn setzeKanteVon
-2506 werkzeugKante
-2507 werkzeugNeu
-2509 fn kantenMenue
-2532 fn partnerKante
-2540 § Dach-Modus (Phase 1): Gebäude-Ansatz + Dach aus Grundriss, Dachform und Aufbau
-2541 dachEinst
-2542 deckungBasis
-2543 aufbauBasis
-2544 BLECH_VORLAGE
-2546 fn dachPlatte
-2555 fn zeigeDachKoerper
-2558 DACH_ARTEN
-2560 fn dachBoxenGeo
-2572 fn dachZiegelGeo
-2581 fn dachBoxenKanten
-2587 fn skizzenGrundriss
-2592 gebaeudeUmriss
-2594 deckungVon
-2595 aufbauVon
-2597 fn ebeneAktuell
-2598 weltAkt
-2599 dist3
-2600 dachKoordinaten
-2602 fn skizzenVieleck
-2605 fn dachKoppeln
-2626 fn lukarneKopplungSetzen
-2633 lukarneSkizzenStand
-2635 fn lukarneDachNeu
-2644 fn lukarneKoppeln
-2663 fn lukarneGeo
-2675 fn skizzeAusFlaeche
-2684 fn lukarneDachZuSkizzen
-2693 fn dachAusSkizzen
-2706 fn dachZuSkizzen
-2713 fn dachErgebnis
-2720 dachWelt
-2722 fn dachPrisma
-2731 fn wandPlatte
-2739 fn eindeckungDialog
-2746 fn lukarneDialog
-2771 fn dachelementDialog
-2786 fn dachblecheDialog
-2798 fn gebaeudeDialog
-2807 AUFBAU_ZAHLEN
-2808 DECKUNG_ZAHLEN
-2809 dachAufbauFelder
-2810 dachDeckungFelder
-2811 fn dachMasseUebernehmen
-2820 fn dachDialog
-2856 § Kanten-Werkzeug: Flansch / Umschlag / Kantenbaustein (erst Blech anklicken, dann die Kante)
-2857 kantenWz
-2858 kantenWzText
-2859 fn kantenBarZeigen
-2866 fn endeKantenWz
-2867 kHoverWartet
-2878 fn stirnErweiterungen
-2881 fn profilErweiterungen
-2884 istProfil
-2885 fn kantenWert
-2889 fn wendeProfilKante
-2897 fn starteKantenWz
-2906 fn kantenWzKlick
-2914 fn wendeKantenWz
-2928 fn kanteUmkehren
-2935 fn kanteDialog
-2958 fn flaecheDialog
-3041 fn belegteKanten
-3044 fn zeigeFlaechenteil
-3063 fn flaechenblatt
-3084 § Baustein-Editor: Abkantfolge als Tabelle mit Live-Querschnitt und Zugabe
-3085 bEdit
-3086 neuerBaustein
-3088 fn bZeilen
-3092 bText
-3093 fn bausteinEditor
-3098 fn bVorschau
-3107 bFolgeOk
-3108 fn zeigeBEditor
-3143 bZeilenAusTabelle
-3179 § Konstruieren: Achsen und Punkte (wie in Fusion)
-3180 ACHSEN_ARTEN
-3181 PUNKT_ARTEN
-3182 v3n
-3183 kreuz3
-3184 skal3
-3185 fn baueAchse
-3200 fn bauePunkt
-3213 fn achsenObjekt
-3218 fn punktObjekt
-3222 fn konstruktionDialog
-3247 § Körper: Abrunden/Fasen, Schale, Muster, Spiegeln, Verschieben/Kopieren (wie in Fusion)
-3249 fn eckenBearbeiten
-3261 fn gerundeteExtrusion
-3275 fn schalenWerkzeug
-3287 koerperVon
-3292 fn transformAus
-3308 fn koerperTeilen
-3326 fn koerperTransform
-3345 koerperOpt
-3346 KOERPER_WZ
-3349 fn koerperDialog
-3383 § Bild / PDF-Plan als Hintergrund (wie «Arbeitsfläche» in Fusion) und DXF in die Skizze
-3384 bilder
-3385 BILDTEX
-3386 fn bildObjekt
-3398 fn bildAusQuelle
-3404 pdfjs
-3405 fn pdfLaden
-3412 fn bildEinfuegen
-3432 fn bildDialog
-3480 § Abrunden / Fasen an angeklickten Kanten (beliebige Volumenkörper, gerade Kanten zwischen ebenen Flächen)
-3482 fn kantenInfo
-3498 fn kantenWerkzeug
-3523 fn kantenBearbeiten
-3534 fn skizzenTreffer
-3550 fn kanteAmKoerper
-3572 fn kantenDialog
-3597 § Kehl- und Gratblech zwischen zwei Flächen (gekantet, mit Abwicklung)
-3599 fn flaechenEbene
-3600 fn flaechenAusdehnung
-3613 fn umkehren
-3614 fn kehlBlech
-3662 norm2
-3663 fn schnitt2
-3664 fn kehleDialog
-3680 fn blechAufFlaeche
-3694 fn blechAufFlaecheStart
-3701 § Sweep und Loft (wie in Fusion)
-3702 v3
-3704 fn ringNetz
-3715 fn deckel
-3719 flaeche2
-3720 fn sweepGeometrie
-3749 fn loftGeometrie
-3771 fn sweepDialog
-3782 fn loftDialog
-3794 § Parameter ändern (Fusion: Ändern → Parameter ändern)
-3795 fn parameterDialog
-3839 § Prüfen: Messen und Schnittanalyse (wie in Fusion)
-3840 messen
-3841 messGruppe
-3843 fn messPunkt
-3850 fn messMarke
-3854 fn messKlick
-3864 fn messenUmschalten
-3873 schnitt
-3876 kappen
-3877 schraffur
-3878 fn schraffurTextur
-3885 fn zeigeKappen
-3904 fn wendeSchnittAn
-3937 § Planblatt (Zeichnung): Ansichten, Details, Bemassung, Schriftfeld
-3939 fn abwicklungPlanAnsicht
-3962 fn dachDetails
-3969 fn dachDetailSvg
-3976 fn dachAufsichtAnsicht
-3988 fn skizzenPlanAnsicht
-4012 plaene
-4039 § Einstellungen: Materialien kalibrieren, Lagerformate
-4040 entwurf
-4042 PROBE_SKIZZE
-4057 probeWerte
-4058 meldung
-4059 zahlen
-4060 einstRegister
-4061 EINST_REGISTER
-4063 fn einstFeld
-4070 fn zeigeEinst
-4208 fn etikettenPruefen
-4212 fn probe
-4239 fn einstWert
-4249 fn einstLaden
-4335 § Hilfe
-4336 hilfe
-4351 § Ansichten
-4352 fn fitte
-4359 alleBox
-4360 fn ansicht
-4368 § Skizzieren
-4369 skizze
-4371 WERKZEUGE
-4415 ABH_NAME
-4417 GLYPHE
-4418 GRUND
-4419 KNOPF_MENUE
-4428 braucheEingabe
-4429 fn eingabeBeschriften
-4433 fn setzeWerkzeug
-4447 fn loescheSkizzenAuswahl
-4454 fn hilfslinieUmschalten
-4459 fn starteSkizze
-4483 § 2D-Modus: nur Skizzen/Zeichnung, Körper ausgeblendet, Layer-Leiste, DXF-Ausgabe
-4484 modus2d
-4485 fn layerZeigen
-4517 fn zeichnungObjekte
-4529 fn schalte2D
-4542 fn beendeSkizze
-4560 strahl
-4561 fn ndc
-4562 fn bildschirm
-4563 fn fangPunkte
-4567 FANGNAME
-4568 kantenCache
-4569 fn koerperKantenCache
-4574 fn koerperFang
-4587 fn skizzenFang
-4601 FANGGLYPHE
-4603 fangArtZuletzt
-4604 fn fangZeigen
-4611 fn ebenenPunkt
-4628 abst
-4629 abstandZurGeraden
-4630 rechteckMitte
-4631 rechteckEl
-4632 rechteckM
-4633 rechteck3Bed
-4634 polygonBed
-4636 fn erstelle
-4652 fn klick
-4722 § Ändern: Abrunden, Versatz, Spiegeln, Stutzen
-4723 zuLinienzug
-4729 fn trefferEcke
-4737 fn abrunden
-4747 fn versatzVorschau
-4780 fn versatzKlick
-4790 fn trefferStrecke
-4795 fn spiegelnKlick
-4807 schneidKanten
-4808 fn stutzen
-4814 fn stutzeLinie
-4839 fn stutzeBogen
-4861 § Dehnen, Trennen, Verschieben/Kopieren/Drehen, Muster, Projizieren
-4862 REF_FELDER
-4863 refsVon
-4865 lageGebunden
-4867 fn transformiere
-4872 fn bewege
-4891 dreher
-4892 fertigMehr
-4893 fn verschiebeUm
-4899 fn dreheUm
-4901 fn mehrfachKlick
-4914 fn musterDialog
-4935 fn aufBogen
-4936 fn dehnen
-4958 fn trennen
-5002 umschaltAn
-5004 fn flaechenRand
-5014 fn teileAnEcken
-5027 fn projizieren
-5071 fn abschliessenLinie
-5078 fn eingabeAnwenden
-5120 § Bemassung und Auswahl
-5121 gleich
-5122 drehung
-5128 RAD
-5129 grad
-5130 fgText
-5132 fn uebernimm
-5137 fn entferneBed
-5143 fn massAendern
-5163 fn bezuege
-5180 projektion
-5181 mitte
-5183 fn waehleGeo
-5208 fn wahlKlick
-5222 fn abhAusWahl
-5244 fn massFuerWahl
-5296 fn massEingabe
-5316 fn zugZiele
-5322 fn segmente
-5326 fn trefferElement
-5336 fn trefferPunkt
-5353 labels
-5354 fgCache
-5355 fn analyseGecacht
-5364 fn zeichneLive
-5470 fn zeigeLabels
-5489 § Maus und Tastatur
-5490 runter
-5493 planUV
-5494 smPos
-5576 § Werkzeugleiste
-5577 fn neueSkizze
-5599 umformLetzt
-5600 umformWerte
-5601 fn umformDialog
-5636 § Werkzeugleiste: Klappmenüs (fest positioniert, die Leiste rollt seitlich)
-5637 leiste
-5638 fn klappZu
-5663 fn leisteZustand
-5698 letzteVariante
-5713 projektPfad
-5715 ZULETZT
-5716 zuletzt
-5717 fn merkeDatei
-5722 fn titel
-5726 fn projektSpeichern
-5732 fn ladeProjekt
-5740 fn projektOeffnen
-5747 § Konto & Cloud (Spengler-Digital-App)
-5748 fn setzeAuftrag
-5749 cloud
-5762 projekte
-5765 ablage
-5768 fn auftragAnzeige
-5777 § 3D-Detailvorlagen (STEP-Körper mit Ankerkante, ersetzen die .f3d-Vorlagen des Add-ins)
-5778 DETAILMESH
-5779 fn detail3dDialog
-5796 fn detailAusDatei
-5809 § Exakter CAD-Kern (Beta): OpenCascade im Web Worker (kern/cad)
-5812 cadK
-5813 kernAn
-5814 fn kern
-5822 fn kernAnzeige
-5826 kernFehlerText
-5828 fn exaktKoerper
-5834 fn stepExakt
-5839 fn pruefe3D
-5855 exaktLauf
-5857 regenStand
-5858 exaktPlanen
-5861 planAus
-5862 fn exakteAnsicht
-5894 fn ersetzeNetz
-5903 fn exaktesModell
-5932 regen-Zweig extrusion
-5945 regen-Zweig kanten3d
-5951 regen-Zweig schale
-5959 regen-Zweig teilen
-5976 regen-Zweig flaeche
-5984 regen-Zweig rundblech
-5993 regen-Zweig detail3d
-6045 fn zeigeEigenschaften
-6063 § Austausch: STEP/STL exportieren, STEP/STL importieren
-6064 fn sichtbareKoerper
-6071 dateiBasis
-6072 fn exportiere
-6078 occt
-6079 fn occtLaden
-6089 fn importFeature
-6097 fn importiereDatei
-6153 neuBestaetigt
-6160 § Start
-6203 neueVersionGemeldet
-6204 fn pruefeNeueVersion
+63 zuWeltK
+66 VERSION
+67 SPEICHER
+69 § Ebenen
+71 EBENEN
+76 V
+77 ebene
+78 E_
+79 ebenenName
+80 basis
+81 zu3D
+82 ebenenEbene
+83 aufEbene
+85 § Dokument
+86 doc
+88 speichern
+89 neueId
+91 fn entferneFeature
+95 fn einfuegen
+100 fn bezuegeVon
+111 finde
+113 paramWerte
+114 zahlAus
+115 fn wendeAusdrueckeAn
+124 fn skizzenAusdruecke
+134 teilFinden
+135 waehlbar
+136 hauptVon
+138 vorSk
+139 vorDach
+140 zeigerAuswahl
+142 EINST
+143 standardEinst
+152 GRUPPEN
+154 fn mitStandard
+163 einst
+166 rastern
+168 darstellung
+175 neuMaterial
+176 SICHERUNG
+177 sichLesen
+178 sichSchreiben
+180 fn sichereEinst
+181 einstSpeichern
+183 material
+184 matOpt
+185 auswahl
+187 § Szene
+188 leinwand
+189 renderer
+191 szene
+192 kamera
+193 steuerung
+199 drehPivot
+219 modellRadius
+220 flaechenTreffer
+221 fn ziehNahe
+236 rollZug
+248 licht
+249 licht2
+250 boden
+252 modell
+253 skizzenRaster
+255 WUERFEL
+256 wuerfelSzene
+257 wuerfelMat
+261 wuerfel
+263 wuerfelHit
+264 fn wuerfelTreffer
+271 fn zeichneWuerfel
+278 fn groesse
+290 leeren
+292 § Skizzengeometrie
+295 schrift
+296 TEXTE
+297 fn textKonturen
+310 fn elGeo
+326 profilElemente
+328 verbunden
+329 fn zugPunkte
+335 fn schleifen
+342 ketten
+353 flaeche
+354 fn innen
+363 REGIONEN
+364 fn skizzenRegionen
+375 fn gewaehlteRegionen
+382 fn exakteProfile
+393 fn formen
+415 § Blech aus Linienzug
+416 fn blechAusKette
+417 fn blechOps
+436 § Körper erzeugen
+437 § Darstellung (wie «Erscheinungsbild» in Fusion): Metalle der Spenglerei, Holz, Beton
+438 OBERFLAECHEN
+455 oberflaecheFuer
+456 farbe
+457 TEXTUREN
+458 fn textur
+471 fn wuerfelUV
+482 fn glatteNormalen
+500 fn oberflaechenMaterial
+508 darstellungVon
+509 csg
+510 fn koerperMesh
+517 fn verknuepfe
+525 nurPos
+528 fn koerperGeometrie
+536 fn drehGeometrie
+560 fn zusammen
+567 fn nachAussen
+575 fn spiegleFlaechen
+576 fn stirnMeshes
+593 fn stirnAnhaengen
+600 fn koerper
+606 fn koerperAusGeo
+612 konturForm
+614 dunkelModus
+615 § Layer (2D): Farbe und Linienart je Layer, Elemente verweisen mit el.layer
+616 layerListe
+617 layerVon
+618 fn skizzenObjekt
+649 § Konstruktionsebenen: Darstellung und Bezüge
+650 EBENEN_ARTEN
+655 fn ebenenObjekt
+664 grundebenen
+666 fn ebenenGroesse
+676 zahl3
+677 fmt3
+678 elementPunkte
+680 ELEMENTNAME
+681 elementKanten
+690 elementPfad
+691 skizzeElement
+692 welt
+693 ACHSEN_EBENE
+695 fn bezugEbene
+699 fn bezugKante
+709 fn bezugPunkt
+718 fn bezugZylinder
+726 fn bezugPfad
+732 fn baueEbene
+747 vorher
+748 SCHNAPP
+749 mitWert
+750 ebenenOpt
+751 fn kantenListe
+757 fn punkteListe
+763 fn zylinderListe
+771 pfadListe
+773 § Auswahl im 3D-Raum (Bezüge in Dialogen, Skizzierebene)
+774 aufSchirm
+775 abstandStrecke
+776 fn koerperKanten
+784 fn waehleImRaum
+873 aktiveWahl
+874 fn zeigeWahl
+883 hoverGruppe
+884 HOVERFARBE
+885 hoverCache
+886 fn flaechenRegion
+900 waehlGruppe
+901 fn regionMesh
+908 fn zeichneGewaehlt
+913 hoverWartet
+914 fn hoverWahl
+918 fn hoverLoeschen
+919 fn hoverZeichnen
+944 fn uebernimmWahl
+974 § Ziehpfeile (wie in Fusion): Masse im Dialog zusätzlich mit einem Pfeil in der Ansicht ziehen
+975 griffGruppe
+976 griffe
+978 fn beidseitig
+985 fn griffeFuer
+1003 regen-Zweig kmuster
+1011 regen-Zweig schale
+1034 griffLaenge
+1035 fn zeichneGriffe
+1049 fn griffAn
+1071 griffEnde
+1075 § Neuaufbau (parametrisch, in Reihenfolge der Zeitleiste)
+1076 fn regen
+1122 regen-Zweig ebene
+1126 regen-Zweig achse
+1129 regen-Zweig konpunkt
+1132 regen-Zweig skizze
+1136 regen-Zweig extrusion
+1144 regen-Zweig bild
+1147 regen-Zweig import
+1151 regen-Zweig detail3d
+1159 regen-Zweig kehle
+1162 regen-Zweig kanten3d
+1168 regen-Zweig kantenrund
+1171 regen-Zweig schale
+1177 regen-Zweig teilen
+1179 regen-Zweig drehung
+1184 regen-Zweig sweep
+1187 regen-Zweig loft
+1191 regen-Zweig blech
+1217 regen-Zweig vorlage
+1225 regen-Zweig flaeche
+1244 regen-Zweig gebaeude
+1249 regen-Zweig dach
+1264 regen-Zweig dachbleche
+1277 regen-Zweig quetschfalte
+1283 regen-Zweig profilkante
+1286 regen-Zweig eindeckung
+1299 regen-Zweig dachelement
+1306 regen-Zweig lukarne
+1314 regen-Zweig kante
+1317 regen-Zweig abwickeln
+1324 regen-Zweig falten
+1336 regen-Zweig rundblech
+1341 regen-Zweig detail
+1343 regen-Zweig profil
+1367 § Rückgängig / Wiederholen
+1369 verlauf
+1370 zustand
+1371 fn merke
+1382 fn springe
+1390 fn zeigeVerlauf
+1404 fn markiere
+1415 richtung
+1416 fn zeigeRichtung
+1431 richtungSkalieren
+1437 § Browser und Zeitleiste
+1438 NAMEN
+1439 AUGE
+1440 fn zeigeBrowser
+1465 fn zeigeZeit
+1475 gezogen
+1485 fn verschiebeFeature
+1497 fn abwickelnSchalten
+1517 istAbgewickelt
+1519 fn featureMenue
+1584 fn waehle
+1591 § Werkstatt
+1592 f1
+1593 register
+1595 blechteile
+1597 rundteile
+1601 fn auftrag
+1604 f2
+1606 bedarf
+1607 fn bedarfCsv
+1616 fn bedarfHtml
+1627 fn zeigeAuftrag
+1646 fn dachListeZeilen
+1656 fn zeigeDachListe
+1665 fn zeigeWerkstatt
+1724 fn dupliziere
+1734 § Druck: Werkstattblatt je Blechteil (A4)
+1735 kopf
+1736 fn werkstattblatt
+1760 fn stuecklisteBlatt
+1776 fn druckeEtiketten
+1790 fn drucke
+1796 esc
+1799 hinweisZeit
+1800 fn status
+1807 fn kopiere
+1810 § Dateien
+1812 pc
+1813 DATEITYPEN
+1814 dateiname
+1815 fn herunterladen
+1842 § Befehlsdialog
+1843 dlg
+1845 fn dialog
+1870 schrittNamen
+1871 fn zeigeSchritt
+1886 mitSchritten
+1887 werte
+1889 fn merkeAusdruecke
+1902 fn schliesse
+1911 fn featureDialog
+1931 bisFelder
+1935 fn bisAbstand
+1941 wendeBisAn
+1942 fn extrusionMitteUV
+1946 bisWert
+1947 zweiFeld
+1948 RICHTUNGEN
+1949 LAGEN
+1951 fn bearbeite
+1986 fn ebeneDialog
+2033 fn extrusionDialog
+2050 VORGAENGE
+2051 vorgangFelder
+2056 fn drehAchse
+2063 achsenOpt
+2065 fn drehungDialog
+2078 fn blechDialog
+2100 fn vorlageDialog
+2130 fn profilDialog
+2181 § Rund-/Kegelblech (Zylinder- oder Kegelmantel mit exakter Abwicklung)
+2183 rohrNeigung
+2185 fn rohrSchnitt
+2189 fn rohrSchnittWerkzeug
+2193 fn rundMeridian
+2202 fn rundGeometrie
+2210 fn rundDialog
+2233 fn zeigeRund
+2253 § Flächenblech: Grundfläche aus der Skizze, Kantenbausteine je Kante
+2254 alleBausteine
+2255 bausteinFuer
+2256 bausteinName
+2258 fn bausteinKontur
+2270 fn prisma
+2284 fn sweepGlatt
+2315 boxUeberlappt
+2317 fn flachKoerper
+2331 fn kantenBeschneiden
+2346 fn lochRaender
+2351 fn schneideAus
+2366 fn blechEbene
+2370 fn flaechenKoerper
+2411 kantenZeiger
+2412 menueKante
+2413 kantenLabels
+2414 kantenName
+2415 fn zeigeKanten
+2441 fn profilKanten
+2449 profilKanteBelegt
+2450 fn zeigeProfilKanten
+2459 fn kanteUnterMaus
+2471 § Komponenten: Lage (verschieben/drehen als Ganzes) und Kollisionsprüfung
+2473 fn lageMatrix
+2480 lageVon
+2481 fn wendeKomponentenLageAn
+2489 fn komponenteDialog
+2501 kollisionen
+2502 fn pruefeKollision
+2523 fn kantenProfil
+2529 fn berechneKanten
+2539 kantenSchritte
+2540 fn setzeKanteRoh
+2548 fn setzeKanteVon
+2555 werkzeugKante
+2556 werkzeugNeu
+2558 fn kantenMenue
+2581 fn partnerKante
+2589 § Dach-Modus (Phase 1): Gebäude-Ansatz + Dach aus Grundriss, Dachform und Aufbau
+2590 dachEinst
+2591 deckungBasis
+2592 aufbauBasis
+2593 BLECH_VORLAGE
+2595 fn dachPlatte
+2604 fn zeigeDachKoerper
+2607 DACH_ARTEN
+2609 fn dachBoxenGeo
+2621 fn dachZiegelGeo
+2630 fn dachBoxenKanten
+2636 fn skizzenGrundriss
+2641 gebaeudeUmriss
+2643 deckungVon
+2644 aufbauVon
+2646 fn ebeneAktuell
+2647 weltAkt
+2648 dist3
+2649 dachKoordinaten
+2651 fn skizzenVieleck
+2654 fn dachKoppeln
+2675 fn lukarneKopplungSetzen
+2682 lukarneSkizzenStand
+2684 fn lukarneDachNeu
+2693 fn lukarneKoppeln
+2712 fn lukarneGeo
+2724 fn skizzeAusFlaeche
+2733 fn lukarneDachZuSkizzen
+2742 fn dachAusSkizzen
+2755 fn dachZuSkizzen
+2762 fn dachErgebnis
+2769 dachWelt
+2771 fn dachPrisma
+2780 fn wandPlatte
+2788 fn eindeckungDialog
+2795 fn lukarneDialog
+2820 fn dachelementDialog
+2835 fn dachblecheDialog
+2847 fn gebaeudeDialog
+2856 AUFBAU_ZAHLEN
+2857 DECKUNG_ZAHLEN
+2858 dachAufbauFelder
+2859 dachDeckungFelder
+2860 fn dachMasseUebernehmen
+2869 fn dachDialog
+2905 § Kanten-Werkzeug: Flansch / Umschlag / Kantenbaustein (erst Blech anklicken, dann die Kante)
+2906 kantenWz
+2907 kantenWzText
+2908 fn kantenBarZeigen
+2915 fn endeKantenWz
+2916 kHoverWartet
+2927 fn stirnErweiterungen
+2930 fn profilErweiterungen
+2933 istProfil
+2934 fn kantenWert
+2938 fn wendeProfilKante
+2947 § Quetschfalte (Ecke zweier Aufkantungen eines Flächenblechs) ----
+2948 quetschWz
+2949 fn quetschGeo
+2965 fn quetschMesh
+2975 quetschEcken
+2976 fn zeigeQuetschEcken
+2980 fn starteQuetschWz
+2985 fn endeQuetschWz
+2986 fn quetschKlick
+2993 fn quetschDialog
+2998 fn starteKantenWz
+3007 fn kantenWzKlick
+3015 fn wendeKantenWz
+3030 fn kanteUmkehren
+3037 fn kanteDialog
+3062 fn flaecheDialog
+3145 fn belegteKanten
+3148 fn zeigeFlaechenteil
+3168 fn flaechenblatt
+3189 § Baustein-Editor: Abkantfolge als Tabelle mit Live-Querschnitt und Zugabe
+3190 bEdit
+3191 neuerBaustein
+3193 fn bZeilen
+3197 bText
+3198 fn bausteinEditor
+3203 fn bVorschau
+3212 bFolgeOk
+3213 fn zeigeBEditor
+3248 bZeilenAusTabelle
+3284 § Konstruieren: Achsen und Punkte (wie in Fusion)
+3285 ACHSEN_ARTEN
+3286 PUNKT_ARTEN
+3287 v3n
+3288 kreuz3
+3289 skal3
+3290 fn baueAchse
+3305 fn bauePunkt
+3318 fn achsenObjekt
+3323 fn punktObjekt
+3327 fn konstruktionDialog
+3352 § Körper: Abrunden/Fasen, Schale, Muster, Spiegeln, Verschieben/Kopieren (wie in Fusion)
+3354 fn eckenBearbeiten
+3366 fn gerundeteExtrusion
+3380 fn schalenWerkzeug
+3392 koerperVon
+3397 fn transformAus
+3413 fn koerperTeilen
+3431 fn koerperTransform
+3450 koerperOpt
+3451 KOERPER_WZ
+3454 fn koerperDialog
+3488 § Bild / PDF-Plan als Hintergrund (wie «Arbeitsfläche» in Fusion) und DXF in die Skizze
+3489 bilder
+3490 BILDTEX
+3491 fn bildObjekt
+3503 fn bildAusQuelle
+3509 pdfjs
+3510 fn pdfLaden
+3517 fn bildEinfuegen
+3537 fn bildDialog
+3585 § Abrunden / Fasen an angeklickten Kanten (beliebige Volumenkörper, gerade Kanten zwischen ebenen Flächen)
+3587 fn kantenInfo
+3603 fn kantenWerkzeug
+3628 fn kantenBearbeiten
+3639 fn skizzenTreffer
+3655 fn kanteAmKoerper
+3677 fn kantenDialog
+3702 § Kehl- und Gratblech zwischen zwei Flächen (gekantet, mit Abwicklung)
+3704 fn flaechenEbene
+3705 fn flaechenAusdehnung
+3718 fn umkehren
+3719 fn kehlBlech
+3767 norm2
+3768 fn schnitt2
+3769 fn kehleDialog
+3785 fn blechAufFlaeche
+3799 fn blechAufFlaecheStart
+3806 § Sweep und Loft (wie in Fusion)
+3807 v3
+3809 fn ringNetz
+3820 fn deckel
+3824 flaeche2
+3825 fn sweepGeometrie
+3854 fn loftGeometrie
+3876 fn sweepDialog
+3887 fn loftDialog
+3899 § Parameter ändern (Fusion: Ändern → Parameter ändern)
+3900 fn parameterDialog
+3944 § Prüfen: Messen und Schnittanalyse (wie in Fusion)
+3945 messen
+3946 messGruppe
+3948 fn messPunkt
+3955 fn messMarke
+3959 fn messKlick
+3969 fn messenUmschalten
+3978 schnitt
+3981 kappen
+3982 schraffur
+3983 fn schraffurTextur
+3990 fn zeigeKappen
+4009 fn wendeSchnittAn
+4042 § Planblatt (Zeichnung): Ansichten, Details, Bemassung, Schriftfeld
+4044 fn abwicklungPlanAnsicht
+4067 fn dachDetails
+4074 fn dachDetailSvg
+4081 fn dachAufsichtAnsicht
+4093 fn skizzenPlanAnsicht
+4117 plaene
+4144 § Einstellungen: Materialien kalibrieren, Lagerformate
+4145 entwurf
+4147 PROBE_SKIZZE
+4162 probeWerte
+4163 meldung
+4164 zahlen
+4165 einstRegister
+4166 EINST_REGISTER
+4168 fn einstFeld
+4175 fn zeigeEinst
+4313 fn etikettenPruefen
+4317 fn probe
+4344 fn einstWert
+4354 fn einstLaden
+4440 § Hilfe
+4441 hilfe
+4456 § Ansichten
+4457 fn fitte
+4464 alleBox
+4465 fn ansicht
+4473 § Skizzieren
+4474 skizze
+4476 WERKZEUGE
+4520 ABH_NAME
+4522 GLYPHE
+4523 GRUND
+4524 KNOPF_MENUE
+4533 braucheEingabe
+4534 fn eingabeBeschriften
+4538 fn setzeWerkzeug
+4552 fn loescheSkizzenAuswahl
+4559 fn hilfslinieUmschalten
+4564 fn starteSkizze
+4588 § 2D-Modus: nur Skizzen/Zeichnung, Körper ausgeblendet, Layer-Leiste, DXF-Ausgabe
+4589 modus2d
+4590 fn layerZeigen
+4622 fn zeichnungObjekte
+4634 fn schalte2D
+4647 fn beendeSkizze
+4665 strahl
+4666 fn ndc
+4667 fn bildschirm
+4668 fn fangPunkte
+4672 FANGNAME
+4673 kantenCache
+4674 fn koerperKantenCache
+4679 fn koerperFang
+4692 fn skizzenFang
+4706 FANGGLYPHE
+4708 fangArtZuletzt
+4709 fn fangZeigen
+4716 fn ebenenPunkt
+4733 abst
+4734 abstandZurGeraden
+4735 rechteckMitte
+4736 rechteckEl
+4737 rechteckM
+4738 rechteck3Bed
+4739 polygonBed
+4741 fn erstelle
+4757 fn klick
+4827 § Ändern: Abrunden, Versatz, Spiegeln, Stutzen
+4828 zuLinienzug
+4834 fn trefferEcke
+4842 fn abrunden
+4852 fn versatzVorschau
+4885 fn versatzKlick
+4895 fn trefferStrecke
+4900 fn spiegelnKlick
+4912 schneidKanten
+4913 fn stutzen
+4919 fn stutzeLinie
+4944 fn stutzeBogen
+4966 § Dehnen, Trennen, Verschieben/Kopieren/Drehen, Muster, Projizieren
+4967 REF_FELDER
+4968 refsVon
+4970 lageGebunden
+4972 fn transformiere
+4977 fn bewege
+4996 dreher
+4997 fertigMehr
+4998 fn verschiebeUm
+5004 fn dreheUm
+5006 fn mehrfachKlick
+5019 fn musterDialog
+5040 fn aufBogen
+5041 fn dehnen
+5063 fn trennen
+5107 umschaltAn
+5109 fn flaechenRand
+5119 fn teileAnEcken
+5132 fn projizieren
+5176 fn abschliessenLinie
+5183 fn eingabeAnwenden
+5225 § Bemassung und Auswahl
+5226 gleich
+5227 drehung
+5233 RAD
+5234 grad
+5235 fgText
+5237 fn uebernimm
+5242 fn entferneBed
+5248 fn massAendern
+5268 fn bezuege
+5285 projektion
+5286 mitte
+5288 fn waehleGeo
+5313 fn wahlKlick
+5327 fn abhAusWahl
+5349 fn massFuerWahl
+5401 fn massEingabe
+5421 fn zugZiele
+5427 fn segmente
+5431 fn trefferElement
+5441 fn trefferPunkt
+5458 labels
+5459 fgCache
+5460 fn analyseGecacht
+5469 fn zeichneLive
+5575 fn zeigeLabels
+5594 § Maus und Tastatur
+5595 runter
+5598 planUV
+5599 smPos
+5682 § Werkzeugleiste
+5683 fn neueSkizze
+5705 umformLetzt
+5706 umformWerte
+5707 fn umformDialog
+5742 § Werkzeugleiste: Klappmenüs (fest positioniert, die Leiste rollt seitlich)
+5743 leiste
+5744 fn klappZu
+5769 fn leisteZustand
+5804 letzteVariante
+5819 projektPfad
+5821 ZULETZT
+5822 zuletzt
+5823 fn merkeDatei
+5828 fn titel
+5832 fn projektSpeichern
+5838 fn ladeProjekt
+5846 fn projektOeffnen
+5853 § Konto & Cloud (Spengler-Digital-App)
+5854 fn setzeAuftrag
+5855 cloud
+5868 projekte
+5871 ablage
+5874 fn auftragAnzeige
+5883 § 3D-Detailvorlagen (STEP-Körper mit Ankerkante, ersetzen die .f3d-Vorlagen des Add-ins)
+5884 DETAILMESH
+5885 fn detail3dDialog
+5902 fn detailAusDatei
+5915 § Exakter CAD-Kern (Beta): OpenCascade im Web Worker (kern/cad)
+5918 cadK
+5919 kernAn
+5920 fn kern
+5928 fn kernAnzeige
+5932 kernFehlerText
+5934 fn exaktKoerper
+5940 fn stepExakt
+5945 fn pruefe3D
+5961 exaktLauf
+5963 regenStand
+5964 exaktPlanen
+5967 planAus
+5968 fn exakteAnsicht
+6000 fn ersetzeNetz
+6009 fn exaktesModell
+6038 regen-Zweig extrusion
+6051 regen-Zweig kanten3d
+6057 regen-Zweig schale
+6065 regen-Zweig teilen
+6082 regen-Zweig flaeche
+6090 regen-Zweig rundblech
+6099 regen-Zweig detail3d
+6151 fn zeigeEigenschaften
+6169 § Austausch: STEP/STL exportieren, STEP/STL importieren
+6170 fn sichtbareKoerper
+6177 dateiBasis
+6178 fn exportiere
+6184 occt
+6185 fn occtLaden
+6195 fn importFeature
+6203 fn importiereDatei
+6259 neuBestaetigt
+6266 § Start
+6309 neueVersionGemeldet
+6310 fn pruefeNeueVersion
 
 ## src/cloud.js
 7 KEY
@@ -1194,6 +1208,20 @@ Format: `Zeile name` (fn = Funktion, § = Abschnitt)
 191 erweiterungsOps
 192 fn profilErweitern
 
+## kern/quetschfalte.js
+7 D
+8 sk
+9 kreuz
+10 betrag
+11 norm
+12 winkel
+14 fn eckeGeometrie
+29 fn quetschZuschnitt
+47 fn rot
+48 fn faltenPruefen
+56 fn quetschDreieck
+62 fn quetschDxf
+
 ## kern/regionen.js
 4 EPS
 5 kreuz2
@@ -1279,10 +1307,15 @@ Format: `Zeile name` (fn = Funktion, § = Abschnitt)
 ## kern/stirnflansch.js
 9 hyp
 12 fn schenkelBereiche
-21 verschiebe
-25 fn stirnLaschen
-42 fn abwicklungUmriss
-54 fn laschenBiegelinien
+28 fn gehrungVersatz
+34 fn laschenHoehe
+40 laschenStart
+41 laschenEnde
+43 verschiebe
+47 fn stirnLaschen
+68 stuetz
+69 fn abwicklungUmriss
+88 fn laschenBiegelinien
 
 ## kern/umformung.js
 6 VERFAHREN
