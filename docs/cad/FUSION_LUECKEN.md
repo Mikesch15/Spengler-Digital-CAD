@@ -32,8 +32,9 @@
 | Rib | «Rippe» | ✔ neu |
 | Move/Copy, Rectangular/Circular pattern, Mirror, Split body, Combine | ✔ | ✔ |
 | Construction planes/axes/points | ✔ | ✔ |
-| Pattern on path | – | offen |
-| Draft, Thicken, Offset face, Emboss, Web, Boundary fill | – | offen |
+| Pattern on path | Muster «Entlang eines Pfads» | ✔ neu |
+| Draft (Konuswinkel der Extrusion) | Extrusion mit Konuswinkel | ✔ neu |
+| Draft auf bestehende Flächen, Thicken, Offset face | – | offen |
 | Surface modelling (Patch, Stitch, Trim) | – | offen |
 | Sketch: Linie, Kreis, Bogen, Rechteck, Ellipse, Spline, Langloch, Polygon, Text, Abrunden, Versatz, Stutzen, Spiegeln, Muster, Bemassung, Abhängigkeiten | ✔ | ✔ |
 | Assembly (Joints, Motion) | – | offen (Zielbereich Blech/Körper) |
