@@ -1,0 +1,14 @@
+CAD-Kern von Spengler Digital CAD
+
+OpenCascade Technology (OCCT) 8.0 – als WebAssembly in «replicad_single.wasm»
+  Lizenz: GNU LGPL 2.1 (siehe OpenCascade-LGPL-2.1.txt), OCCT zusätzlich mit «Open CASCADE Exception»
+  Paket:  replicad-opencascadejs 1.2.1 (npm), Build-Konfiguration im Repository https://github.com/sgenoud/replicad
+          (packages/replicad-opencascadejs, Commit 5e4ad9bb5a35bb9ae0571e91c25fa1897ba0570c), gebaut mit dem Docker-Image
+          ghcr.io/taucad/opencascade.js:3.1.0-single-threaded
+  Quellcode OCCT: https://github.com/Open-Cascade-SAS/OCCT  ·  opencascade.js: https://github.com/donalffons/opencascade.js
+  Version belegt durch den STEP-Kopf der Ausgabe: «Open CASCADE STEP processor 8.0».
+
+Austausch (LGPL): Die WASM-Datei wird unverändert und getrennt vom Programm ausgeliefert. Sie kann durch eine selbst
+gebaute, schnittstellengleiche Datei gleichen Namens ersetzt werden (im Programmordner bzw. neben cad-worker.js).
+
+replicad 1.2.1 – MIT (siehe replicad-MIT.txt), https://github.com/sgenoud/replicad
