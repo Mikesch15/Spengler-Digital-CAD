@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8774);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8774);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 760 } }), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
 // Skizze mit zwei Punkten, dazu das alte Raster 5 in den Einstellungen (muss jetzt aus sein)
@@ -14,7 +14,7 @@ await s.addInitScript(() => {
   localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "B", nr: "B-1", zaehler: 5, features: [{ id: "sk", typ: "skizze", name: "Skizze 1", ebene: "XY", elemente: [{ id: 1, art: "linie", pts: [[-123.4, 10.3], [197.7, 10.3]] }] }] }));
   localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], skizze: { raster: 5, abstand: 80 } }));
 });
-await s.goto("http://localhost:8774/index.html?test"); await s.waitForTimeout(800);
+await s.goto("http://localhost:" + (process.env.PORT || 8774) + "/index.html?test"); await s.waitForTimeout(800);
 ok(await s.evaluate(() => window.sdcadTest.raster() === 0), "Altes 5-mm-Raster ist aus");
 await s.evaluate(() => window.sdcadTest.bearbeite("sk")); await s.waitForTimeout(800);
 const mitte = await s.evaluate(() => window.sdcadTest.schirmUV("XY", [37.15, 10.3]));

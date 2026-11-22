@@ -3,14 +3,14 @@
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8797);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8797);
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), pr = [];
 const FENSTER = [["Handy hoch", 390, 800, true], ["Handy quer", 800, 390, true], ["Tablet hoch", 820, 1180, true], ["Tablet quer", 1180, 820, true], ["Desktop klein", 1024, 640, false], ["Desktop gross", 1600, 900, false]];
 for (const th of ["light", "dark"]) for (const [name, w, h, touch] of FENSTER) {
   const ctx = await b.newContext({ viewport: { width: w, height: h }, colorScheme: th, hasTouch: touch, isMobile: touch && w < 900 });
   const s = await ctx.newPage(); s.on("pageerror", (e) => pr.push(name + ": " + e.message));
-  await s.goto("http://localhost:8797/index.html?test"); await s.waitForTimeout(1200);
+  await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s.waitForTimeout(1200);
   const tag = `${name} · ${th}`;
   ok(await s.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${tag}: kein horizontaler Seitenüberlauf`);
   ok(await s.evaluate(() => { const r = document.getElementById("wSuche").getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.width >= 40; }), `${tag}: «Suchen» sichtbar und gross genug`);

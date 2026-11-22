@@ -3,7 +3,7 @@
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8794);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8794);
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
 const pj = { objekt: "P", nr: "P-1", zaehler: 20, features: [
@@ -14,7 +14,7 @@ const pj = { objekt: "P", nr: "P-1", zaehler: 20, features: [
   { id: "k2", typ: "skizze", name: "Kasten B", ebene: "XZ", elemente: [{ id: 1, art: "rechteck", a: [400, 0], b: [440, 25] }] },
   { id: "e2", typ: "extrusion", name: "Kasten B", skizze: "k2", flaechen: [[410, 10]], abstand: 20, richtung: "eine", vorgang: "neu", komponente: "Gruppe B" }] };
 await s.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, pj);
-await s.goto("http://localhost:8794/index.html?test"); await s.waitForTimeout(1200);
+await s.goto("http://localhost:" + (process.env.PORT || 8794) + "/index.html?test"); await s.waitForTimeout(1200);
 // Abwickeln im Blech-Register: Blech wählen, Knopf drücken
 ok(await s.evaluate(() => !!document.querySelector('[data-klapp="blech"] #wAbwickeln')), "«Abwickeln / Falten» steht im Blech-Register");
 ok(await s.evaluate(() => !!document.getElementById("wTeilMenue") && !!document.querySelector('[data-klapp="aendern"] #wTeilMenue')), "«Teil-Funktionen …» (Komponente, Duplizieren, Darstellung …) steht im Register «Ändern»");
@@ -43,7 +43,7 @@ const fs = [
   { id: "s2", typ: "skizze", name: "Ausklinkung", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [80, -40], b: [120, -10] }] },
   { id: "ex", typ: "extrusion", name: "Ausschnitt", skizze: "s2", flaechen: [[100, -20]], abstand: 10, richtung: "symmetrisch", vorgang: "ausschneiden", ziel: "fl" }];
 await sB.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "A", nr: "A-1", zaehler: 20, features: d, plaene: [{ id: "p1", name: "Plan 1", format: "A3", ansichten: [{ id: "a1", art: "oben", abwicklung: "fl:0", titel: "Abwicklung Blech 1", massstab: 1, verdeckt: false, x: 30, y: 25 }], details: [], masse: [], texte: [] }] })); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, fs);
-await sB.goto("http://localhost:8794/index.html?test"); await sB.waitForTimeout(1500);
+await sB.goto("http://localhost:" + (process.env.PORT || 8794) + "/index.html?test"); await sB.waitForTimeout(1500);
 await sB.evaluate(() => document.getElementById("wPlan").click()); await sB.waitForTimeout(700);
 const d = await sB.evaluate(() => [...document.querySelectorAll("#plFlaeche path.sichtbar")].map((p) => p.getAttribute("d")).join(""));
 const seg = [...d.matchAll(/M([\d.-]+) ([\d.-]+)L([\d.-]+) ([\d.-]+)/g)].map((m) => m.slice(1).map(Number));

@@ -3,10 +3,10 @@
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8797);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8797);
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), pr = [];
-const neu = async (features) => { const s = await b.newPage({ viewport: { width: 1280, height: 800 } }); s.on("pageerror", (e) => pr.push(e.message)); await s.addInitScript((f) => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 50, features: f })), features); await s.goto("http://localhost:8797/index.html?test"); await s.waitForTimeout(1500); await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(300); return s; };
+const neu = async (features) => { const s = await b.newPage({ viewport: { width: 1280, height: 800 } }); s.on("pageerror", (e) => pr.push(e.message)); await s.addInitScript((f) => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 50, features: f })), features); await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s.waitForTimeout(1500); await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(300); return s; };
 const warte = (s) => s.waitForTimeout(450);
 const aktionen = (s) => s.evaluate(() => window.sdcadTest.kontext());
 const klickAm = async (s, p) => { const q = await s.evaluate((x) => window.sdcadTest.schirm(x), p); await s.mouse.move(q[0], q[1]); await s.mouse.click(q[0], q[1]); await warte(s); };

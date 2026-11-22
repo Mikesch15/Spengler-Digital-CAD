@@ -8,7 +8,7 @@ import { extname, join, resolve } from "node:path";
 import { occtKern } from "../../kern/cad/occt.js";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8772);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8772);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 // STEP-Datei: Quader 40 × 10 × 5 (Ursprung am Kantenanfang, X entlang der Kante)
 const K = await occtKern(), q = await K.ausfuehren({ op: "quader", min: [0, 0, 0], max: [40, 10, 5] }), { text } = await K.ausfuehren({ op: "stepExport", ziele: [q.id], namen: ["Kehle"] });
@@ -17,7 +17,7 @@ const b = await chromium.launch(), s = await b.newPage(), probleme = []; s.on("p
 { const f0 = s.fill.bind(s); s.fill = async (sel, v, o) => (o?.force ? s.evaluate(([q, w]) => { const e = document.querySelector(q); e.value = w; e.dispatchEvent(new Event("input", { bubbles: true })); }, [sel, v]) : f0(sel, v, o)); }
 await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "D", nr: "D-1", zaehler: 5, features: [] }));
   localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: "occt" } })); });
-await s.goto("http://localhost:8772/index.html?test"); await s.waitForTimeout(800);
+await s.goto("http://localhost:" + (process.env.PORT || 8772) + "/index.html?test"); await s.waitForTimeout(800);
 // 1) Vorlage aus STEP anlegen
 await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="detail3d"]').click(); });
 await s.setInputFiles("#detailDatei", datei); await s.waitForSelector('[data-dv="name"]', { timeout: 20000 });

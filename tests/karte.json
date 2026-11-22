@@ -1,0 +1,25 @@
+{
+  "_hinweis": "Zuordnung geänderte Datei (Teilstring des Pfads) → passende App-Tests (tests/app-kern/<name>.mjs). Wird von tests/lauf.mjs genutzt.",
+  "schnelltest": ["assistent", "kontext", "bedienung", "dach", "projektdatei", "kantenwz", "befehlssuche"],
+  "regeln": [
+    { "muster": "src/kontext.js", "tests": ["kontext"] },
+    { "muster": "kern/dach/", "tests": ["dach", "dachbleche", "dachflaechen", "kopplung", "griffe"] },
+    { "muster": "kern/stirnflansch", "tests": ["stirnflansch", "blechkanten"] },
+    { "muster": "kern/profile.js", "tests": ["profilkante", "stirnflansch", "blechkanten"] },
+    { "muster": "kern/flansch.js", "tests": ["kantenwz", "flansch", "blechkanten"] },
+    { "muster": "kern/flaechenblech.js", "tests": ["flaechen", "kantenwz", "blechkanten", "abwickeln"] },
+    { "muster": "kern/dxf.js", "tests": ["stirnflansch", "zeichnen2d"] },
+    { "muster": "kern/richtung.js", "tests": ["zweiseitig", "bis"] },
+    { "muster": "src/befehlssuche.js", "tests": ["befehlssuche", "responsive"] },
+    { "muster": "src/arbeitsbereich.js", "tests": ["befehlssuche", "responsive"] },
+    { "muster": "src/meldungen.js", "tests": ["befehlssuche", "neueversion"] },
+    { "muster": "src/plan.js", "tests": ["plan", "plan2d", "plan3"] },
+    { "muster": "src/projekte.js", "tests": ["projekte"] },
+    { "muster": "src/cloud.js", "tests": ["cloud", "ablage"] },
+    { "muster": "src/ansicht.js", "tests": ["hover"] },
+    { "muster": "kern/skizze", "tests": ["zeichnen2d", "bemassung", "projektion", "projflaeche"] },
+    { "muster": "kern/loeser", "tests": ["bemassung", "zeichnen2d"] },
+    { "muster": "kern/cad/", "tests": ["pruefen", "rundblech", "detail3d"] },
+    { "muster": "web/sw.js", "tests": ["neueversion"] }
+  ]
+}

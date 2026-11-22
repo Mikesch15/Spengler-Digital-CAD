@@ -3,7 +3,7 @@
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8797);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8797);
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), pr = [];
 const DOC = { objekt: "Muster", nr: "7", zaehler: 40, features: [
@@ -11,7 +11,7 @@ const DOC = { objekt: "Muster", nr: "7", zaehler: 40, features: [
   { id: "e1", typ: "extrusion", name: "Extrusion 1", skizze: "s1", abstand: 25, richtung: "zwei", abstand2: 5, vorgang: "neu" },
   { id: "d1", typ: "dach", name: "Dach 1", gebaeude: "g1", form: "sattel", firstRichtung: "laengs", neigung: 35, neigung2: 35, ueberstandTraufe: 400, ueberstandOrtgang: 300 },
   { id: "g1", typ: "gebaeude", name: "Gebäude 1", breite: 10000, tiefe: 8000, traufhoehe: 3000, wandstaerke: 300, x: 0, z: 0 }] };
-const neu = async (init) => { const s = await b.newPage({ viewport: { width: 1280, height: 800 } }); s.on("pageerror", (e) => pr.push(e.message)); if (init) await s.addInitScript((d) => localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)), init); await s.goto("http://localhost:8797/index.html?test"); await s.waitForTimeout(1500); return s; };
+const neu = async (init) => { const s = await b.newPage({ viewport: { width: 1280, height: 800 } }); s.on("pageerror", (e) => pr.push(e.message)); if (init) await s.addInitScript((d) => localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)), init); await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s.waitForTimeout(1500); return s; };
 const sig = (d) => JSON.stringify(d.features.map((f) => [f.id, f.typ, f.name]));
 const s1 = await neu(DOC); const d1 = await s1.evaluate(() => window.sdcadTest.dok());
 ok(sig(d1) === sig(DOC) && d1.objekt === "Muster" && d1.nr === "7", "Bestehendes Projekt wird mit allen Features und IDs geladen");

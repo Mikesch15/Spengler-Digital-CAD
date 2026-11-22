@@ -3,7 +3,7 @@
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8792);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8792);
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
 const pj = { objekt: "P", nr: "P-1", zaehler: 10, layer: [{ id: "0", name: "0", aci: null, art: "durchgezogen", sichtbar: true }, { id: "m", name: "Achsen", aci: 1, art: "mittellinie", sichtbar: true }],
@@ -11,7 +11,7 @@ const pj = { objekt: "P", nr: "P-1", zaehler: 10, layer: [{ id: "0", name: "0", 
     { id: "bl", typ: "skizze", name: "Blechumriss", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [300, 0], b: [400, 60] }] },
     { id: "fl", typ: "flaeche", name: "Blech 1", skizze: "bl", material: "zink07", flaechen: [[310, 10]], kanten: { "0:0": "ortgang" } }] };
 await s.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, pj);
-await s.goto("http://localhost:8792/index.html?test"); await s.waitForTimeout(900);
+await s.goto("http://localhost:" + (process.env.PORT || 8792) + "/index.html?test"); await s.waitForTimeout(900);
 await s.evaluate(() => document.getElementById("wPlan").click()); await s.waitForTimeout(500);
 await s.click("#plNeuAnsicht"); await s.waitForTimeout(150);
 ok(await s.isVisible('[data-plskizze="sk"]'), "Menü «+ Ansicht» bietet die Skizze an");

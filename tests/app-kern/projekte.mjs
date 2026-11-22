@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8775);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8775);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 // Nachbau der Tabelle projects (id, name, order_no, customer, object, hinweis, status, archived, updated_at)
 const db = { proj: [{ id: 7, name: "Dach Müller", order_no: "2026-114", customer: "Müller AG", object: "Haus 3, Bern", hinweis: null, status: "in_arbeit", archived: false, updated_at: "2026-11-20T10:00:00+00:00" }], n: 8, zeit: 1 };
@@ -28,7 +28,7 @@ await s.route("**/nfgryuzkpwjfmdlmevuy.supabase.co/**", async (r) => {
   return j(404, {});
 });
 await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Muster, Bern", nr: "2026-001", zaehler: 5, features: [] })); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }] })); });
-await s.goto("http://localhost:8775/index.html?test"); await s.waitForTimeout(800);
+await s.goto("http://localhost:" + (process.env.PORT || 8775) + "/index.html?test"); await s.waitForTimeout(800);
 // ohne Anmeldung
 await s.click("#aProjektWahl"); ok(/Anmeldung nötig/.test(await s.textContent("#pjInhalt")), "Ohne Anmeldung: Hinweis und Weg zum Konto");
 await s.click('[data-pj-aktion="anmelden"]'); await s.waitForSelector("#cName", { timeout: 4000 });

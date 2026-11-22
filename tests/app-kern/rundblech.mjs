@@ -6,14 +6,14 @@ import { createRequire } from "node:module";
 import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8768);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8768);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 const b = await chromium.launch(), PI = Math.PI, t = 0.7;
 for (const kern of [null, "occt"]) {
   const s = await b.newPage({ acceptDownloads: true }), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
   await s.addInitScript((k) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Rund", nr: "R-1", zaehler: 5, features: [] }));
     localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: k || "netz" } })); }, kern);
-  await s.goto("http://localhost:8768/index.html?test"); await s.waitForTimeout(500);
+  await s.goto("http://localhost:" + (process.env.PORT || 8768) + "/index.html?test"); await s.waitForTimeout(500);
   await s.evaluate(() => document.getElementById("wRund").click());           // Werkzeug: Standard Kegelstumpf Ø400/Ø200, h 150, Zugabe 10
   await s.waitForSelector("#kRundDxf", { timeout: 5000 });
   const info = await s.textContent("#dInfo");
@@ -39,7 +39,7 @@ for (const kern of [null, "occt"]) {
   const s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
   await s.addInitScript((k) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Rohr", nr: "R-2", zaehler: 5, features: [{ id: "ro", typ: "rundblech", name: "Entlüftungsrohr", art: "zylinder", d1: 150, d2: 150, h: 200, neigung: 30, winkel: 360, zugabe: 8, material: "zink07", ebene: "XZ" }] }));
     localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: k || "netz" } })); }, kern);
-  await s.goto("http://localhost:8768/index.html?test");
+  await s.goto("http://localhost:" + (process.env.PORT || 8768) + "/index.html?test");
   if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 60000 }); else await s.waitForTimeout(1500);
   const k = (await s.evaluate(() => window.sdcadTest.koerperInfo())).find((o) => o.fid === "ro"), ta = Math.tan(PI / 6), V = t * 2 * PI * 75 * (200 + 75 * ta);
   const name = kern ? "Ein" : "Aus";

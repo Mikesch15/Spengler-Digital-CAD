@@ -6,13 +6,13 @@ import { createRequire } from "node:module";
 import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8778);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8778);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
 await s.addInitScript(() => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "H", nr: "H-1", zaehler: 9, features: [
   { id: "sf", typ: "skizze", name: "Skizze 1", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [200, 100] }] },
   { id: "ex", typ: "extrusion", name: "Extrusion 1", skizze: "sf", abstand: 60, richtung: "eine", vorgang: "neu" }] })));
-await s.goto("http://localhost:8778/index.html?test"); await s.waitForTimeout(1200);
+await s.goto("http://localhost:" + (process.env.PORT || 8778) + "/index.html?test"); await s.waitForTimeout(1200);
 await s.click("#wSkizze"); await s.waitForSelector("#dialog:not([hidden])", { timeout: 4000 });
 const box = await s.locator("#leinwand").boundingBox(); let treffer = null;
 for (let y = box.y + box.height * 0.25; y < box.y + box.height * 0.8 && !treffer; y += 24) for (let x = box.x + box.width * 0.15; x < box.x + box.width * 0.7; x += 24) {

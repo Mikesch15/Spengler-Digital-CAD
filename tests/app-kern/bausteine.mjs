@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8770);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8770);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 const b = await chromium.launch(), s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
 await s.addInitScript(() => {
@@ -14,7 +14,7 @@ await s.addInitScript(() => {
   localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }],
     bausteine: [{ id: "pf", name: "Falz mit Parametern", gruppe: "Eigene", folge: "90 H U+ u+4*t", versatz: 0, parameter: [{ name: "H", label: "Höhe", standard: 25, min: 10, max: 60 }, { name: "u", label: "u", standard: 5, min: null, max: null }], bedingungen: { dickeMin: 0.5, dickeMax: 1, kantenMin: null } }] }));
 });
-await s.goto("http://localhost:8770/index.html?test"); await s.waitForTimeout(600);
+await s.goto("http://localhost:" + (process.env.PORT || 8770) + "/index.html?test"); await s.waitForTimeout(600);
 await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="bausteine"]').click(); });
 const folgeFeld = await s.inputValue('[data-bk="folge"]');
 ok(folgeFeld === "90 H U+ u+4*t", `Tabelle der Bausteine zeigt die Kurzschrift mit Parametern «${folgeFeld}»`);
@@ -58,7 +58,7 @@ await s.click("#eAbbrechen");
   const p2 = await b.newPage(), pr2 = []; p2.on("pageerror", (e) => pr2.push(e.message));
   await p2.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d.doc));
     localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], bausteine: [{ id: "pf", name: "Falz mit Parametern", gruppe: "Eigene", folge: "90 H", versatz: 0, parameter: [{ name: "H", label: "Höhe", standard: 25, min: 10, max: 60 }] }] })); }, { doc: projekt });
-  await p2.goto("http://localhost:8770/index.html?test"); await p2.waitForTimeout(700);
+  await p2.goto("http://localhost:" + (process.env.PORT || 8770) + "/index.html?test"); await p2.waitForTimeout(700);
   await p2.evaluate(() => window.sdcadTest.bearbeite("fl")); await p2.waitForSelector('[data-kw="0:0"]', { timeout: 5000 });
   const z0 = parseFloat(await p2.textContent('[data-z="0:0"]'));
   await p2.fill('[data-kw="0:0"]', "40"); await p2.dispatchEvent('[data-kw="0:0"]', "change"); await p2.waitForTimeout(400);

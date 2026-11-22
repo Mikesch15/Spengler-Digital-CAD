@@ -3,7 +3,7 @@
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8779);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8779);
 let fehler = 0; const ok = (c, x) => { console.log(`${c ? "✓" : "✗"} ${x}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
 const projekt = { objekt: "T", nr: "T-1", zaehler: 10, features: [
@@ -13,7 +13,7 @@ const projekt = { objekt: "T", nr: "T-1", zaehler: 10, features: [
   { id: "sk2", typ: "skizze", name: "S2", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [200, 100] }] },
   { id: "fl", typ: "flaeche", name: "F", skizze: "sk2", material: "zink07", flaechen: [[10, 10]], lage: "vorne", kanten: {} }] };
 await s.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, projekt);
-await s.goto("http://localhost:8779/index.html?test"); await s.waitForTimeout(1200);
+await s.goto("http://localhost:" + (process.env.PORT || 8779) + "/index.html?test"); await s.waitForTimeout(1200);
 const info = await s.evaluate(() => window.sdcadTest.koerperInfo().map((k) => [k.fid, Math.round(k.volumen)]));
 ok(info.some((k) => k[0] === "ex" && k[1] === 250000) && info.some((k) => k[0] === "te:0" && k[1] === 250000), "Körper an der Ebene in zwei Hälften à 250000 mm³ geteilt " + JSON.stringify(info));
 ok(info.some((k) => k[0] === "fl:0" && k[1] === 14000), "Flächenblech mit Skizze auf der Vorderseite (Lage) baut");

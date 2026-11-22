@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".wasm": "application/wasm", ".json": "application/json", ".webmanifest": "application/manifest+json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8767);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8767);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 const b = await chromium.launch();
 async function seite(kern) {
@@ -15,7 +15,7 @@ async function seite(kern) {
   s.on("request", (r) => anfragen.push(r.url())); s.on("pageerror", (e) => probleme.push(e.message)); s.on("console", (m) => m.type() === "error" && probleme.push(m.text()));
   // Einstellungen werden nur mit Materialliste übernommen (wie gespeicherte Einstellungen der App)
   if (kern) await s.addInitScript((k) => localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: k } })), kern);
-  await s.goto("http://localhost:8767/index.html?test");
+  await s.goto("http://localhost:" + (process.env.PORT || 8767) + "/index.html?test");
   await s.waitForTimeout(800);
   return { s, anfragen, probleme };
 }
@@ -62,7 +62,7 @@ async function seite(kern) {
   for (const kern of [null, "occt"]) {
     const s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
     await s.addInitScript(([k, d]) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); if (k) localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: k } })); }, [kern, projekt]);
-    await s.goto("http://localhost:8767/index.html?test");
+    await s.goto("http://localhost:" + (process.env.PORT || 8767) + "/index.html?test");
     if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 60000 });
     else await s.waitForTimeout(1500);
     const k = await s.evaluate(() => window.sdcadTest.koerperInfo()), st = await s.textContent("#status");
@@ -107,7 +107,7 @@ async function seite(kern) {
   for (const kern of [null, "occt"]) {
     const s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
     await s.addInitScript(([k, d]) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); if (k) localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: k } })); }, [kern, projekt]);
-    await s.goto("http://localhost:8767/index.html?test");
+    await s.goto("http://localhost:" + (process.env.PORT || 8767) + "/index.html?test");
     if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 90000 });
     else await s.waitForTimeout(2000);
     erg[kern ?? "netz"] = { k: await s.evaluate(() => window.sdcadTest.koerperInfo()), st: await s.textContent("#status"), probleme };
@@ -148,7 +148,7 @@ async function seite(kern) {
   ] };
   const s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
   await s.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: "occt" } })); }, projekt);
-  await s.goto("http://localhost:8767/index.html?test");
+  await s.goto("http://localhost:" + (process.env.PORT || 8767) + "/index.html?test");
   await s.waitForFunction(() => /Exakt aus dem CAD-Kern|CAD-Kern:/.test(document.getElementById("status").textContent), null, { timeout: 90000 });
   const k = (await s.evaluate(() => window.sdcadTest.koerperInfo())).filter((o) => String(o.fid).startsWith("fl")), st = await s.textContent("#status");
   const t = 0.7, Vmin = t * 1000 * 500, Vmax = t * (1000 * 500 + 2 * 1500 * 26);

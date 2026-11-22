@@ -3,7 +3,7 @@
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8787);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8787);
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
 const pj = { objekt: "P", nr: "P-1", zaehler: 10, features: [
@@ -15,7 +15,7 @@ const pj = { objekt: "P", nr: "P-1", zaehler: 10, features: [
   { id: "eb", typ: "ebene", art: "versatz", name: "Ebene", ref: "XY", abstand: 30 },
 ] };
 await s.addInitScript((d) => localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)), pj);
-await s.goto("http://localhost:8787/index.html?test"); await s.waitForTimeout(1000);
+await s.goto("http://localhost:" + (process.env.PORT || 8787) + "/index.html?test"); await s.waitForTimeout(1000);
 for (const [id, feld, sel] of [["sch", "dicke", "#d_dicke"], ["mu", "abstand", "#d_abstand"], ["bw", "dx", "#d_dx"], ["eb", "abstand", "#d_abstand"]]) {
   await s.evaluate((i) => window.sdcadTest.bearbeite(i), id); await s.waitForTimeout(500);
   await s.evaluate(() => document.getElementById("zoomAlles").click()); await s.waitForTimeout(300);

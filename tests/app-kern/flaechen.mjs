@@ -6,14 +6,14 @@ import { createRequire } from "node:module";
 import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8778);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8778);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
 const projekt = { objekt: "F", nr: "F-1", zaehler: 10, features: [
   { id: "sk", typ: "skizze", name: "Skizze 1", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [100, 100] }, { id: 2, art: "rechteck", a: [50, 50], b: [150, 150] }] },
   { id: "ex", typ: "extrusion", name: "Extrusion 1", skizze: "sk", flaechen: [], abstand: 10, richtung: "eine", vorgang: "neu" }] };
 await s.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); }, projekt);
-await s.goto("http://localhost:8778/index.html?test"); await s.waitForTimeout(900);
+await s.goto("http://localhost:" + (process.env.PORT || 8778) + "/index.html?test"); await s.waitForTimeout(900);
 const klick = async (uv) => { const p = await s.evaluate((u) => window.sdcadTest.schirmUV("XY", u), uv); await s.mouse.move(p[0], p[1]); await s.waitForTimeout(150); await s.mouse.click(p[0], p[1]); await s.waitForTimeout(300); };
 const vol = () => s.evaluate(() => window.sdcadTest.koerperInfo().filter((k) => k.fid === "ex").reduce((a, k) => a + Math.abs(k.volumen), 0));
 const fl = () => s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.id === "ex").flaechen.length);

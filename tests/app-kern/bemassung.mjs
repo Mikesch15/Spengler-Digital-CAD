@@ -6,13 +6,13 @@ import { createRequire } from "node:module";
 import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8777);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8777);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
 // zwei parallele Linien (Abstand 60), eine schräge Linie, ein Punkt
 await s.addInitScript(() => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "B", nr: "B-1", zaehler: 9, features: [{ id: "sk", typ: "skizze", name: "Skizze 1", ebene: "XY", elemente: [
   { id: 1, art: "linie", pts: [[0, 0], [200, 0]] }, { id: 2, art: "linie", pts: [[0, 60], [200, 60]] }, { id: 3, art: "linie", pts: [[0, 150], [150, 220]] }, { id: 4, art: "kreis", c: [260, 30], r: 20 }] }] })));
-await s.goto("http://localhost:8777/index.html?test"); await s.waitForTimeout(800);
+await s.goto("http://localhost:" + (process.env.PORT || 8777) + "/index.html?test"); await s.waitForTimeout(800);
 await s.evaluate(() => window.sdcadTest.bearbeite("sk")); await s.waitForTimeout(800);
 const pos = (uv) => s.evaluate((u) => window.sdcadTest.schirmUV("XY", u), uv);
 await s.click("#tMass"); await s.waitForTimeout(200);

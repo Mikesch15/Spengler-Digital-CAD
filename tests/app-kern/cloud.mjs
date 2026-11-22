@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8769);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8769);
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 const b = await chromium.launch(), s = await b.newPage(), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
 const db = { daten: [], proj: [], teile: [] };
@@ -26,7 +26,7 @@ await s.route("**/nfgryuzkpwjfmdlmevuy.supabase.co/**", async (r) => {
 });
 await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Test", nr: "2026-114", appProjekt: { id: 7, name: "Dach Müller" }, zaehler: 5, features: [{ id: "f1", typ: "profil", name: "Ortbrett", start: 0, zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 40, winkel: 0, art: "abkanten" }], material: "zink07", laenge: 2000, stueck: 2, richtung: "eine", ebene: "XY" }] }));
   const e = { materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }] }; localStorage.setItem("sdcad-einstellungen", JSON.stringify(e)); });
-await s.goto("http://localhost:8769/index.html?test"); await s.waitForTimeout(600);
+await s.goto("http://localhost:" + (process.env.PORT || 8769) + "/index.html?test"); await s.waitForTimeout(600);
 await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="konto"]').click(); });
 ok(/Konto der Spengler-Digital-App/.test(await s.textContent("#eInhalt")), "Register «Konto & Cloud» ist da");
 await s.fill("#cName", "Max.Muster"); await s.fill("#cPass", "geheim"); await s.click('[data-cloud="anmelden"]');

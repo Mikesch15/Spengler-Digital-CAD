@@ -3,7 +3,7 @@
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
-const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(8790);
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] ?? "application/octet-stream" }); a.end(d); }).listen(+process.env.PORT || 8790);
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), pr = [];
 // Rechteck 200 × 100 mit Ortgang (Aufkantung 25) an Kante 1; Abwickeln → Skizze (Loch Ø 20 in der Platte, Schlitz im Flansch) → Extrusion Ausschneiden → Falten
@@ -17,7 +17,7 @@ const falten = { id: "fa", typ: "falten", name: "Falten Blech 1", ziel: "fl" };
 const volumen = async (features) => {
   const s = await b.newPage({ viewport: { width: 1280, height: 800 } }); s.on("pageerror", (e) => pr.push(e.message));
   await s.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "U", nr: "U-1", zaehler: 10, features: d })); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, features);
-  await s.goto("http://localhost:8790/index.html?test"); await s.waitForTimeout(1500);
+  await s.goto("http://localhost:" + (process.env.PORT || 8790) + "/index.html?test"); await s.waitForTimeout(1500);
   const r = await s.evaluate(() => window.sdcadTest.koerperInfo().filter((k) => k.fid.startsWith("fl")).map((k) => k.volumen)); await s.close(); return r;
 };
 const t = 0.7, soll = Math.PI * 100 * t + 20 * 8 * t;
@@ -33,7 +33,7 @@ for (const [nm, fs] of [["flach", [...basis(), { ...schnitt, id: "ex2", skizze: 
   const f2 = fs.slice(); f2.splice(f2.findIndex((x) => x.id === "ex2"), 0, s3);
   const sx = await b.newPage({ viewport: { width: 1280, height: 800 } }); sx.on("pageerror", (e) => pr.push(e.message));
   await sx.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "U", nr: "U-1", zaehler: 10, features: d })); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, f2);
-  await sx.goto("http://localhost:8790/index.html?test"); await sx.waitForTimeout(1500);
+  await sx.goto("http://localhost:" + (process.env.PORT || 8790) + "/index.html?test"); await sx.waitForTimeout(1500);
   const n = await sx.evaluate((fl) => fl ? window.sdcadTest.segmenteImKasten("fl", 92, 108, -28, -14) : window.sdcadTest.segmenteImKasten("fl", 92, 108, -3, 3, 15, 23), nm === "flach"); ok(n === 0, `${nm}: keine Kantenlinien mehr im ausgeklinkten Bereich (${n})`); await sx.close();
 }
 await b.close(); srv.close();
