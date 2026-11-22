@@ -39,3 +39,9 @@
 | Sketch: Linie, Kreis, Bogen, Rechteck, Ellipse, Spline, Langloch, Polygon, Text, Abrunden, Versatz, Stutzen, Spiegeln, Muster, Bemassung, Abhängigkeiten | ✔ | ✔ |
 | Assembly (Joints, Motion) | – | offen (Zielbereich Blech/Körper) |
 | Simulation, CAM, Rendering | – | ausserhalb |
+
+
+## Nachtrag 22.11.2026 (Skizze und Blech)
+- Skizze: **Fase**, **Skalieren**, **Schnitt mit Körper** (Schnittlinien der Körper mit der Skizzenebene) neu.
+- Blech: **Eckentlastung** (rund/quadratisch) am Flächenblech neu; Flansch/Umschlag mit Live-Vorschau, Ziehpfeilen und Fusion-Bezügen («Länge bis», «Biegeposition»).
+- Weiter offen (Skizze/Blech): Kegelschnitt (Conic), Rollsaum, Biegung gleichzeitig mit Kantenflanschen, Formwerkzeuge.
