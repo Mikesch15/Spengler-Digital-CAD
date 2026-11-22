@@ -20,9 +20,11 @@ await s.keyboard.down("Shift"); await s.mouse.move(900, 300); await s.mouse.down
 const blick = () => s.evaluate(() => window.sdcadTest.kameraBlick());
 ok(Math.abs((await blick())[2]) > 0.999, "Blick senkrecht auf die XY-Fläche (z = " + (await blick())[2] + ")");
 ok(!gleich(q0, await s.evaluate(() => window.sdcadTest.kameraQ())) && Math.abs((await blick())[2]) > 0.999, "Umschalt + Mausrad dreht in der Skizze nur in der Ebene (Blick bleibt, Ansicht 2D)");
+ok(await s.evaluate(() => window.sdcadTest.fov()) < 2, "Skizze: keine Perspektive (Sehfeld " + (await s.evaluate(() => window.sdcadTest.fov())).toFixed(2) + "°)");
 await s.evaluate(() => window.sdcadTest.beendeSkizze()); await s.waitForTimeout(400);
 await s.keyboard.down("Shift"); await s.mouse.move(900, 300); await s.mouse.down({ button: "middle" }); await s.mouse.move(1000, 400, { steps: 6 }); await s.mouse.up({ button: "middle" }); await s.keyboard.up("Shift"); await s.waitForTimeout(200);
 ok(!gleich(q0, await s.evaluate(() => window.sdcadTest.kameraQ())), "Nach der Skizze dreht Umschalt + Mausrad wieder");
+ok(await s.evaluate(() => window.sdcadTest.fov()) === 35, "Nach der Skizze wieder perspektivisch (35°)");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Skizzenansicht (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

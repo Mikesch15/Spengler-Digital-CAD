@@ -7,7 +7,7 @@ const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
 { const f0 = s.fill.bind(s); s.fill = async (sel, v, o) => (o?.force ? s.evaluate(([q, w]) => { const e = document.querySelector(q); e.value = w; e.dispatchEvent(new Event("input", { bubbles: true })); }, [sel, v]) : f0(sel, v, o)); }
-const kantenKlick = async (s, key) => { const k = (await s.evaluate(() => window.sdcadTest.profilKanten())).find((x) => x.key === key); if (!k) throw new Error("Kante " + key + " nicht gefunden"); await s.mouse.move(k.mitte[0], k.mitte[1]); await s.waitForTimeout(150); await s.mouse.click(k.mitte[0], k.mitte[1]); await s.waitForTimeout(500); };
+const kantenKlick = async (s, key) => { const k = (await s.evaluate(() => window.sdcadTest.profilKanten())).find((x) => x.key === key); if (!k) throw new Error("Kante " + key + " nicht gefunden"); await s.mouse.move(k.mitte[0], k.mitte[1]); await s.waitForTimeout(150); await s.mouse.click(k.mitte[0], k.mitte[1]); await s.waitForTimeout(500); await s.evaluate(() => document.getElementById("kbOk")?.click()); await s.waitForTimeout(500); };
 
 await s.addInitScript(() => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 9, features: [
   { id: "s1", typ: "skizze", name: "Skizze 1", ebene: "XY", elemente: [{ id: 1, art: "linie", pts: [[0, 0], [100, 0], [100, 60]], geschlossen: false }], bedingungen: [] },
@@ -38,6 +38,14 @@ await s.fill("#d_laenge", "50", { force: true }); await s.waitForTimeout(600); a
 const v4 = await vol(); ok(v4 - v3 > 1200, `Stirn-Flansch auf 50 mm verlängert: Volumen ${Math.round(v3)} → ${Math.round(v4)}`);
 await s.evaluate(() => { const l = window.sdcadTest.dok().features.filter((f) => f.typ === "profilkante"); window.sdcadTest.bearbeite(l[0].id); }); await s.waitForSelector("#dLoeschen:not([hidden])", { timeout: 4000 }); await s.click("#dLoeschen"); await s.waitForTimeout(600);
 ok(Math.abs((await vol()) - v3 + 0) > 100 && (await vol()) < v4, "Schritt löschen entfernt die Stirnlaschen wieder");
+{ await s.keyboard.press("Escape"); await s.evaluate(() => window.sdcadTest.waehle("b1")); await s.evaluate(() => document.querySelector('[data-kantenwz="flansch"]').click()); await s.waitForTimeout(400); // Wahl ohne Bestätigung legt nichts an; erst «Übernehmen» erzeugt die Flansche (Schritte, keine eigenen Körper im Browser)
+  const ks = await s.evaluate(() => window.sdcadTest.profilKanten()); for (const key of ["S1:1", "S2:2"]) { const k = ks.find((x) => x.key === key); await s.mouse.move(k.mitte[0], k.mitte[1]); await s.waitForTimeout(150); await s.mouse.click(k.mitte[0], k.mitte[1]); await s.waitForTimeout(300); }
+  const vorN = (await stirnAnz()).split(",").filter(Boolean).length; ok((await stirnAnz()).split(",").filter(Boolean).length === vorN && (await s.evaluate(() => document.getElementById("kbOk").textContent)).includes("(2)"), "Kanten nur gewählt (2), noch nichts angelegt");
+  await s.keyboard.press("Enter"); await s.waitForTimeout(700);
+  ok((await stirnAnz()).split(",").filter(Boolean).length === vorN + 2, "Enter/Übernehmen legt beide Flansche an (" + (await stirnAnz()) + ")");
+  ok(!(await s.evaluate(() => document.querySelector("aside.browser").textContent)).includes("Profilkante") && (await s.evaluate(() => [...document.querySelectorAll("aside.browser .eintrag, aside.browser li")].filter((e) => /Flansch/.test(e.textContent)).length)) === 0, "Flansche erscheinen nicht als eigene Körper im Browser");
+  await s.evaluate(() => document.getElementById("kbEnde").click()); await s.waitForTimeout(200);
+  }
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Stirnflansch (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

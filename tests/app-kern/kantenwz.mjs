@@ -13,7 +13,7 @@ const pj = { objekt: "K", nr: "K-1", zaehler: 10, features: [
 await s.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, pj);
 await s.goto("http://localhost:" + (process.env.PORT || 8791) + "/index.html?test"); await s.waitForTimeout(1200);
 const uv = (p) => s.evaluate((u) => window.sdcadTest.schirmUV("XY", u), p);
-const klick = async (p) => { const q = await uv(p); await s.mouse.move(q[0], q[1]); await s.waitForTimeout(120); await s.mouse.down(); await s.mouse.up(); await s.waitForTimeout(350); };
+const klick = async (p) => { const q = await uv(p); await s.mouse.move(q[0], q[1]); await s.waitForTimeout(120); await s.mouse.down(); await s.mouse.up(); await s.waitForTimeout(350); await s.evaluate(() => document.getElementById("kbOk")?.click()); await s.waitForTimeout(500); };
 const kanten = () => s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.id === "fl").kanten);
 const werkzeug = async (name) => { await s.click('[data-klapp="kanten"] .klappknopf'); await s.waitForTimeout(150); await s.click(`[data-kantenwz="${name}"]`); await s.waitForTimeout(250); };
 // ohne Werkzeug: Klick auf die Kante legt nichts an

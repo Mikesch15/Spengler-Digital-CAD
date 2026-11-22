@@ -7,7 +7,7 @@ const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
 { const f0 = s.fill.bind(s); s.fill = async (sel, v, o) => (o?.force ? s.evaluate(([q, w]) => { const e = document.querySelector(q); e.value = w; e.dispatchEvent(new Event("input", { bubbles: true })); }, [sel, v]) : f0(sel, v, o)); }
-const kantenKlick = async (s, key) => { const k = (await s.evaluate(() => window.sdcadTest.profilKanten())).find((x) => x.key === key); if (!k) throw new Error("Kante " + key + " nicht gefunden"); await s.mouse.move(k.mitte[0], k.mitte[1]); await s.waitForTimeout(150); await s.mouse.click(k.mitte[0], k.mitte[1]); await s.waitForTimeout(500); };
+const kantenKlick = async (s, key) => { const k = (await s.evaluate(() => window.sdcadTest.profilKanten())).find((x) => x.key === key); if (!k) throw new Error("Kante " + key + " nicht gefunden"); await s.mouse.move(k.mitte[0], k.mitte[1]); await s.waitForTimeout(150); await s.mouse.click(k.mitte[0], k.mitte[1]); await s.waitForTimeout(500); await s.evaluate(() => document.getElementById("kbOk")?.click()); await s.waitForTimeout(500); };
 
 await s.addInitScript(() => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 9, features: [
   { id: "s1", typ: "skizze", name: "Skizze 1", ebene: "XY", elemente: [{ id: 1, art: "linie", pts: [[0, 0], [100, 0], [100, 60]], geschlossen: false }], bedingungen: [] },
