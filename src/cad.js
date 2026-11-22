@@ -4509,6 +4509,7 @@ function fitte(box) {
 }
 const alleBox = () => { const b = new THREE.Box3(); modell.children.forEach((o) => { if (!o.userData.konstruktion) b.expandByObject(o); }); b.union(new THREE.Box3().setFromObject(live)); if (bilder.children.length) b.union(new THREE.Box3().setFromObject(bilder)); return b; }; // Achsen sind «unendlich» lang
 function ansicht(name) {
+  if (skizze) return; // in der Skizze bleibt die Ansicht senkrecht auf die Fläche
   const d = { oben: [0, 1, 0.0001], unten: [0, -1, 0.0001], vorne: [0, 0, 1], hinten: [0, 0, -1], rechts: [1, 0, 0], links: [-1, 0, 0], iso: [0.7, 0.5, 0.8] }[name];
   kamera.position.copy(steuerung.target.clone().add(V(d).normalize()));
   fitte(alleBox());
@@ -5761,6 +5762,7 @@ function klappZu() {
   if (!bandAn()) return;
   const kp = leiste.querySelector(`#gHaupt .klapp[data-klapp="${aktTab}"]`) || leiste.querySelector("#gHaupt .klapp"); if (!kp) return;
   kp.querySelector(".klappmenue").hidden = false; kp.querySelector(".klappknopf").setAttribute("aria-selected", "true");
+  leiste.dataset.tab = kp.dataset.klapp;
 }
 addEventListener("resize", klappZu);
 setTimeout(klappZu);
@@ -5792,6 +5794,7 @@ new MutationObserver(() => leiste.querySelectorAll(".klapp").forEach((kp) => {
 // Nur zeigen, was gerade gebraucht wird: in der Skizze die Skizzenwerkzeuge, bei offenem Befehl nur dessen Name
 function leisteZustand() {
   leiste.classList.toggle("imSkizze", !!skizze);
+  document.body.classList.toggle("skizzeAktiv", !!skizze);
   const imDialog = !!dlg && !skizze; leiste.classList.toggle("imDialog", imDialog);
   $("aktivWz").hidden = !imDialog; if (imDialog) $("aktivWz").textContent = dlg.titel + " – im Dialog fertigstellen";
   klappZu();
@@ -6295,7 +6298,12 @@ regen();
 auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser(); zeigeWerkstatt();
 ansicht("iso");
 kernAnzeige();
-(function schleife() { steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
+function skizzeSenkrecht() { // Blick immer genau senkrecht auf die Skizzenebene (nur Drehung in der Ebene erlaubt)
+  const E = E_(skizze.f.ebene), n = V(E.n), d = kamera.position.clone().sub(steuerung.target), L = d.length(); if (L < 1e-6) return;
+  const c = d.dot(n) / L; if (Math.abs(c) > 0.9999999) return;
+  kamera.position.copy(steuerung.target).add(n.multiplyScalar(L * (c < 0 ? -1 : 1)));
+}
+(function schleife() { if (skizze) skizzeSenkrecht(); steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
 // Kontextleiste (siehe src/kontext.js): passende Werkzeuge zur Auswahl
 initKontext({

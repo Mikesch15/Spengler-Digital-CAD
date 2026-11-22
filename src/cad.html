@@ -571,6 +571,14 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 #plEigen { background: var(--panel); border-left: 1px solid var(--line); padding: 0 12px 12px; gap: 10px; }
 #plEigen::before { content: "Eigenschaften"; display: block; margin: 0 -12px 4px; padding: 10px 12px; font: 600 12px var(--font-label); background: var(--panel-2); border-bottom: 1px solid var(--line); }
 .plkopf select, .plkopf .knopf { font-size: 13px; }
+
+.skizzeAktiv #wuerfelHit, .skizzeAktiv [data-ansicht] { display: none !important; } /* Skizze: Ansicht bleibt senkrecht (kein Würfel, kein Iso) */
+@media (min-width: 1001px) {
+  .leiste:not(.imSkizze):not(.imDialog) .trenner { display: none; }
+  /* Skizze, 2D, Ebene gehören zum Reiter Körper, Plan zu Prüfen */
+  .leiste:not(.imSkizze):not(.imDialog):not([data-tab="koerper"]) #gHaupt > .knoepfe > #wSkizze, .leiste:not(.imSkizze):not(.imDialog):not([data-tab="koerper"]) #gHaupt > .knoepfe > #w2D, .leiste:not(.imSkizze):not(.imDialog):not([data-tab="koerper"]) #gHaupt > .knoepfe > #wEbene,
+  .leiste:not(.imSkizze):not(.imDialog):not([data-tab="pruefen"]) #gHaupt > .knoepfe > #wPlan { display: none; }
+}
 </style>
 
 <a class="skip" href="#leinwand" id="skipLink">Zur 3D-Ansicht</a>
