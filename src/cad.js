@@ -1334,6 +1334,10 @@ function regen() {
           _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
         for (const bl of f._bleche) bl.abw.loecher = [];
         if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, blechEbene(s.ebene, f, m), m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
+      } else if (f.typ === "loftflansch") { // Lofted Flange: Blech zwischen zwei Profilen
+        f._teile = null; const lb = loftflanschBau(f);
+        if (!f.versteckt) modell.add(koerperAusGeo(lb.geo, darstellungVon(f, lb.m), `${f.id}:0`));
+        f._teile = [{ id: `${f.id}:0`, typ: "flaechenteil", eltern: f, name: f.name, material: f.material, laenge: +lb.abw.laenge.toFixed(1), stueck: f.stueck ?? 1, notiz: f.notiz, _blech: { pi: 0, pts: [], gruppen: [], profile: [], abw: lb.abw }, _res: { zuschnitt: lb.abw.breite, biegungen: lb.abw.linien.map((l, i) => ({ nr: i + 1, pos: l.punkte[0][0], winkel: 0, art: "Abkanten", richtung: "oben" })), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }];
       } else if (f.typ === "gebaeude") { // Gebäude-Ansatz: Wände bis zur Traufe bzw. zum Dach (Giebel)
         if (!(f.traufhoehe > 0) || (f.form !== "skizze" && !(f.breite > 0 && f.tiefe > 0))) throw new Error("Breite, Tiefe und Wandhöhe müssen grösser als 0 sein");
         const dach = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id && !x._aus), r = dach ? dachErgebnis(dach, f) : { grundriss: gebaeudeUmriss(f), hoeheAn: () => f.traufhoehe };
@@ -1528,7 +1532,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { rip: "Rip (Auftrennen)", biegung: "Biegung an Linie", skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { loftflansch: "Lofted Flange", rip: "Rip (Auftrennen)", biegung: "Biegung an Linie", skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
@@ -1557,7 +1561,7 @@ $("baum").addEventListener("dblclick", (e) => { const id = e.target.closest("li"
 
 // Zeitleiste: Symbole statt Namen (Name erscheint beim Überfahren)
 const ZEIT_ICON = {
-  rip: '<path d="M3 12h7l2-3 2 6 2-3h5"/>', biegung: '<path d="M3 17h8l6-9h4"/>', skalieren: '<rect x="4" y="10" width="8" height="8"/><rect x="4" y="4" width="16" height="16" stroke-dasharray="2 2"/>', bohrung: '<circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4"/>', rohr: '<path d="M4 18h8a4 4 0 0 0 4-4V6"/>', spirale: '<path d="M6 20c8 0 8-4 0-4s-8-4 0-4 8-4 0-4"/>', rippe: '<path d="M4 20h16M12 20V6"/>',
+  loftflansch: '<path d="M3 18c4 0 5-12 9-12s5 12 9 12"/><path d="M3 21h18"/>', rip: '<path d="M3 12h7l2-3 2 6 2-3h5"/>', biegung: '<path d="M3 17h8l6-9h4"/>', skalieren: '<rect x="4" y="10" width="8" height="8"/><rect x="4" y="4" width="16" height="16" stroke-dasharray="2 2"/>', bohrung: '<circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4"/>', rohr: '<path d="M4 18h8a4 4 0 0 0 4-4V6"/>', spirale: '<path d="M6 20c8 0 8-4 0-4s-8-4 0-4 8-4 0-4"/>', rippe: '<path d="M4 20h16M12 20V6"/>',
   skizze: '<path d="M4 17l4-7 3 4 4-6"/><circle cx="4" cy="17" r="1.3"/><circle cx="15" cy="8" r="1.3"/>', extrusion: '<path d="M4 15l8 4 8-4-8-4z"/><path d="M12 11V3M9 6l3-3 3 3"/>', drehung: '<path d="M12 3v18" stroke-dasharray="2 2.5"/><path d="M12 7h5c1.4 3.5 1.4 6.5 0 10h-5z"/>', sweep: '<path d="M5 18c0-7 5-10 14-12" stroke-dasharray="2 2.5"/><rect x="3" y="16" width="5" height="5" rx=".8"/>', loft: '<rect x="3" y="16" width="18" height="4" rx="1"/><ellipse cx="12" cy="6" rx="5" ry="2.5"/><path d="M3 17L7 7M21 17l-4-10"/>',
   blech: '<path d="M3 17h5l5-9h8"/>', vorlage: '<path d="M3 17h5l5-9h8"/>', profil: '<path d="M3 17h5l5-9h8"/>', flaeche: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>', kante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', profilkante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', quetschfalte: '<path d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/>',
   dach: '<path d="M3 12l9-8 9 8"/><path d="M6 11v8h12v-8"/>', gebaeude: '<path d="M5 20V9l7-5 7 5v11z"/>', dachbleche: '<path d="M3 12l9-8 9 8"/><path d="M7 12l5-4 5 4"/>', eindeckung: '<path d="M3 12l9-8 9 8"/><path d="M6 14h12M8 17h8"/>', dachelement: '<path d="M3 12l9-8 9 8"/><rect x="9" y="11" width="6" height="5"/>', lukarne: '<path d="M3 12l9-8 9 8"/><path d="M9 20v-6l3-3 3 3v6z"/>',
@@ -1970,7 +1974,7 @@ function dialog(opt) {
     return `<div class="feld" data-s="${esc(fd.schritt || "")}"${fd.wahl ? ` data-wahl="${fd.wahl}" data-feld="${fd.id}"` : ""}><label for="d_${fd.id}">${fd.wahl ? "⊕ " : ""}${fd.label}${fd.einheit ? ` (${fd.einheit})` : ""}</label>${inp}</div>`;
   }).join("") + (opt.zusatz ? `<div id="dZusatz">${opt.zusatz()}</div>` : "") + (opt.hinweis ? `<p class="hinweis">${opt.hinweis}</p>` : "");
   $("dialog").hidden = false;
-  document.querySelector(".mitte")?.classList.toggle("dialogMitWerk", ["blech", "vorlage", "profil", "rundblech", "kehle", "flaeche", "flaechenteil", "kante", "profilkante"].includes(opt.feature?.typ)); // Blechwerkzeuge zeigen Zuschnitt/Abwicklung im Teil-Panel
+  document.querySelector(".mitte")?.classList.toggle("dialogMitWerk", ["blech", "vorlage", "profil", "rundblech", "kehle", "loftflansch", "flaeche", "flaechenteil", "kante", "profilkante"].includes(opt.feature?.typ)); // Blechwerkzeuge zeigen Zuschnitt/Abwicklung im Teil-Panel
   zeigeSchritt();
   opt.felder.forEach((fd) => $("d_" + fd.id).addEventListener(fd.optionen ? "change" : "input", () => opt.aendern?.(werte(), fd.id)));
   opt.binden?.($("dZusatz"));
@@ -2077,6 +2081,7 @@ function bearbeite(f) {
   if (KOERPER_WZ2[f.typ]) return koerper2Dialog(f.typ, f);
   if (f.typ === "biegung") return biegungDialog(f);
   if (f.typ === "rip") return ripDialog(f);
+  if (f.typ === "loftflansch") return loftflanschDialog(f);
   if (f.typ === "loft") return loftDialog(f);
   if (f.typ === "blech") return blechDialog(f);
   if (f.typ === "vorlage") return vorlageDialog(f);
@@ -3207,6 +3212,7 @@ function kanteDialog(f) {
   featureDialog(f, false, felder, setze, "Kante bearbeiten", "Ändert den Flansch bzw. Baustein dieser Kante – das Blech passt sich sofort an. Richtung auch per Rechtsklick › «Richtung umkehren».", { wahlNr: -1, aktiveKante: f.key, nachRegen: () => zeigeKanten() });
   zeigeKanten();
 }
+$("wLoftFlansch")?.addEventListener("click", () => { if (dlg) $("dAbbrechen").click(); loftflanschDialog(); });
 $("wRip")?.addEventListener("click", () => { if (dlg) $("dAbbrechen").click(); ripDialog(); });
 $("wBiegung")?.addEventListener("click", () => { if (dlg) $("dAbbrechen").click(); biegungDialog(); });
 for (const [id, t] of [["wSkalieren", "skalieren"], ["wBohrung", "bohrung"], ["wRohr", "rohr"], ["wSpirale", "spirale"], ["wRippe", "rippe"]]) $(id).addEventListener("click", () => { if (dlg) $("dAbbrechen").click(); koerper2Dialog(t); });
@@ -3605,6 +3611,41 @@ function ripOp(f) { // Rip: Blech entlang einer Skizzenlinie auftrennen (Schlitz
   for (const o of modell.children.filter((o) => o.isMesh && (o.userData.fid === z.id || String(o.userData.fid).startsWith(z.id + ":")))) verknuepfe(o, g, "ausschneiden");
   const bl = z._bleche[0]; bl.abw.loecher = [...(bl.abw.loecher || []), rechteck]; bl.abw.linien.push({ kante: -1, nr: 0, art: "rip", punkte: [A, B] }); f._rip = { laenge: L, spalt: gap };
 }
+// ---- Lofted Flange: Blechfläche zwischen zwei offenen Profilen (Linienzügen), Dicke aus dem Material, mit genäherter Abwicklung ----
+function loftflanschBau(f) {
+  const m = material(f.material), t = m.t, holen = (id, k, nr) => { const sk = finde(id); if (!sk) throw new Error(`Profilskizze ${nr} fehlt`); const kt = ketten(sk)[k || 0]; if (!kt) throw new Error(`Skizze ${nr} hat keinen offenen Linienzug`); return kt.pts.map((p) => zu3D(sk.ebene, p)); };
+  if (f.profil1 === f.profil2 && (f.kette1 || 0) === (f.kette2 || 0)) throw new Error("Zwei verschiedene Profile wählen");
+  const A = holen(f.profil1, f.kette1, 1), B = holen(f.profil2, f.kette2, 2), par = (P) => { const L = [0]; for (let i = 1; i < P.length; i++) L.push(L[i - 1] + P[i].distanceTo(P[i - 1])); const tot = L.at(-1) || 1; return L.map((v) => v / tot); };
+  const pa = par(A), pb = par(B), us = [...new Set([...pa, ...pb].map((v) => +v.toFixed(6)))].sort((x, y) => x - y);
+  const bei = (P, pr, u) => { for (let i = 1; i < pr.length; i++) if (u <= pr[i] + 1e-9) return P[i - 1].clone().lerp(P[i], Math.min(1, (u - pr[i - 1]) / Math.max(pr[i] - pr[i - 1], 1e-12))); return P.at(-1).clone(); };
+  const J = us.length - 1, M = Math.max(4, Math.round(+f.teilung || 12)), g = []; for (let i = 0; i <= M; i++) g.push(us.map((u) => bei(A, pa, u).lerp(bei(B, pb, u), i / M)));
+  if (J < 1) throw new Error("Profile zu kurz");
+  const nrm = (i, j) => { const tu = g[i][Math.min(J, j + 1)].clone().sub(g[i][Math.max(0, j - 1)]), tv = g[Math.min(M, i + 1)][j].clone().sub(g[Math.max(0, i - 1)][j]); return tu.cross(tv).normalize(); };
+  const N = g.map((r, i) => r.map((_, j) => nrm(i, j))), versch = f.lage === "vorne" ? t / 2 : f.lage === "hinten" ? -t / 2 : 0, sg = f.sichtseite === -1 ? -1 : 1, pos = [];
+  const top = (i, j) => g[i][j].clone().addScaledVector(N[i][j], sg * (t / 2 + versch)), bot = (i, j) => g[i][j].clone().addScaledVector(N[i][j], sg * (-t / 2 + versch));
+  const tri = (a, b, c, aussen) => { const n = b.clone().sub(a).cross(c.clone().sub(a)); if (n.dot(aussen) < 0) [b, c] = [c, b]; pos.push(...a.toArray(), ...b.toArray(), ...c.toArray()); };
+  const quad = (a, b, c, d, aussen) => { tri(a, b, c, aussen); tri(a, c, d, aussen); };
+  for (let i = 0; i < M; i++) for (let j = 0; j < J; j++) {
+    const nT = N[i][j].clone().multiplyScalar(sg), nB = nT.clone().negate();
+    quad(top(i, j), top(i, j + 1), top(i + 1, j + 1), top(i + 1, j), nT); quad(bot(i, j), bot(i, j + 1), bot(i + 1, j + 1), bot(i + 1, j), nB);
+    if (j === 0) quad(top(i, 0), top(i + 1, 0), bot(i + 1, 0), bot(i, 0), g[i][0].clone().sub(g[i][1])); if (j === J - 1) quad(top(i, J), top(i + 1, J), bot(i + 1, J), bot(i, J), g[i][J].clone().sub(g[i][J - 1]));
+    if (i === 0) quad(top(0, j), top(0, j + 1), bot(0, j + 1), bot(0, j), g[0][j].clone().sub(g[1][j])); if (i === M - 1) quad(top(M, j), top(M, j + 1), bot(M, j + 1), bot(M, j), g[M][j].clone().sub(g[M - 1][j]));
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
+  // Abwicklung: Dreiecke der Reihe nach in die Ebene klappen (für nicht abwickelbare Flächen eine Näherung)
+  const f2 = (x, y) => ({ x, y }), plan = g.map((r) => r.map(() => null)); let x = 0; plan[0][0] = f2(0, 0);
+  for (let j = 1; j <= J; j++) { x += g[0][j].distanceTo(g[0][j - 1]); plan[0][j] = f2(x, 0); }
+  const platz = (P, Q, dP, dQ, seite) => { const dx = Q.x - P.x, dy = Q.y - P.y, d = Math.hypot(dx, dy) || 1e-9, a = (dP * dP - dQ * dQ + d * d) / (2 * d), h = Math.sqrt(Math.max(0, dP * dP - a * a)); return f2(P.x + (a * dx) / d + (seite * -dy * h) / d, P.y + (a * dy) / d + (seite * dx * h) / d); };
+  for (let i = 1; i <= M; i++) for (let j = 0; j <= J; j++) {
+    if (j === 0) plan[i][0] = platz(plan[i - 1][0], plan[i - 1][1], g[i][0].distanceTo(g[i - 1][0]), g[i][0].distanceTo(g[i - 1][1]), 1);
+    else plan[i][j] = platz(plan[i][j - 1], plan[i - 1][j], g[i][j].distanceTo(g[i][j - 1]), g[i][j].distanceTo(g[i - 1][j]), -1);
+  }
+  const rand = []; for (let i = 0; i <= M; i++) rand.push(plan[i][0]); for (let j = 1; j <= J; j++) rand.push(plan[M][j]); for (let i = M - 1; i >= 0; i--) rand.push(plan[i][J]); for (let j = J - 1; j >= 1; j--) rand.push(plan[0][j]);
+  const umriss = rand.map((q) => [q.x, q.y]), xs = umriss.map((q) => q[0]), ys = umriss.map((q) => q[1]), flaeche = Math.abs(umriss.reduce((a, q, i) => { const r = umriss[(i + 1) % umriss.length]; return a + q[0] * r[1] - r[0] * q[1]; }, 0) / 2);
+  const biege = []; for (let j = 1; j < J; j++) { const a = A.length > 2, kn = us[j]; if (pa.some((v) => Math.abs(v - kn) < 1e-5) || pb.some((v) => Math.abs(v - kn) < 1e-5)) biege.push({ kante: -1, nr: biege.length + 1, art: "Abkanten", punkte: plan.map((r) => [r[j].x, r[j].y]) }); }
+  const abw = { umriss, linien: biege, drehung: 0, laenge: Math.max(...xs) - Math.min(...xs), breite: Math.max(...ys) - Math.min(...ys), flaeche: flaeche / 1e6, dreh: (p) => p, loecher: [] };
+  return { geo, abw, m };
+}
 const KOERPER_WZ2 = { skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe" };
 const csgGeo = (a, b, op) => { const A = new Brush(nurPos(a)), B = new Brush(nurPos(b)); A.updateMatrixWorld(); B.updateMatrixWorld(); return csg.evaluate(A, B, op).geometry; };
 const vereinigeGeos = (liste) => liste.slice(1).reduce((acc, g) => csgGeo(acc, g, ADDITION), liste[0]);
@@ -3737,6 +3778,16 @@ function ripDialog(f) {
   featureDialog(f, istNeu, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "ziel", label: "Flächenblech", optionen: fl.map((x) => [x.id, x.name]), wert: ff.ziel }, { id: "skizze", label: "Trennlinie (Skizze, erste Linie)", optionen: sk.map((x) => [x.id, x.name]), wert: ff.skizze }, { id: "spalt", label: "Spalt (Schlitzbreite)", einheit: "mm", wert: ff.spalt }],
     (ff, w) => Object.assign(ff, w, { name: w.name?.trim() || ff.name }), "Rip (Auftrennen)", "Trennt das Blech entlang der Linie auf (Schlitz mit Spalt): Eckentlastung bzw. Naht, damit sich Ecken ohne Zwang falten lassen. Der Schlitz erscheint auch in der Abwicklung.",
     { info: () => (f._fehler ? "⚠ " + f._fehler : f._rip ? `Schlitz ${f1(f._rip.laenge)} × ${f1(f._rip.spalt)} mm` : "") });
+}
+function loftflanschDialog(f) {
+  const istNeu = !f, sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
+  if (sk.length < 2) return status("Zuerst zwei Profile als offene Linienzüge in zwei Skizzen zeichnen (z. B. auf zwei parallelen Ebenen).");
+  f ||= { id: neueId(), typ: "loftflansch", name: "Lofted Flange " + (doc.features.filter((x) => x.typ === "loftflansch").length + 1), profil1: sk.at(-2).id, profil2: sk.at(-1).id, kette1: 0, kette2: 0, material: neuMaterial(), stueck: einst.neu.stueck, sichtseite: 1, lage: "mitte", teilung: 12 };
+  featureDialog(f, istNeu, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "profil1", label: "Profil 1 (Skizze)", optionen: sk.map((x) => [x.id, x.name]), wert: ff.profil1 }, { id: "profil2", label: "Profil 2 (Skizze)", optionen: sk.map((x) => [x.id, x.name]), wert: ff.profil2 },
+    { id: "material", label: "Material", optionen: matOpt(), wert: ff.material }, { id: "sichtseite", label: "Sichtseite", optionen: [["1", "Vorne (Flächennormale)"], ["-1", "Hinten"]], wert: String(ff.sichtseite ?? 1) },
+    { id: "lage", label: "Profile liegen …", optionen: [["mitte", "in der Blechmitte"], ["vorne", "auf der Vorderseite"], ["hinten", "auf der Rückseite"]], wert: ff.lage || "mitte" }, { id: "teilung", label: "Unterteilung", wert: ff.teilung ?? 12 }, { id: "stueck", label: "Stück", wert: ff.stueck ?? 1 }, { id: "notiz", label: "Notiz", text: true, wert: ff.notiz ?? "" }],
+    (ff, w) => Object.assign(ff, w, { name: w.name?.trim() || ff.name, sichtseite: +w.sichtseite || 1 }), "Lofted Flange", "Blechfläche zwischen zwei offenen Profilen (Linienzügen): Die Ecken der Profile bleiben als Kanten erhalten, die Abwicklung ist bei nicht abwickelbaren Flächen eine Näherung.",
+    { info: () => (f._fehler ? "⚠ " + f._fehler : f._teile?.[0] ? `Zuschnitt ≈ ${f1(f._teile[0]._blech.abw.laenge)} × ${f1(f._teile[0]._blech.abw.breite)} mm` : "") });
 }
 function koerper2Dialog(typ, f) {
   const istNeu = !f, opt = koerperOpt(f), sk = (arten) => doc.features.filter((x) => x.typ === "skizze" && x.elemente.some((el) => arten.includes(el.art)));
