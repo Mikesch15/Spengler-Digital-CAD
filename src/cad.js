@@ -540,6 +540,19 @@ function verknuepfe(ziel, werkzeug, op, kantenNeu = true) {
 const nurPos = (g) => { const n = g.index ? g.toNonIndexed() : g.clone(); for (const k of Object.keys(n.attributes)) if (k !== "position" && k !== "normal") n.deleteAttribute(k); if (!n.attributes.normal) n.computeVertexNormals(); return n; };
 // ueber > 0: Werkzeug für Vereinigen/Ausschneiden an beiden Enden etwas länger – deckungsgleiche Flächen (Skizze auf der
 // Körperfläche) machen die Boolesche Rechnung sonst sehr langsam und unsauber; 0.01 mm ist für die Werkstatt ohne Belang
+// Konische Extrusion (Entformungsschräge wie der «Konuswinkel» der Fusion-Extrusion): Deckfläche um tan(Winkel)·Tiefe nach innen (+) bzw. aussen (−) versetzt
+function konischGeometrie(loops, ebene, tiefe, richtung, winkel) {
+  const d = Math.tan((winkel * Math.PI) / 180) * Math.abs(tiefe), pos = [], tri = (a, b, c) => pos.push(...a, ...b, ...c);
+  for (const roh of loops) {
+    let L = roh.slice(); if (L.length > 2 && gleich(L[0], L.at(-1))) L.pop(); if (L.length < 3) continue; if (flaeche(L) < 0) L = L.reverse();
+    const T = versatzPolylinie(L, d, true), n = L.length, B = (i) => [L[i][0], L[i][1], 0], Tp = (i) => [T[i][0], T[i][1], tiefe];
+    for (let i = 0; i < n; i++) { const j = (i + 1) % n; tri(B(i), B(j), Tp(j)); tri(B(i), Tp(j), Tp(i)); } // Seiten (gegen den Uhrzeigersinn: aussen)
+    for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(L.map(([x, y]) => new THREE.Vector2(x, y)), [])) { tri(B(a), B(c), B(b)); tri(Tp(a), Tp(b), Tp(c)); }
+  }
+  if (!pos.length) throw new Error("Konische Extrusion: kein geschlossenes Profil");
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
+  geo.translate(0, 0, -rueckVersatz(richtung, tiefe)); geo.applyMatrix4(basis(ebene)); return geo;
+}
 function koerperGeometrie(formen_, ebene, tiefe, richtung, ueber = 0) {
   const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe + 2 * ueber, bevelEnabled: false, curveSegments: 48 });
   geo.translate(0, 0, -ueber);
@@ -1221,7 +1234,7 @@ function regen() {
         const fs = formen(s, undefined, f); if (!fs.length) throw new Error(Array.isArray(f.flaechen) ? "Gewählte Fläche gibt es nicht mehr – neu anklicken" : "Skizze hat kein geschlossenes Profil");
         const kr = doc.features.filter((x) => x.typ === "kantenrund" && x.ziel === f.id && !x._aus);
         aktSchnitt = { ebene: s.ebene, loops: gewaehlteRegionen(f, s)?.map((r) => r.aussen) ?? schleifen(s) };
-        try { volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : koerperGeometrie(fs, s.ebene, zweiseitig(f, "abstand", "abstand2").tiefe, zweiseitig(f, "abstand", "abstand2").richtung, (f.vorgang || "neu") === "neu" ? 0 : 0.01)); } finally { aktSchnitt = null; }
+        try { volumenKoerper(f, kr.length ? gerundeteExtrusion(s, f, kr) : +f.konisch ? konischGeometrie(aktSchnitt.loops, s.ebene, zweiseitig(f, "abstand", "abstand2").tiefe, zweiseitig(f, "abstand", "abstand2").richtung, +f.konisch) : koerperGeometrie(fs, s.ebene, zweiseitig(f, "abstand", "abstand2").tiefe, zweiseitig(f, "abstand", "abstand2").richtung, (f.vorgang || "neu") === "neu" ? 0 : 0.01)); } finally { aktSchnitt = null; }
       } else if (f.typ === "bild") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         if (!f.versteckt) bilder.add(bildObjekt(f));
@@ -2160,6 +2173,7 @@ function extrusionDialog(f) {
     { id: "abstand", label: f.richtung === "zwei" ? "Abstand 1" : "Abstand", einheit: "mm", wert: f.abstand },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung },
     ...zweiFeld(f, "abstand", "Abstand"),
+    { id: "konisch", label: "Konuswinkel (Entformung, + = nach innen)", einheit: "°", wert: f.konisch ?? 0 },
     ...bisFelder(f),
     ...vorgangFelder(f),
   ], (f, w) => { if (Array.isArray(f.flaechen) && w.skizze !== f.skizze) f.flaechen = []; Object.assign(f, w); }, "Extrudieren",
@@ -3713,6 +3727,10 @@ function transformAus(f, k) {
     return M;
   }
   if (f.typ === "kspiegel") { const e = bezugEbene(f.ebene), n = V(e.n).normalize(), d = n.dot(V(e.o)); return new THREE.Matrix4().set(1 - 2 * n.x * n.x, -2 * n.x * n.y, -2 * n.x * n.z, 2 * d * n.x, -2 * n.y * n.x, 1 - 2 * n.y * n.y, -2 * n.y * n.z, 2 * d * n.y, -2 * n.z * n.x, -2 * n.z * n.y, 1 - 2 * n.z * n.z, 2 * d * n.z, 0, 0, 0, 1); }
+  if (f.art === "pfad") { // Muster entlang eines Pfads (offener Linienzug einer Skizze): Kopien in gleichen Abständen, Lage relativ zum Pfadanfang
+    const sk = finde(f.pfadSkizze), kt = sk && ketten(sk)[f.pfadKette || 0]; if (!kt) throw new Error("Pfad (offener Linienzug) fehlt");
+    const P = kt.pts.map((p) => zu3D(sk.ebene, p)), Ls = [0]; for (let i = 1; i < P.length; i++) Ls.push(Ls[i - 1] + P[i].distanceTo(P[i - 1])); const n = Math.max(2, Math.round(f.anzahl || 2)), ziel = (Ls.at(-1) * k) / (n - 1);
+    let i = 1; while (i < Ls.length - 1 && Ls[i] < ziel) i++; const q = P[i - 1].clone().lerp(P[i], Math.min(1, (ziel - Ls[i - 1]) / Math.max(Ls[i] - Ls[i - 1], 1e-9))); return new THREE.Matrix4().makeTranslation(q.x - P[0].x, q.y - P[0].y, q.z - P[0].z); }
   if (f.art === "kreis") { const a = bezugKante(f.achse), p = V(a.p), d = V(a.d).normalize(), voll = Math.abs(Math.abs(f.winkel ?? 360) - 360) < 1e-6, w = (((f.winkel ?? 360) * Math.PI) / 180) / (voll ? f.anzahl : Math.max(1, f.anzahl - 1)) * k;
     return new THREE.Matrix4().makeTranslation(p.x, p.y, p.z).multiply(new THREE.Matrix4().makeRotationAxis(d, w)).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z)); }
   const d1 = V(bezugKante(f.richtung1 || "A:X").d).normalize(), n1 = Math.max(1, Math.round(f.anzahl || 2)), i = k % n1, j = Math.floor(k / n1);
@@ -3743,7 +3761,7 @@ function koerperTransform(f, volumen) {
   const quellen = koerperVon(f.ziel, volumen); if (!quellen.length && finde(f.ziel)?.versteckt) return; // ausgeblendet: Kopien auch
   if (!quellen.length) throw new Error("Körper fehlt (ausgeblendet, unterdrückt oder noch nicht da)");
   const kopie = f.typ === "kspiegel" || f.typ === "kmuster" || f.kopie;
-  const anzahl = f.typ === "kmuster" ? (f.art === "kreis" ? Math.max(2, Math.round(f.anzahl)) : Math.max(1, Math.round(f.anzahl || 1)) * Math.max(1, Math.round(f.anzahl2 || 1))) : 2;
+  const anzahl = f.typ === "kmuster" ? (f.art === "pfad" ? Math.max(2, Math.round(f.anzahl || 2)) : f.art === "kreis" ? Math.max(2, Math.round(f.anzahl)) : Math.max(1, Math.round(f.anzahl || 1)) * Math.max(1, Math.round(f.anzahl2 || 1))) : 2;
   if (f.typ === "kmuster" && anzahl < 2) throw new Error("Anzahl mindestens 2");
   for (let k = 1; k < anzahl; k++) {
     const M = transformAus(f, k), spiegel = M.determinant() < 0;
@@ -3828,8 +3846,9 @@ function koerperDialog(typ, f) {
     kantenrund: () => [{ id: "art", label: "Art", optionen: [["rund", "Abrunden (Radius)"], ["fase", "Fasen (Abstand)"]], wert: f.art }, { id: "mass", label: f.art === "fase" ? "Fase" : "Radius", einheit: "mm", wert: f.mass },
       { id: "kanten", label: "Kanten", optionen: [["alle", "Alle Kanten"], ["senkrecht", "Kanten in Extrusionsrichtung"], ["quer", "Kanten oben und unten"]], wert: f.kanten }],
     schale: () => [{ id: "dicke", label: "Wanddicke", einheit: "mm", wert: f.dicke }, { id: "offen", label: "Offene Seite", optionen: [["oben", "Oben (Ende der Extrusion)"], ["unten", "Unten (Skizzenebene)"], ["beide", "Oben und unten"], ["keine", "Keine (geschlossen hohl)"]], wert: f.offen }],
-    kmuster: () => [{ id: "art", label: "Art", optionen: [["rechteck", "Rechteckig"], ["kreis", "Kreisförmig"]], wert: f.art },
-      ...(f.art === "kreis" ? [{ id: "achse", label: "Achse", wahl: "kante", optionen: mitWert(kantenListe(f), f.achse), wert: f.achse }, { id: "anzahl", label: "Anzahl", wert: f.anzahl }, { id: "winkel", label: "Gesamtwinkel", einheit: "°", wert: f.winkel }]
+    kmuster: () => [{ id: "art", label: "Art", optionen: [["rechteck", "Rechteckig"], ["kreis", "Kreisförmig"], ["pfad", "Entlang eines Pfads"]], wert: f.art },
+      ...(f.art === "pfad" ? [{ id: "pfadSkizze", label: "Pfad (Skizze, offener Linienzug)", optionen: doc.features.filter((x) => x.typ === "skizze" && ketten(x).length).map((x) => [x.id, x.name]), wert: f.pfadSkizze || doc.features.filter((x) => x.typ === "skizze" && ketten(x).length).at(-1)?.id }, { id: "anzahl", label: "Anzahl (inkl. Original)", wert: f.anzahl }] : []),
+      ...(f.art === "pfad" ? [] : f.art === "kreis" ? [{ id: "achse", label: "Achse", wahl: "kante", optionen: mitWert(kantenListe(f), f.achse), wert: f.achse }, { id: "anzahl", label: "Anzahl", wert: f.anzahl }, { id: "winkel", label: "Gesamtwinkel", einheit: "°", wert: f.winkel }]
         : [{ id: "richtung1", label: "Richtung 1", wahl: "kante", optionen: mitWert(kantenListe(f), f.richtung1), wert: f.richtung1 }, { id: "anzahl", label: "Anzahl 1", wert: f.anzahl }, { id: "abstand", label: "Abstand 1", einheit: "mm", wert: f.abstand },
           { id: "richtung2", label: "Richtung 2", wahl: "kante", optionen: mitWert(kantenListe(f), f.richtung2), wert: f.richtung2 }, { id: "anzahl2", label: "Anzahl 2", wert: f.anzahl2 }, { id: "abstand2", label: "Abstand 2", einheit: "mm", wert: f.abstand2 }])],
     kspiegel: () => [{ id: "ebene", label: "Spiegelebene", wahl: "ebene", optionen: ebenenOpt(f, f.ebene), wert: f.ebene }],
