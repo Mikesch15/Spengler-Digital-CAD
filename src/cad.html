@@ -670,7 +670,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <div class="kontextbar" id="kontextBar" role="toolbar" aria-label="Passende Werkzeuge zur Auswahl" hidden></div>
       <div class="kantenbar" id="kantenBar" hidden><b id="kbTitel"></b><span id="kbText"></span>
         <label id="kbWinkelL">Winkel <input id="kbWinkel" type="number" step="any" value="90">°</label><label>Länge <input id="kbLaenge" type="number" step="any" value="25"> mm</label>
-        <span id="kbEnden" hidden><button class="knopf klein" id="kbA" title="Am Anfang des Profils ansetzen (Kante A)">Kante A</button><button class="knopf klein" id="kbB" title="Am Ende des Profils ansetzen (Kante B)">Kante B</button><button class="knopf klein" id="kbS1" title="Stirnseite 1 (Anfang der Länge): Flansch/Umschlag/Baustein an den Schenkelenden">Stirn 1</button><button class="knopf klein" id="kbS2" title="Stirnseite 2 (Ende der Länge): Flansch/Umschlag/Baustein an den Schenkelenden">Stirn 2</button><label title="Nur dieser gerade Schenkel (0 = alle) – gilt für Stirn 1/2">Schenkel <input id="kbSchenkel" type="number" min="0" step="1" value="0"></label></span><button class="knopf klein" id="kbRichtung" title="Richtung der Abkantung: zur Sichtseite oder nach hinten">Richtung: Sichtseite ⇄</button><button class="knopf klein haupt" id="kbEnde">Fertig</button></div>
+        <button class="knopf klein" id="kbRichtung" title="Richtung der Abkantung: zur Sichtseite oder nach hinten">Richtung: Sichtseite ⇄</button><button class="knopf klein haupt" id="kbEnde">Fertig</button></div>
       <div class="layerbox" id="layerBox" hidden><div class="ltitel" id="lTitel" title="Layer-Leiste ein-/ausklappen">Layer ▾</div><div id="layerListe"></div>
         <div class="lknoepfe"><button class="knopf klein" id="lNeu">＋ Layer</button><button class="knopf klein" id="lZuw" title="Gewähltes Element auf den aktiven Layer legen">Element → Layer</button><button class="knopf klein haupt" id="lDxf" title="Zeichnung als DXF mit Layern, Farben und Linienarten speichern">DXF</button></div></div>
       <div id="messAnzeige" hidden></div>
@@ -748,8 +748,8 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     </ul>
     <h4>Flansch, Umschlag und Bausteine am Blechprofil</h4>
     <ul>
-      <li>Blechprofil anklicken, dann <b>Flansch</b>, <b>Umschlag</b> oder <b>Kantenbaustein</b> wählen. <b>Kante A / B</b> = die Längsseiten des Profils, <b>Stirn 1 / Stirn 2</b> = Anfang und Ende der Länge (links/rechts).</li>
-      <li>An den Stirnseiten gilt der Flansch je geradem Schenkel – im Feld <b>Schenkel</b> nur einen Schenkel wählen (0 = alle). Die Abwicklung (DXF) zeigt die Laschen mit Biegelinien.</li>
+      <li>Blechprofil anklicken, dann <b>Flansch</b>, <b>Umschlag</b> oder <b>Kantenbaustein</b> wählen und die Kante <b>direkt am Modell</b> anklicken: die Längsseiten (A/B) oder jede Stirnkante einzeln. Die Kante unter dem Zeiger leuchtet orange auf.</li>
+      <li>Die Stirnkante gilt je gerader Schenkel – jeden Schenkel wählt man durch Anklicken seiner Kante. Die Abwicklung (DXF) zeigt die Laschen mit Biegelinien.</li>
     </ul>
     <h4>Flächenblech mit Kantenbausteinen</h4>
     <ul>

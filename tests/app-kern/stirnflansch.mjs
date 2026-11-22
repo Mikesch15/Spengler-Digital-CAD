@@ -7,6 +7,7 @@ const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
 { const f0 = s.fill.bind(s); s.fill = async (sel, v, o) => (o?.force ? s.evaluate(([q, w]) => { const e = document.querySelector(q); e.value = w; e.dispatchEvent(new Event("input", { bubbles: true })); }, [sel, v]) : f0(sel, v, o)); }
+const kantenKlick = async (s, key) => { const k = (await s.evaluate(() => window.sdcadTest.profilKanten())).find((x) => x.key === key); if (!k) throw new Error("Kante " + key + " nicht gefunden"); await s.mouse.move(k.mitte[0], k.mitte[1]); await s.waitForTimeout(150); await s.mouse.click(k.mitte[0], k.mitte[1]); await s.waitForTimeout(500); };
 
 await s.addInitScript(() => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 9, features: [
   { id: "s1", typ: "skizze", name: "Skizze 1", ebene: "XY", elemente: [{ id: 1, art: "linie", pts: [[0, 0], [100, 0], [100, 60]], geschlossen: false }], bedingungen: [] },
@@ -17,22 +18,24 @@ const stirnAnz = () => s.evaluate(() => window.sdcadTest.dok().features.filter((
 const v0 = await vol(); ok(v0 > 0, "Blechprofil vorhanden (Volumen " + Math.round(v0) + ")");
 await s.evaluate(() => window.sdcadTest.waehle("b1")); await s.waitForTimeout(300);
 await s.evaluate(() => document.querySelector('[data-kantenwz="flansch"]').click()); await s.waitForTimeout(400);
-ok(await s.evaluate(() => !document.getElementById("kbS1").hidden && !document.getElementById("kbS2").hidden && !!document.getElementById("kbSchenkel")), "Kantenleiste bietet Stirn 1 / Stirn 2 und Schenkelwahl");
-await s.fill("#kbLaenge", "25", { force: true }); await s.click("#kbS1"); await s.waitForTimeout(800);
+ok((await s.evaluate(() => window.sdcadTest.profilKanten())).map((k) => k.key).join() === "A,B,S1:1,S2:1,S1:2,S2:2", "Alle Kanten am Modell wählbar: A, B und Stirn 1/2 je Schenkel");
+await s.mouse.move(...(await s.evaluate(() => window.sdcadTest.profilKanten())).find((k) => k.key === "S1:1").mitte); await s.waitForTimeout(250);
+ok(await s.evaluate(() => window.sdcadTest.kantenAktiv()) === "S1:1", "Kante leuchtet beim Überfahren auf");
+await s.fill("#kbLaenge", "25", { force: true }); await kantenKlick(s, "S1:1"); await kantenKlick(s, "S1:2");
 const v1 = await vol(); ok(v1 - v0 > 2000 && v1 - v0 < 3600, `Flansch an Stirn 1 (beide Schenkel): Volumen ${Math.round(v0)} → ${Math.round(v1)}`);
 ok(await s.evaluate(() => !/⚠/.test(document.getElementById("status").textContent)), "keine Warnung beim Ansetzen");
 // nur Schenkel 2 am Ende
-await s.fill("#kbSchenkel", "2", { force: true }); await s.click("#kbS2"); await s.waitForTimeout(800);
+await kantenKlick(s, "S2:2");
 const v2 = await vol(); ok(v2 - v1 > 700 && v2 - v1 < 1400, `Flansch an Stirn 2, nur Schenkel 2: Volumen ${Math.round(v1)} → ${Math.round(v2)}`);
-ok(await stirnAnz() === "S1:0,S2:2", "Zwei Schritte «Profilkante» (S1 alle, S2 Schenkel 2): " + await stirnAnz());
+ok(await stirnAnz() === "S1:1,S1:2,S2:2", "Schritte «Profilkante» (Stirn 1 Schenkel 1+2, Stirn 2 Schenkel 2): " + await stirnAnz());
 // Umschlag an Stirn 1 (Schenkel 1)
 await s.click("#kbEnde"); await s.evaluate(() => { window.sdcadTest.waehle("b1"); document.querySelector('[data-kantenwz="umschlag"]').click(); }); await s.waitForTimeout(400);
-await s.fill("#kbLaenge", "8", { force: true }); await s.fill("#kbSchenkel", "1", { force: true }); await s.click("#kbS2"); await s.waitForTimeout(800);
+await s.fill("#kbLaenge", "8", { force: true }); await kantenKlick(s, "S2:1");
 const v3 = await vol(); ok(v3 > v2, `Umschlag an Stirn 2, Schenkel 1: Volumen ${Math.round(v2)} → ${Math.round(v3)}`);
 // Schritt bearbeiten ändert die Lasche, Löschen nimmt sie wieder weg
 await s.click("#kbEnde"); await s.evaluate(() => { const l = window.sdcadTest.dok().features.filter((f) => f.typ === "profilkante"); window.sdcadTest.bearbeite(l[0].id); }); await s.waitForSelector("#d_laenge", { state: "attached", timeout: 4000 });
 await s.fill("#d_laenge", "50", { force: true }); await s.waitForTimeout(600); await s.click("#dOk"); await s.waitForTimeout(500);
-const v4 = await vol(); ok(v4 - v3 > 2500, `Stirn-Flansch auf 50 mm verlängert: Volumen ${Math.round(v3)} → ${Math.round(v4)}`);
+const v4 = await vol(); ok(v4 - v3 > 1200, `Stirn-Flansch auf 50 mm verlängert: Volumen ${Math.round(v3)} → ${Math.round(v4)}`);
 await s.evaluate(() => { const l = window.sdcadTest.dok().features.filter((f) => f.typ === "profilkante"); window.sdcadTest.bearbeite(l[0].id); }); await s.waitForSelector("#dLoeschen:not([hidden])", { timeout: 4000 }); await s.click("#dLoeschen"); await s.waitForTimeout(600);
 ok(Math.abs((await vol()) - v3 + 0) > 100 && (await vol()) < v4, "Schritt löschen entfernt die Stirnlaschen wieder");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));

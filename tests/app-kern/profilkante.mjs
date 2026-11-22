@@ -7,17 +7,18 @@ const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.
 let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
 { const f0 = s.fill.bind(s); s.fill = async (sel, v, o) => (o?.force ? s.evaluate(([q, w]) => { const e = document.querySelector(q); e.value = w; e.dispatchEvent(new Event("input", { bubbles: true })); }, [sel, v]) : f0(sel, v, o)); }
+const kantenKlick = async (s, key) => { const k = (await s.evaluate(() => window.sdcadTest.profilKanten())).find((x) => x.key === key); if (!k) throw new Error("Kante " + key + " nicht gefunden"); await s.mouse.move(k.mitte[0], k.mitte[1]); await s.waitForTimeout(150); await s.mouse.click(k.mitte[0], k.mitte[1]); await s.waitForTimeout(500); };
 await s.addInitScript(() => localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 9, features: [{ id: "p1", typ: "profil", name: "Profil 1", ebene: "XY", start: 0, laenge: 500, richtung: "eine", material: "zink07", stueck: 1, zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 60, winkel: 0, art: "abkanten" }] }] })));
 await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s.waitForTimeout(1200);
 const zuschnitt = () => s.evaluate(() => parseFloat(document.querySelector("#werkstatt .zahl b")?.textContent.replace(",", ".")));
 await s.evaluate(() => window.sdcadTest.waehle("p1")); await s.waitForTimeout(300); const z0 = await zuschnitt();
 ok(z0 > 150 && z0 < 170, "Profil vorher: Zuschnitt " + z0);
 await s.evaluate(() => document.querySelector('[data-kantenwz="flansch"]').click()); await s.waitForTimeout(400);
-ok(await s.evaluate(() => !document.getElementById("kbEnden").hidden), "Kanten-Werkzeug: Profil erkannt, Kante A / Kante B wählbar");
-await s.fill("#kbLaenge", "25"); await s.click("#kbB"); await s.waitForTimeout(600); const z1 = await zuschnitt();
+ok((await s.evaluate(() => window.sdcadTest.profilKanten())).length >= 4, "Kanten-Werkzeug: Profil erkannt, Kanten am Modell wählbar");
+await s.fill("#kbLaenge", "25"); await kantenKlick(s, "B"); const z1 = await zuschnitt();
 ok(z1 - z0 > 20 && z1 - z0 < 30, `Flansch 25 mm an Kante B: Zuschnitt ${z0} → ${z1}`);
 await s.click("#kbEnde"); await s.evaluate(() => { window.sdcadTest.waehle("p1"); document.querySelector('[data-kantenwz="flansch"]').click(); }); await s.waitForTimeout(400);
-await s.fill("#kbLaenge", "15"); await s.click("#kbA"); await s.waitForTimeout(600); const z2 = await zuschnitt();
+await s.fill("#kbLaenge", "15"); await kantenKlick(s, "A"); const z2 = await zuschnitt();
 ok(z2 - z1 > 10 && z2 - z1 < 20, `Flansch 15 mm an Kante A: Zuschnitt ${z1} → ${z2}`);
 const doc = await s.evaluate(() => window.sdcadTest.dok()); const pk = doc.features.filter((f) => f.typ === "profilkante");
 ok(pk.length === 2 && pk.map((f) => f.ende).sort().join() === "A,B", "Zwei Schritte «Profilkante» in der Zeitleiste");

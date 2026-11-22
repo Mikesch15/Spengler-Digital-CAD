@@ -55,7 +55,7 @@ const knopf = (s, text) => s.evaluate((t) => { const b = [...document.querySelec
   await s.evaluate(() => window.sdcadTest.waehle("b1")); await warte(s); const k = await aktionen(s);
   ok(/Blechprofil «Blechprofil 1»/.test(k.titel) && ["Flansch", "Umschlag", "Kantenbaustein"].every((x) => k.aktionen.includes(x)), "Blechprofil gewählt: Flansch / Umschlag / Kantenbaustein (" + k.aktionen.join(", ") + ")");
   await knopf(s, "Flansch"); await warte(s);
-  ok(await s.evaluate(() => !document.getElementById("kbEnden").hidden && /Kante A/.test(document.getElementById("kbA").textContent)), "Flansch startet mit dem gewählten Blechprofil (Kante A / B wählbar)");
+  ok((await s.evaluate(() => window.sdcadTest.profilKanten())).length >= 4, "Flansch startet mit dem gewählten Blechprofil (Kanten am Modell wählbar)");
   await s.close(); }
 
 // 4) Dach: gewähltes Dach wird vorbelegt, Leiste verschwindet bei offenem Dialog
