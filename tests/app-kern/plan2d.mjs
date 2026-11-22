@@ -13,12 +13,12 @@ const pj = { objekt: "P", nr: "P-1", zaehler: 10, layer: [{ id: "0", name: "0", 
 await s.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, pj);
 await s.goto("http://localhost:" + (process.env.PORT || 8792) + "/index.html?test"); await s.waitForTimeout(900);
 await s.evaluate(() => document.getElementById("wPlan").click()); await s.waitForTimeout(500);
-await s.click("#plNeuAnsicht"); await s.waitForTimeout(150);
+await s.click('[data-pltab="ansichten"]'); await s.click("#plNeuAnsicht"); await s.waitForTimeout(150);
 ok(await s.isVisible('[data-plskizze="sk"]'), "Menü «+ Ansicht» bietet die Skizze an");
 await s.click('[data-plskizze="sk"]'); await s.waitForTimeout(400);
 let svg = await s.innerHTML("#plFlaeche");
 ok(/stroke:#e02424;stroke-dasharray:8 1\.5 1\.5 1\.5/.test(svg), "Layer «Achsen»: rot, Mittellinie im Plan");
-await s.click("#plAutoMass"); await s.waitForTimeout(400);
+await s.click('[data-pltab="beschriften"]'); await s.click("#plAutoMass"); await s.waitForTimeout(400);
 svg = await s.innerHTML("#plFlaeche");
 ok(/>200</.test(svg) && />100</.test(svg), "Auto-Bemassung: Gesamtmasse 200 und 100");
 ok(/Ø40/.test(svg), "Auto-Bemassung: Kreis Ø40");
@@ -34,7 +34,7 @@ await s.mouse.move(bb.x + bb.width * 0.9, bb.y + bb.height * 0.5); await s.mouse
 const v3 = await vb(); ok(Math.abs(v3[0] - v2[0]) > 5, "Leere Fläche ziehen verschiebt das Blatt");
 await s.click("#plZoomAlles"); await s.waitForTimeout(200); const v4 = await vb(); ok(v4[0] === 0 && v4[2] > v1[2] * 1.2, "«Blatt» zeigt wieder das ganze Blatt");
 // Abwicklung im Plan
-await s.click("#plNeuAnsicht"); await s.waitForTimeout(150);
+await s.click('[data-pltab="ansichten"]'); await s.click("#plNeuAnsicht"); await s.waitForTimeout(150);
 ok(await s.isVisible("[data-plabw]"), "Menü «+ Ansicht» bietet die Abwicklung des Blechs an");
 await s.click("[data-plabw]"); await s.waitForTimeout(400);
 svg = await s.innerHTML("#plFlaeche"); ok(/Abwicklung Blech 1/.test(svg) && /stroke:#e02424/.test(svg), "Abwicklung im Plan mit roten Biegelinien");
@@ -42,11 +42,11 @@ svg = await s.innerHTML("#plFlaeche"); ok(/Abwicklung Blech 1/.test(svg) && /str
 await s.selectOption("#plFormat", "A1"); await s.waitForTimeout(300); ok((await vb())[2] === 841, "Format A1 quer (841 × 594 mm) einstellbar");
 await s.selectOption("#plFormat", "A3"); await s.waitForTimeout(200);
 // Fangmarke beim Bemassen: Zeiger nahe an einem Eckpunkt zeigt die orange Marke
-await s.click('[data-modus="mass"]'); await s.waitForTimeout(150);
+await s.click('[data-pltab="beschriften"]'); await s.click('[data-modus="mass"]'); await s.waitForTimeout(150);
 const eck = await s.evaluate(() => { const svg = document.querySelector("#plFlaeche svg"), p = svg.querySelector("path.sichtbar"); const d = p.getAttribute("d").match(/M([\d.]+) ([\d.]+)/), g = p.closest("g"), t = g.getAttribute("transform").match(/translate\(([\d.]+) ([\d.]+)\)/), pt = svg.createSVGPoint(); pt.x = +d[1] + +t[1]; pt.y = +d[2] + +t[2]; const q = pt.matrixTransform(svg.getScreenCTM()); return [q.x, q.y]; });
 await s.mouse.move(eck[0] + 6, eck[1] + 5, { steps: 4 }); await s.waitForTimeout(200);
 ok(await s.locator("#plFangZ").count() === 1, "Beim Bemassen zeigt eine orange Marke den Fangpunkt (auch ca. 8 px daneben)");
-ok(await s.isVisible("#plDruck"), "Knopf «Drucken / PDF» vorhanden");
+await s.click('[data-pltab="ausgabe"]'); ok(await s.isVisible("#plDruck"), "Knopf «Drucken / PDF» vorhanden");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Skizze im Plan: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);
