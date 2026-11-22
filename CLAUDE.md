@@ -10,8 +10,8 @@ Antworten kurz, deutsch. Keine Wiederholung von Bekanntem, keine langen Zusammen
 - Task-Liste nur bei grossen Aufträgen nutzen und erledigte Tasks löschen (die Liste wird bei jedem Hinweis mitgeschickt).
 
 ## Aufbau
-- `kern/` reine Rechnung (Tests in `test/`): geometrie, profile, flansch, flaechenblech, stirnflansch, skizze, loeser, dxf, zeichnung, step, ebenen, richtung; `kern/dach/` Dach; `kern/cad/` exakter OCCT-Kern.
-- `src/cad.js` Oberfläche + 3D (`regen()` baut alle Features neu, Zweig je `f.typ`), `src/cad.html` Markup/CSS/Hilfe, `src/plan.js` Planblatt, `src/kontext.js` Kontextleiste, `src/befehlssuche.js`, `src/arbeitsbereich.js`, `src/meldungen.js`.
+- `kern/` reine Rechnung (Tests in `test/`): geometrie, profile, flansch, flaechenblech, stirnflansch, skizze, loeser, dxf, zeichnung, step, ebenen, richtung; `kern/dach/` Dach; `kern/cad/` exakter OCCT-Kern; `kern/fem/` Simulation (Schalen-FEM, Netz, Studie, Beulen, Normlasten, Bericht – siehe `docs/cad/SIMULATION.md`).
+- `src/cad.js` Oberfläche + 3D (`regen()` baut alle Features neu, Zweig je `f.typ`), `src/cad.html` Markup/CSS/Hilfe, `src/plan.js` Planblatt, `src/kontext.js` Kontextleiste, `src/befehlssuche.js`, `src/arbeitsbereich.js`, `src/meldungen.js`, `src/simulation.js` Simulationsfenster (Lager/Lasten/Ergebnis).
 - Feature-Dialog: `featureDialog(f, istNeu, felder, setze, titel, hinweis, extra)`; Schritte: `mitSchritten(felder, regeln)`; Bearbeiten: `bearbeite(f)`; Werkzeugknöpfe: `#w…` in `cad.html`.
 
 ## Prüfen (Ausgabe kurz halten)

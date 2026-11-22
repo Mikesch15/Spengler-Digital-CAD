@@ -96,8 +96,9 @@ export function auswerten(M, sys, erg, mat, opt = {}) {
   let umax = 0, iu = 0; const disp = new Float64Array(nn);
   for (let i = 0; i < nn; i++) { const d = Math.hypot(erg.u[6 * i], erg.u[6 * i + 1], erg.u[6 * i + 2]); disp[i] = d; if (d > umax) { umax = d; iu = i; } }
   let smax = 0, es = 0; vmE.forEach((v, e) => { if (opt.ohne && opt.ohne.has(e)) return; if (v > smax) { smax = v; es = e; } });
+  const smaxElement = smax, smaxKnoten = vmN.reduce((m, v) => Math.max(m, v), 0); if (opt.glaetten) smax = smaxKnoten; // Knotenmittel glättet Spannungsspitzen an Ecken und Lagern
   const zul = mat.rp / (opt.gammaM || 1), R = [0, 0, 0]; for (let i = 0; i < nn; i++) for (let j = 0; j < 3; j++) R[j] += erg.reaktion[6 * i + j];
-  return { vmN, vmE, disp, umax, umaxKnoten: iu, smax, smaxElement: es, zul, sicherheit: smax > 0 ? zul / smax : Infinity, faktorZul: smax > 0 ? zul / smax : Infinity, summeReaktion: R };
+  return { vmN, vmE, disp, umax, umaxKnoten: iu, smax, smaxKnoten, smaxElementWert: smaxElement, smaxElement: es, zul, sicherheit: smax > 0 ? zul / smax : Infinity, faktorZul: smax > 0 ? zul / smax : Infinity, summeReaktion: R };
 }
 
 // Gesamte Studie rechnen: Lastfälle einzeln lösen (linear), Kombinationen überlagern
@@ -121,7 +122,7 @@ export function rechneStudie(M, studie, mat) {
     if (!elem) elem = M.tris.map(() => ({ oben: [0, 0, 0], unten: [0, 0, 0], membran: [0, 0, 0], biegung: [0, 0, 0] }));
     const vm = (s) => Math.sqrt(Math.max(0, s[0] * s[0] - s[0] * s[1] + s[1] * s[1] + 3 * s[2] * s[2]));
     for (const x of elem) x.vm = Math.max(vm(x.oben), vm(x.unten));
-    const a = auswerten(M, sys, { u, reaktion: r, elem }, mat, { gammaM: studie.gammaM });
+    const a = auswerten(M, sys, { u, reaktion: r, elem }, mat, { gammaM: studie.gammaM, glaetten: studie.glaetten });
     const erg = { u, reaktion: r, elem }; let beul = null;
     if (studie.beulen && (k.art || "GZT") !== "GZG") { try { beul = beulen(M, sys, erg); } catch (err) { beul = { fehler: err.message }; } }
     ergebnisse.push({ name: k.name, art: k.art || "alle", faktoren: k.faktoren, u, beul, ...a });

@@ -4645,8 +4645,8 @@ function zeigeEinst() {
   const inhalt = {
     material: `
     <h4>Materialien</h4>
-    <div class="tabwrap"><table class="zeilen mat"><thead><tr><th>Name</th><th>Dicke mm</th><th>Innenradius mm</th><th>K-Faktor</th><th>Dichte kg/dm³</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand stauchen">Stauchen max %</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand strecken">Strecken max %</th><th></th></tr></thead><tbody>
-    ${e.materialien.map((m, i) => `<tr><td>${feld(i, "name", m.name)}</td><td>${feld(i, "t", m.t)}</td><td>${feld(i, "ri", m.ri)}</td><td>${feld(i, "k", m.k)}</td><td>${feld(i, "dichte", m.dichte ?? "")}</td><td>${feld(i, "umSchr", m.umform?.schrumpfMaxProzent ?? "")}</td><td>${feld(i, "umStr", m.umform?.streckMaxProzent ?? "")}</td>
+    <div class="tabwrap"><table class="zeilen mat"><thead><tr><th>Name</th><th>Dicke mm</th><th>Innenradius mm</th><th>K-Faktor</th><th>Dichte kg/dm³</th><th title="Simulation: Elastizitätsmodul in N/mm² – leer = Richtwert nach Werkstoff">E-Modul N/mm²</th><th title="Simulation: Streckgrenze Rp0,2 in N/mm² – leer = Richtwert nach Werkstoff">Rp0,2 N/mm²</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand stauchen">Stauchen max %</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand strecken">Strecken max %</th><th></th></tr></thead><tbody>
+    ${e.materialien.map((m, i) => `<tr><td>${feld(i, "name", m.name)}</td><td>${feld(i, "t", m.t)}</td><td>${feld(i, "ri", m.ri)}</td><td>${feld(i, "k", m.k)}</td><td>${feld(i, "dichte", m.dichte ?? "")}</td><td>${feld(i, "emod", m.emod ?? "")}</td><td>${feld(i, "rp", m.rp ?? "")}</td><td>${feld(i, "umSchr", m.umform?.schrumpfMaxProzent ?? "")}</td><td>${feld(i, "umStr", m.umform?.streckMaxProzent ?? "")}</td>
       <td>${e.materialien.length > 1 ? `<button class="weg" data-weg="${i}" aria-label="${esc(m.name)} entfernen">×</button>` : ""}</td></tr>`).join("")}
     </tbody></table></div>
     <button class="knopf" id="eNeuMat">+ Material</button>

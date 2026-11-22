@@ -93,7 +93,7 @@ export function simModul(ctx) {
     try {
       modellSichern(); ergebnisZeigen(); status("Berechnet … (je nach Netz einige Sekunden)"); $("simRechnen") && ($("simRechnen").disabled = true);
       await new Promise((r) => setTimeout(r, 30));
-      const t0 = performance.now(), studie = { lager: s.lager.map((l) => ({ ...l, fest: FESTE[l.art] })), lasten: s.lasten, lastfaelle: s.lastfaelle, kombis: kombisVon(s), gammaM: s.gammaM || 1, durchbiegung: s.durchbiegungN ? { n: +s.durchbiegungN } : null, beulen: !!s.beulen };
+      const t0 = performance.now(), studie = { lager: s.lager.map((l) => ({ ...l, fest: FESTE[l.art] })), lasten: s.lasten, lastfaelle: s.lastfaelle, kombis: kombisVon(s), gammaM: s.gammaM || 1, durchbiegung: s.durchbiegungN ? { n: +s.durchbiegungN } : null, beulen: !!s.beulen, glaetten: !!s.glaetten };
       const mat = matWerte(); S.erg = rechneStudie(S.M, studie, mat); S.erg.dauer = performance.now() - t0; S.erg.matName = mat.name;
       S.zeige.kombi = Math.max(0, S.erg.ergebnisse.indexOf(S.erg.massgebend)); ergebnisZeigen(); zeichne();
       const m = S.erg.massgebend; status(`Fertig (${(S.erg.dauer / 1000).toFixed(1)} s): Höchstlast ${z(m.hoechstlast, 2)}× der angesetzten Last, σmax ${z(m.smax, 0)} N/mm² – Richtwert, kein Nachweis.`);
@@ -192,7 +192,7 @@ export function simModul(ctx) {
   function ergebnisHtml() {
     const R = S.erg; if (!R) return `<p class="hinweis">Noch nicht gerechnet. Lager und Lasten setzen, dann «Berechnen».</p>`;
     const m = R.massgebend, ok = m.hoechstlast >= 1, e = R.ergebnisse[Math.min(S.zeige.kombi, R.ergebnisse.length - 1)];
-    return `<div class="simergebnis ${ok ? "ok" : "bad"}"><b>${ok ? "Hält" : "Überlastet"}</b> – Höchstlast <b>${z(m.hoechstlast, 2)}×</b> der angesetzten Last<br><small>${esc(m.name)}: σ<sub>max</sub> ${z(m.smax, 0)} N/mm² (zul. ${z(m.zul, 0)}), u<sub>max</sub> ${z(m.umax, 2)} mm${m.wGrenze ? ` (Grenze ${z(m.wGrenze, 1)})` : ""}${m.beul?.lambda ? `, Beulen λ ${z(m.beul.lambda, 2)}` : ""}</small></div>`
+    return `<div class="simergebnis ${ok ? "ok" : "bad"}"><b>${ok ? "Hält" : "Überlastet"}</b> – Höchstlast <b>${z(m.hoechstlast, 2)}×</b> der angesetzten Last<br><small>${esc(m.name)}: σ<sub>max</sub> ${z(m.smax, 0)} N/mm² (zul. ${z(m.zul, 0)}${S.erg.massgebend.smaxKnoten < m.smaxElementWert * 0.97 ? `; Knotenmittel ${z(m.smaxKnoten, 0)}` : ""}), u<sub>max</sub> ${z(m.umax, 2)} mm${m.wGrenze ? ` (Grenze ${z(m.wGrenze, 1)})` : ""}${m.beul?.lambda ? `, Beulen λ ${z(m.beul.lambda, 2)}` : ""}</small></div>`
       + (R.ergebnisse.length > 1 ? `<table class="simtab"><tr><th>Kombination</th><th>σ</th><th>u</th><th>×</th></tr>${R.ergebnisse.map((x, i) => `<tr data-k="${i}" class="${i === S.zeige.kombi ? "jetzt" : ""}"><td>${esc(x.name)}</td><td>${z(x.smax, 0)}</td><td>${z(x.umax, 1)}</td><td class="${x.hoechstlast < 1 ? "bad" : ""}">${z(x.hoechstlast, 2)}</td></tr>`).join("")}</table>` : "")
       + feld("Anzeige", sel("simAnz", ANZEIGEN, S.zeige.art)) + feld("Überhöhung (×)", `<input id="simUeber" type="text" class="zahlfeld" inputmode="decimal" placeholder="auto" value="${esc(S.zeige.ueber)}">`)
       + feld("Blech darunter zeigen", `<input id="simKoerper" type="checkbox" ${S.zeige.koerper ? "checked" : ""}>`) + `<p class="hinweis">Reaktionskraft Σ ${e.summeReaktion.map((x) => z(x, 0)).join(" / ")} N · Netz ${S.M.nodes.length} Knoten, ${S.M.tris.length} Elemente.</p>`;
@@ -219,6 +219,7 @@ export function simModul(ctx) {
       ${feld("E-Modul (N/mm²)", `<input id="simE" type="text" class="zahlfeld" inputmode="decimal" placeholder="${z(matWerte().E, 0)}" value="${esc(s.emod ?? "")}">`)}
       ${feld("Teilsicherheit γ<sub>M</sub>", `<input id="simGm" type="text" class="zahlfeld" inputmode="decimal" value="${esc(s.gammaM)}">`)}
       ${feld("Durchbiegung L / …", `<input id="simDn" type="text" class="zahlfeld" inputmode="decimal" placeholder="aus" value="${esc(s.durchbiegungN ?? "")}">`)}
+      ${feld("Spannung glätten (Knotenmittel)", `<input id="simGlatt" type="checkbox" ${s.glaetten ? "checked" : ""}>`)}
       ${feld("Beulen mitrechnen", `<input id="simBeulen" type="checkbox" ${s.beulen ? "checked" : ""}>`)}
       <div class="simkopf">Ergebnis</div>${ergebnisHtml()}<p class="hinweis simwarn">${esc(HINWEIS)}</p>`;
     fuss.innerHTML = `<button class="knopf" id="simZu">Schliessen</button><button class="knopf" id="simBericht" ${S.erg ? "" : "disabled"}>Bericht</button><button class="knopf haupt" id="simRechnen">Berechnen</button>`;
@@ -245,7 +246,7 @@ export function simModul(ctx) {
     tg("simKombi", (e) => { s.kombiModus = e.value; S.erg = null; ergebnisZeigen(); zeichne(); });
     tg("simRp", (e) => { s.rp = +e.value.replace(",", ".") > 0 ? +e.value.replace(",", ".") : null; S.erg = null; ergebnisZeigen(); }); tg("simE", (e) => { s.emod = +e.value.replace(",", ".") > 0 ? +e.value.replace(",", ".") : null; S.erg = null; ergebnisZeigen(); });
     tg("simGm", (e) => { s.gammaM = Math.max(1, +e.value.replace(",", ".") || 1); S.erg = null; ergebnisZeigen(); }); tg("simDn", (e) => { s.durchbiegungN = +e.value > 0 ? +e.value : null; S.erg = null; ergebnisZeigen(); });
-    tg("simBeulen", (e) => { s.beulen = e.checked; S.erg = null; ergebnisZeigen(); });
+    tg("simGlatt", (e) => { s.glaetten = e.checked; S.erg = null; ergebnisZeigen(); zeichne(); }); tg("simBeulen", (e) => { s.beulen = e.checked; S.erg = null; ergebnisZeigen(); });
     tg("simAnz", (e) => { S.zeige.art = e.value; ergebnisZeigen(); }); tg("simKoerper", (e) => { S.zeige.koerper = e.checked; ergebnisZeigen(); });
     $("simUeber") && ($("simUeber").onchange = (e) => { S.zeige.ueber = e.target.value.replace(",", "."); ergebnisZeigen(); });
     el.querySelectorAll(".simtab tr[data-k]").forEach((r) => (r.onclick = () => { S.zeige.kombi = +r.dataset.k; ergebnisZeigen(); zeichne(); }));
