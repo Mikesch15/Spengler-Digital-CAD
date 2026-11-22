@@ -158,7 +158,7 @@ table.zeilen.kanten tr[data-k] td:first-child { cursor: pointer; white-space: no
 input, select, textarea, button { font-family: var(--font-body); font-variant-numeric: tabular-nums; }
 input.zahlfeld.formel { color: var(--accent); font-style: italic; } input.ungueltig { border-color: #c4352b !important; }
 table.zeilen.parameter input { width: 100%; min-width: 70px; }
-#messAnzeige { position: absolute; left: 12px; top: 48px; z-index: 4; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-s); padding: 6px 10px; font: 12px var(--font-num); box-shadow: 0 2px 8px rgb(0 0 0 / .12); }
+#messInhalt { font: 12px var(--font-num); line-height: 1.5; }
 #messAnzeige b { font-size: 14px; color: var(--hl); }
 .wz[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 tr.klickbar { cursor: pointer; } tr.klickbar:hover td { background: color-mix(in srgb, var(--sketch) 8%, transparent); }
@@ -786,16 +786,27 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
         <label>L <input id="eLaenge" type="number" step="any"></label><label>∠ <input id="eWinkel" type="number" step="any"></label>
       </div>
       <div class="kontextbar" id="kontextBar" role="toolbar" aria-label="Passende Werkzeuge zur Auswahl" hidden></div>
-      <div class="kantenbar" id="projBar" hidden><b>Projizieren</b><span id="pbText"></span><button class="knopf klein haupt" id="pbOk" disabled>OK</button><button class="knopf klein" id="pbAbbr">Abbrechen</button></div>
-      <div class="kantenbar" id="kantenBar" hidden><b id="kbTitel"></b><span id="kbText"></span>
-        <label id="kbBezugL">Länge bis <select id="kbBezug"><option value="mitte">Mittellinie</option><option value="aussen">Aussenkante</option><option value="innen">Innenkante</option><option value="tangente">Tangente</option></select></label><label id="kbPosL">Biegung <select id="kbPos"><option value="mitte">Mittelebene auf Kante</option><option value="aussen">Aussenfläche bündig</option><option value="innen">Innenfläche bündig</option><option value="tangente">beginnt an der Kante</option></select></label><label id="kbSaumL" hidden>Saum <select id="kbSaum"><option value="geschlossen">geschlossen</option><option value="offen">offen</option><option value="tropfen">Tropfen</option></select></label><label id="kbWinkelL">Winkel <input id="kbWinkel" type="number" step="any" value="90">°</label><label id="kbLaengeL">Länge <input id="kbLaenge" type="number" step="any" value="25"> mm</label>
-        <button class="knopf klein" id="kbRichtung" title="Richtung der Abkantung: zur Sichtseite oder nach hinten">Richtung: Sichtseite ⇄</button><button class="knopf klein haupt" id="kbOk" disabled>Übernehmen</button><button class="knopf klein" id="kbEnde">Fertig</button></div>
+      
+      
       <div class="layerbox" id="layerBox" hidden><div class="ltitel" id="lTitel" title="Layer-Leiste ein-/ausklappen">Layer ▾</div><div id="layerListe"></div>
         <div class="lknoepfe"><button class="knopf klein" id="lNeu">＋ Layer</button><button class="knopf klein" id="lZuw" title="Gewähltes Element auf den aktiven Layer legen">Element → Layer</button><button class="knopf klein haupt" id="lDxf" title="Zeichnung als DXF mit Layern, Farben und Linienarten speichern">DXF</button></div></div>
-      <div id="messAnzeige" hidden></div>
       <div id="status" role="status" aria-live="polite"></div>
     </section>
     <button class="knopf klein" id="werkAuf" title="Teil/Auftrag wieder aufklappen" aria-label="Teil und Auftrag aufklappen">« Teil / Auftrag</button>
+    <!-- Werkzeugfenster: alle Werkzeuge öffnen dasselbe angedockte Fenster (Titel, Felder, Fuss mit Schaltflächen) -->
+    <div class="dialog" id="kantenBar" hidden><h3 id="kbTitel"></h3><button class="dklein" data-gen title="Fenster einklappen – Ansicht frei zum Antippen" aria-label="Fenster einklappen">▾</button><div class="inhalt">
+      <p class="hinweis" id="kbText"></p>
+      <div class="feld" id="kbWinkelL"><label for="kbWinkel">Winkel (°)</label><input id="kbWinkel" type="text" inputmode="decimal" value="90"></div>
+      <div class="feld" id="kbLaengeL"><label for="kbLaenge">Länge (mm)</label><input id="kbLaenge" type="text" inputmode="decimal" value="25"></div>
+      <div class="feld" id="kbSaumL" hidden><label for="kbSaum">Saumart</label><select id="kbSaum"><option value="geschlossen">Geschlossen</option><option value="offen">Offen</option><option value="tropfen">Tropfen</option></select></div>
+      <div class="feld" id="kbBezugL"><label for="kbBezug">Länge gemessen bis</label><select id="kbBezug"><option value="mitte">Mittellinie</option><option value="aussen">Aussenkante</option><option value="innen">Innenkante</option><option value="tangente">Tangente</option></select></div>
+      <div class="feld" id="kbPosL"><label for="kbPos">Biegeposition</label><select id="kbPos"><option value="mitte">Mittelebene auf Kante</option><option value="aussen">Aussenfläche bündig</option><option value="innen">Innenfläche bündig</option><option value="tangente">Beginnt an der Kante</option></select></div>
+      <div class="feld"><label>Richtung</label><button class="knopf" id="kbRichtung" title="Richtung der Abkantung: zur Sichtseite oder nach hinten">Sichtseite ⇄</button></div></div>
+      <div class="fuss"><button class="knopf" id="kbAbbr">Abbrechen</button><button class="knopf" id="kbEnde">Fertig</button><button class="knopf haupt" id="kbOk" disabled>Übernehmen</button></div></div>
+    <div class="dialog" id="projBar" hidden><h3>Projizieren</h3><button class="dklein" data-gen title="Fenster einklappen – Ansicht frei zum Antippen" aria-label="Fenster einklappen">▾</button><div class="inhalt"><p class="hinweis" id="pbText"></p></div>
+      <div class="fuss"><button class="knopf" id="pbAbbr">Abbrechen</button><button class="knopf haupt" id="pbOk" disabled>OK</button></div></div>
+    <div class="dialog" id="messAnzeige" hidden><h3>Messen</h3><button class="dklein" data-gen title="Fenster einklappen – Ansicht frei zum Antippen" aria-label="Fenster einklappen">▾</button><div class="inhalt" id="messInhalt"></div><div class="fuss"><button class="knopf haupt" id="messZu">Beenden</button></div></div>
+    <div class="dialog" id="wkFenster" hidden><h3 id="wkTitel"></h3><button class="dklein" data-gen title="Fenster einklappen – Ansicht frei zum Antippen" aria-label="Fenster einklappen">▾</button><div class="inhalt"><p class="hinweis" id="wkText"></p></div><div class="fuss"><button class="knopf haupt" id="wkAbbr">Abbrechen</button></div></div>
     <div class="dialog" id="dialog" hidden><h3 id="dTitel"></h3><button class="dklein" id="dKlein" title="Dialog einklappen – Ansicht frei zum Antippen" aria-label="Dialog einklappen">▾</button><div class="schritte" id="dSchritte" hidden></div><div class="inhalt" id="dInhalt"></div>
         <div class="fuss"><span id="dInfo" role="status"></span><button class="knopf weg" id="dLoeschen" hidden>Löschen</button><button class="knopf" id="dAbbrechen">Abbrechen</button><button class="knopf" id="dZurueck" hidden>‹ Zurück</button><button class="knopf haupt" id="dWeiter" hidden>Weiter ›</button><button class="knopf haupt" id="dOk">OK</button></div></div>
     <aside class="panel werkstatt"><div class="register" role="tablist" aria-label="Werkstatt">

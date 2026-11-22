@@ -1127,7 +1127,8 @@ function griffeFuer(f) {
   }
   return l;
 }
-const griffLaenge = (pos) => kamera.position.distanceTo(pos) * 0.14;
+const GRIFFFARBE = 0x1f6fb2; const griffKey = (g) => `${g.feld}|${g.faktor}|${g.dir.x.toFixed(3)},${g.dir.y.toFixed(3)},${g.dir.z.toFixed(3)}`; let hoverGriff = null; // alle Ziehpfeile gleich (Akzentblau), unter dem Zeiger orange
+const griffLaenge = (pos) => kamera.position.distanceTo(pos) * 0.1;
 // Eingabefeld hinter einem Ziehpfeil: im Dialog «d_<feld>», beim Kantenwerkzeug die Felder der Kantenleiste (Länge/Winkel gelten für alle Vorschau-Flansche)
 const griffInput = (feld) => (dlg?.feature ? $("d_" + feld) : feld === "laenge" ? $("kbLaenge") : feld === "winkel" ? $("kbWinkel") : null);
 const vorschauFeature = () => { const l = kantenWz?.letzte; return l && l._vorschau && doc.features.includes(l) && l.wert?.werkzeug ? l : null; };
@@ -1135,16 +1136,16 @@ function zeichneGriffe() {
   leeren(griffGruppe); griffe = [];
   const gf = dlg?.feature || vorschauFeature(); if (!gf || skizze) return;
   try { griffe = griffeFuer(gf).filter((g) => griffInput(g.feld)); } catch { griffe = []; }
-  for (const g of griffe) {
-    const L = griffLaenge(g.pos), spitze = g.pos.clone().addScaledVector(g.dir, L), mat = new THREE.MeshBasicMaterial({ color: g.farbe, depthTest: false, transparent: true, opacity: 0.95 });
-    const schaft = new THREE.Line(new THREE.BufferGeometry().setFromPoints([g.pos, spitze]), new THREE.LineBasicMaterial({ color: g.farbe, depthTest: false })); schaft.renderOrder = 30;
-    const kopf = new THREE.Mesh(new THREE.ConeGeometry(L * 0.09, L * 0.28, 16), mat); kopf.renderOrder = 31;
-    kopf.position.copy(spitze); kopf.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), g.dir);
-    const kugel = new THREE.Mesh(new THREE.SphereGeometry(L * 0.045, 12, 8), mat); kugel.position.copy(g.pos); kugel.renderOrder = 31;
-    griffGruppe.add(schaft, kopf, kugel);
+  for (const g of griffe) { // schlank und einheitlich: dünner Schaft, kleiner Pfeilkopf, heller Rand für Kontrast; unter dem Zeiger orange
+    const an = griffKey(g) === hoverGriff, farbe = an ? 0xe0782b : GRIFFFARBE, L = griffLaenge(g.pos), dir = g.dir, q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir), kopfL = L * 0.2, schaftL = L - kopfL;
+    const mat = (c, o = 1) => new THREE.MeshBasicMaterial({ color: c, depthTest: false, transparent: true, opacity: o }), teil = (geo, pos, c, ordnung, o) => { const m = new THREE.Mesh(geo, mat(c, o)); m.position.copy(pos); m.quaternion.copy(q); m.renderOrder = ordnung; return m; };
+    const mitteSchaft = g.pos.clone().addScaledVector(dir, schaftL / 2), kopfPos = g.pos.clone().addScaledVector(dir, schaftL + kopfL / 2), rS = L * (an ? 0.016 : 0.012), rK = L * (an ? 0.062 : 0.052);
+    griffGruppe.add(
+      teil(new THREE.CylinderGeometry(rS * 1.9, rS * 1.9, schaftL, 8), mitteSchaft, 0xffffff, 29, 0.85), teil(new THREE.ConeGeometry(rK * 1.35, kopfL * 1.12, 16), kopfPos, 0xffffff, 29, 0.85), // heller Rand
+      teil(new THREE.CylinderGeometry(rS, rS, schaftL, 8), mitteSchaft, farbe, 30, 1), teil(new THREE.ConeGeometry(rK, kopfL, 16), kopfPos, farbe, 31, 1),
+      teil(new THREE.SphereGeometry(L * 0.026, 12, 8), g.pos, farbe, 31, 1));
   }
-}
-steuerung.addEventListener("change", () => { if (griffe.length && !griffZug) zeichneGriffe(); });
+}steuerung.addEventListener("change", () => { if (griffe.length && !griffZug) zeichneGriffe(); });
 function griffAn(e) { // Pfeil unter dem Zeiger (Abstand zur Strecke Fuss–Spitze am Bildschirm)
   if (!griffe.length || skizze) return null;
   const sm = smPos(e), r = e.pointerType === "touch" ? 30 : e.pointerType === "pen" ? 22 : 14; let best = null, bd = r;
@@ -1161,7 +1162,7 @@ leinwand.addEventListener("pointerdown", (e) => {
   griffZug = { g, m0: smPos(e), v0: zahlAus(griffInput(g.feld).value) || 0, d: [dx / L, dy / L], pxProMm: L / 100 };
 }, true);
 leinwand.addEventListener("pointermove", (e) => {
-  if (!griffZug) { leinwand.style.cursor = !e.buttons && griffAn(e) ? "grab" : ""; return; }
+  if (!griffZug) { const gh = !e.buttons ? griffAn(e) : null; leinwand.style.cursor = gh ? "grab" : ""; const gk = gh ? griffKey(gh) : null; if (gk !== hoverGriff) { hoverGriff = gk; if (griffe.length) zeichneGriffe(); } return; }
   e.stopImmediatePropagation();
   const { g, m0, v0, d, pxProMm } = griffZug, sm = smPos(e), delta = ((sm[0] - m0[0]) * d[0] + (sm[1] - m0[1]) * d[1]) / pxProMm;
   let v = v0 + delta * g.faktor; v = Math.round(v * (e.shiftKey ? 100 : 2)) / (e.shiftKey ? 100 : 2); if (g.min != null) v = Math.max(g.min, v); if (g.max != null) v = Math.min(g.max, v);
@@ -3056,12 +3057,12 @@ function dachDialog(f, vor) { // vor: { skizze } = Grundriss aus der Kontextleis
 let kantenWz = null; // { typ, baustein, seite, schritt: "blech" | "kante", f }
 const kantenWzText = () => { const w = kantenWz; if (!w) return ""; return w.schritt === "blech" ? "① Flächenblech oder Blechprofil anklicken" : istProfil(w.f) ? `② «${w.f.name}»: Kante am Modell anklicken (Längsseite A/B oder Stirnkante eines Schenkels – sie leuchtet beim Überfahren auf)` : `② Kante von «${w.f.name}» anklicken`; };
 function kantenBarZeigen() {
-  const w = kantenWz, bar = $("kantenBar"); bar.hidden = !w; if (!w) return;
+  const w = kantenWz, bar = $("kantenBar"); bar.hidden = !w; if (!w) { if (!dlg) document.querySelector(".mitte")?.classList.remove("dialogMitWerk"); return; }
   $("kbTitel").textContent = w.typ === "flansch" ? "Flansch" : w.typ === "umschlag" ? "Umschlag" : `Baustein: ${bausteinName(w.baustein)}`;
   $("kbText").textContent = kantenWzText();
   $("kbOk").hidden = w.schritt !== "kante"; $("kbOk").disabled = !w.vorschau?.size; $("kbOk").textContent = w.vorschau?.size ? `Übernehmen (${w.vorschau.size})` : "Übernehmen";
   $("kbWinkelL").hidden = w.typ !== "flansch"; $("kbSaumL").hidden = w.typ !== "umschlag"; $("kbBezugL").hidden = $("kbPosL").hidden = w.typ !== "flansch"; $("kbLaengeL").hidden = w.typ === "baustein";
-  $("kbRichtung").textContent = `Richtung: ${w.seite === -1 ? "nach hinten" : "Sichtseite"} ⇄`;
+  $("kbRichtung").textContent = `${w.seite === -1 ? "Nach hinten" : "Sichtseite"} ⇄`; document.querySelector(".mitte")?.classList.add("dialogMitWerk"); // Teil-Panel (Zuschnitt) bleibt unter dem Werkzeugfenster sichtbar
 }
 function endeKantenWz() { vorschauVerwerfen(); regen(); kantenWz = null; menueKante = null; kantenBarZeigen(); zeigeKanten(); }
 let kHoverWartet = false, kHoverPos = null; // Kante unter dem Zeiger leuchtet auf (Werkzeug Schritt 2)
@@ -3161,18 +3162,24 @@ function zeigeQuetschEcken(z) {
   const s = finde(z.skizze), B = basis(blechEbene(s.ebene, z, material(z.material)));
   for (const e of quetschEcken(z)) { const w = new THREE.Vector3(e.p[0], e.p[1], 0).applyMatrix4(B); const r = new THREE.Mesh(new THREE.SphereGeometry(3, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe0782b, depthTest: false, transparent: true })); r.position.copy(w); r.renderOrder = 13; r.scale.setScalar(Math.max(1, kamera.position.distanceTo(w) / 120)); kantenZeiger.add(r); }
 }
+// Hinweisfenster für Werkzeuge ohne eigene Felder (gleiche Optik wie alle Werkzeugfenster)
+let wkAbbruch = null;
+function wkZeigen(titel, text, abbrechen) { $("wkTitel").textContent = titel; $("wkText").textContent = text; wkAbbruch = abbrechen; $("wkFenster").hidden = false; }
+function wkZu() { $("wkFenster").hidden = true; wkAbbruch = null; }
+document.addEventListener("click", (e) => { const b = e.target.closest?.(".dklein[data-gen]"); if (b) b.closest(".dialog").classList.toggle("klein"); });
+$("wkAbbr").onclick = () => { const f = wkAbbruch; wkZu(); f?.(); status(""); };
 function starteQuetschWz() {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
   const h = hauptVon(auswahl); if (h?.typ !== "flaeche" || h.versteckt) return status("Zuerst ein Flächenblech mit Flanschen an zwei Kanten anklicken.");
-  quetschWz = { f: h }; zeigeKanten(); status("Quetschfalte: Ecke des Flächenblechs anklicken (orange Punkte) – Esc bricht ab.");
+  quetschWz = { f: h }; zeigeKanten(); wkZeigen("Quetschfalte", `Ecke des Flächenblechs «${h.name}» anklicken (orange Punkte). Beide Nachbarkanten brauchen einen Flansch; Winkel und Höhe dürfen verschieden sein.`, endeQuetschWz); status("Quetschfalte: Ecke anklicken – Esc bricht ab.");
 }
-function endeQuetschWz() { quetschWz = null; zeigeKanten(); }
+function endeQuetschWz() { quetschWz = null; wkZu(); zeigeKanten(); }
 function quetschKlick(e) {
   const z = quetschWz.f, s = finde(z.skizze), B = basis(blechEbene(s.ebene, z, material(z.material))), sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 36 : 20;
   for (const c of quetschEcken(z)) { const w = aufSchirm(new THREE.Vector3(c.p[0], c.p[1], 0).applyMatrix4(B).toArray()); const d = Math.hypot(w[0] - sm[0], w[1] - sm[1]); if (d < bd) { bd = d; best = c; } }
   if (!best) { status("Eine Ecke des Flächenblechs anklicken (orange Punkte)."); return true; }
   const n = { id: neueId(), typ: "quetschfalte", name: `Quetschfalte ${z.name} · Ecke ${best.key}`, ziel: z.id, ecke: best.key, richtung: "links" };
-  quetschWz = null; einfuegen(n); regen(); zeigeKanten(); waehle(n.id); status(n._fehler ? "⚠ " + n._fehler : "Quetschfalte angesetzt (Schritt in der Zeitleiste)."); return true;
+  quetschWz = null; wkZu(); einfuegen(n); regen(); zeigeKanten(); waehle(n.id); status(n._fehler ? "⚠ " + n._fehler : "Quetschfalte angesetzt (Schritt in der Zeitleiste)."); return true;
 }
 function quetschDialog(f) {
   featureDialog(f, false, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "richtung", label: "Falte liegt auf", optionen: [["links", "hinten links (Wand 1)"], ["rechts", "hinten rechts (Wand 2)"]], wert: ff.richtung || "links" }],
@@ -3268,6 +3275,8 @@ for (const id of ["kbWinkel", "kbLaenge"]) $(id).addEventListener("input", vorsc
 for (const id of ["kbBezug", "kbPos", "kbSaum"]) $(id).addEventListener("change", vorschauAktualisieren);
 $("kbEnde").onclick = () => { if (kantenWz?.vorschau?.size) uebernehmeKanten(); endeKantenWz(); }; // «Fertig» übernimmt noch offene Vorschauen
 $("kbOk").onclick = uebernehmeKanten;
+$("kbAbbr").onclick = () => { endeKantenWz(); status(""); };
+$("messZu").onclick = () => messenUmschalten(false);
 $("pbOk").onclick = () => projizierenBestaetigen();
 $("pbAbbr").onclick = () => projWahlLeeren();
 document.addEventListener("keydown", (e) => { if (e.key === "Enter" && kantenWz?.sel?.length && !dlg && !skizze && !e.target.closest?.("#kantenMenue")) { e.preventDefault(); uebernehmeKanten(); } });
@@ -4377,17 +4386,17 @@ function messMarke(p, farbe = 0xe0782b) {
 }
 function messKlick(e) {
   const q = messPunkt(e); if (!q) return status("Hier ist kein Körper – eine Ecke, Kante oder Fläche anklicken.");
-  if (!messen.a || messen.b) { leeren(messGruppe); messen = { a: q.p }; messMarke(q.p); $("messAnzeige").innerHTML = `<b>Punkt 1</b> (${q.art}) ${q.p.map((v) => f1(v)).join(" / ")} – zweiten Punkt anklicken`; return; }
+  if (!messen.a || messen.b) { leeren(messGruppe); messen = { a: q.p }; messMarke(q.p); $("messInhalt").innerHTML = `<b>Punkt 1</b> (${q.art}) ${q.p.map((v) => f1(v)).join(" / ")} – zweiten Punkt anklicken`; return; }
   messen.b = q.p; messMarke(q.p);
   const a = messen.a, b = q.p, d = b.map((v, i) => v - a[i]), L = Math.hypot(...d);
   const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(a), V(b)]), new THREE.LineBasicMaterial({ color: 0xe0782b, depthTest: false }));
   l.renderOrder = 15; messGruppe.add(l);
-  $("messAnzeige").innerHTML = `<b>Abstand ${f1(L)} mm</b><br>ΔX ${f1(d[0])} · ΔY ${f1(d[1])} · ΔZ ${f1(d[2])} <small>(${q.art})</small>`;
+  $("messInhalt").innerHTML = `<b>Abstand ${f1(L)} mm</b><br>ΔX ${f1(d[0])} · ΔY ${f1(d[1])} · ΔZ ${f1(d[2])} <small>(${q.art})</small>`;
   status(`Abstand ${f1(L)} mm – nächster Klick beginnt eine neue Messung, Esc beendet.`);
 }
 function messenUmschalten(an = !messen) {
   messen = an ? { a: null } : null; leeren(messGruppe);
-  $("messAnzeige").hidden = !an; $("messAnzeige").innerHTML = "Ersten Punkt anklicken: Körperecke, Kantenmitte oder Fläche.";
+  $("messAnzeige").hidden = !an; $("messInhalt").innerHTML = "Ersten Punkt anklicken: Körperecke, Kantenmitte oder Fläche.";
   $("wMessen").setAttribute("aria-pressed", an);
   status(an ? "Messen: zwei Punkte anklicken. Esc beendet." : "");
 }
