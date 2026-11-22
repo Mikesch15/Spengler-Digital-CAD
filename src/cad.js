@@ -4900,6 +4900,8 @@ const WERKZEUGE = {
   punkt: { knopf: "tPunkt", text: "Punkt: Stelle anklicken (z. B. als Bezug für Konstruktionsebenen)." },
   text: { knopf: "tText", text: "Text: Stelle anklicken (linke Grundlinie), Text und Höhe eingeben. Mit Extrudieren → Gravur (Ausschneiden) oder Prägung (Vereinigen)." },
   abrunden: { aendern: true, knopf: "tAbrunden", ein: () => ["R"], immer: true, text: "Abrunden: Radius eintippen (Enter), dann Ecken anklicken. Beim Blechprofil wird daraus der Biegeradius." },
+  fase: { aendern: true, knopf: "tFase", ein: () => ["Abst."], immer: true, text: "Fase: Abstand eintippen (Enter), dann Ecken anklicken – die Ecke wird um diesen Abstand auf beiden Schenkeln gekappt." },
+  schnitt: { knopf: "tSchnitt", text: "Schnitt mit Körpern: ein Klick projiziert die Schnittlinien aller sichtbaren Körper mit der Skizzenebene (fixierte Linien)." },
   versatz: { aendern: true, knopf: "tVersatz", ein: () => ["Abst."], text: "Versatz: Element anklicken, dann mit der Maus die Seite zeigen und klicken – oder Abstand eintippen und Enter." },
   spiegeln: { aendern: true, knopf: "tSpiegeln", text: "Spiegeln: zu spiegelndes Element anklicken, dann die Spiegellinie (gerade Kante) anklicken." },
   stutzen: { aendern: true, knopf: "tStutzen", text: "Stutzen: Teilstück zwischen Schnittpunkten anklicken – es wird entfernt." },
@@ -4971,6 +4973,7 @@ function hilfslinieUmschalten() { // gewähltes Element, sonst das zuletzt Proji
   const ziele = skizze.sel ? [skizze.sel] : (skizze.projNeu || []).filter((el) => skizze.f.elemente.includes(el)); if (!ziele.length) return;
   const an = !ziele[0].hilfs; for (const el of ziele) el.hilfs = an; status(an ? "Hilfslinie." : "Normale Linie."); zeichneLive();
 }
+$("tSkalieren")?.addEventListener("click", skizzeSkalieren);
 $("tHilfs").onclick = () => { if (!skizze?.sel && !skizze?.projNeu?.length) return status("Zuerst ein Element anklicken (Werkzeug Auswahl)."); hilfslinieUmschalten(); };
 function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
@@ -5222,6 +5225,8 @@ function klick(uv, fang, sm, ref) {
       else { const r2 = abstandZurGeraden(uv, P[0], P[1]); fertig(r2 > 0 ? { art: "ellipse", c: P[0], a: P[1], r2 } : null); }
       break;
     case "abrunden": abrunden(sm); break;
+    case "fase": fase(sm); break;
+    case "schnitt": schnittMitKoerpern(); setzeWerkzeug("auswahl"); break;
     case "versatz": versatzKlick(uv, sm); break;
     case "spiegeln": spiegelnKlick(sm); break;
     case "stutzen": stutzen(uv, sm); break;
@@ -5252,6 +5257,45 @@ function trefferEcke(sm) {
     for (let i = 0; i < pts.length; i++) { const q = bildschirm(pts[i]); if (Math.hypot(q[0] - sm[0], q[1] - sm[1]) < 12) return { el, i }; }
   }
   return null;
+}
+// Fase in der Skizze: Ecke eines Linienzugs, Polygons oder Rechtecks um den Abstand auf beiden Schenkeln kappen
+function fase(sm) {
+  const t = trefferEcke(sm); if (!t) return status("Ecke eines Linienzugs, Polygons oder Rechtecks anklicken.");
+  const el = zuLinienzug(t.el), i = t.i, D = skizze.radius, n = el.pts.length;
+  if (!el.geschlossen && (i === 0 || i === n - 1)) return status("Endpunkte eines offenen Linienzugs lassen sich nicht fasen.");
+  if (!(D > 0)) return status("Zuerst den Fasenabstand eintippen (Enter).");
+  const vor = el.pts[(i - 1 + n) % n], p = el.pts[i], nach = el.pts[(i + 1) % n], l1 = abst(p, vor), l2 = abst(p, nach); if (l1 < 1e-9 || l2 < 1e-9) return;
+  const d1 = Math.min(D, l1 / 2), d2 = Math.min(D, l2 / 2), a = [p[0] + ((vor[0] - p[0]) / l1) * d1, p[1] + ((vor[1] - p[1]) / l1) * d1], b = [p[0] + ((nach[0] - p[0]) / l2) * d2, p[1] + ((nach[1] - p[1]) / l2) * d2];
+  const rad = {}; for (const [k, v] of Object.entries(el.radien || {})) { const kk = +k; if (kk !== i) rad[kk > i ? kk + 1 : kk] = v; } el.radien = rad;
+  el.pts.splice(i, 1, a, b); status(d1 < D - 1e-6 || d2 < D - 1e-6 ? `Fase auf ${f1(Math.min(d1, d2))} mm begrenzt (Kanten zu kurz).` : `Ecke mit ${f1(D)} mm gefast.`);
+}
+// Skizze oder gewähltes Element mit einem Faktor skalieren (Masse der Bemassungen werden mitgeführt)
+function skizzeSkalieren() {
+  if (!skizze) return; const k = parseFloat(String(prompt("Skalierfaktor (z. B. 2 = doppelt, 0.5 = halb)", "2") || "").replace(",", ".")); if (!(k > 0)) return;
+  const f = skizze.f, ziele = skizze.sel ? [skizze.sel] : f.elemente.filter((e) => !e.projiziert), pts = ziele.flatMap((e) => elementPunkte(e)), c = pts.length ? [pts.reduce((a, q) => a + q[0], 0) / pts.length, pts.reduce((a, q) => a + q[1], 0) / pts.length] : [0, 0];
+  const fn = (q) => [c[0] + (q[0] - c[0]) * k, c[1] + (q[1] - c[1]) * k];
+  for (const el of ziele) { transformiere(el, fn); if (el.r > 0) el.r *= k; if (el.radien) for (const key of Object.keys(el.radien)) el.radien[key] *= k; }
+  for (const b of f.bedingungen || []) if (typeof b.w === "number" && IST_MASS.has?.(b.typ) !== false && !/winkel/i.test(b.typ)) b.w *= k;
+  sichereIds(f); bereinige(f); zeichneLive(); status(`Skizze mit Faktor ${k} skaliert.`);
+}
+// Schnitt mit Körpern: Dreiecke aller sichtbaren Netze mit der Skizzenebene schneiden und die Schnittlinien als fixierte Linien übernehmen
+function schnittMitKoerpern() {
+  const f = skizze.f, E = E_(f.ebene), n = V(E.n).normalize(), d0 = n.dot(V(E.o)), segs = [];
+  for (const m of modell.children.filter((o) => o.isMesh && o.visible)) {
+    m.updateMatrixWorld(true); const P = m.geometry.attributes.position, idx = m.geometry.index, tn = (idx ? idx.count : P.count) / 3, W = (i) => new THREE.Vector3().fromBufferAttribute(P, idx ? idx.getX(i) : i).applyMatrix4(m.matrixWorld);
+    for (let t = 0; t < tn; t++) {
+      const a = W(t * 3), b = W(t * 3 + 1), c = W(t * 3 + 2), da = n.dot(a) - d0, db = n.dot(b) - d0, dc = n.dot(c) - d0; if ((da > 1e-6 && db > 1e-6 && dc > 1e-6) || (da < -1e-6 && db < -1e-6 && dc < -1e-6) || (Math.abs(da) < 1e-6 && Math.abs(db) < 1e-6 && Math.abs(dc) < 1e-6)) continue;
+      const pk = []; for (const [p, q, dp, dq] of [[a, b, da, db], [b, c, db, dc], [c, a, dc, da]]) if ((dp > 0) !== (dq > 0) && dp !== dq) pk.push(p.clone().lerp(q, dp / (dp - dq))); else if (Math.abs(dp) <= 1e-6) pk.push(p.clone());
+      const u = pk.filter((p, i) => pk.findIndex((q) => q.distanceTo(p) < 1e-5) === i); if (u.length === 2) segs.push([u[0], u[1]]);
+    }
+  }
+  if (!segs.length) return status("Die Skizzenebene schneidet keinen sichtbaren Körper.");
+  const auf = (w) => zuLokal(E, w.toArray()), stuecke = segs.map(([a, b]) => ({ pts: [auf(a), auf(b)] })), neu = [];
+  for (const z of verbindeStuecke(stuecke).flatMap((z) => teileAnEcken(z.pts, z.geschlossen))) {
+    const pts = z.pts.filter((q, i) => !i || abst(q, z.pts[i - 1]) > 1e-6); if (z.zu && pts.length > 2 && gleich(pts[0], pts.at(-1))) pts.pop(); if (pts.length < 2) continue;
+    const el = { art: "linie", pts, geschlossen: !!z.zu && pts.length > 2, projiziert: true, id: neueElementId(f) }; f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); neu.push(el);
+  }
+  skizze.projNeu = neu; status(`Schnitt: ${neu.length} Linie${neu.length === 1 ? "" : "n"} projiziert (fixiert, X = Hilfslinie).`);
 }
 function abrunden(sm) {
   const t = trefferEcke(sm); if (!t) return status("Ecke eines Linienzugs, Polygons oder Rechtecks anklicken.");
