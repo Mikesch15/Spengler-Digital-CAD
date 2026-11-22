@@ -524,6 +524,53 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .kontextbar .kk-knopf:hover { border-color: var(--accent); }
 .kontextbar .kk-zu { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; padding: 0 var(--sp-1); }
 @media (max-width: 1000px) { .kontextbar { top: auto; bottom: 44px; left: 8px; right: 8px; transform: none; max-width: none; flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; gap: var(--sp-2); } .kontextbar .kk-titel { display: none; } .kontextbar .kk-knopf { padding: 10px 12px; white-space: nowrap; flex: none; } }
+
+/* Menüband (Desktop): Reiter oben (Datei ganz links), darunter die Werkzeuge des gewählten Reiters */
+@media (min-width: 1001px) {
+  .leiste:not(.imSkizze):not(.imDialog) { flex-wrap: wrap; overflow: visible; row-gap: 0; padding: 0 12px 6px; align-items: center; }
+  .leiste:not(.imSkizze):not(.imDialog) #gHaupt, .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe, .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp { display: contents; }
+  .leiste:not(.imSkizze):not(.imDialog)::after { content: ""; flex: 1 0 100%; order: 30; height: 0; }
+  .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf { min-width: 0; flex-direction: row; padding: 9px 16px 7px; border-radius: var(--r-s) var(--r-s) 0 0; border: 0; border-bottom: 3px solid transparent; font-size: 13px; gap: 0; }
+  .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf svg, .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf .kpfeil { display: none; }
+  .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-soft); }
+  [data-klapp="datei"] > .klappknopf { order: 1; } [data-klapp="koerper"] > .klappknopf { order: 2; } [data-klapp="blech"] > .klappknopf { order: 3; } [data-klapp="dach"] > .klappknopf { order: 4; }
+  [data-klapp="kanten"] > .klappknopf { order: 5; } [data-klapp="aendern"] > .klappknopf { order: 6; } [data-klapp="pruefen"] > .klappknopf { order: 7; } [data-klapp="werkstatt"] > .klappknopf { order: 8; }
+  .leiste:not(.imSkizze):not(.imDialog) .marke { order: 21; border-right: 0; margin: 0 0 0 8px; padding: 6px 0 0; }
+  .leiste:not(.imSkizze):not(.imDialog) #wSuche { order: 20; margin-left: auto; flex-direction: row; min-width: 0; padding: 6px 12px; }
+  .leiste:not(.imSkizze):not(.imDialog) #wSuche svg { width: 16px; height: 16px; }
+  .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > #wSkizze { order: 31; } .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > #w2D { order: 32; } .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > .trenner { order: 35; } .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > #wEbene { order: 33; } .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > #wPlan { order: 34; }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue { order: 40; z-index: auto; position: static; display: flex; flex-wrap: wrap; align-items: center; gap: 1px; min-width: 0; max-height: none; overflow: visible; padding: 0; background: none; border: 0; box-shadow: none; }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .wz { flex-direction: column; justify-content: center; width: auto; min-width: 62px; padding: 4px 8px; text-align: center; gap: 2px; font-size: 12px; }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .wz svg { width: 22px; height: 22px; }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .wz small { display: none; }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .wz b { font-weight: 500; }
+}
+
+/* Zeitleiste: nur Symbole, Name beim Überfahren */
+#zeit { gap: 4px; }
+#zeit button[data-id] { position: relative; width: 34px; height: 34px; padding: 0; justify-content: center; border-radius: var(--r-s); }
+#zeit button[data-id] .zi { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+#zeit button[data-id] .zn { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#zeit button[data-id] .zw { position: absolute; top: -5px; right: -5px; width: 15px; height: 15px; border-radius: 50%; background: #c4352b; color: #fff; font: 700 10px/15px var(--font-body); text-align: center; font-style: normal; }
+#zeit button[data-id]:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.zeitTip { position: fixed; z-index: 90; pointer-events: none; padding: 4px 9px; border-radius: var(--r-s); background: var(--fg); color: var(--bg); font: 500 12px var(--font-body); white-space: nowrap; box-shadow: var(--sh-2, 0 4px 14px rgb(0 0 0 / .25)); }
+.zeitleiste { min-height: 46px; }
+
+/* Planblatt: gleiche Optik wie die Modellierung (Kopfzeile, Menüband mit Symbolen, Zeichenfläche, Seitenleiste) */
+#planEditor .planbox { padding: 0; overflow: hidden; background: var(--bg); }
+.plkopf { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 12px; background: var(--leiste-bg, var(--panel)); border-bottom: 1px solid var(--line); }
+.plkopf h3 { margin: 0 12px 0 0; font: 700 15px var(--font-label); letter-spacing: -.01em; } .plkopf .plabstand { flex: 1; }
+.plband { gap: 2px 14px; padding: 6px 12px 0; background: var(--leiste-bg, var(--panel)); align-items: stretch; flex-wrap: wrap; }
+.plgruppe { display: flex; flex-direction: column; padding-right: 14px; border-right: 1px solid var(--line); } .plgruppe:last-child { border-right: 0; }
+.plwz { display: flex; gap: 1px; } .plwz .menuewrap { display: flex; }
+.pltitel { font: 600 10px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); text-align: center; padding: 2px 0 4px; }
+.plband .wz { min-width: 64px; }
+.plband .wz.haupt { background: var(--accent-soft); color: var(--accent); }
+#plFlaeche { background: var(--ansicht-bg, #dfe6ec); background-image: radial-gradient(circle, color-mix(in srgb, var(--fg) 14%, transparent) 1px, transparent 1.4px); background-size: 18px 18px; padding: 20px; }
+#plFlaeche svg { box-shadow: 0 6px 28px rgb(20 35 50 / .28); border-radius: 1px; }
+#plEigen { background: var(--panel); border-left: 1px solid var(--line); padding: 0 12px 12px; gap: 10px; }
+#plEigen::before { content: "Eigenschaften"; display: block; margin: 0 -12px 4px; padding: 10px 12px; font: 600 12px var(--font-label); background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.plkopf select, .plkopf .knopf { font-size: 13px; }
 </style>
 
 <a class="skip" href="#leinwand" id="skipLink">Zur 3D-Ansicht</a>
@@ -545,10 +592,8 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <div class="klapp" data-klapp="blech"><button class="wz klappknopf" aria-haspopup="true" title="Blechprofil, Vorlage, Flächenblech, Kehle/Grat"><svg viewBox="0 0 24 24"><path class="f" d="M3 17h5.5l5-9H21v3h-5.5l-5 9H3z"/></svg><span class="kz"><span class="kl">Blech</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
       <button class="wz" id="wBlech"><svg viewBox="0 0 24 24"><path class="f" d="M3 17h5.5l5-9H21v3h-5.5l-5 9H3z"/></svg>Blechprofil</button>
       <button class="wz" id="wVorlage"><svg viewBox="0 0 24 24"><path class="f" d="M6 3h12v18l-6-4-6 4z"/><path d="M9.5 8h5M9.5 11.5h5"/></svg>Spengler-Vorlage</button>
-      <button class="wz" id="wProfil" title="Profil als Tabelle: Schenkel und Winkel eintippen"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9.3h18M3 14.7h18M9 4v16"/></svg>Freies Profil</button>
       <button class="wz" id="wRund" title="Zylinder- oder Kegelmantel (Rohr, Kaminhut, Trichter, Rinnenstutzen …) mit exakter Abwicklung und DXF"><svg viewBox="0 0 24 24"><path class="f" d="M7 6h10l3 13H4z"/><ellipse cx="12" cy="6" rx="5" ry="1.8"/><path d="M4 19c0 1.4 3.6 2.4 8 2.4s8-1 8-2.4"/></svg>Rund-/Kegelblech</button>
       <button class="wz" id="wDetail3d" title="Körper einer 3D-Detailvorlage (STEP) an eine Kante setzen"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><path class="f" d="M6 20v-8l6-5 6 5v8z"/><path d="M10 20v-4.5h4V20"/></svg>3D-Detail</button>
-      <button class="wz" id="wUmform" title="Scheibe mit Rand, Kragen oder Kegel beurteilen: konstruierbar, abwickelbar, herstellbar (wie im Fusion-Add-in)"><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 4V2M20 12h2M12 20v2M4 12H2"/></svg>Rundblech beurteilen</button>
       <button class="wz" id="wFlaeche" title="Blech als Grundfläche aus der Skizze; Kanten anklicken und Spenglerbaustein zuweisen (Falz, Traufe, Ortgang …)"><svg viewBox="0 0 24 24"><path class="f" d="M4 17l3-9h11l-3 9z"/><path d="M7 8V5M18 8V5M4 17v3M15 17v3"/></svg>Flächenblech</button>
       <button class="wz" id="wBlechAufFlaeche"><svg viewBox="0 0 24 24"><path d="M4 12l8 4 8-4v5l-8 4-8-4z"/><path class="f" d="M4 12l8-4 8 4-8 4z"/></svg><span><b>Blech auf Körperfläche</b><small>Fläche anklicken – Umriss wird übernommen</small></span></button>
       <button class="wz" id="wAbwickeln" title="Flächenblech abwickeln (flach bearbeiten) und wieder falten – wie Unfold/Refold in Fusion"><svg viewBox="0 0 24 24"><path class="f" d="M3 14h18v4H3z"/><path d="M6 14l4-7h8l-4 7" stroke-dasharray="2 2"/></svg><span><b>Abwickeln / Falten</b><small>Blech flach bearbeiten</small></span></button>
@@ -683,7 +728,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <aside class="panel werkstatt"><div class="register" role="tablist" aria-label="Werkstatt">
       <button role="tab" data-register="teil" aria-selected="true">Teil</button><button role="tab" data-register="auftrag" aria-selected="false">Auftrag</button><button class="knopf klein" id="werkZu" title="Teil/Auftrag zuklappen – mehr Platz für die Ansicht" aria-label="Teil und Auftrag zuklappen">»</button></div><div id="werkstatt"></div>
       <div class="auftrag">
-        <div class="feld"><label>App-Projekt</label><div class="projzeile"><span id="aProjektName" class="hinweis">nicht zugeordnet</span><button class="knopf klein" id="aProjektWahl">Projekt …</button></div></div>
+        <div class="feld"><label>App-Projekt</label><div class="projzeile"><span id="aProjektName" class="hinweis">Ohne Projekt</span><button class="knopf klein" id="aProjektWahl">Projekt …</button></div></div>
         <div class="feld"><label for="aObjekt">Objekt</label><input id="aObjekt"></div>
         <div class="feld"><label for="aNr">Objektnummer</label><input id="aNr"></div>
       </div>
@@ -711,23 +756,33 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   <div class="fuss"><span id="bMeldung" class="hinweis" role="status"></span><button class="knopf" id="bAbbrechen">Abbrechen</button><button class="knopf haupt" id="bOk">Baustein speichern</button></div>
 </div></div>
 <div class="modal plan" id="planEditor" hidden><div class="modalbox planbox" role="dialog" aria-labelledby="plTitel">
-  <h3 id="plTitel">Planblatt</h3>
-  <div class="plleiste">
-    <select id="plBlatt" aria-label="Plan"></select><button class="knopf" id="plNeu">+ Blatt</button><button class="knopf" id="plUmbenennen">Umbenennen</button><button class="knopf weg" id="plWeg">Blatt löschen</button>
+  <div class="plkopf">
+    <h3 id="plTitel">Planblatt</h3>
+    <select id="plBlatt" aria-label="Plan"></select><button class="knopf klein" id="plNeu">+ Blatt</button><button class="knopf klein" id="plUmbenennen">Umbenennen</button><button class="knopf klein weg" id="plWeg">Blatt löschen</button>
     <select id="plFormat" aria-label="Format"><option value="A4">A4 quer</option><option value="A3">A3 quer</option><option value="A2">A2 quer</option><option value="A1">A1 quer</option><option value="A0">A0 quer</option></select>
-    <span class="trenner"></span>
-    <button class="knopf" data-modus="auswahl">Auswahl</button><button class="knopf" data-modus="mass">Bemassen</button><button class="knopf" data-modus="text">Text / Hinweis</button>
-    <span class="trenner"></span>
-    <span class="menuewrap"><button class="knopf haupt" id="plNeuAnsicht">+ Ansicht ▾</button><div class="menue" id="plAnsichtMenue" hidden>
-      <button data-plansicht="vorne">Ansicht vorne</button><button data-plansicht="hinten">Ansicht hinten</button><button data-plansicht="links">Ansicht links</button><button data-plansicht="rechts">Ansicht rechts</button>
-      <button data-plansicht="oben">Draufsicht</button><button data-plansicht="unten">Untersicht</button><button data-plansicht="iso">Isometrie</button>
-      <button data-plansicht="schnitt:vorne">Schnitt (Blick von vorne)</button><button data-plansicht="schnitt:rechts">Schnitt (Blick von rechts)</button><button data-plansicht="schnitt:oben">Schnitt (Blick von oben)</button></div></span>
-    <button class="knopf" data-modus="lupe" title="Detailansicht: Stelle in einer Ansicht anklicken – wird im Kreis vergrössert">Detail (Lupe)</button>
-    <button class="knopf" id="plAutoMass" title="Gesamt- und Kettenmasse für die gewählte Ansicht">Auto-Masse</button>
-    <span class="menuewrap"><button class="knopf" id="plNeuDetail" title="Querschnitt eines Kantenbausteins (Flächenblech) massstäblich aufs Blatt">+ Bausteinschnitt ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
-    <span class="trenner"></span>
-    <span class="trenner"></span><button class="knopf klein" id="plZoomMinus" title="Verkleinern (Mausrad)" aria-label="Verkleinern">－</button><button class="knopf klein" id="plZoomAlles" title="Ganzes Blatt zeigen">Blatt</button><button class="knopf klein" id="plZoomPlus" title="Vergrössern (Mausrad)" aria-label="Vergrössern">＋</button>
-    <button class="knopf" id="plDruck" title="Alle Blätter drucken oder als PDF speichern">Drucken / PDF</button><button class="knopf" id="plSvg">SVG speichern</button><button class="knopf haupt" id="plZu">Fertig</button>
+    <span class="plabstand"></span>
+    <button class="knopf klein" id="plZoomMinus" title="Verkleinern (Mausrad)" aria-label="Verkleinern">－</button><button class="knopf klein" id="plZoomAlles" title="Ganzes Blatt zeigen">Blatt</button><button class="knopf klein" id="plZoomPlus" title="Vergrössern (Mausrad)" aria-label="Vergrössern">＋</button>
+    <button class="knopf haupt" id="plZu">Fertig</button>
+  </div>
+  <div class="plleiste plband">
+    <div class="plgruppe"><div class="plwz">
+      <button class="wz" data-modus="auswahl" title="Elemente anklicken und verschieben"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l12 8-5.5 1.5L9 18z"/></svg>Auswahl</button>
+      <button class="wz" data-modus="mass" title="Mass setzen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17h18M3 14v6M21 14v6M7 13l-3 4 3 4M17 13l3 4-3 4" transform="translate(0 -5)"/></svg>Bemassen</button>
+      <button class="wz" data-modus="text" title="Text / Hinweis setzen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M12 6v13M9 19h6"/></svg>Text</button>
+      <button class="wz" data-modus="lupe" title="Detailansicht: Stelle in einer Ansicht anklicken – wird im Kreis vergrössert"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l6 6M8 10.5h5M10.5 8v5"/></svg>Detail (Lupe)</button>
+    </div><div class="pltitel">Werkzeug</div></div>
+    <div class="plgruppe"><div class="plwz">
+      <span class="menuewrap"><button class="wz haupt" id="plNeuAnsicht"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M12 9v6M9 12h6"/></svg>Ansicht ▾</button><div class="menue" id="plAnsichtMenue" hidden>
+        <button data-plansicht="vorne">Ansicht vorne</button><button data-plansicht="hinten">Ansicht hinten</button><button data-plansicht="links">Ansicht links</button><button data-plansicht="rechts">Ansicht rechts</button>
+        <button data-plansicht="oben">Draufsicht</button><button data-plansicht="unten">Untersicht</button><button data-plansicht="iso">Isometrie</button>
+        <button data-plansicht="schnitt:vorne">Schnitt (Blick von vorne)</button><button data-plansicht="schnitt:rechts">Schnitt (Blick von rechts)</button><button data-plansicht="schnitt:oben">Schnitt (Blick von oben)</button></div></span>
+      <span class="menuewrap"><button class="wz" id="plNeuDetail" title="Querschnitt eines Kantenbausteins (Flächenblech) massstäblich aufs Blatt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h10a4 4 0 0 0 0-8H8"/></svg>Bausteinschnitt ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
+      <button class="wz" id="plAutoMass" title="Gesamt- und Kettenmasse für die gewählte Ansicht"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M3 9v6M21 9v6M8 8l-3 4 3 4M16 8l3 4-3 4"/></svg>Auto-Masse</button>
+    </div><div class="pltitel">Einfügen</div></div>
+    <div class="plgruppe"><div class="plwz">
+      <button class="wz" id="plDruck" title="Alle Blätter drucken oder als PDF speichern"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 17H4v-7h16v7h-3M7 14h10v6H7z"/></svg>Drucken / PDF</button>
+      <button class="wz" id="plSvg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg>SVG speichern</button>
+    </div><div class="pltitel">Ausgabe</div></div>
   </div>
   <div class="plinhalt"><div id="plFlaeche"></div><aside id="plEigen"></aside></div>
 </div></div>
@@ -744,7 +799,6 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <h4>Blechteil erstellen</h4>
     <ul>
       <li><b>Spengler-Vorlage</b>: Traufe, Ortgang, First, Rinnen … Masse eintippen, fertig.</li>
-      <li><b>Freies Profil</b>: Schenkel und Winkel als Tabelle – am schnellsten für eigene Profile, auch auf dem Handy.</li>
       <li><b>Skizze → Blechprofil</b>: Linienzug zeichnen, jeder Knick wird zur Biegung. Die Linie ist die Blechmitte – oder eine Blechoberfläche, dann im Dialog wählen, ob das Blech links oder rechts davon liegt (in Zeichenrichtung ab Kante A).</li>
     </ul>
     <h4>Flansch, Umschlag und Bausteine am Blechprofil</h4>
@@ -775,7 +829,6 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <li><b>Bausteine mit Parametern</b>: im Baustein-Editor unter «Parameter und Bedingungen», z. B. Kurzschrift «90 H U+ u+4*t» und Parameter «H = 25 [10-60] Höhe». <b>t</b> (Dicke), <b>ri</b> (Innenradius) und <b>k</b> (K-Faktor) kommen aus dem Material. Im Flächenblech-Dialog lässt sich der Wert je Kante überschreiben; ⚠ warnt bei Grenzverletzungen (Parametergrenzen, Materialdicke, Kantenlänge).</li>
       <li><b>3D-Details</b> (Einstellungen › Details 3D, dann Blech ▾ › 3D-Detail): Körper für wiederkehrende Details aus einer STEP-Datei als Vorlage ablegen (Ursprung = Kantenanfang, +X = Kantenrichtung, +Z = Sichtseite) und an eine Kante setzen, mit Versatz und Drehung. Mit exaktem Kern entsteht ein exakter Körper. Vorlagen werden mit der Firma abgeglichen (bis 1.5 MB je Vorlage). <b>STEP-Import</b> ist mit exaktem Kern ebenfalls exakt (B-Rep) statt Netz.</li>
       <li><b>Sicherungen und Papierkorb</b> (Einstellungen › Vorlagen &amp; Sichern): vor jedem «Übernehmen» wird der alte Stand gesichert; gelöschte Bausteine und Materialien lassen sich zurückholen.</li>
-      <li><b>Rundblech beurteilen</b> (Blech ▾): Scheibe mit Rand, Kragen oder Kegel – konstruierbar, abwickelbar, herstellbar. «Herstellbar» wird nur mit einem eigenen Erfahrungswert beurteilt (Einstellungen › Materialien › Stauchen/Strecken max %), sonst «nicht beurteilbar». Reine Geometrie, keine Garantie für die Umformbarkeit.</li>
       <li><b>Selbsttest</b> (Einstellungen › Programm) prüft die Rechenkerne gegen bekannte Werte.</li>
     </ul>
     <h4>Pläne</h4>

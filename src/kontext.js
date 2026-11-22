@@ -38,7 +38,7 @@ export function aktionenFuer(k) {
     case "blech": case "vorlage": case "profil":
       return { titel: `Blechprofil «${f.name}»`, aktionen: [A("Flansch", "Flansch an Kante A oder B ansetzen", '[data-kantenwz="flansch"]', true), A("Umschlag", "Umschlag an Kante A oder B", '[data-kantenwz="umschlag"]'), A("Kantenbaustein", "Baustein aus der Bibliothek an Kante A oder B", '[data-kantenwz="baustein"]'), A("Muster", "Teil mehrfach anordnen", '[data-kwz="kmuster"]'), A("Spiegeln", "Teil spiegeln", '[data-kwz="kspiegel"]'), bearbeiten, A("Kollision prüfen", "Durchdringungen mit anderen Teilen finden", "#wKollision"), A("Plan", "Planblatt mit Ansichten und Bemassung", "#wPlan")] };
     case "rundblech":
-      return { titel: `Rund-/Kegelblech «${f.name}»`, aktionen: [bearbeiten, A("Beurteilen", "Konstruierbar, abwickelbar, herstellbar?", "#wUmform")] };
+      return { titel: `Rund-/Kegelblech «${f.name}»`, aktionen: [bearbeiten] };
     case "dach":
       return { titel: `Dach «${f.name}»`, aktionen: [A("Dachbleche", "Traufe, Ortgang, First, Grat, Kehle automatisch", "#wDachBleche", true), A("Fenster / Kamin", "Dachfenster oder Kamin auf der Dachfläche", "#wDachElement"), A("Lukarne", "Gaube auf der Dachfläche", "#wLukarne"), A("Ziegel eindecken", "Ziegel einzeln eindecken", "#wEindeckung"), bearbeiten] };
     case "gebaeude": return { titel: `Gebäude «${f.name}»`, aktionen: [bearbeiten] };

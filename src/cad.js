@@ -37,7 +37,6 @@ import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geom
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, profilErweitern, alsZeilen } from "../kern/profile.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf, rundblechDxf } from "../kern/dxf.js";
-import { scheibeMitRand, kragen, kegelstumpf, beurteilen, zuschnitt, zuschnittDxf, VERFAHREN } from "../kern/umformung.js";
 import { rundblechAbwicklung, rundblechSvg } from "../kern/abwicklungRund.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
@@ -1471,14 +1470,32 @@ $("baum").addEventListener("dblclick", (e) => {
 });
 $("baum").addEventListener("dblclick", (e) => { const id = e.target.closest("li")?.dataset.id; if (id) bearbeite(finde(id)); });
 
+// Zeitleiste: Symbole statt Namen (Name erscheint beim Überfahren)
+const ZEIT_ICON = {
+  skizze: '<path d="M4 17l4-7 3 4 4-6"/><circle cx="4" cy="17" r="1.3"/><circle cx="15" cy="8" r="1.3"/>', extrusion: '<path d="M4 15l8 4 8-4-8-4z"/><path d="M12 11V3M9 6l3-3 3 3"/>', drehung: '<path d="M12 3v18" stroke-dasharray="2 2.5"/><path d="M12 7h5c1.4 3.5 1.4 6.5 0 10h-5z"/>', sweep: '<path d="M5 18c0-7 5-10 14-12" stroke-dasharray="2 2.5"/><rect x="3" y="16" width="5" height="5" rx=".8"/>', loft: '<rect x="3" y="16" width="18" height="4" rx="1"/><ellipse cx="12" cy="6" rx="5" ry="2.5"/><path d="M3 17L7 7M21 17l-4-10"/>',
+  blech: '<path d="M3 17h5l5-9h8"/>', vorlage: '<path d="M3 17h5l5-9h8"/>', profil: '<path d="M3 17h5l5-9h8"/>', flaeche: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>', kante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', profilkante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', quetschfalte: '<path d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/>',
+  dach: '<path d="M3 12l9-8 9 8"/><path d="M6 11v8h12v-8"/>', gebaeude: '<path d="M5 20V9l7-5 7 5v11z"/>', dachbleche: '<path d="M3 12l9-8 9 8"/><path d="M7 12l5-4 5 4"/>', eindeckung: '<path d="M3 12l9-8 9 8"/><path d="M6 14h12M8 17h8"/>', dachelement: '<path d="M3 12l9-8 9 8"/><rect x="9" y="11" width="6" height="5"/>', lukarne: '<path d="M3 12l9-8 9 8"/><path d="M9 20v-6l3-3 3 3v6z"/>',
+  ebene: '<path d="M3 16l5-8h13l-5 8z"/>', achse: '<path d="M4 20L20 4" stroke-dasharray="3 2"/>', konpunkt: '<circle cx="12" cy="12" r="2.5"/>', kmuster: '<rect x="3" y="3" width="6" height="6"/><rect x="14" y="3" width="6" height="6"/><rect x="3" y="14" width="6" height="6"/><rect x="14" y="14" width="6" height="6"/>', schale: '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M8 10l4-2 4 2v4l-4 2-4-2z"/>', kantenrund: '<path d="M4 20V8a4 4 0 0 1 4-4h12"/>', kanten3d: '<path d="M4 20V8a4 4 0 0 1 4-4h12"/>', teilen: '<path d="M4 12h16" stroke-dasharray="3 2"/><rect x="5" y="4" width="14" height="16" rx="1"/>', abwickeln: '<path d="M4 6h16v12H4z"/><path d="M9 6v12M15 6v12" stroke-dasharray="2 2"/>', falten: '<path d="M4 6l6 3v9l-6-3zM10 9l6-3 4 2v9l-4-2-6 3"/>', rundblech: '<ellipse cx="12" cy="8" rx="6" ry="3"/><path d="M6 8l-2 10h16L18 8"/>', bild: '<rect x="3" y="5" width="18" height="14" rx="1"/><circle cx="9" cy="10" r="1.5"/><path d="M4 18l5-5 4 3 3-3 4 4"/>', import: '<path d="M12 3v12M8 11l4 4 4-4M5 20h14"/>'
+};
+const zeitIcon = (typ) => `<svg class="zi" viewBox="0 0 24 24" aria-hidden="true">${ZEIT_ICON[typ] || '<rect x="5" y="5" width="14" height="14" rx="2"/>'}</svg>`;
+// Ohne zugeordnetes Projekt arbeitet man normal weiter; einmal je Sitzung kommt nach dem ersten Schritt ein Hinweis mit Knopf «Projekt wählen»
+let projektHinweisGezeigt = false;
+function projektHinweis() {
+  if (projektHinweisGezeigt || doc.appProjekt || !doc.features.length || new URLSearchParams(location.search).has("test")) return;
+  projektHinweisGezeigt = true; zeigeMeldung("Kein Projekt zugeordnet – das Modell wird ohne Projekt gespeichert.", "info", 12000, { text: "Projekt wählen", fn: () => projekte.oeffnen() });
+}
 function zeigeZeit() {
   const m = doc.marke ?? doc.features.length;
-  const knopf = (f) => `<button data-id="${f.id}" draggable="true" class="${f._aus ? "aus " + f._aus : ""}${f._fehler ? " fehler" : ""}" title="${esc(f._fehler || (f._aus === "unterdrueckt" ? "Unterdrückt" : f._aus ? "Zurückgerollt" : "Bearbeiten – Rechtsklick für mehr"))}">${esc(f.name)}${f._fehler ? " ⚠" : ""}</button>`;
+  const knopf = (f) => `<button data-id="${f.id}" data-name="${esc(f.name)}" draggable="true" class="${f._aus ? "aus " + f._aus : ""}${f._fehler ? " fehler" : ""}" aria-label="${esc(f.name)}" title="${esc(f.name + (f._fehler ? " – ⚠ " + f._fehler : f._aus === "unterdrueckt" ? " – unterdrückt" : f._aus ? " – zurückgerollt" : ""))}">${zeitIcon(f.typ)}<span class="zn">${esc(f.name)}</span>${f._fehler ? '<i class="zw">!</i>' : ""}</button>`;
   const marke = `<span class="marke" draggable="true" title="Rückrollmarke: ziehen oder Rechtsklick auf ein Feature → «Bis hier zurückrollen»"></span>`;
   $("zeit").innerHTML = doc.features.length ? [...doc.features.slice(0, m).map(knopf), marke, ...doc.features.slice(m).map(knopf)].join("")
     : '<span class="hinweis">Leer: mit «Skizze» oder «Spengler-Vorlage» beginnen</span>';
   $("rueckgaengig").disabled = !doc.features.length || !!skizze;
+  projektHinweis();
 }
+const zeitTip = document.body.appendChild(Object.assign(document.createElement("div"), { className: "zeitTip", hidden: true }));
+$("zeit").addEventListener("pointerover", (e) => { const b = e.target.closest("button[data-name]"); if (!b) return; zeitTip.textContent = b.dataset.name; zeitTip.hidden = false; const r = b.getBoundingClientRect(), t = zeitTip.getBoundingClientRect(); zeitTip.style.left = Math.max(6, Math.min(r.left + r.width / 2 - t.width / 2, innerWidth - t.width - 6)) + "px"; zeitTip.style.top = r.top - t.height - 8 + "px"; });
+$("zeit").addEventListener("pointerout", (e) => { if (e.target.closest("button[data-name]")) zeitTip.hidden = true; });
 $("zeit").addEventListener("click", (e) => { const id = e.target.closest("button")?.dataset.id; const f = finde(id); if (!f) return; if (f._aus) return status(`«${f.name}» ist ${f._aus === "zurueck" ? "zurückgerollt – Marke dahinter ziehen" : "unterdrückt – Rechtsklick → Aktivieren"}.`); bearbeite(f); });
 // Ziehen: Feature verschieben (nur wenn Bezüge davor bleiben) oder Rückrollmarke setzen
 let gezogen = null;
@@ -4594,7 +4611,7 @@ function starteSkizze(f) {
   vorbereiten(f); // IDs, Abhängigkeiten; alte Rechtecke werden Linienzüge mit H/V
   skizze = { f, werkzeug: "linie", pkt: [], maus: null, sel: null, bsel: null, zug: null, quelle: null, ecken: 6, radius: 10, picks: [], fangRefs: [], mehr: new Set(), basis: null };
   $("gSkizze").hidden = false; setTimeout(leisteZustand); setTimeout(layerZeigen);
-  ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = true));
+  ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = true));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null };
   steuerung.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
   orthoSetzen(true);
@@ -4681,7 +4698,7 @@ function beendeSkizze() {
   skizze = null;
   if (!f.elemente.length) entferneFeature(f);
   $("gSkizze").hidden = true; setTimeout(leisteZustand); setTimeout(layerZeigen);
-  ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wProfil", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
+  ["wSkizze", "wExtrusion", "wDrehung", "wSweep", "wLoft", "wBlech", "wVorlage", "wFlaeche", "wEbene"].forEach((id) => ($(id).disabled = false));
   steuerung.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: null };
   steuerung.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }; steuerung.enableRotate = true; kamera.up.set(0, 1, 0);
   orthoSetzen(false);
@@ -5732,50 +5749,25 @@ $("wDrehung").onclick = () => { if (dlg) $("dAbbrechen").click(); drehungDialog(
 $("wSweep").onclick = () => { if (dlg) $("dAbbrechen").click(); sweepDialog(); };
 $("wFlaeche").onclick = () => { if (dlg) $("dAbbrechen").click(); flaecheDialog(); };
 $("wRund").onclick = () => { if (dlg) $("dAbbrechen").click(); rundDialog(); };
-// Rundblech beurteilen: Scheibe mit Rand / Kragen / Kegel – konstruierbar, abwickelbar, herstellbar (wie im Fusion-Add-in)
-let umformLetzt = null; // letzter berechneter Zuschnitt für den DXF-Knopf
-let umformWerte = { fall: "scheibe", r: 100, h: 20, winkel: 90, r2: 50, verfahren: "auto", material: null };
-function umformDialog() {
-  const w = umformWerte; w.material ||= neuMaterial();
-  const rechne = () => {
-    const m = material(w.material); let e;
-    try { e = w.fall === "scheibe" ? scheibeMitRand(+w.r, +w.h, +w.winkel) : w.fall === "kragen" ? kragen(+w.r, +w.h, +w.winkel) : kegelstumpf(+w.r, +w.r2, +w.h); } catch (err) { return { fehler: err.message }; }
-    const b = beurteilen(e, w.verfahren, m); let z = null, zf = ""; try { z = zuschnitt(e); } catch (err) { zf = err.message; }
-    return { e, b, z, zf };
-  };
-  const html = () => {
-    const r = rechne(); umformLetzt = r.z ? { z: r.z, fall: w.fall } : null; if (r.fehler) return `<p class="fehler">⚠ ${esc(r.fehler)}</p>`;
-    const ja = (v) => v === true ? "ja" : v === false ? "nein" : "nicht beurteilbar", { e, b } = r;
-    return `<table class="zeilen"><tbody><tr><td>konstruierbar</td><td><b>ja</b></td></tr><tr><td>abwickelbar</td><td><b>${ja(e.abwickelbar)}</b></td></tr><tr><td>herstellbar</td><td><b>${ja(b.herstellbar)}</b></td></tr></tbody></table>
-      ${r.z ? `<p>${esc(r.z.beschreibung)}</p><div class="reihe ohnerand"><button class="knopf" id="uDxf">Zuschnitt als DXF speichern</button></div>` : `<p class="hinweis">${esc(r.zf)}</p>`}<ul>${b.hinweise.map((h) => `<li>${esc(h)}</li>`).join("")}</ul>`;
-  };
-  const felder = () => [
-      { id: "fall", label: "Fall", optionen: [["scheibe", "Scheibe mit aufgebogenem Rand"], ["kragen", "Kragen an rundem Ausschnitt"], ["kegel", "Kegelstumpf / Zylinder"]], wert: w.fall },
-      { id: "r", label: w.fall === "kegel" ? "Radius unten (Blechmitte)" : w.fall === "kragen" ? "Fertiger Lochradius" : "Radius bis zur Biegung", einheit: "mm", wert: w.r },
-      ...(w.fall === "kegel" ? [{ id: "r2", label: "Radius oben", einheit: "mm", wert: w.r2 }] : []),
-      { id: "h", label: w.fall === "kegel" ? "Höhe" : w.fall === "kragen" ? "Kragenhöhe" : "Randhöhe", einheit: "mm", wert: w.h },
-      ...(w.fall === "kegel" ? [] : [{ id: "winkel", label: "Randwinkel", einheit: "°", wert: w.winkel }]),
-      { id: "verfahren", label: "Verfahren", optionen: Object.entries(VERFAHREN), wert: w.verfahren },
-      { id: "material", label: "Material", optionen: matOpt(), wert: w.material },
-    ];
-  dialog({
-    titel: "Rundblech beurteilen", hinweis: "Theoretische Beurteilung wie im Fusion-Add-in. «Herstellbar» gibt es nur mit eigenem Erfahrungswert im Material (Einstellungen › Materialien, Stauchen/Strecken max %). Es werden nie Einschnitte erzeugt.",
-    felder: felder(),
-    zusatz: html,
-    aendern: (v, feld) => { const alt = w.fall; Object.assign(w, v); if (alt !== w.fall) { const d = dlg; return setTimeout(() => dialog({ ...d, felder: felder() })); } $("dZusatz").innerHTML = html(); },
-    ok: () => {},
-  });
-}
-$("dInhalt").addEventListener("click", (e) => { if (e.target.id === "uDxf" && umformLetzt) herunterladen(`Rundblech ${umformLetzt.fall} Zuschnitt.dxf`, zuschnittDxf(umformLetzt.z, "Rundblech " + umformLetzt.fall), "application/dxf"); });
-$("wUmform").onclick = () => { if (dlg) $("dAbbrechen").click(); umformDialog(); };
 $("wBlechAufFlaeche").onclick = () => blechAufFlaecheStart();
 $("wKehle").onclick = () => { if (dlg) $("dAbbrechen").click(); kehleDialog(); };
 // ------------------------------------------------------------ Werkzeugleiste: Klappmenüs (fest positioniert, die Leiste rollt seitlich)
 const leiste = $("leiste");
-function klappZu() { leiste.querySelectorAll(".klappmenue").forEach((m) => (m.hidden = true)); leiste.querySelectorAll(".klappknopf").forEach((k) => k.setAttribute("aria-expanded", "false")); }
+// Menüband (Desktop): die Klappmenüs der Hauptgruppe sind Reiter; das Menü des gewählten Reiters steht dauernd unter der Reiterzeile
+const bandAn = () => innerWidth > 1000 && !skizze && !dlg;
+let aktTab = (() => { try { return localStorage.getItem("sdcad-reiter") || "koerper"; } catch { return "koerper"; } })();
+function klappZu() {
+  leiste.querySelectorAll(".klappmenue").forEach((m) => (m.hidden = true)); leiste.querySelectorAll(".klappknopf").forEach((k) => { k.setAttribute("aria-expanded", "false"); k.removeAttribute("aria-selected"); });
+  if (!bandAn()) return;
+  const kp = leiste.querySelector(`#gHaupt .klapp[data-klapp="${aktTab}"]`) || leiste.querySelector("#gHaupt .klapp"); if (!kp) return;
+  kp.querySelector(".klappmenue").hidden = false; kp.querySelector(".klappknopf").setAttribute("aria-selected", "true");
+}
+addEventListener("resize", klappZu);
+setTimeout(klappZu);
 leiste.addEventListener("click", (e) => {
   const k = e.target.closest(".klappknopf");
   if (k) {
+    if (bandAn() && k.closest("#gHaupt")) { aktTab = k.parentElement.dataset.klapp; try { localStorage.setItem("sdcad-reiter", aktTab); } catch {} klappZu(); return; }
     const m = k.nextElementSibling, offen = !m.hidden; klappZu(); if (offen) return;
     m.hidden = false; k.setAttribute("aria-expanded", "true");
     const r = k.getBoundingClientRect(), b = m.getBoundingClientRect();
@@ -5792,6 +5784,7 @@ document.addEventListener("pointerdown", (e) => { if (!e.target.closest?.(".klap
 // Klappknopf zeigt das aktive Werkzeug darin
 new MutationObserver(() => leiste.querySelectorAll(".klapp").forEach((kp) => {
   const k = kp.querySelector(".klappknopf"), an = kp.querySelector(".klappmenue .wz[aria-pressed='true']");
+  if (bandAn() && kp.closest("#gHaupt")) { const kl0 = k.querySelector(".kl"); if (k.dataset.label && kl0 && kl0.textContent !== k.dataset.label) kl0.textContent = k.dataset.label; return; }
   const soll = an ? "true" : "false", kl = k.querySelector(".kl"); k.dataset.label ||= kl.textContent;
   if (k.getAttribute("aria-pressed") !== soll) k.setAttribute("aria-pressed", soll); // nur bei Änderung, sonst ruft sich der Beobachter endlos auf
   const text = an ? an.textContent.replace("▾", "").trim().split(/\s{2,}/)[0] : k.dataset.label; if (kl.textContent !== text) kl.textContent = text;
@@ -5806,7 +5799,6 @@ function leisteZustand() {
 $("wLoft").onclick = () => { if (dlg) $("dAbbrechen").click(); loftDialog(); };
 $("wBlech").onclick = () => { if (dlg) $("dAbbrechen").click(); blechDialog(); };
 $("wVorlage").onclick = () => { if (dlg) $("dAbbrechen").click(); vorlageDialog(); };
-$("wProfil").onclick = () => { if (dlg) $("dAbbrechen").click(); profilDialog(); };
 // Konstruieren: Menü mit allen Ebenenarten
 $("wEbene").onclick = (e) => {
   e.stopPropagation();
@@ -5903,7 +5895,7 @@ const ablage = ablageModul({ esc, status, getDoc: () => doc, client: () => cloud
 ablage.binden();
 $("wAblage").onclick = () => { if (dlg) $("dAbbrechen").click(); ablage.oeffnen(); };
 function auftragAnzeige() { // zugeordnetes Projekt: Objekt und Nummer kommen aus der App (nur dort änderbar)
-  const z = !!doc.appProjekt; $("aProjektName").textContent = z ? doc.appProjekt.name : "nicht zugeordnet";
+  const z = !!doc.appProjekt; $("aProjektName").textContent = z ? doc.appProjekt.name : "Ohne Projekt";
   for (const id of ["aObjekt", "aNr"]) { $(id).readOnly = z; $(id).title = z ? "Kommt aus dem App-Projekt – im Projekt ändern (Datei › Projekte)" : ""; }
 }
 $("wProjekte").onclick = () => { if (dlg) $("dAbbrechen").click(); projekte.oeffnen(); };

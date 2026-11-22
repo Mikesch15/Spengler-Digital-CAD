@@ -2,7 +2,7 @@
 // keine doppelten Funktionen, nur ein zweiter Zugang. Die Liste wird bei jedem Öffnen aus dem DOM gelesen (neue Werkzeuge erscheinen automatisch).
 const SYNONYME = {
   wSkizze: "zeichnen skizzieren linie 2d", w2D: "zeichnung dxf layer", wExtrusion: "extrusion ziehen pressen körper volumen", wDrehung: "rotation drehen rohr kugel",
-  wBlech: "blechprofil linienzug abkanten profil", wVorlage: "vorlage falz traufe ortgang bibliothek", wProfil: "freies profil tabelle schenkel winkel", wRund: "rundblech kegel zylinder rohr trichter kaminhut",
+  wBlech: "blechprofil linienzug abkanten profil", wVorlage: "vorlage falz traufe ortgang bibliothek", wRund: "rundblech kegel zylinder rohr trichter kaminhut",
   wFlaeche: "flächenblech abwicklung kanten", wKehle: "kehle grat", wDachAuto: "dach haus gebäude sparren ziegel neigung", wDachBleche: "traufblech ortgang first grat kehle spengler brücke",
   wEindeckung: "ziegel eindecken schuppen", wDachElement: "dachfenster velux kamin", wLukarne: "gaube lukarne", wEbene: "konstruktionsebene", wMessen: "abstand messen",
   wKollision: "kollision durchdringung", wSchnitt: "schnittanalyse schneiden", wPlan: "plan zeichnung blatt ansichten drucken pdf", wSpeichern: "sichern", wOeffnen: "laden projekt",
