@@ -14,7 +14,7 @@ await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?tes
 await s.evaluate(() => document.getElementById("wPlan").click()); await s.waitForTimeout(800);
 const plan = () => s.evaluate(() => window.sdcadTest.dok().plaene[0]);
 const blatt = async (x, y) => s.evaluate(([a, c]) => { const svg = document.querySelector("#plFlaeche svg"), p = svg.createSVGPoint(); p.x = a; p.y = c; const q = p.matrixTransform(svg.getScreenCTM()); return [q.x, q.y]; }, [x, y]);
-const ziehe = async (modus, [x1, y1], [x2, y2]) => { await s.click(`[data-modus="${modus}"]`); const a = await blatt(x1, y1), c = await blatt(x2, y2); await s.mouse.move(a[0], a[1]); await s.mouse.down(); await s.mouse.move(c[0], c[1], { steps: 6 }); await s.mouse.up(); await s.waitForTimeout(250); };
+const ziehe = async (modus, [x1, y1], [x2, y2]) => { await s.click('[data-pltab="beschriften"]'); await s.click(`[data-modus="${modus}"]`); const a = await blatt(x1, y1), c = await blatt(x2, y2); await s.mouse.move(a[0], a[1]); await s.mouse.down(); await s.mouse.move(c[0], c[1], { steps: 6 }); await s.mouse.up(); await s.waitForTimeout(250); };
 ok((await s.isVisible("#plStatus")) && /Zoom/.test(await s.textContent("#plStatus")), "Statuszeile unter dem Blatt (Position, Zoom, Raster, Werkzeug)");
 // Zeichenelemente
 await ziehe("rechteck", [50, 40], [101, 82]); await ziehe("linie", [50, 100], [120.3, 100.4]); await ziehe("kreis", [200, 60], [215, 60]); await ziehe("pfeil", [150, 150], [190, 150]);
@@ -33,15 +33,29 @@ await s.click("#plUndo"); await s.waitForTimeout(250); p = await plan(); ok(p.fo
 await s.keyboard.press("Control+z"); await s.waitForTimeout(250); p = await plan(); ok(p.formen.length === 4, "Strg + Z macht das Duplizieren rückgängig");
 await s.click("#plRedo"); await s.waitForTimeout(250); p = await plan(); ok(p.formen.length === 5, "Wiederholen");
 // Positionsnummer
-await s.click('[data-modus="ballon"]'); const bp = await blatt(260, 120); await s.mouse.click(bp[0], bp[1]); await s.waitForTimeout(250); p = await plan();
+await s.click('[data-pltab="beschriften"]'); await s.click('[data-modus="ballon"]'); const bp = await blatt(260, 120); await s.mouse.click(bp[0], bp[1]); await s.waitForTimeout(250); p = await plan();
 ok(p.texte.some((t) => t.ballon && t.text === "1") && (await s.evaluate(() => !!document.querySelector("#plFlaeche circle.ballon"))), "Positionsnummer 1 (Ballon) gesetzt");
 // Tabellen aus dem Modell
-await s.click("#plNeuTab"); await s.waitForTimeout(200); ok((await s.locator('#plTabMenue button').count()) === 2, "Tabellenmenü: Stückliste und Biegeliste");
+await s.click('[data-pltab="tabellen"]'); await s.click("#plNeuTab"); await s.waitForTimeout(200); ok((await s.locator('#plTabMenue button').count()) === 2, "Tabellenmenü: Stückliste und Biegeliste");
 await s.click('#plTabMenue [data-tab^="stueck"]'); await s.waitForTimeout(300);
 let svg = await s.evaluate(() => document.querySelector("#plFlaeche svg").textContent);
 ok(/Stückliste/.test(svg) && /Traufblech/.test(svg) && /Titanzink/.test(svg), "Stückliste mit Teil, Material und Zuschnitt");
 await s.click("#plNeuTab"); await s.click('#plTabMenue [data-tab^="biege"]'); await s.waitForTimeout(300);
 svg = await s.evaluate(() => document.querySelector("#plFlaeche svg").textContent); ok(/Biegeliste Traufblech/.test(svg) && /90\.0°/.test(svg), "Biegeliste mit Winkel und Anschlägen");
+// Fusion-Zeichnung: Browser links, projizierte Ansichten
+await s.click('[data-pltab="ansichten"]'); await s.click("#plNeuAnsicht"); await s.click('[data-plansicht="vorne"]'); await s.waitForTimeout(400);
+ok((await s.locator("#plBrowser [data-plsel]").count()) >= 4, "Browser links listet Ansicht, Tabellen und Beschriftung (" + (await s.locator("#plBrowser [data-plsel]").count()) + " Einträge)");
+await s.click("#plNeuProj"); await s.waitForTimeout(200); ok((await s.locator("#plProjMenue [data-pproj]").count()) >= 4, "Projizierte Ansicht: Draufsicht, Untersicht, Seitenansichten wählbar");
+await s.click('#plProjMenue [data-pproj="oben"]'); await s.waitForTimeout(400); p = await plan();
+const va = p.ansichten.find((a) => a.art === "vorne"), vo = p.ansichten.find((a) => a.art === "oben");
+ok(vo && va && vo.y > va.y && Math.abs((vo.x + 0) - (va.x + vo.ausgerichtet.off)) < 1e-6 && vo.ausgerichtet.zu === va.id, "Draufsicht liegt unter der Vorderansicht und ist an ihr ausgerichtet");
+// Ziehen der Basisansicht nimmt die projizierte Ansicht mit
+await s.click('[data-modus="auswahl"]'); const va0 = { x: va.x, y: va.y }, vo0 = { x: vo.x, y: vo.y };
+{ const bsel = await s.locator('#plBrowser [data-plsel]').first(); }
+await s.evaluate((id) => { const el = document.querySelector(`#plBrowser [data-plsel="${id}"]`); el?.click(); }, va.id);
+const pa = await blatt(va.x + 2, va.y + 2); await s.mouse.move(pa[0], pa[1]); await s.mouse.down(); const pb = await blatt(va.x + 32, va.y + 22); await s.mouse.move(pb[0], pb[1], { steps: 6 }); await s.mouse.up(); await s.waitForTimeout(300); p = await plan();
+const va1 = p.ansichten.find((a) => a.id === va.id), vo1 = p.ansichten.find((a) => a.id === vo.id);
+ok(va1.x !== va0.x && Math.abs((vo1.x - vo0.x) - (va1.x - va0.x)) < 1e-6 && Math.abs((vo1.y - vo0.y) - (va1.y - va0.y)) < 1e-6, "Projizierte Ansicht folgt der Basisansicht");
 // Schriftfeld
 await s.click('[data-modus="auswahl"]'); await s.mouse.click((await blatt(10, 5))[0], (await blatt(10, 5))[1]); await s.waitForTimeout(200);
 await s.fill('#plEigen [data-s="zeichner"]', "M. Muster"); await s.dispatchEvent('#plEigen [data-s="zeichner"]', "change"); await s.waitForTimeout(250);

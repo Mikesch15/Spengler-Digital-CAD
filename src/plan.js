@@ -234,7 +234,7 @@ ${out.join("\n")}
     plaene().push(p); return p;
   }
   function oeffnen() {
-    plan = normal(plaene()[0] || neuerPlan()); sel = null; modus = "auswahl"; box = null; undo = []; redo = []; letzterStand = null;
+    try { const t = localStorage.getItem("sdcad-pltab"); if (t) $("planEditor").dataset.tab = t; } catch {} plan = normal(plaene()[0] || neuerPlan()); sel = null; modus = "auswahl"; box = null; undo = []; redo = []; letzterStand = null;
     $("planEditor").hidden = false; zeige();
   }
   const element = (id) => [...plan.ansichten, ...plan.details, ...plan.masse, ...plan.texte, ...plan.formen, ...plan.tabellen].find((x) => x.id === id);
@@ -256,7 +256,7 @@ ${out.join("\n")}
     $("plFormat").value = plan.format;
     document.querySelectorAll("#planEditor [data-modus]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.modus === modus));
     $("plFlaeche").innerHTML = blattSvg(plan, { auswahl: sel, nr: i + 1, von: p.length, bildschirm: true }); wendeBox();
-    eigenschaften(); merkeStand(); if ($("plUndo")) { $("plUndo").disabled = !undo.length; $("plRedo").disabled = !redo.length; } statusZeile(null); ctx.speichern();
+    eigenschaften(); browserZeigen(); merkeStand(); if ($("plUndo")) { $("plUndo").disabled = !undo.length; $("plRedo").disabled = !redo.length; } statusZeile(null); ctx.speichern();
   }
   function planBaum() { // Sichtbarkeit einzelner Körper/Komponenten nur auf diesem Plan (wie der Browser im Modell)
     const l = ctx.koerperBaum(); if (!l.length) return "";
@@ -270,7 +270,7 @@ ${out.join("\n")}
   function eigenschaften0() {
     const e = sel && element(sel), box = $("plEigen");
     if (!e) {
-      const sc = plan.schrift || {}, hinweis = { auswahl: "Element anklicken und ziehen (Umschalt = gerade). «+ Ansicht» (auch Schnitte) oder «+ Bausteinschnitt» platziert eine Zeichnung; «Auto-Masse» bemasst die gewählte Ansicht.", mass: "Bemassen: zwei Eckpunkte einer Ansicht anklicken, dann die Lage des Masses (oben/unten = waagrecht, seitlich = senkrecht).", text: "Text: Stelle anklicken, Text eingeben. Mit gedrückter Maus ziehen = Hinweispfeil.", lupe: "Detail (Lupe): in einer Ansicht die Stelle anklicken, die vergrössert werden soll.", linie: "Linie: ziehen (Umschalt = waagrecht/senkrecht).", pfeil: "Pfeil: ziehen (Umschalt = waagrecht/senkrecht).", rechteck: "Rechteck: ziehen (Umschalt = Quadrat).", kreis: "Kreis: vom Mittelpunkt aus ziehen.", ballon: "Positionsnummer: Stelle anklicken, mit gedrückter Maus ziehen = Hinweispfeil." }[modus] || "";
+      const sc = plan.schrift || {}, hinweis = { auswahl: "Element anklicken und ziehen (Umschalt = gerade). Reiter «Ansichten»: Basisansicht (auch Schnitte), Projizierte Ansicht von der gewählten Basis aus, Detailansicht. Reiter «Beschriften»: Bemassung, Automassen, Mittellinien, Text, Zeichnen.", mass: "Bemassen: zwei Eckpunkte einer Ansicht anklicken, dann die Lage des Masses (oben/unten = waagrecht, seitlich = senkrecht).", text: "Text: Stelle anklicken, Text eingeben. Mit gedrückter Maus ziehen = Hinweispfeil.", lupe: "Detail (Lupe): in einer Ansicht die Stelle anklicken, die vergrössert werden soll.", linie: "Linie: ziehen (Umschalt = waagrecht/senkrecht).", pfeil: "Pfeil: ziehen (Umschalt = waagrecht/senkrecht).", rechteck: "Rechteck: ziehen (Umschalt = Quadrat).", kreis: "Kreis: vom Mittelpunkt aus ziehen.", ballon: "Positionsnummer: Stelle anklicken, mit gedrückter Maus ziehen = Hinweispfeil." }[modus] || "";
       const fe = (k, l, ph = "") => `<label class="feld"><span>${l}</span><input data-s="${k}" value="${esc(sc[k] || "")}" placeholder="${ph}"></label>`;
       box.innerHTML = `<section class="plkarte"><div class="plkt">Blatt</div><label class="feld"><span>Fangraster</span><select data-fang="1">${[[0, "aus"], [1, "1 mm"], [2.5, "2.5 mm"], [5, "5 mm"], [10, "10 mm"]].map(([v, n]) => `<option value="${v}" ${+plan.fang === v ? "selected" : ""}>${n}</option>`).join("")}</select></label></section>
         <section class="plkarte"><div class="plkt">Schriftfeld</div>${fe("zeichner", "Gezeichnet von")}${fe("geprueft", "Geprüft von")}${fe("index", "Index / Revision", "z. B. A")}${fe("datum", "Datum", "heute")}${fe("bemerkung", "Bemerkung")}</section>
@@ -298,7 +298,7 @@ ${out.join("\n")}
   }
   function dupliziere() {
     const e = sel && element(sel); if (!e) return ctx.status("Zuerst ein Element anklicken.");
-    const kopie = JSON.parse(JSON.stringify(e)); kopie.id = neuId(); const d = plan.fang > 0 ? plan.fang * Math.max(1, Math.round(10 / plan.fang)) : 10;
+    const kopie = JSON.parse(JSON.stringify(e)); kopie.id = neuId(); delete kopie.ausgerichtet; const d = plan.fang > 0 ? plan.fang * Math.max(1, Math.round(10 / plan.fang)) : 10;
     if (kopie.x1 !== undefined) { kopie.x1 += d; kopie.x2 += d; kopie.y1 += d; kopie.y2 += d; } else if (kopie.lage) kopie.lage = [kopie.lage[0] + d, kopie.lage[1] + d]; else { kopie.x += d; kopie.y += d; if (kopie.pfeil) kopie.pfeil = [kopie.pfeil[0] + d, kopie.pfeil[1] + d]; }
     const liste = ["ansichten", "details", "masse", "texte", "formen", "tabellen"].find((k) => plan[k].includes(e)); plan[liste].push(kopie); sel = kopie.id; zeige(); ctx.status("Dupliziert.");
   }
@@ -307,6 +307,45 @@ ${out.join("\n")}
   function statusZeile(q) {
     const el = $("plStatus"); if (!el || !plan) return; const F = FORMATE[plan.format] || FORMATE.A3, b = aktBox();
     el.innerHTML = `<span>${q ? `x ${z(q[0])} · y ${z(q[1])} mm` : "x – · y – mm"}</span><span>${plan.format} quer · ${F.b} × ${F.h} mm</span><span>Zoom ${Math.round((F.b / b.w) * 100)} %</span><span>Raster ${plan.fang > 0 ? plan.fang + " mm" : "aus"}</span><span>${MODUSNAMEN[modus] || modus}</span>`;
+  }
+  // Browser links (wie in Fusion): Blätter und Inhalt der Zeichnung
+  const PI_ = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`, BICO = { ansicht: PI_('<rect x="4" y="5" width="16" height="14" rx="1.5"/>'), detail: PI_('<circle cx="12" cy="12" r="7"/>'), tabelle: PI_('<rect x="4" y="5" width="16" height="14"/><path d="M4 10h16M10 5v14"/>'), text: PI_('<path d="M5 6h14M12 6v13"/>'), form: PI_('<path d="M4 19L20 5"/>') };
+  const ansichtName = (a) => `${a.titel || (a.abwicklung ? "Abwicklung" : a.skizze ? "Zeichnung" : a.schnitt ? `Schnitt ${a.schnitt.buchstabe || "A"}–${a.schnitt.buchstabe || "A"}` : a.lupe ? `Detail ${a.lupe.buchstabe || "B"}` : RICHTUNGEN[a.art]?.name || a.art)} 1:${+massstabVon(a).toFixed(2)}`;
+  function browserZeigen() {
+    const el = $("plBrowser"); if (!el || !plan) return; const p = plaene();
+    const eintrag = (id, text, ico) => `<button class="pleintrag plkind" data-plsel="${esc(id)}"${sel === id ? ' aria-current="true"' : ""}>${BICO[ico]}${esc(text)}</button>`;
+    const gruppe = (titel, liste) => `<div class="plkt">${titel} <small>(${liste.length})</small></div>${liste.length ? liste.join("") : '<div class="pllee">leer</div>'}`;
+    el.innerHTML = `<div class="plkt">Blätter</div>${p.map((x, k) => `<button class="pleintrag plblatt" data-plblatt="${k}"${x === plan ? ' aria-current="true"' : ""}>${esc(x.name)} <small>${x.format}</small></button>`).join("")}
+      <div class="plkt">${esc(plan.name)}</div>
+      ${gruppe("Ansichten", plan.ansichten.filter((a) => !a.lupe).map((a) => eintrag(a.id, ansichtName(a), "ansicht")))}
+      ${gruppe("Details und Schnitte", [...plan.ansichten.filter((a) => a.lupe).map((a) => eintrag(a.id, ansichtName(a), "detail")), ...plan.details.map((d) => eintrag(d.id, d.titel || `Bausteinschnitt 1:${d.massstab}`, "detail"))])}
+      ${gruppe("Tabellen", plan.tabellen.map((t) => eintrag(t.id, t.art === "biege" ? "Biegeliste" : "Stückliste", "tabelle")))}
+      ${gruppe("Beschriftung", [...plan.texte.map((t) => eintrag(t.id, t.ballon ? `Position ${t.text}` : t.text, "text")), ...(plan.masse.length ? [`<div class="pllee">${plan.masse.length} Masse</div>`] : []), ...plan.formen.map((f) => eintrag(f.id, { linie: "Linie", pfeil: "Pfeil", rechteck: "Rechteck", kreis: "Kreis" }[f.art], "form"))])}`;
+  }
+  // Projizierte Ansichten (Europäische Projektion): Lage relativ zur Basisansicht; bleiben in der Achse ausgerichtet
+  const PROJ = { vorne: { oben: [0, 1], unten: [0, -1], links: [1, 0], rechts: [-1, 0] }, oben: { vorne: [0, -1] }, unten: { vorne: [0, 1] }, links: { vorne: [-1, 0], hinten: [1, 0] }, rechts: { vorne: [1, 0], hinten: [-1, 0] } };
+  const basisAnsicht = () => { const a = sel && element(sel); return a && plan.ansichten.includes(a) && !a.lupe && !a.skizze && !a.abwicklung ? a : null; };
+  function projMenue() {
+    const m = $("plProjMenue"), b = basisAnsicht();
+    m.innerHTML = b && PROJ[b.art] ? Object.entries(PROJ[b.art]).map(([art, [dx, dy]]) => `<button data-pproj="${art}">${esc(RICHTUNGEN[art]?.name || art)} <small>${dx > 0 ? "rechts" : dx < 0 ? "links" : dy > 0 ? "darunter" : "darüber"}</small></button>`).join("") + `<button data-pproj="iso">Isometrie <small>rechts</small></button>`
+      : '<p class="hinweis">Zuerst eine Basisansicht (Vorne, Oben, Links …) auf dem Blatt anklicken.</p>';
+    m.hidden = !m.hidden;
+  }
+  function projAnsicht(art) {
+    const b = basisAnsicht(); if (!b) return ctx.status("Zuerst eine Basisansicht anklicken.");
+    const [dx, dy] = art === "iso" ? [1, 0] : PROJ[b.art]?.[art] || [1, 0], rb = ansicht(b); if (!rb) return;
+    const a = { id: neuId(), art, massstab: b.massstab, verdeckt: art !== "iso", x: 0, y: 0, ausgerichtet: { zu: b.id, achse: dx ? "y" : "x", off: 0 } }, r2 = ansicht(a) || { breite: 50, hoehe: 40 }, gap = 25;
+    if (dx) { a.x = dx > 0 ? b.x + rb.breite + gap : b.x - r2.breite - gap; a.y = b.y + (rb.hoehe - r2.hoehe) / 2; a.ausgerichtet.off = a.y - b.y; }
+    else { a.y = dy > 0 ? b.y + rb.hoehe + gap : b.y - r2.hoehe - gap; a.x = b.x + (rb.breite - r2.breite) / 2; a.ausgerichtet.off = a.x - b.x; }
+    if (art === "iso") delete a.ausgerichtet;
+    plan.ansichten.push(a); sel = a.id; $("plProjMenue").hidden = true; zeige(); ctx.status(`${RICHTUNGEN[art]?.name || art} projiziert – bleibt zur Basisansicht ausgerichtet.`);
+  }
+  function mittellinien() {
+    const a = plan.ansichten.find((x) => x.id === sel && !x.lupe); if (!a) return ctx.status("Zuerst eine Ansicht anklicken.");
+    const r = ansicht(a), kr = r?.kreise || []; if (!kr.length) return ctx.status("Keine Kreise in dieser Ansicht (Kreise erkennt der exakte CAD-Kern).");
+    plan.formen = plan.formen.filter((f) => f.mitte !== a.id);
+    for (const k of kr) { const R = k.r / massstabVon(a) + 3, cx = a.x + k.x, cy = a.y + k.y; for (const [x1, y1, x2, y2] of [[cx - R, cy, cx + R, cy], [cx, cy - R, cx, cy + R]]) plan.formen.push({ id: neuId(), art: "linie", x1, y1, x2, y2, staerke: 0.18, linie: "strichpunkt", mitte: a.id }); }
+    zeige(); ctx.status(`Mittellinien an ${kr.length} Kreis${kr.length === 1 ? "" : "en"} gesetzt.`);
   }
   const blattPunkt = (ev) => { const svg = $("plFlaeche").querySelector("svg"), pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; const q = pt.matrixTransform(svg.getScreenCTM().inverse()); return [q.x, q.y]; };
   function fang(q, px = 12) { // nächster Fangpunkt einer Ansicht (Radius in Bildschirmpixeln, Finger/Stift grösser)
@@ -339,7 +378,7 @@ ${out.join("\n")}
       if (ev.pointerType === "touch") { finger.set(ev.pointerId, [ev.clientX, ev.clientY]); if (finger.size === 2) { zug = null; schwenk = null; const [a, b] = [...finger.values()]; finger.gestur = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; return; } }
       if (ev.button === 1 || (ev.button === 0 && plLeer)) { ev.preventDefault(); return schwenkStart(ev); }
       const q = blattPunkt(ev);
-      if (modus === "auswahl") { const t = treffer(q); sel = t?.id || null; if (t) zug = { e: t, von: q, x: t.x ?? t.lage?.[0], y: t.y ?? t.lage?.[1], ...(t.x1 !== undefined ? { orig: { x1: t.x1, y1: t.y1, x2: t.x2, y2: t.y2 } } : {}) }; zeige(); if (!t && ev.button === 0) schwenkStart(ev); return; }
+      if (modus === "auswahl") { const t = treffer(q); sel = t?.id || null; if (t) zug = { e: t, von: q, x: t.x ?? t.lage?.[0], y: t.y ?? t.lage?.[1], ...(t.x1 !== undefined ? { orig: { x1: t.x1, y1: t.y1, x2: t.x2, y2: t.y2 } } : {}), kinder: plan.ansichten.filter((c) => c.ausgerichtet?.zu === t.id).map((c) => ({ e: c, x0: c.x, y0: c.y })) }; zeige(); if (!t && ev.button === 0) schwenkStart(ev); return; }
       if (modus === "lupe") {
         const q0 = plan.ansichten.find((a) => { const r = ansicht(a); return !a.lupe && r && q[0] > a.x && q[0] < a.x + r.breite && q[1] > a.y && q[1] < a.y + r.hoehe; });
         if (!q0) return ctx.status("In eine Ansicht klicken – dort, wo vergrössert werden soll.");
@@ -377,7 +416,11 @@ ${out.join("\n")}
       else if (zug.pfeil) { if (Math.hypot(q[0] - zug.e.x, q[1] - zug.e.y) > 3) zug.e.pfeil = q; }
       else if (zug.orig) { const o = zug.orig, dx = snap(o.x1 + q[0] - zug.von[0]) - o.x1, dy = snap(o.y1 + q[1] - zug.von[1]) - o.y1; Object.assign(zug.e, { x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy }); }
       else if (zug.e.lage) zug.e.lage = [zug.x + q[0] - zug.von[0], zug.y + q[1] - zug.von[1]];
-      else { zug.e.x = snap(zug.x + q[0] - zug.von[0]); zug.e.y = snap(zug.y + q[1] - zug.von[1]); }
+      else {
+        zug.e.x = snap(zug.x + q[0] - zug.von[0]); zug.e.y = snap(zug.y + q[1] - zug.von[1]);
+        const au = zug.e.ausgerichtet, bs = au && plan.ansichten.find((x) => x.id === au.zu); if (bs) { if (au.achse === "x") zug.e.x = bs.x + au.off; else zug.e.y = bs.y + au.off; } // ausgerichtete Ansicht: nur entlang der freien Achse
+        for (const k of zug.kinder || []) { k.e.x = k.x0 + zug.e.x - zug.x; k.e.y = k.y0 + zug.e.y - zug.y; } // projizierte Ansichten folgen der Basis
+      }
       $("plFlaeche").innerHTML = blattSvg(plan, { auswahl: sel, bildschirm: true, nr: plaene().indexOf(plan) + 1, von: plaene().length }); wendeBox();
     });
     addEventListener("pointerup", (ev) => { finger.delete(ev.pointerId); if (finger.size < 2) delete finger.gestur; if (schwenk) { schwenk = null; $("plFlaeche").style.cursor = ""; } if (zug) { if (zug.neu) { const f = zug.e; if (Math.hypot(f.x2 - f.x1, f.y2 - f.y1) < 0.5) { plan.formen = plan.formen.filter((x) => x !== f); sel = null; } modus = "auswahl"; } zug = null; zeige(); } });
@@ -402,6 +445,12 @@ ${out.join("\n")}
     });
     $("planEditor").addEventListener("click", (ev) => {
       const b = ev.target.closest("button"); if (!b) return;
+      if (b.dataset.pltab && b.closest(".pltabs")) { $("planEditor").dataset.tab = b.dataset.pltab; try { localStorage.setItem("sdcad-pltab", b.dataset.pltab); } catch {} return; }
+      if (b.dataset.plsel) { sel = b.dataset.plsel; modus = "auswahl"; zeige(); return; }
+      if (b.dataset.plblatt != null) { plan = normal(plaene()[+b.dataset.plblatt]); sel = null; box = null; zeige(); return; }
+      if (b.id === "plNeuProj") return projMenue();
+      if (b.dataset.pproj) return projAnsicht(b.dataset.pproj);
+      if (b.id === "plMittel") return mittellinien();
       if (b.dataset.modus) { modus = b.dataset.modus; mass = null; sel = null; zeige(); }
       else if (b.dataset.plansicht) { // neue Ansicht: rechts neben die letzte, Massstab passend zum Blatt
         const F = FORMATE[plan.format], vorige = plan.ansichten.filter((x) => !x.lupe).at(-1), M = vorige?.massstab || passenderPlanMassstab(F);

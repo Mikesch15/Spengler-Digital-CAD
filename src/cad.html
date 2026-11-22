@@ -586,6 +586,24 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .plkt { margin: 0 -10px 2px; padding: 7px 10px; font: 600 11px var(--font-label); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
 #plEigen .plkt:first-child { margin: 0 -12px 2px; padding: 10px 12px; }
 .plband .menuewrap .menue { top: calc(100% + 2px); }
+
+/* Zeichnung wie im Fusion-Zeichnungsarbeitsbereich: Reiter, Gruppen, Browser links, Eigenschaften rechts */
+.pltabs { display: flex; align-items: flex-end; gap: 2px; padding: 4px 12px 0; background: var(--leiste-bg, var(--panel)); border-bottom: 1px solid var(--line); }
+.pltabs [data-pltab] { border: 0; border-bottom: 3px solid transparent; background: none; color: var(--fg); font: 600 12px var(--font-label); letter-spacing: .06em; text-transform: uppercase; padding: 8px 16px 6px; cursor: pointer; border-radius: var(--r-s) var(--r-s) 0 0; }
+.pltabs [data-pltab]:hover { background: var(--panel-2); }
+#planEditor[data-tab="ansichten"] .pltabs [data-pltab="ansichten"], #planEditor[data-tab="beschriften"] .pltabs [data-pltab="beschriften"], #planEditor[data-tab="tabellen"] .pltabs [data-pltab="tabellen"], #planEditor[data-tab="ausgabe"] .pltabs [data-pltab="ausgabe"] { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-soft); }
+.pltabs .wz { min-width: 0; flex-direction: row; gap: 6px; padding: 5px 12px; margin-bottom: 3px; }
+.plband .plgruppe { display: none; } #planEditor[data-tab="ansichten"] .plgruppe[data-pltab="ansichten"], #planEditor[data-tab="beschriften"] .plgruppe[data-pltab="beschriften"], #planEditor[data-tab="tabellen"] .plgruppe[data-pltab="tabellen"], #planEditor[data-tab="ausgabe"] .plgruppe[data-pltab="ausgabe"] { display: flex; }
+.plband { min-height: 78px; }
+.plinhalt { grid-template-columns: 210px minmax(0, 1fr) 250px; }
+#plBrowser { border-right: 1px solid var(--line); background: var(--panel); overflow: auto; font-size: 13px; }
+#plBrowser .plkt { margin: 0; padding: 9px 12px; background: var(--panel-2); }
+#plBrowser .pleintrag { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; border: 0; background: none; color: var(--fg); padding: 5px 12px 5px 22px; cursor: pointer; font: 13px var(--font-body); }
+#plBrowser .pleintrag:hover { background: var(--panel-2); } #plBrowser .pleintrag[aria-current="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+#plBrowser .pleintrag svg { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; opacity: .8; }
+#plBrowser .plblatt { padding-left: 12px; font-weight: 600; } #plBrowser .plkind { padding-left: 30px; }
+#plBrowser .pllee { padding: 6px 12px 6px 30px; color: var(--muted); font-size: 12px; }
+@media (max-width: 1000px) { .plinhalt { grid-template-columns: minmax(0, 1fr); } #plBrowser { display: none; } .pltabs [data-pltab] { padding: 8px 10px 6px; } }
 </style>
 
 <a class="skip" href="#leinwand" id="skipLink">Zur 3D-Ansicht</a>
@@ -627,7 +645,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <button class="wz" data-kantenwz="umschlag" title="Umschlag (Saum): Blech anklicken, dann Kante"><svg viewBox="0 0 24 24"><path d="M3 18h13a4 4 0 0 0 0-8H8"/></svg><span><b>Umschlag</b><small>Länge · Blech, dann Kante</small></span></button>
       <button class="wz" data-kantenwz="baustein" title="Spenglerbaustein aus der Bibliothek (Falz, Traufe, Ortgang …): Baustein wählen, Blech anklicken, dann Kante"><svg viewBox="0 0 24 24"><path class="f" d="M4 18l4-10h8l4 10z"/></svg><span><b>Kantenbaustein …</b><small>Falz, Traufe, Ortgang …</small></span></button>
       <button class="wz" id="wQuetsch" title="Quetschfalte an der Ecke zweier Aufkantungen eines Flächenblechs: Blech wählen, dann Ecke anklicken"><svg viewBox="0 0 24 24"><path class="f" d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/></svg><span><b>Quetschfalte</b><small>Ecke zweier Aufkantungen</small></span></button>
-      <li><b>Planblatt</b> (Prüfen › Plan): Ansichten, Schnitte, Details und Bemassung wie bisher; zusätzlich Linie, Pfeil, Rechteck, Kreis, Positionsnummern, <b>Stückliste</b> und <b>Biegeliste</b> aus dem Modell, Schriftfeld mit Zeichner/Prüfer/Index/Datum, Fangraster (Blatt-Einstellungen rechts), Rückgängig/Wiederholen (Strg + Z / Y), Duplizieren (Strg + D) und Blatt kopieren.</li>
+      <li><b>Zeichnung</b> (Prüfen › Plan, aufgebaut wie der Fusion-Zeichnungsbereich: Reiter Ansichten / Beschriften / Tabellen / Ausgabe, Browser links, Eigenschaften rechts): Basisansicht, <b>Projizierte Ansichten</b> (bleiben ausgerichtet und folgen der Basis), Schnitte, Detailansicht, Bemassung, Mittellinien; zusätzlich Linie, Pfeil, Rechteck, Kreis, Positionsnummern, <b>Stückliste</b> und <b>Biegeliste</b> aus dem Modell, Schriftfeld mit Zeichner/Prüfer/Index/Datum, Fangraster (Blatt-Einstellungen rechts), Rückgängig/Wiederholen (Strg + Z / Y), Duplizieren (Strg + D) und Blatt kopieren.</li>
     </div></div>
       <button class="wz" id="wEbene" title="Konstruktionsebene: versetzt, unter Winkel, Mitte, zwei Kanten, drei Punkte, tangential, entlang Pfad"><svg viewBox="0 0 24 24"><path class="f" d="M3 16l6-6h12l-6 6z"/><path d="M12 10V3M9.5 5.5L12 3l2.5 2.5"/></svg><span class="kz">Ebene<span class="kpfeil">▾</span></span></button>
     <div class="klapp" data-klapp="aendern"><button class="wz klappknopf" aria-haspopup="true" title="Abrunden, Schale, Muster, Spiegeln, Parameter"><svg viewBox="0 0 24 24"><rect class="f" x="3.5" y="5" width="17" height="14" rx="5.5"/></svg><span class="kz"><span class="kl">Ändern</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
@@ -772,45 +790,52 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   <h3 id="bTitel">Kantenbaustein</h3><div class="inhalt" id="bInhalt"></div>
   <div class="fuss"><span id="bMeldung" class="hinweis" role="status"></span><button class="knopf" id="bAbbrechen">Abbrechen</button><button class="knopf haupt" id="bOk">Baustein speichern</button></div>
 </div></div>
-<div class="modal plan" id="planEditor" hidden><div class="modalbox planbox" role="dialog" aria-labelledby="plTitel">
+<div class="modal plan" id="planEditor" hidden data-tab="ansichten"><div class="modalbox planbox" role="dialog" aria-labelledby="plTitel">
   <div class="plkopf">
-    <h3 id="plTitel">Planblatt</h3>
-    <select id="plBlatt" aria-label="Plan"></select><button class="knopf klein" id="plNeu">+ Blatt</button><button class="knopf klein" id="plUmbenennen">Umbenennen</button><button class="knopf klein weg" id="plWeg">Blatt löschen</button>
+    <h3 id="plTitel">Zeichnung</h3>
+    <select id="plBlatt" aria-label="Blatt"></select><button class="knopf klein" id="plNeu" title="Neues Blatt">+ Blatt</button><button class="knopf klein" id="plUmbenennen">Umbenennen</button><button class="knopf klein" id="plKopie" title="Blatt duplizieren">Kopieren</button><button class="knopf klein weg" id="plWeg">Löschen</button>
     <select id="plFormat" aria-label="Format"><option value="A4">A4 quer</option><option value="A3">A3 quer</option><option value="A2">A2 quer</option><option value="A1">A1 quer</option><option value="A0">A0 quer</option></select>
     <span class="plabstand"></span>
-    <button class="knopf klein" id="plUndo" title="Rückgängig (Strg + Z)" aria-label="Rückgängig" disabled>↶</button><button class="knopf klein" id="plRedo" title="Wiederholen (Strg + Y)" aria-label="Wiederholen" disabled>↷</button><button class="knopf klein" id="plKopie" title="Blatt duplizieren">Blatt kopieren</button>
+    <button class="knopf klein" id="plUndo" title="Rückgängig (Strg + Z)" aria-label="Rückgängig" disabled>↶</button><button class="knopf klein" id="plRedo" title="Wiederholen (Strg + Y)" aria-label="Wiederholen" disabled>↷</button>
     <button class="knopf klein" id="plZoomMinus" title="Verkleinern (Mausrad)" aria-label="Verkleinern">－</button><button class="knopf klein" id="plZoomAlles" title="Ganzes Blatt zeigen">Blatt</button><button class="knopf klein" id="plZoomPlus" title="Vergrössern (Mausrad)" aria-label="Vergrössern">＋</button>
-    <button class="knopf haupt" id="plZu">Fertig</button>
+    <button class="knopf haupt" id="plZu">Zeichnung beenden</button>
   </div>
+  <div class="pltabs" role="tablist"><button data-pltab="ansichten" role="tab">Ansichten</button><button data-pltab="beschriften" role="tab">Beschriften</button><button data-pltab="tabellen" role="tab">Tabellen</button><button data-pltab="ausgabe" role="tab">Ausgabe</button>
+    <span class="plabstand"></span><button class="wz" data-modus="auswahl" title="Elemente anklicken und verschieben"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l12 8-5.5 1.5L9 18z"/></svg>Auswahl</button></div>
   <div class="plleiste plband">
-    <div class="plgruppe"><div class="plwz">
-      <button class="wz" data-modus="auswahl" title="Elemente anklicken und verschieben"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l12 8-5.5 1.5L9 18z"/></svg>Auswahl</button>
-      <button class="wz" data-modus="mass" title="Mass setzen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17h18M3 14v6M21 14v6M7 13l-3 4 3 4M17 13l3 4-3 4" transform="translate(0 -5)"/></svg>Bemassen</button>
-      <button class="wz" data-modus="text" title="Text / Hinweis setzen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M12 6v13M9 19h6"/></svg>Text</button>
-      <button class="wz" data-modus="lupe" title="Detailansicht: Stelle in einer Ansicht anklicken – wird im Kreis vergrössert"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l6 6M8 10.5h5M10.5 8v5"/></svg>Detail (Lupe)</button>
-    </div><div class="pltitel">Werkzeug</div></div>
-    <div class="plgruppe"><div class="plwz">
+    <div class="plgruppe" data-pltab="ansichten"><div class="plwz">
+      <span class="menuewrap"><button class="wz haupt" id="plNeuAnsicht" title="Basisansicht, Schnitt, Skizze oder Abwicklung aufs Blatt"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M12 9v6M9 12h6"/></svg>Basisansicht ▾</button><div class="menue" id="plAnsichtMenue" hidden>
+        <button data-plansicht="vorne">Ansicht vorne</button><button data-plansicht="hinten">Ansicht hinten</button><button data-plansicht="links">Ansicht links</button><button data-plansicht="rechts">Ansicht rechts</button>
+        <button data-plansicht="oben">Draufsicht</button><button data-plansicht="unten">Untersicht</button><button data-plansicht="iso">Isometrie</button>
+        <button data-plansicht="schnitt:vorne">Schnitt (Blick von vorne)</button><button data-plansicht="schnitt:rechts">Schnitt (Blick von rechts)</button><button data-plansicht="schnitt:oben">Schnitt (Blick von oben)</button></div></span>
+      <span class="menuewrap"><button class="wz" id="plNeuProj" title="Projizierte Ansicht (Europäische Projektion) von der gewählten Ansicht aus"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="10" height="9" rx="1"/><rect x="9" y="10" width="12" height="10" rx="1" stroke-dasharray="2 1.6"/></svg>Projizierte Ansicht ▾</button><div class="menue" id="plProjMenue" hidden></div></span>
+      <button class="wz" data-modus="lupe" title="Detailansicht: Stelle in einer Ansicht anklicken – wird im Kreis vergrössert"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l6 6M8 10.5h5M10.5 8v5"/></svg>Detailansicht</button>
+      <span class="menuewrap"><button class="wz" id="plNeuDetail" title="Querschnitt eines Kantenbausteins (Flächenblech) massstäblich aufs Blatt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h10a4 4 0 0 0 0-8H8"/></svg>Bausteinschnitt ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
+    </div><div class="pltitel">Erstellen</div></div>
+    <div class="plgruppe" data-pltab="beschriften"><div class="plwz">
+      <button class="wz" data-modus="mass" title="Mass setzen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17h18M3 14v6M21 14v6M7 13l-3 4 3 4M17 13l3 4-3 4" transform="translate(0 -5)"/></svg>Bemassung</button>
+      <button class="wz" id="plAutoMass" title="Gesamt- und Kettenmasse für die gewählte Ansicht"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M3 9v6M21 9v6M8 8l-3 4 3 4M16 8l3 4-3 4"/></svg>Automassen</button>
+      <button class="wz" id="plMittel" title="Mittellinien und Mittelmarken an den Kreisen der gewählten Ansicht"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v20M2 12h20" stroke-dasharray="4 2 1 2"/></svg>Mittellinien</button>
+    </div><div class="pltitel">Masse</div></div>
+    <div class="plgruppe" data-pltab="beschriften"><div class="plwz">
+      <button class="wz" data-modus="text" title="Text oder Hinweis mit Führungslinie (ziehen)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M12 6v13M9 19h6"/></svg>Text / Hinweis</button>
+      <button class="wz" data-modus="ballon" title="Positionsnummer (Ballon) setzen"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/><path d="M9.5 10.5l2-1.5v6"/></svg>Positionsnr.</button>
+    </div><div class="pltitel">Text</div></div>
+    <div class="plgruppe" data-pltab="beschriften"><div class="plwz">
       <button class="wz" data-modus="linie" title="Linie ziehen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19L20 5"/></svg>Linie</button>
       <button class="wz" data-modus="pfeil" title="Pfeil ziehen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20L19 5M11 5h8v8"/></svg>Pfeil</button>
       <button class="wz" data-modus="rechteck" title="Rechteck ziehen"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>Rechteck</button>
       <button class="wz" data-modus="kreis" title="Kreis vom Mittelpunkt aus ziehen"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/></svg>Kreis</button>
-      <button class="wz" data-modus="ballon" title="Positionsnummer (Ballon) setzen"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5"/><path d="M9.5 10.5l2-1.5v6"/></svg>Position</button>
     </div><div class="pltitel">Zeichnen</div></div>
-    <div class="plgruppe"><div class="plwz">
-      <span class="menuewrap"><button class="wz haupt" id="plNeuAnsicht"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1.5"/><path d="M12 9v6M9 12h6"/></svg>Ansicht ▾</button><div class="menue" id="plAnsichtMenue" hidden>
-        <button data-plansicht="vorne">Ansicht vorne</button><button data-plansicht="hinten">Ansicht hinten</button><button data-plansicht="links">Ansicht links</button><button data-plansicht="rechts">Ansicht rechts</button>
-        <button data-plansicht="oben">Draufsicht</button><button data-plansicht="unten">Untersicht</button><button data-plansicht="iso">Isometrie</button>
-        <button data-plansicht="schnitt:vorne">Schnitt (Blick von vorne)</button><button data-plansicht="schnitt:rechts">Schnitt (Blick von rechts)</button><button data-plansicht="schnitt:oben">Schnitt (Blick von oben)</button></div></span>
-      <span class="menuewrap"><button class="wz" id="plNeuDetail" title="Querschnitt eines Kantenbausteins (Flächenblech) massstäblich aufs Blatt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h10a4 4 0 0 0 0-8H8"/></svg>Bausteinschnitt ▾</button><div class="menue" id="plDetailMenue" hidden></div></span>
-      <span class="menuewrap"><button class="wz" id="plNeuTab" title="Stückliste oder Biegeliste aus dem Modell aufs Blatt"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M4 10h16M4 14.5h16M10 5v14"/></svg>Tabelle ▾</button><div class="menue" id="plTabMenue" hidden></div></span>
-      <button class="wz" id="plAutoMass" title="Gesamt- und Kettenmasse für die gewählte Ansicht"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M3 9v6M21 9v6M8 8l-3 4 3 4M16 8l3 4-3 4"/></svg>Auto-Masse</button>
-    </div><div class="pltitel">Einfügen</div></div>
-    <div class="plgruppe"><div class="plwz">
+    <div class="plgruppe" data-pltab="tabellen"><div class="plwz">
+      <span class="menuewrap"><button class="wz haupt" id="plNeuTab" title="Stückliste oder Biegeliste aus dem Modell aufs Blatt"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M4 10h16M4 14.5h16M10 5v14"/></svg>Tabelle ▾</button><div class="menue" id="plTabMenue" hidden></div></span>
+    </div><div class="pltitel">Tabellen</div></div>
+    <div class="plgruppe" data-pltab="ausgabe"><div class="plwz">
       <button class="wz" id="plDruck" title="Alle Blätter drucken oder als PDF speichern"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 17H4v-7h16v7h-3M7 14h10v6H7z"/></svg>Drucken / PDF</button>
       <button class="wz" id="plSvg"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M8 11l4 4 4-4M5 20h14"/></svg>SVG speichern</button>
-    </div><div class="pltitel">Ausgabe</div></div>
+    </div><div class="pltitel">Exportieren</div></div>
   </div>
-  <div class="plinhalt"><div class="plmitte"><div id="plFlaeche"></div><div id="plStatus" aria-live="off"></div></div><aside id="plEigen"></aside></div>
+  <div class="plinhalt"><aside id="plBrowser" aria-label="Zeichnungsbrowser"></aside><div class="plmitte"><div id="plFlaeche"></div><div id="plStatus" aria-live="off"></div></div><aside id="plEigen"></aside></div>
 </div></div>
 <div class="modal" id="hilfe" hidden><div class="modalbox" role="dialog" aria-labelledby="hTitel">
   <h3 id="hTitel">Kurzanleitung</h3><div class="inhalt hilfetext">

@@ -52,7 +52,7 @@ async function seite(kern) {
   ok(await s.$eval("#plFlaeche", (el) => el.querySelectorAll("line,path,polyline").length > 3), "Ein: Planblatt zeigt die exakte Vorderansicht");
   // Modelländerung: Ansicht fällt auf das Netz zurück und wird danach wieder exakt
   // Automatisch bemassen: Gesamtmasse und Ø20 am Loch (exakte Ansicht)
-  await s.click('[data-modus="auswahl"]'); const stufe = await s.$('[data-pl="automass"], #plAutoMass, [data-pl="auto"]');
+  await s.click('[data-pltab="beschriften"]'); await s.click('[data-modus="auswahl"]'); const stufe = await s.$('[data-pl="automass"], #plAutoMass, [data-pl="auto"]');
   if (stufe) { await stufe.click(); await s.waitForTimeout(500); const txt = await s.$$eval("#plFlaeche .masstext", (t) => t.map((x) => x.textContent)); ok(txt.includes("Ø20"), `Ein: automatische Bemassung enthält «Ø20» (${txt.join(", ")})`); } else ok(false, "Ein: Knopf für automatische Bemassung nicht gefunden");
   await s.evaluate(() => document.getElementById("plZu").click());
   const vor = await s.evaluate(() => window.sdcadTest.exaktAnsicht("vorne", 1));
