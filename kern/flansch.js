@@ -5,12 +5,19 @@ const zahl = (v) => String(+(+v).toFixed(3));
 export function werkzeugAuf(b, m) {
   const w = b?.werkzeug; if (!w) return b;
   const t = +m?.t || 0, r = w.radius > 0 ? w.radius : null, s = w.seite === -1 ? -1 : 1;
-  if (w.typ === "umschlag") return { ...b, folge: `U${s > 0 ? "+" : "-"}${r ? "r" + zahl(r) : ""} ${zahl(Math.max(0.1, w.laenge))}`, versatz: 0 };
+  if (w.typ === "umschlag") { // Saumarten wie in Fusion: geschlossen (180°, Radius 0), offen (180° mit Lücke = grosser Radius), Tropfen (>180°), Rollsaum (270° ohne Schenkel)
+    const sa = w.saum || "geschlossen", sg = s > 0 ? "+" : "-", L = zahl(Math.max(0.1, w.laenge));
+    if (sa === "offen") return { ...b, folge: `U${sg}r${zahl(r || Math.max(1.5, 2 * t))} ${L}`, versatz: 0 };
+    if (sa === "tropfen") return { ...b, folge: `${s * 215}r${zahl(r || Math.max(1.5, 2 * t))} ${L}`, versatz: 0 };
+    if (sa === "roll") return { ...b, folge: `${s * 270}r${zahl(r || Math.max(2, 3 * t))} 0.1`, versatz: 0 };
+    return { ...b, folge: `U${sg}${r ? "r" + zahl(r) : ""} ${L}`, versatz: 0 };
+  }
   const a = Math.min(Math.max(+w.winkel || 90, 1), 179), k = (t / 2) * Math.tan((a * Math.PI) / 360), korr = w.bezug === "aussen" ? k : w.bezug === "innen" ? -k : 0;
   return { ...b, folge: `${s * a}${r ? "r" + zahl(r) : ""} ${zahl(Math.max(0.1, w.laenge - korr))}`, versatz: +(-korr).toFixed(4) };
 }
 export const flanschStandard = (typ = "flansch") => ({ typ, winkel: 90, laenge: typ === "umschlag" ? 10 : 25, radius: null, bezug: "mitte", seite: 1 });
-export const werkzeugName = (w) => w.typ === "umschlag" ? `Umschlag ${w.laenge} mm ${w.seite === -1 ? "hinten" : "Sichtseite"}` : `Flansch ${w.winkel}° ${w.laenge} mm${w.bezug && w.bezug !== "mitte" ? " (" + (w.bezug === "aussen" ? "aussen" : "innen") + ")" : ""}`;
+export const SAUMARTEN = { geschlossen: "Geschlossener Saum", offen: "Offener Saum", tropfen: "Tropfensaum", roll: "Rollsaum" };
+export const werkzeugName = (w) => w.typ === "umschlag" ? `${SAUMARTEN[w.saum || "geschlossen"].replace("Geschlossener Saum", "Umschlag")} ${w.laenge} mm ${w.seite === -1 ? "hinten" : "Sichtseite"}` : `Flansch ${w.winkel}° ${w.laenge} mm${w.bezug && w.bezug !== "mitte" ? " (" + (w.bezug === "aussen" ? "aussen" : "innen") + ")" : ""}`;
 
 // Abkantfolge eines Bausteins («90 25 U+ 7»: Winkel, Länge, Winkel, Länge …) in die Gegenrichtung (Sichtseite ⇄ Rückseite):
 // alle Winkel bekommen das andere Vorzeichen, U+ ⇄ U−; Längen und Radien bleiben.

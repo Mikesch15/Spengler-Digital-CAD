@@ -604,6 +604,16 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 #plBrowser .plblatt { padding-left: 12px; font-weight: 600; } #plBrowser .plkind { padding-left: 30px; }
 #plBrowser .pllee { padding: 6px 12px 6px 30px; color: var(--muted); font-size: 12px; }
 @media (max-width: 1000px) { .plinhalt { grid-template-columns: minmax(0, 1fr); } #plBrowser { display: none; } .pltabs [data-pltab] { padding: 8px 10px 6px; } }
+
+/* Menügruppen im Reiter (z. B. Datei): Gruppentitel unter den Knöpfen, im Aufklappmenü als Zwischenüberschrift */
+.klappmenue .mgr { display: contents; }
+.klappmenue .mgr::before { content: attr(data-titel); display: block; grid-column: 1 / -1; padding: 6px 10px 2px; font: 600 10px var(--font-label); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+@media (min-width: 1001px) {
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue { align-items: stretch; }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 1px; position: relative; padding: 0 10px 14px; border-right: 1px solid var(--line); margin-right: 2px; }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr:last-child { border-right: 0; }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr::before { position: absolute; left: 0; right: 0; bottom: 1px; padding: 0; text-align: center; }
+}
 </style>
 
 <a class="skip" href="#leinwand" id="skipLink">Zur 3D-Ansicht</a>
@@ -669,18 +679,28 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <button class="wz" id="wPlan" title="Planblatt: Ansichten des Modells, Bausteinschnitte, Bemassung, Schriftfeld – A3/A4 drucken oder als PDF/SVG"><svg viewBox="0 0 24 24"><rect class="f" x="4" y="3" width="16" height="18" rx="1.5"/><rect x="7" y="6" width="10" height="7"/><path d="M7 17h10"/></svg>Plan</button>
       <span class="trenner" aria-hidden="true"></span>
     <div class="klapp" data-klapp="datei"><button class="wz klappknopf" aria-haspopup="true" title="Speichern, Öffnen, Austausch, Drucken"><svg viewBox="0 0 24 24"><path class="f" d="M4 4h13l3 3v13H4z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg><span class="kz"><span class="kl">Datei</span><span class="kpfeil">▾</span></span></button><div class="klappmenue" hidden>
-      <button class="wz" id="wAblage" title="Modelle, Exporte und Pläne in der Cloud: Projekte › Jahr › Projekt › Modelle / Exporte / Pläne"><svg viewBox="0 0 24 24"><path class="f" d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 8.5 4.8 4.8 0 0 0 7 18z"/></svg><span><b>Cloud-Ablage</b><small>Modelle, Exporte, Pläne</small></span></button>
-      <button class="wz" id="wProjekte" title="Projekte der App anlegen, bearbeiten und diesem Modell zuordnen"><svg viewBox="0 0 24 24"><path class="f" d="M3 6.5h6l2 2.5h10V19H3z"/><path d="M12 12v4.5M9.75 14.25h4.5"/></svg>Projekte …</button>
-      <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path class="f" d="M4 4h13l3 3v13H4z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
+      <div class="mgr" data-titel="Projekt">
+      <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path class="f" d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M12 11v6M9 14h6"/></svg>Neu</button>
       <button class="wz" id="wOeffnen"><svg viewBox="0 0 24 24"><path class="f" d="M3 6.5h6l2 2.5h10V19H3z"/></svg>Öffnen</button>
       <button class="wz" id="wZuletzt" title="Zuletzt geöffnete Projekte" hidden><svg viewBox="0 0 24 24"><circle class="f" cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>Zuletzt</button>
-      <button class="wz" id="wNeu"><svg viewBox="0 0 24 24"><path class="f" d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M12 11v6M9 14h6"/></svg>Neu</button>
+      <button class="wz" id="wSpeichern"><svg viewBox="0 0 24 24"><path class="f" d="M4 4h13l3 3v13H4z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></svg>Speichern</button>
+      </div>
+      <div class="mgr" data-titel="Cloud und Projekte">
+      <button class="wz" id="wAblage" title="Modelle, Exporte und Pläne in der Cloud: Projekte › Jahr › Projekt › Modelle / Exporte / Pläne"><svg viewBox="0 0 24 24"><path class="f" d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7 8.5 4.8 4.8 0 0 0 7 18z"/></svg><span><b>Cloud-Ablage</b><small>Modelle, Exporte, Pläne</small></span></button>
+      <button class="wz" id="wProjekte" title="Projekte der App anlegen, bearbeiten und diesem Modell zuordnen"><svg viewBox="0 0 24 24"><path class="f" d="M3 6.5h6l2 2.5h10V19H3z"/><path d="M12 12v4.5M9.75 14.25h4.5"/></svg>Projekte …</button>
+      </div>
+      <div class="mgr" data-titel="Ausgabe">
       <button class="wz" id="wDrucken" title="Stückliste und Werkstattblätter aller sichtbaren Blechteile (Strg+P)"><svg viewBox="0 0 24 24"><path d="M7 9V3h10v6"/><rect class="f" x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg>Drucken</button>
+      </div>
+      <div class="mgr" data-titel="Export">
       <button class="wz" data-aus="step"><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><span><b>STEP exportieren</b><small>aus dem Anzeige-Netz (facettiert)</small></span></button>
       <button class="wz" data-aus="stepExakt" id="wStepExakt" hidden><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><span><b>STEP exakt (B-Rep)</b><small>alle exakten Körper aus dem CAD-Kern, AP242</small></span></button>
       <button class="wz" data-aus="stl"><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><span><b>STL exportieren</b><small>3D-Druck, Visualisierung</small></span></button>
+      </div>
+      <div class="mgr" data-titel="Import">
       <button class="wz" data-aus="import"><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 17v-6M9 14l3-3 3 3"/></svg><span><b>STEP / STL importieren</b><small>als Körper ins Modell</small></span></button>
       <button class="wz" data-aus="bild"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg><span><b>Bild / PDF-Plan als Hintergrund</b><small>auf Ebene legen, kalibrieren</small></span></button>
+      </div>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
       <input type="file" id="importDatei" accept=".step,.stp,.stl" hidden>
       <input type="file" id="detailDatei" accept=".step,.stp" hidden>
@@ -750,7 +770,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <div class="kontextbar" id="kontextBar" role="toolbar" aria-label="Passende Werkzeuge zur Auswahl" hidden></div>
       <div class="kantenbar" id="projBar" hidden><b>Projizieren</b><span id="pbText"></span><button class="knopf klein haupt" id="pbOk" disabled>OK</button><button class="knopf klein" id="pbAbbr">Abbrechen</button></div>
       <div class="kantenbar" id="kantenBar" hidden><b id="kbTitel"></b><span id="kbText"></span>
-        <label id="kbWinkelL">Winkel <input id="kbWinkel" type="number" step="any" value="90">°</label><label>Länge <input id="kbLaenge" type="number" step="any" value="25"> mm</label>
+        <label id="kbSaumL" hidden>Saum <select id="kbSaum"><option value="geschlossen">geschlossen</option><option value="offen">offen</option><option value="tropfen">Tropfen</option><option value="roll">Rollsaum</option></select></label><label id="kbWinkelL">Winkel <input id="kbWinkel" type="number" step="any" value="90">°</label><label id="kbLaengeL">Länge <input id="kbLaenge" type="number" step="any" value="25"> mm</label>
         <button class="knopf klein" id="kbRichtung" title="Richtung der Abkantung: zur Sichtseite oder nach hinten">Richtung: Sichtseite ⇄</button><button class="knopf klein haupt" id="kbOk" disabled>Übernehmen</button><button class="knopf klein" id="kbEnde">Fertig</button></div>
       <div class="layerbox" id="layerBox" hidden><div class="ltitel" id="lTitel" title="Layer-Leiste ein-/ausklappen">Layer ▾</div><div id="layerListe"></div>
         <div class="lknoepfe"><button class="knopf klein" id="lNeu">＋ Layer</button><button class="knopf klein" id="lZuw" title="Gewähltes Element auf den aktiven Layer legen">Element → Layer</button><button class="knopf klein haupt" id="lDxf" title="Zeichnung als DXF mit Layern, Farben und Linienarten speichern">DXF</button></div></div>

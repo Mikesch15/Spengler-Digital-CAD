@@ -28,6 +28,11 @@ export const BAUSTEINE_STANDARD = [
   { id: "abk-u", name: "Abkantung 90° nach hinten", gruppe: "Kanten", folge: "-90 30", versatz: 0 },
   { id: "abk-o", name: "Abkantung 90° zur Sichtseite", gruppe: "Kanten", folge: "90 30", versatz: 0 },
   { id: "tropf", name: "Abkantung mit Tropfkante", gruppe: "Kanten", folge: "-90 30 45 10", versatz: 0 },
+  { id: "saum-offen", name: "Offener Saum (Lücke 2 mm)", gruppe: "Säume", folge: "U+r1.5 10", versatz: 0 },
+  { id: "saum-tropfen", name: "Tropfensaum", gruppe: "Säume", folge: "215r1.5 10", versatz: 0 },
+  { id: "saum-roll", name: "Rollsaum", gruppe: "Säume", folge: "270r3 0.1", versatz: 0 },
+  { id: "kroepf-45", name: "Kröpfung 45° (Z-Abkantung, 12 mm)", gruppe: "Kröpfungen", folge: "45 12 -45 25", versatz: 0 },
+  { id: "kroepf-90", name: "Kröpfung 90° (Stufe 10 mm)", gruppe: "Kröpfungen", folge: "90 10 -90 25", versatz: 0 },
   { id: "paneel", name: "Paneel: Abkantung 30 mit Einhang", gruppe: "Fassade", folge: "-90 30 -90 15", versatz: 0 },
 ];
 
@@ -148,9 +153,9 @@ export function eckSchnitt(pA, pB, dA, dB) {
 }
 const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]);
 const richtung = (a, b) => { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
-export function eckFaktoren(gruppen, profile) {
+export function eckFaktoren(gruppen, profile, opt = null) { // opt: { ecken: "gehrung" | "stoss" | "spalt", spalt, t } – Eckenschluss wie in Fusion (Gehrung, Stoss/Überlappung, offene Ecke mit Spalt)
   const n = gruppen.length;
-  return gruppen.map((g, k) => {
+  const ek = gruppen.map((g, k) => {
     const vor = gruppen[(k - 1 + n) % n], nach = gruppen[(k + 1) % n];
     const dV = richtung(vor.punkte.at(-2), vor.punkte.at(-1)), d0 = richtung(g.punkte[0], g.punkte[1]), d1 = richtung(g.punkte.at(-2), g.punkte.at(-1)), dN = richtung(nach.punkte[0], nach.punkte[1]);
     const pV = profile[(k - 1 + n) % n], p = profile[k], pN = profile[(k + 1) % n];
@@ -158,6 +163,15 @@ export function eckFaktoren(gruppen, profile) {
     const a = pV?.quer && p?.quer ? eckSchnitt(pV, p, dV, d0) : null, b = p?.quer && pN?.quer ? eckSchnitt(p, pN, d1, dN) : null;
     return { k0: eckFaktor(knick(dV, d0), !!pV?.lage, !!a?.gehrung) - (a?.kB || 0), e0: a?.eB || 0, k1: eckFaktor(knick(d1, dN), !!pN?.lage, !!b?.gehrung) - (b?.kA || 0), e1: b?.eA || 0 };
   });
+  const art = opt?.ecken || "gehrung"; if (art === "gehrung") return ek;
+  const t = +opt?.t || 0.7, gap = Math.max(0, +opt?.spalt || 0);
+  gruppen.forEach((g, k) => { // Ecke am Anfang der Kante k (zwischen Kante k−1 und k): nur wo beide Kanten einen Baustein haben
+    const kv = (k - 1 + n) % n; if (!profile[k]?.lage || !profile[kv]?.lage || kv === k) return;
+    const dV = richtung(gruppen[kv].punkte.at(-2), gruppen[kv].punkte.at(-1)), d0 = richtung(g.punkte[0], g.punkte[1]), beta = knick(dV, d0);
+    if (art === "spalt") { ek[k].e0 += gap / 2; ek[kv].e1 += gap / 2; }
+    else if (art === "stoss") { ek[k].k0 = eckFaktor(beta, false); ek[kv].k1 = 0; ek[kv].e1 += t / Math.max(0.2, Math.abs(Math.sin(beta))); } // Kante k läuft bis zur Aussenfläche der Nachbarkante, die Nachbarkante endet an ihrer Innenfläche
+  });
+  return ek;
 }
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
 const len = (a) => Math.hypot(a[0], a[1]);
@@ -196,8 +210,8 @@ function lappenLinie(g, u, x, f) {
 }
 // Zuschnitt = aufgefaltetes 3D-Blech: Grundfläche + je Kante der Lappen bis zur Zugabe; an den Enden für jedes u
 // genau dort abgeschnitten, wo das gekantete Profil an der Ecke endet. Biegelinien auf denselben Lappen.
-export function abwicklung(pts, gruppen, profile, quetsch = null) { // quetsch: Map k → Quetschfalte an der Ecke am Anfang der Kante k (siehe quetschEckeFlach)
-  const ek = eckFaktoren(gruppen, profile), umriss = [], n0 = gruppen.length, qA = (k) => quetsch?.get(k), qE = (k) => quetsch?.get((k + 1) % n0);
+export function abwicklung(pts, gruppen, profile, quetsch = null, opt = null) { // quetsch: Map k → Quetschfalte an der Ecke am Anfang der Kante k (siehe quetschEckeFlach)
+  const ek = eckFaktoren(gruppen, profile, opt), umriss = [], n0 = gruppen.length, qA = (k) => quetsch?.get(k), qE = (k) => quetsch?.get((k + 1) % n0);
   gruppen.forEach((g, k) => {
     const p = profile[k];
     if (!p?.lage || !(p.zugabe > 0)) { umriss.push(...g.punkte.slice(0, -1)); return; }
@@ -245,14 +259,14 @@ export function quetschEcke(pts, gruppen, profile, k) {
 }
 
 // Alles für ein Blech: Kanten, Profile der Bausteine, Abwicklung. kanten[k] = Baustein (oder null)
-export function flaechenblech(ptsRoh, kanten, m, quetschEcken = []) { // quetschEcken: Ecken (Index k = Anfang der Kante k), an denen eine Quetschfalte gesetzt ist
+export function flaechenblech(ptsRoh, kanten, m, quetschEcken = [], opt = null) { // quetschEcken: Ecken (Index k = Anfang der Kante k), an denen eine Quetschfalte gesetzt ist
   const pts = gegenUhrzeiger(ptsRoh), gruppen = kantenGruppen(pts);
   const profile = gruppen.map((_, k) => { const b = kanten[k]; try { return b ? { ...bausteinProfil(b, m), baustein: b } : null; } catch (e) { throw new Error(`Kante ${k + 1} (${b.name}): ${e.message}`); } });
   const quetsch = new Map(), fehlerQ = {};
   for (const k of quetschEcken || []) {
     try { quetsch.set(k, quetschEcke(pts, gruppen, profile, k)); } catch (e) { fehlerQ[k] = e.message; }
   }
-  return { pts, gruppen, profile, quetsch, quetschFehler: fehlerQ, abw: abwicklung(pts, gruppen, profile, quetsch.size ? quetsch : null) };
+  return { pts, gruppen, profile, quetsch, quetschFehler: fehlerQ, opt: opt ? { ...opt, t: m.t } : null, abw: abwicklung(pts, gruppen, profile, quetsch.size ? quetsch : null, opt ? { ...opt, t: m.t } : null) };
 }
 
 // ------------------------------------------------------------------------------------------------------------------

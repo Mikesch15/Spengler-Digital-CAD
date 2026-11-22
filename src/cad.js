@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { planModul } from "./plan.js";
 import { cloudModul } from "./cloud.js";
-import { werkzeugAuf, flanschStandard, werkzeugName, folgeUmkehren, folgeAnhaengen } from "../kern/flansch.js";
+import { werkzeugAuf, flanschStandard, werkzeugName, folgeUmkehren, folgeAnhaengen, SAUMARTEN } from "../kern/flansch.js";
 import { projekteModul } from "./projekte.js";
 import { kantenLage, detailAusStep, pruefeDetail, meshAusVorlage } from "../kern/vorlagen/detail3d.js";
 import { selbsttest } from "../kern/selbsttest.js";
@@ -1314,7 +1314,7 @@ function regen() {
         f._bleche = nr.map((pi) => {
           if (!loops[pi]) throw new Error(`Fläche ${pi + 1} fehlt in der Skizze`);
           const n = kantenGruppen(gegenUhrzeiger(loops[pi])).length;
-          return { pi, ...flaechenblech(loops[pi], [...Array(n).keys()].map((k) => { const b = bausteinFuer(f.kanten?.[`${pi}:${k}`]), w = f.kantenWerte?.[`${pi}:${k}`]; return b && w ? { ...b, _werte: w } : b; }), m, doc.features.filter((q) => q.typ === "quetschfalte" && q.ziel === f.id && !q._aus).map((q) => String(q.ecke).split(":").map(Number)).filter(([p0]) => p0 === pi).map(([, k0]) => k0)) };
+          return { pi, ...flaechenblech(loops[pi], [...Array(n).keys()].map((k) => { const b = bausteinFuer(f.kanten?.[`${pi}:${k}`]), w = f.kantenWerte?.[`${pi}:${k}`]; return b && w ? { ...b, _werte: w } : b; }), m, doc.features.filter((q) => q.typ === "quetschfalte" && q.ziel === f.id && !q._aus).map((q) => String(q.ecke).split(":").map(Number)).filter(([p0]) => p0 === pi).map(([, k0]) => k0), f.ecken && f.ecken !== "gehrung" ? { ecken: f.ecken, spalt: +f.eckSpalt || 1 } : null) };
         });
         const viele = f._bleche.length > 1;
         f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
@@ -2476,7 +2476,7 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   // Ecken: Profile auf Gehrung (Nachbarkante mit Baustein) bzw. bündig zur Nachbarkante (ohne) – keine Überschneidungen
   const richt = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]); // + = links (konvexe Ecke)
-  const ek = eckFaktoren(bl.gruppen, bl.profile); // dieselbe Eckregel wie die Abwicklung
+  const ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt); // dieselbe Eckregel wie die Abwicklung
   const n = bl.gruppen.length;
   for (const k of bl.quetsch?.keys() || []) { // Quetschfalte: beide Flansche enden an der Ecklinie ε; der Flansch der vorigen Kante wird um die halbe Blechstärke zurückgesetzt, damit die Blechstärke nicht doppelt in der Ecke steckt
     const e3 = quetschEcke3D(bl, k); if (!e3) continue; const { q, A, B, V, O, kv } = e3, g1 = q.z.gamma1 * Math.PI / 180, g2 = q.z.gamma2 * Math.PI / 180, cot = (x) => Math.cos(x) / Math.sin(x);
@@ -3014,7 +3014,7 @@ function kantenBarZeigen() {
   $("kbTitel").textContent = w.typ === "flansch" ? "Flansch" : w.typ === "umschlag" ? "Umschlag" : `Baustein: ${bausteinName(w.baustein)}`;
   $("kbText").textContent = kantenWzText();
   $("kbOk").hidden = w.schritt !== "kante"; $("kbOk").disabled = !w.sel?.length; $("kbOk").textContent = w.sel?.length ? `Übernehmen (${w.sel.length})` : "Übernehmen";
-  $("kbWinkelL").hidden = w.typ !== "flansch"; document.querySelector("#kantenBar label:nth-of-type(2)").hidden = w.typ === "baustein";
+  $("kbWinkelL").hidden = w.typ !== "flansch"; $("kbSaumL").hidden = w.typ !== "umschlag"; $("kbLaengeL").hidden = w.typ === "baustein";
   $("kbRichtung").textContent = `Richtung: ${w.seite === -1 ? "nach hinten" : "Sichtseite"} ⇄`;
 }
 function endeKantenWz() { kantenWz = null; menueKante = null; kantenBarZeigen(); zeigeKanten(); }
@@ -3038,7 +3038,7 @@ function profilErweiterungen(f, m) {
 const istProfil = (h) => h?.typ === "profil" || h?.typ === "vorlage" || h?.typ === "blech";
 function kantenWert(w, m) { // Baustein bzw. Werkzeug der Kantenleiste → Wert für einen Schritt
   if (w.typ === "baustein") { const b = bausteinFuer(w.baustein); return w.seite === -1 ? { folge: folgeUmkehren(bausteinFolge(werkzeugAuf(b, m), m)), versatz: +b.versatz || 0 } : w.baustein; }
-  const wk = { ...flanschStandard(w.typ), winkel: parseFloat($("kbWinkel").value) || 90, laenge: parseFloat($("kbLaenge").value) || (w.typ === "umschlag" ? 10 : 25), seite: w.seite }; return werkzeugNeu({ werkzeug: wk }, wk, m);
+  const wk = { ...flanschStandard(w.typ), winkel: parseFloat($("kbWinkel").value) || 90, laenge: parseFloat($("kbLaenge").value) || (w.typ === "umschlag" ? 10 : 25), seite: w.seite, ...(w.typ === "umschlag" ? { saum: $("kbSaum").value } : {}) }; return werkzeugNeu({ werkzeug: wk }, wk, m);
 }
 function wendeProfilKante(key) { // Schritt «Profilkante» in der Zeitleiste anlegen (live); key: A, B, S1:n oder S2:n (Stirnkante von Schenkel n)
   const [ende, nr] = String(key).split(":");
@@ -3156,7 +3156,7 @@ function wendeKantenWz(key) { // legt einen Schritt «Kante» in der Zeitleiste 
   const w = kantenWz, f = w.f, m = material(f.material), vor = f.kanten?.[key];
   let neu;
   if (w.typ === "baustein") { const b = bausteinFuer(w.baustein); neu = w.seite === -1 ? { folge: folgeUmkehren(bausteinFolge(werkzeugAuf(b, m), m)), versatz: +b.versatz || 0 } : w.baustein; }
-  else { const wk = { ...flanschStandard(w.typ), winkel: parseFloat($("kbWinkel").value) || 90, laenge: parseFloat($("kbLaenge").value) || (w.typ === "umschlag" ? 10 : 25), seite: w.seite }; neu = werkzeugNeu({ werkzeug: wk }, wk, m); }
+  else { const wk = { ...flanschStandard(w.typ), winkel: parseFloat($("kbWinkel").value) || 90, laenge: parseFloat($("kbLaenge").value) || (w.typ === "umschlag" ? 10 : 25), seite: w.seite, ...(w.typ === "umschlag" ? { saum: $("kbSaum").value } : {}) }; neu = werkzeugNeu({ werkzeug: wk }, wk, m); }
   const titel = w.typ === "flansch" ? "Flansch" : w.typ === "umschlag" ? "Umschlag" : bausteinName(w.baustein);
   const n = { id: neueId(), typ: "kante", name: `${titel} ${kantenName(f, key)}`, ziel: f.id, key, wert: neu, anhaengen: !!vor };
   einfuegen(n); w.letzte = n;
@@ -3176,7 +3176,7 @@ function kanteUmkehren(f, key) {
 function kanteDialog(f) {
   const z = finde(f.ziel), m = material(z?.material), w = f.wert;
   const felder = (ff) => { const x = ff.wert; return [{ id: "name", label: "Name", text: true, wert: ff.name },
-    ...(x?.werkzeug ? [...(x.werkzeug.typ === "flansch" ? [{ id: "winkel", label: "Winkel", einheit: "°", wert: x.werkzeug.winkel }] : []), { id: "laenge", label: "Länge", einheit: "mm", wert: x.werkzeug.laenge }, { id: "radius", label: "Radius (0 = automatisch)", einheit: "mm", wert: x.werkzeug.radius ?? 0 },
+    ...(x?.werkzeug ? [...(x.werkzeug.typ === "flansch" ? [{ id: "winkel", label: "Winkel", einheit: "°", wert: x.werkzeug.winkel }] : []), ...(x.werkzeug.typ === "umschlag" ? [{ id: "saum", label: "Saumart", optionen: Object.entries(SAUMARTEN), wert: x.werkzeug.saum || "geschlossen" }] : []), { id: "laenge", label: "Länge", einheit: "mm", wert: x.werkzeug.laenge }, { id: "radius", label: "Radius (0 = automatisch)", einheit: "mm", wert: x.werkzeug.radius ?? 0 },
       ...(x.werkzeug.typ === "flansch" ? [{ id: "bezug", label: "Mass bis", optionen: [["mitte", "Mittellinie"], ["aussen", "Aussenkante"], ["innen", "Innenkante"]], wert: x.werkzeug.bezug || "mitte" }] : []),
       { id: "seite", label: "Richtung", optionen: [["1", "zur Sichtseite"], ["-1", "nach hinten"]], wert: String(x.werkzeug.seite === -1 ? -1 : 1) }]
       : typeof x === "string" ? [{ id: "baustein", label: "Baustein", optionen: alleBausteine().map((b) => [b.id, b.name]), wert: x }]
@@ -3184,7 +3184,7 @@ function kanteDialog(f) {
     ...(ff.typ === "kante" ? [{ id: "anhaengen", label: "Bei belegter Kante", optionen: [["", "ersetzt den Baustein der Kante"], ["1", "setzt ihn fort (anhängen)"]], wert: ff.anhaengen ? "1" : "" }] : [])]; };
   const setze = (ff, ww) => {
     ff.name = ww.name?.trim() || ff.name; ff.anhaengen = !!ww.anhaengen;
-    if (ff.wert?.werkzeug) { const wk = { ...ff.wert.werkzeug }; if (ww.winkel > 0) wk.winkel = ww.winkel; if (ww.laenge > 0) wk.laenge = ww.laenge; wk.radius = ww.radius > 0 ? ww.radius : null; if (ww.bezug) wk.bezug = ww.bezug; wk.seite = +ww.seite === -1 ? -1 : 1; ff.wert = werkzeugNeu(ff.wert, wk, m); }
+    if (ff.wert?.werkzeug) { const wk = { ...ff.wert.werkzeug }; if (ww.winkel > 0) wk.winkel = ww.winkel; if (ww.laenge > 0) wk.laenge = ww.laenge; wk.radius = ww.radius > 0 ? ww.radius : null; if (ww.bezug) wk.bezug = ww.bezug; if (ww.saum) wk.saum = ww.saum; wk.seite = +ww.seite === -1 ? -1 : 1; ff.wert = werkzeugNeu(ff.wert, wk, m); }
     else if (typeof ff.wert === "string") ff.wert = ww.baustein || ff.wert;
     else if (ww.folge) { try { folge("100 " + ww.folge); ff.wert = { ...ff.wert, folge: ww.folge }; } catch {} }
   };
@@ -3215,6 +3215,8 @@ function flaecheDialog(f) {
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "sichtseite", label: "Richtung der Abkantungen / Sichtseite", optionen: [["1", "Vorne (Richtung Ebenen-Normale)"], ["-1", "Hinten (gegen die Normale)"]], wert: String(f.sichtseite ?? 1) },
     { id: "lage", label: "Skizze liegt …", optionen: [["mitte", "in der Blechmitte"], ["vorne", "auf der Vorderseite (Blech dahinter)"], ["hinten", "auf der Rückseite (Blech davor)"]], wert: f.lage || "mitte" },
+    { id: "ecken", label: "Eckenschluss", optionen: [["gehrung", "Gehrung (Eckschnitt, Standard)"], ["stoss", "Stoss (Überlappung)"], ["spalt", "Offene Ecke mit Spalt"]], wert: f.ecken || "gehrung" },
+    { id: "eckSpalt", label: "Eckspalt (offene Ecke)", einheit: "mm", wert: f.eckSpalt ?? 1 },
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },
     { id: "notiz", label: "Notiz", text: true, wert: f.notiz ?? "" },
   ];
