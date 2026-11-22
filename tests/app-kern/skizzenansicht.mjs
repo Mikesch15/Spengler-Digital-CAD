@@ -20,7 +20,9 @@ await s.keyboard.down("Shift"); await s.mouse.move(900, 300); await s.mouse.down
 const blick = () => s.evaluate(() => window.sdcadTest.kameraBlick());
 ok(Math.abs((await blick())[2]) > 0.999, "Blick senkrecht auf die XY-Fläche (z = " + (await blick())[2] + ")");
 ok(!gleich(q0, await s.evaluate(() => window.sdcadTest.kameraQ())) && Math.abs((await blick())[2]) > 0.999, "Umschalt + Mausrad dreht in der Skizze nur in der Ebene (Blick bleibt, Ansicht 2D)");
-ok(await s.evaluate(() => window.sdcadTest.fov()) < 2, "Skizze: keine Perspektive (Sehfeld " + (await s.evaluate(() => window.sdcadTest.fov())).toFixed(2) + "°)");
+{ // echte orthogonale Projektion: gleiche Stelle in verschiedener Tiefe liegt auf demselben Bildpunkt, auch weit ausserhalb der Bildmitte und nach Verschieben
+  const q1 = await s.evaluate(() => window.sdcadTest.schirm([90, 50, 0])), q2 = await s.evaluate(() => window.sdcadTest.schirm([90, 50, 300]));
+  ok(Math.hypot(q1[0] - q2[0], q1[1] - q2[1]) < 0.01, "Skizze: keine Perspektive – Tiefe verschiebt den Bildpunkt nicht (" + q1.map(Math.round) + " / " + q2.map(Math.round) + ")"); }
 ok(!(await s.isVisible("#wuerfelHit")) && !(await s.isVisible('[data-ansicht="iso"]')), "Skizze: kein Ansichtswürfel und kein Iso – Blick bleibt senkrecht");
 await s.evaluate(() => document.querySelector('[data-ansicht="iso"]').click()); await s.waitForTimeout(200);
 ok(Math.abs((await blick())[2]) > 0.9999, "Iso in der Skizze ändert den Blick nicht");
@@ -28,6 +30,7 @@ await s.evaluate(() => window.sdcadTest.beendeSkizze()); await s.waitForTimeout(
 await s.keyboard.down("Shift"); await s.mouse.move(900, 300); await s.mouse.down({ button: "middle" }); await s.mouse.move(1000, 400, { steps: 6 }); await s.mouse.up({ button: "middle" }); await s.keyboard.up("Shift"); await s.waitForTimeout(200);
 ok(!gleich(q0, await s.evaluate(() => window.sdcadTest.kameraQ())), "Nach der Skizze dreht Umschalt + Mausrad wieder");
 ok(await s.evaluate(() => window.sdcadTest.fov()) === 35, "Nach der Skizze wieder perspektivisch (35°)");
+{ const q1 = await s.evaluate(() => window.sdcadTest.schirm([90, 50, 0])), q2 = await s.evaluate(() => window.sdcadTest.schirm([90, 50, 300])); ok(Math.hypot(q1[0] - q2[0], q1[1] - q2[1]) > 1, "Ausserhalb der Skizze ist die Ansicht wieder perspektivisch"); }
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Skizzenansicht (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

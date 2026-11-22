@@ -47,7 +47,7 @@ import { zuschnittAusVolumen } from "../kern/cad/blech.js";
 import { dxfLesen } from "../kern/dxflesen.js";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
 import schriftDaten from "three/examples/fonts/droid/droid_sans_bold.typeface.json";
-import { ausschnittWerkzeug, ausschnittKante } from "../kern/flaechenblech.js";
+import { ausschnittWerkzeug, ausschnittKante, profilPunkt } from "../kern/flaechenblech.js";
 import { BAUSTEINE_STANDARD, flaechenblech, plattenUmriss, kantenGruppen, gegenUhrzeiger, bausteinProfil, eckFaktoren } from "../kern/flaechenblech.js";
 import { profilSvg, abwicklungSvg, zuschnittSvg, bausteinSvg, bausteinGrenzen } from "../kern/zeichnung.js";
 import { folge } from "../kern/details.js";
@@ -189,14 +189,21 @@ const renderer = new THREE.WebGLRenderer({ canvas: leinwand, antialias: true, al
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const szene = new THREE.Scene();
 const kamera = new THREE.PerspectiveCamera(35, 1, 1, 100000);
-// In der Skizze keine Perspektive: Sehfeld winzig, Abstand entsprechend grösser (Bildgrösse bleibt gleich) = praktisch orthogonale Projektion
-const FOV_NORMAL = 35, FOV_ORTHO = 0.7; let orthoK = 1;
+// In der Skizze keine Perspektive: echte orthogonale Projektion (Projektionsmatrix der Kamera), Raycaster und Steuerung sehen eine Ortho-Kamera
+const FOV_NORMAL = 35, orthoK = 1; let orthoAn = false;
+const perspUpdate = THREE.PerspectiveCamera.prototype.updateProjectionMatrix, perspFlags = { p: true, o: false };
+function orthoUpdate() {
+  const d = kamera.position.distanceTo(steuerung.target) || 1, hh = d * Math.tan(FOV_NORMAL * Math.PI / 360) / (kamera.zoom || 1), hw = hh * kamera.aspect;
+  Object.assign(kamera, { left: -hw, right: hw, top: hh, bottom: -hh, near: -2e5, far: 2e6 });
+  kamera.projectionMatrix.makeOrthographic(-hw, hw, hh, -hh, -2e5, 2e6); kamera.projectionMatrixInverse.copy(kamera.projectionMatrix).invert();
+}
 function orthoSetzen(an) {
-  const neu = an ? FOV_ORTHO : FOV_NORMAL; if (kamera.fov === neu) return;
-  const k = Math.tan(kamera.fov * Math.PI / 360) / Math.tan(neu * Math.PI / 360);
-  kamera.fov = neu; orthoK = an ? Math.tan(FOV_NORMAL * Math.PI / 360) / Math.tan(FOV_ORTHO * Math.PI / 360) : 1;
-  const d = kamera.position.clone().sub(steuerung.target).multiplyScalar(k); kamera.position.copy(steuerung.target).add(d);
-  kamera.near = Math.max(1, d.length() * 0.02); kamera.far = Math.max(100000, d.length() * 20); kamera.updateProjectionMatrix();
+  if (an === orthoAn) return; orthoAn = an;
+  if (an) { kamera.fov = FOV_NORMAL; kamera.isPerspectiveCamera = false; kamera.isOrthographicCamera = true; kamera.updateProjectionMatrix = orthoUpdate; kamera.near = -2e5; kamera.far = 2e6; kamera.zoom = 1; orthoUpdate(); }
+  else {
+    const L = kamera.zoom || 1; if (L !== 1) { const d = kamera.position.clone().sub(steuerung.target).multiplyScalar(1 / L); kamera.position.copy(steuerung.target).add(d); }
+    kamera.zoom = 1; kamera.isPerspectiveCamera = true; kamera.isOrthographicCamera = false; delete kamera.updateProjectionMatrix; kamera.near = 1; kamera.far = 100000; perspUpdate.call(kamera);
+  }
 }
 const steuerung = new OrbitControls(kamera, leinwand);
 steuerung.enableDamping = false; // keine Nachlaufzeit: Drehen und Verschieben folgen der Maus sofort
@@ -603,7 +610,7 @@ function stirnAnhaengen(f, m, ebeneRef, versatz) {
   const er = stirnErweiterungen(f, m); if (!er.length) return;
   const r = stirnLaschen(f._res, er, m); f._stirn = r.laschen; f._stirnFehler = r.fehler[0] || null;
   if (f.versteckt) return;
-  for (const mesh of stirnMeshes(f, ebeneRef, versatz, zweiseitig(f, "laenge", "laenge2"), darstellungVon(f, m))) modell.add(mesh);
+  for (const mesh of stirnMeshes(f, ebeneRef, versatz, zweiseitig(f, "laenge", "laenge2"), darstellungVon(f, m))) { mesh.userData.stirn = true; modell.add(mesh); } // Stirnlaschen bleiben Netz (der exakte Kern kennt sie noch nicht) – sie dürfen nicht durch den exakten Körper verschwinden
 }
 function koerper(formen_, ebene, tiefe, richtung, farbe, fid) {
   const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe, bevelEnabled: false, curveSegments: 48 });
@@ -1007,6 +1014,49 @@ function beidseitig(f, feld, feld2) {
   const d = f.richtung === "umgekehrt" ? -1 : 1, fern = d * vz; // Richtung des fernen Endes (+1 = Normale)
   return [{ plus: fern > 0, feld, faktor: vz, farbe }, { plus: fern < 0, feld, faktor: -vz, farbe, nah: true }]; // nah: Pfeil am Fuss (liegt auf der Profilfläche)
 }
+// Flansch/Umschlag (Flächenblech-Kante, Blechprofil A/B, Stirnlasche): Pfeile an der Spitze – Länge in beide Richtungen, Winkel tangential in beide Richtungen
+function griffeKante(f) {
+  const z = finde(f.ziel), wk = f.wert?.werkzeug; if (!z || !wk || typeof wk !== "object") return [];
+  const laenge = Math.max(1, +wk.laenge || 10), s = wk.seite === -1 ? -1 : 1, l = [];
+  const mk = (tip, dir, tan, radius) => {
+    l.push({ feld: "laenge", pos: tip, dir, faktor: 1, min: 0.5, farbe: 0xe0782b }, { feld: "laenge", pos: tip.clone(), dir: dir.clone().negate(), faktor: -1, min: 0.5, farbe: 0xe0782b });
+    if (wk.typ === "flansch") { const k = 180 / Math.PI / Math.max(4, radius); l.push({ feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(s), faktor: k, min: -170, max: 170, farbe: 0x2f7dd1 }, { feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(-s), faktor: -k, min: -170, max: 170, farbe: 0x2f7dd1 }); }
+  };
+  if (z.typ === "flaeche") {
+    const [pi, k] = String(f.key).split(":").map(Number), bl = z._bleche?.find((b) => b.pi === pi), g = bl?.gruppen[k], pr = bl?.profile[k]; if (!g?.gerade || !pr?.res) return [];
+    const a = g.punkte[0], b = g.punkte.at(-1), L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], no = [d[1], -d[0]], mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const pp = profilPunkt(pr, pr.zugabe * 0.999); if (!pp) return [];
+    const sicht = z.sichtseite === -1 ? -1 : 1, B = basis(blechEbene(finde(z.skizze).ebene, z, material(z.material))), LM = lageVon(z);
+    const pos = new THREE.Vector3(mid[0] + no[0] * pp.x, mid[1] + no[1] * pp.x, sicht * pp.y).applyMatrix4(B), W = (v) => new THREE.Vector3(...v).transformDirection(B);
+    if (LM) pos.applyMatrix4(LM);
+    mk(pos, W([Math.cos(pp.th) * no[0], Math.cos(pp.th) * no[1], sicht * Math.sin(pp.th)]), W([-Math.sin(pp.th) * no[0], -Math.sin(pp.th) * no[1], sicht * Math.cos(pp.th)]), laenge);
+    return l;
+  }
+  const kl = z._kernLage, res = z._res; if (!kl || !res?.pfad?.length || z.versteckt) return [];
+  const zw = zweiseitig(z, "laenge", "laenge2"), rueck = rueckVersatz(zw.richtung, zw.tiefe), zm = (-rueck + zw.tiefe - rueck) / 2, M = basis(kl.ebene), vz = kl.versatz;
+  const Pt = (p, zz) => new THREE.Vector3(p[0] + vz[0], p[1] + vz[1], zz).applyMatrix4(M), Dv = (x, y, zz) => new THREE.Vector3(x, y, zz).transformDirection(M);
+  if (f.ende === "A" || f.ende === "B") {
+    const el = f.ende === "B" ? res.pfad.at(-1) : res.pfad[0]; if (el?.typ !== "linie") return [];
+    const p = f.ende === "B" ? el.p2 : el.p1, q = f.ende === "B" ? el.p1 : el.p2, L = Math.hypot(p[0] - q[0], p[1] - q[1]) || 1, d = [(p[0] - q[0]) / L, (p[1] - q[1]) / L];
+    mk(Pt(p, zm), Dv(d[0], d[1], 0), Dv(-d[1], d[0], 0), laenge); return l;
+  }
+  const la = (z._stirn || []).find((x) => x.ende === f.ende && (!(f.schenkel > 0) || x.schenkel === f.schenkel)); if (!la) return [];
+  const len = Math.hypot(la.p2[0] - la.p1[0], la.p2[1] - la.p1[1]) || 1, d = [(la.p2[0] - la.p1[0]) / len, (la.p2[1] - la.p1[1]) / len], lk = [-d[1], d[0]], sg = f.ende === "S1" ? -1 : 1, zE = f.ende === "S1" ? -rueck : zw.tiefe - rueck;
+  let ang = 0, u = 0, v = 0, pos0 = 0; for (const b of [...la.biegungen].sort((a, c) => a.pos - c.pos)) { const sg2 = b.pos - pos0; u += sg2 * Math.cos(ang); v += sg2 * Math.sin(ang); pos0 = b.pos; ang += b.winkel * Math.PI / 180; }
+  const rest = Math.max(0, la.laenge - pos0); u += rest * Math.cos(ang); v += rest * Math.sin(ang);
+  const du = Math.cos(ang), dv = Math.sin(ang), mx = la.p1[0] + d[0] * len / 2 + lk[0] * v, my = la.p1[1] + d[1] * len / 2 + lk[1] * v;
+  mk(Pt([mx, my], zE + sg * u), Dv(lk[0] * dv, lk[1] * dv, sg * du), Dv(lk[0] * du, lk[1] * du, -sg * dv), laenge);
+  return l;
+}
+// Drehung: Pfeile am Ende des gedrehten Profils, tangential – Winkel in beide Richtungen ziehbar
+function griffeDrehung(f) {
+  const s = finde(f.skizze); if (!s || f.bis) return [];
+  const loops = schleifen(s); if (!loops.length) return []; const [a, d] = drehAchse(s, f.achse); if (!a) return [];
+  const p = loops.sort((x, y) => Math.abs(flaeche(y)) - Math.abs(flaeche(x)))[0], c = [p.reduce((q, r) => q + r[0], 0) / p.length, p.reduce((q, r) => q + r[1], 0) / p.length];
+  const A = zu3D(s.ebene, a), ax = zu3D(s.ebene, [a[0] + d[0], a[1] + d[1]]).sub(A).normalize(), C = zu3D(s.ebene, c), rv = C.clone().sub(A); rv.addScaledVector(ax, -rv.dot(ax)); const R = rv.length(); if (R < 1e-6) return [];
+  const th = (f.winkel ?? 360) * Math.PI / 180, r2 = rv.clone().applyAxisAngle(ax, th), pos = A.clone().add(C.clone().sub(A).projectOnVector(ax)).add(r2), tan = new THREE.Vector3().crossVectors(ax, r2).normalize(), k = 180 / Math.PI / R;
+  return [{ feld: "winkel", pos, dir: tan, faktor: k, min: 1, max: 360, farbe: 0x2f7dd1 }, { feld: "winkel", pos: pos.clone(), dir: tan.clone().negate(), faktor: -k, min: 1, max: 360, farbe: 0x2f7dd1 }];
+}
 function griffeFuer(f) {
   if (f.bis && f.bis !== "mass" && (f.typ === "extrusion" || ["blech", "vorlage", "profil"].includes(f.typ))) return []; // Ausdehnung folgt der gewählten Fläche/Kante
   const l = [], mitte = (ms) => { const bb = new THREE.Box3(); ms.forEach((m) => bb.expandByObject(m)); return bb.isEmpty() ? null : bb; };
@@ -1048,6 +1098,12 @@ function griffeFuer(f) {
     const S = dachRahmen(fl).S, n = d._schichten?.oben ?? 0, sm = (r.s0 + r.s1) / 2, tm = (r.t0 + r.t1) / 2, P = (s, t) => V(dachWelt(g, S.punkt(s, t, n))), c = P(sm, tm);
     const ds = P(sm + 100, tm).sub(c).normalize(), dt = P(sm, tm + 100).sub(c).normalize();
     for (const [feld, dir, faktor, farbe] of [["x", ds, 1, 0xd23c3c], ["x", ds.clone().negate(), -1, 0xd23c3c], ["y", dt, 1, 0x3aa655], ["y", dt.clone().negate(), -1, 0x3aa655]]) l.push({ feld, pos: c.clone(), dir, faktor, farbe });
+  } else if (f.typ === "kante" || f.typ === "profilkante") { return griffeKante(f);
+  } else if (f.typ === "drehung") { return griffeDrehung(f);
+  } else if (f.typ === "gebaeude") { // Breite/Tiefe/Wandhöhe: Pfeile an den Wänden, in beide Richtungen ziehbar
+    const bb = mitte(modell.children.filter((o) => o.isMesh && o.userData.fid === f.id)); if (!bb) return l;
+    const c = bb.getCenter(new THREE.Vector3());
+    for (const [feld, pos, dir, farbe] of [["breite", new THREE.Vector3(bb.max.x, c.y, c.z), [1, 0, 0], 0xd23c3c], ["breite", new THREE.Vector3(bb.min.x, c.y, c.z), [-1, 0, 0], 0xd23c3c], ["tiefe", new THREE.Vector3(c.x, c.y, bb.max.z), [0, 0, 1], 0x3aa655], ["tiefe", new THREE.Vector3(c.x, c.y, bb.min.z), [0, 0, -1], 0x3aa655], ["traufhoehe", new THREE.Vector3(c.x, bb.max.y, c.z), [0, 1, 0], 0x2f7dd1]]) l.push({ feld, pos, dir: V(dir), faktor: 1, min: 100, farbe });
   } else if (f.typ === "rundblech" && f.h > 0) {
     const bb = mitte(modell.children.filter((o) => o.isMesh && o.userData.fid === f.id)); if (!bb) return l;
     const E = E_(f.ebene), n = V(E.n).normalize(), c = bb.getCenter(new THREE.Vector3());
@@ -1090,7 +1146,7 @@ leinwand.addEventListener("pointermove", (e) => {
   if (!griffZug) { leinwand.style.cursor = !e.buttons && griffAn(e) ? "grab" : ""; return; }
   e.stopImmediatePropagation();
   const { g, m0, v0, d, pxProMm } = griffZug, sm = smPos(e), delta = ((sm[0] - m0[0]) * d[0] + (sm[1] - m0[1]) * d[1]) / pxProMm;
-  let v = v0 + delta * g.faktor; v = Math.round(v * (e.shiftKey ? 100 : 2)) / (e.shiftKey ? 100 : 2); if (g.min != null) v = Math.max(g.min, v);
+  let v = v0 + delta * g.faktor; v = Math.round(v * (e.shiftKey ? 100 : 2)) / (e.shiftKey ? 100 : 2); if (g.min != null) v = Math.max(g.min, v); if (g.max != null) v = Math.min(g.max, v);
   const el = $("d_" + g.feld); if (!el) return; el.value = String(v); el.dispatchEvent(new Event("input"));
 }, true);
 const griffEnde = (e) => { if (!griffZug) return; try { leinwand.releasePointerCapture(e.pointerId); } catch {} griffZug = null; zeichneGriffe(); leinwand.style.cursor = ""; };
@@ -6211,7 +6267,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
     for (const [schl, id] of [...koerper, ...blech]) {
       if (nicht.has(schl) || nicht.has(schl.split(":")[0]) && schl.includes(":")) continue;
       const fid = netzVon.get(schl) ?? schl;
-      const netze = modell.children.filter((o) => o.isMesh && o.userData.fid === fid), mesh = netze[0]; if (!mesh) continue;
+      const netze = modell.children.filter((o) => o.isMesh && o.userData.fid === fid && !o.userData.stirn), mesh = netze[0]; if (!mesh) continue;
       const netz = await K.ausfuehren({ op: "tessellieren", ziel: id }), e = await K.ausfuehren({ op: "eigenschaften", ziel: id });
       if (!step && lauf !== exaktLauf) return;
       ersetzeNetz(mesh, netz, lageVon(hauptVon(fid))); n++;
@@ -6363,7 +6419,7 @@ function skizzeSenkrecht() { // Blick immer genau senkrecht auf die Skizzenebene
   const c = d.dot(n) / L; if (Math.abs(c) > 0.9999999) return;
   kamera.position.copy(steuerung.target).add(n.multiplyScalar(L * (c < 0 ? -1 : 1)));
 }
-(function schleife() { if (skizze) skizzeSenkrecht(); steuerung.update(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
+(function schleife() { if (skizze) skizzeSenkrecht(); steuerung.update(); if (orthoAn) orthoUpdate(); richtungSkalieren(); renderer.render(szene, kamera); zeichneWuerfel(); zeigeLabels(); requestAnimationFrame(schleife); })();
 // Nur für automatische Tests (Adresse mit ?test): Bildschirmposition von Weltpunkten
 // Kontextleiste (siehe src/kontext.js): passende Werkzeuge zur Auswahl
 initKontext({
