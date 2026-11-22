@@ -4251,6 +4251,14 @@ const plaene = planModul({
     const { w, h } = bausteinGrenzen(p), rand = 5, b = w / M + 2 * rand, hh = h / M + 2 * rand;
     return { svg: bausteinSvg(p, material(f.material).t, { breite: b, hoehe: hh, rand, schrift: 2.5, massstab: 1 / M, papier: true }), b, h: hh, name: `Schnitt ${kantenName(f, k)} · ${p.name}` };
   },
+  // Tabellen aufs Blatt: Stückliste (alle Blechteile) und Biegeliste je Teil – aus dem Modell, aktualisieren sich selbst
+  tabellenListe: () => { const t = blechteile().filter((x) => x._res); return t.length ? [["stueck", null, "Stückliste (alle Blechteile)"], ...t.map((x) => ["biege", String(x.id), "Biegeliste: " + x.name])] : []; },
+  tabelle: (art, fid) => {
+    const t = blechteile().filter((x) => x._res), L = (x) => (x.typ === "flaechenteil" ? x.laenge : laengeVon(x));
+    if (art === "stueck") return t.length ? { titel: "Stückliste", kopf: ["Pos.", "Bezeichnung", "Material", "Zuschnitt", "Stk."], zeilen: t.map((x, i) => { const m = material(x.material); return [String(i + 1), x.name, `${m.name.replace(/ [\d.]+$/, "")} ${m.t} mm`, `${f1(x._res.zuschnitt)} × ${f1(L(x))} mm`, String(x.stueck ?? 1)]; }) } : null;
+    const x = t.find((q) => String(q.id) === fid); if (!x) return null;
+    return { titel: "Biegeliste " + x.name, kopf: ["Nr.", "Winkel", "Anschlag A", "Anschlag B", "Richtung"], zeilen: (x._res.biegungen || []).map((b, i) => [String(b.nr ?? i + 1), `${f1(Math.abs(b.winkel))}°`, f1(b.pos), f1(x._res.zuschnitt - b.pos), b.richtung || (b.winkel > 0 ? "oben" : "unten")]) };
+  },
   abwicklungen: () => blechteile().filter((x) => x._blech?.abw || x._res).map((x) => [String(x.id), x.name]),
   abwicklungAnsicht: (ref, k) => abwicklungPlanAnsicht(ref, k),
   skizzen: () => [...doc.features.filter((x) => x.typ === "dach" && x._dach && !x._aus).map((x) => ["dach:" + x.id, "Dachaufsicht " + x.name]), ...doc.features.filter((x) => x.typ === "skizze" && !x._aus && x.elemente.some((el) => !el.hilfs && el.art !== "punkt")).map((x) => [x.id, x.name])],

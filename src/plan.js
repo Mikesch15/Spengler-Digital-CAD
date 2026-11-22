@@ -62,6 +62,11 @@ function imKreis([x1, y1, x2, y2], cx, cy, r) {
   return [x1 + dx * t1, y1 + dy * t1, x1 + dx * t2, y1 + dy * t2];
 }
 
+// Grösse einer Tabelle auf dem Blatt (mm): Spaltenbreiten nach Textlänge
+export function tabGroesse(T) {
+  const fs = 3.2, spalten = T.kopf.map((k, i) => Math.max(...[k, ...T.zeilen.map((r) => r[i])].map((v) => String(v ?? "").length)) * fs * 0.56 + 4), zh = 5;
+  const b = spalten.reduce((a, c) => a + c, 0); return { spalten, b, zh, h: 4.2 + (T.zeilen.length + 1) * zh };
+}
 export function planModul(ctx) {
   const cache = new Map();
   const planAusBlatt = () => (plan?.aus && (plan.aus.ids?.length || plan.aus.komp?.length) ? plan.aus : null); // nur im Plan ausgeblendet
@@ -103,7 +108,7 @@ export function planModul(ctx) {
   // ---------------------------------------------------------- Blatt als SVG (mm)
   function blattSvg(plan, { auswahl = null, nr = 1, von = 1, bildschirm = false } = {}) {
     const F = FORMATE[plan.format] || FORMATE.A3, doc = ctx.doc(), einst = ctx.einst();
-    const out = [], rl = 20, ro = 10, rr = 10, ru = 10, sfB = 180, sfH = 32;
+    const out = [], rl = 20, ro = 10, rr = 10, ru = 10, sfB = 180, sfH = 40;
     out.push(`<rect x="${rl}" y="${ro}" width="${F.b - rl - rr}" height="${F.h - ro - ru}" class="rahmen"/>`);
     const M = plan.ansichten[0]?.massstab;
     // Ansichten
@@ -169,9 +174,24 @@ export function planModul(ctx) {
         <line x1="${z(p1[0])}" y1="${z(p1[1])}" x2="${z(p2[0])}" y2="${z(p2[1])}" class="masslinie" marker-start="url(#pp)" marker-end="url(#pp)"/>
         <text x="${z(mt[0])}" y="${z(mt[1])}" dy="-1.2" transform="rotate(${z(w2)} ${z(mt[0])} ${z(mt[1])})" class="t35 masstext">${esc(m.text || (+wert.toFixed(1)).toString())}</text></g>`);
     }
+    // Zeichenelemente (Linie, Pfeil, Rechteck, Kreis)
+    for (const f of plan.formen || []) {
+      const sel2 = auswahl === f.id ? " sel" : "", sw = f.staerke || 0.35, da = f.linie === "strich" ? "4 2" : f.linie === "strichpunkt" ? "6 1.5 1 1.5" : "", st = `fill="none" stroke="#000" stroke-width="${sw}"${da ? ` stroke-dasharray="${da}"` : ""}`;
+      const x = Math.min(f.x1, f.x2), y = Math.min(f.y1, f.y2), w = Math.abs(f.x2 - f.x1), h = Math.abs(f.y2 - f.y1), r = Math.hypot(f.x2 - f.x1, f.y2 - f.y1);
+      const g = f.art === "rechteck" ? `<rect x="${z(x)}" y="${z(y)}" width="${z(w)}" height="${z(h)}" ${st}/>` : f.art === "kreis" ? `<circle cx="${z(f.x1)}" cy="${z(f.y1)}" r="${z(r)}" ${st}/>` : `<line x1="${z(f.x1)}" y1="${z(f.y1)}" x2="${z(f.x2)}" y2="${z(f.y2)}" ${st}${f.art === "pfeil" ? ' marker-end="url(#pp)"' : ""}/>`;
+      out.push(`<g data-id="${f.id}" class="form${sel2}">${g}</g>`);
+    }
+    // Tabellen (Stückliste, Biegeliste) aus dem Modell
+    for (const t of plan.tabellen || []) {
+      const T = ctx.tabelle?.(t.art, t.fid); if (!T) { out.push(`<text x="${t.x}" y="${t.y}" class="t3">(Tabelle: keine Daten)</text>`); continue; }
+      const G = tabGroesse(T), sel3 = auswahl === t.id ? " sel" : "", fs = 3.2; let cx = t.x; const sp = G.spalten.map((b) => { const c = cx; cx += b; return c; });
+      const zl = [T.kopf, ...T.zeilen].map((zeile, ri) => { const y = t.y + 7.7 + ri * G.zh; return `${ri === 0 ? `<rect x="${z(t.x)}" y="${z(t.y + 4.2)}" width="${z(G.b)}" height="${z(G.zh)}" class="tabkopf"/>` : ""}<line x1="${z(t.x)}" y1="${z(y + 1.3)}" x2="${z(t.x + G.b)}" y2="${z(y + 1.3)}" class="duenn"/>${zeile.map((v, ci) => `<text x="${z(sp[ci] + 1.5)}" y="${z(y)}" font-size="${fs}" class="tabtext${ri === 0 ? " fett" : ""}">${esc(v)}</text>`).join("")}`; }).join("");
+      out.push(`<g data-id="${t.id}" class="tabelle${sel3}"><text x="${z(t.x)}" y="${z(t.y + 2.4)}" class="t35 fett" style="text-anchor:start">${esc(T.titel)}</text>${bildschirm ? `<rect x="${z(t.x)}" y="${z(t.y)}" width="${z(G.b)}" height="${z(G.h)}" class="treffer${sel3 ? " sel" : ""}"/>` : ""}<rect x="${z(t.x)}" y="${z(t.y + 4.2)}" width="${z(G.b)}" height="${z(G.h - 4.2)}" class="rahmen" style="stroke-width:.3"/>${zl}${sp.slice(1).map((c) => `<line x1="${z(c)}" y1="${z(t.y + 4.2)}" x2="${z(c)}" y2="${z(t.y + G.h)}" class="duenn"/>`).join("")}</g>`);
+    }
     // Texte (z. B. Detailhinweise «A» mit Pfeil)
     for (const t of plan.texte) {
       const sel = auswahl === t.id ? " sel" : "";
+      if (t.ballon) { const R = (t.groesse || 5) * 0.95; out.push(`<g data-id="${t.id}" class="text${sel}">${t.pfeil ? `<line x1="${z(t.x)}" y1="${z(t.y)}" x2="${z(t.pfeil[0])}" y2="${z(t.pfeil[1])}" class="masslinie" marker-end="url(#pp)"/>` : ""}<circle cx="${z(t.x)}" cy="${z(t.y)}" r="${z(R)}" class="ballon"/><text x="${z(t.x)}" y="${z(t.y)}" class="frei fett" font-size="${t.groesse || 5}">${esc(t.text)}</text></g>`); continue; }
       out.push(`<g data-id="${t.id}" class="text${sel}">${t.pfeil ? `<line x1="${z(t.x)}" y1="${z(t.y)}" x2="${z(t.pfeil[0])}" y2="${z(t.pfeil[1])}" class="masslinie" marker-end="url(#pp)"/>` : ""}
         <text x="${z(t.x)}" y="${z(t.y)}" class="frei" font-size="${t.groesse || 5}">${esc(t.text)}</text></g>`);
     }
@@ -183,12 +203,13 @@ export function planModul(ctx) {
       <text x="${x0 + 113}" y="${zeile(0)}" class="t25 grau">NR.</text><text x="${x0 + 113}" y="${zeile(0) + 4.5}" class="t35">${esc(doc.nr)}</text>
       <text x="${x0 + 143}" y="${zeile(0)}" class="t25 grau">BLATT</text><text x="${x0 + 143}" y="${zeile(0) + 4.5}" class="t35">${nr} / ${von}</text>
       <text x="${x0 + 113}" y="${zeile(2) - 1.5}" class="t25 grau">MASSSTAB</text><text x="${x0 + 113}" y="${zeile(2) + 3}" class="t35">${M ? "1:" + M : "–"}</text>
-      <text x="${x0 + 143}" y="${zeile(2) - 1.5}" class="t25 grau">DATUM</text><text x="${x0 + 143}" y="${zeile(2) + 3}" class="t35">${new Date().toLocaleDateString("de-CH")}</text>
-      <text x="${x0 + 113}" y="${zeile(3) + 3.5}" class="t25 grau">${esc(einst.druck?.betrieb || "Spengler Digital CAD")}</text></g>`);
+      <text x="${x0 + 143}" y="${zeile(2) - 1.5}" class="t25 grau">DATUM</text><text x="${x0 + 143}" y="${zeile(2) + 3}" class="t35">${esc(plan.schrift?.datum || new Date().toLocaleDateString("de-CH"))}</text>
+      <text x="${x0 + 113}" y="${zeile(3) + 3.5}" class="t25 grau">${esc(einst.druck?.betrieb || "Spengler Digital CAD")}</text>
+      <line x1="${x0}" y1="${y0 + 31}" x2="${x0 + sfB}" y2="${y0 + 31}" class="duenn"/>${[["GEZEICHNET", "zeichner"], ["GEPRÜFT", "geprueft"], ["INDEX", "index"], ["BEMERKUNG", "bemerkung"]].map(([l, k], i) => `<text x="${x0 + 3 + i * 45}" y="${y0 + 34.5}" class="t25 grau">${l}</text><text x="${x0 + 3 + i * 45}" y="${y0 + 38.5}" class="t35">${esc(plan.schrift?.[k] || "")}</text>`).join("")}${[1, 2, 3].map((i) => `<line x1="${x0 + i * 45}" y1="${y0 + 31}" x2="${x0 + i * 45}" y2="${y0 + sfH}" class="duenn"/>`).join("")}</g>`);
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${F.b} ${F.h}" class="planblatt-svg">
 <defs><pattern id="schraffur" patternUnits="userSpaceOnUse" width="1.6" height="1.6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="1.6" stroke="#000" stroke-width=".2"/></pattern><marker id="pp" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="3.2" markerHeight="3.2" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 3L10 5L0 7z" fill="#000"/></marker></defs>
 <style>.rahmen{fill:none;stroke:#000;stroke-width:.5}.duenn{stroke:#000;stroke-width:.25}.sichtbar{fill:none;stroke:#000;stroke-width:.35;stroke-linecap:round}.verdeckt{fill:none;stroke:#000;stroke-width:.18;stroke-dasharray:1.5 1}
-.hilfs{stroke:#000;stroke-width:.18;fill:none}.schnittflaeche{fill:url(#schraffur);fill-rule:evenodd;stroke:#000;stroke-width:.5}.lupenrand{fill:none;stroke:#000;stroke-width:.35}.lupenkreis{fill:none;stroke:#000;stroke-width:.25;stroke-dasharray:3 1 .5 1}.schnittspur{stroke:#000;stroke-width:.5;stroke-dasharray:6 1.5 1 1.5}.masslinie{stroke:#000;stroke-width:.25}text{font-family:Arial,Helvetica,sans-serif;fill:#000}.t25{font-size:2.5px}.t3{font-size:3px}.t35{font-size:3.5px;text-anchor:middle}.t5{font-size:5px}.fett{font-weight:700}.grau{fill:#555}
+.hilfs{stroke:#000;stroke-width:.18;fill:none}.ballon{fill:#fff;stroke:#000;stroke-width:.35}.tabkopf{fill:#e8edf2;stroke:none}.tabtext{text-anchor:start;fill:#000}.form.sel path,.form.sel line,.form.sel rect,.form.sel circle{stroke:#e0782b}.tabelle.sel .rahmen{stroke:#e0782b}.schnittflaeche{fill:url(#schraffur);fill-rule:evenodd;stroke:#000;stroke-width:.5}.lupenrand{fill:none;stroke:#000;stroke-width:.35}.lupenkreis{fill:none;stroke:#000;stroke-width:.25;stroke-dasharray:3 1 .5 1}.schnittspur{stroke:#000;stroke-width:.5;stroke-dasharray:6 1.5 1 1.5}.masslinie{stroke:#000;stroke-width:.25}text{font-family:Arial,Helvetica,sans-serif;fill:#000}.t25{font-size:2.5px}.t3{font-size:3px}.t35{font-size:3.5px;text-anchor:middle}.t5{font-size:5px}.fett{font-weight:700}.grau{fill:#555}
 .schriftfeld .t35{text-anchor:start}.frei{text-anchor:middle;dominant-baseline:middle}.treffer{fill:transparent;stroke:#1f5fbf33;stroke-width:.3;stroke-dasharray:2 2}.treffer.sel{stroke:#e0782b;stroke-width:.6}.sel text,.sel line,.sel path{stroke:#e0782b;fill:#e0782b}</style>
 <rect width="${F.b}" height="${F.h}" fill="#fff"/>
 ${out.join("\n")}
@@ -207,24 +228,35 @@ ${out.join("\n")}
   };
   const $ = (id) => document.getElementById(id);
   const plaene = () => (ctx.doc().plaene ||= []);
+  const normal = (p) => { p.formen ||= []; p.tabellen ||= []; p.schrift ||= {}; if (p.fang == null) p.fang = 0; return p; };
   function neuerPlan() {
-    const p = { id: neuId(), name: "Plan " + (plaene().length + 1), format: "A3", ansichten: [], details: [], masse: [], texte: [] };
+    const p = { id: neuId(), name: "Plan " + (plaene().length + 1), format: "A3", ansichten: [], details: [], masse: [], texte: [], formen: [], tabellen: [], schrift: {}, fang: 5 };
     plaene().push(p); return p;
   }
   function oeffnen() {
-    plan = plaene()[0] || neuerPlan(); sel = null; modus = "auswahl"; box = null;
+    plan = normal(plaene()[0] || neuerPlan()); sel = null; modus = "auswahl"; box = null; undo = []; redo = []; letzterStand = null;
     $("planEditor").hidden = false; zeige();
   }
-  const element = (id) => [...plan.ansichten, ...plan.details, ...plan.masse, ...plan.texte].find((x) => x.id === id);
+  const element = (id) => [...plan.ansichten, ...plan.details, ...plan.masse, ...plan.texte, ...plan.formen, ...plan.tabellen].find((x) => x.id === id);
+  // Rückgängig/Wiederholen: Zustände des Blatts als JSON
+  let undo = [], redo = [], letzterStand = null, letzteId = null;
+  const merkeStand = () => {
+    const st = JSON.stringify(plan); if (plan.id !== letzteId || letzterStand == null) { undo = []; redo = []; letzteId = plan.id; letzterStand = st; return; }
+    if (st !== letzterStand) { undo.push(letzterStand); if (undo.length > 80) undo.shift(); redo = []; letzterStand = st; }
+  };
+  const setzeStand = (st) => { const o = JSON.parse(st); for (const k of Object.keys(plan)) delete plan[k]; Object.assign(plan, o); normal(plan); letzterStand = st; sel = null; zeige(); };
+  const rueckgaengig = () => { if (!undo.length) return ctx.status("Nichts zum Rückgängigmachen."); redo.push(letzterStand); setzeStand(undo.pop()); ctx.status("Rückgängig."); };
+  const wiederholen = () => { if (!redo.length) return ctx.status("Nichts zum Wiederholen."); undo.push(letzterStand); setzeStand(redo.pop()); ctx.status("Wiederholt."); };
+  const snap = (v) => (plan?.fang > 0 ? Math.round(v / plan.fang) * plan.fang : v); // Fangraster in mm
   const aktualisiere = () => { if (plan && !$("planEditor").hidden) zeige(); };
   document.addEventListener("sdcad-exakt", aktualisiere);
   function zeige() {
-    const p = plaene(), i = p.indexOf(plan);
+    normal(plan); const p = plaene(), i = p.indexOf(plan);
     $("plBlatt").innerHTML = p.map((x, k) => `<option value="${k}" ${k === i ? "selected" : ""}>${esc(x.name)}</option>`).join("");
     $("plFormat").value = plan.format;
     document.querySelectorAll("#planEditor [data-modus]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.modus === modus));
     $("plFlaeche").innerHTML = blattSvg(plan, { auswahl: sel, nr: i + 1, von: p.length, bildschirm: true }); wendeBox();
-    eigenschaften(); ctx.speichern();
+    eigenschaften(); merkeStand(); if ($("plUndo")) { $("plUndo").disabled = !undo.length; $("plRedo").disabled = !redo.length; } statusZeile(null); ctx.speichern();
   }
   function planBaum() { // Sichtbarkeit einzelner Körper/Komponenten nur auf diesem Plan (wie der Browser im Modell)
     const l = ctx.koerperBaum(); if (!l.length) return "";
@@ -237,7 +269,12 @@ ${out.join("\n")}
   function eigenschaften() { eigenschaften0(); $("plEigen").insertAdjacentHTML("afterbegin", planBaum()); }
   function eigenschaften0() {
     const e = sel && element(sel), box = $("plEigen");
-    if (!e) { box.innerHTML = `<p class="hinweis">${{ auswahl: "Element anklicken und ziehen. «+ Ansicht» (auch Schnitte) oder «+ Bausteinschnitt» platziert eine Zeichnung; «Auto-Masse» bemasst die gewählte Ansicht.", mass: "Bemassen: zwei Eckpunkte einer Ansicht anklicken, dann die Lage des Masses (oben/unten = waagrecht, seitlich = senkrecht).", text: "Text: Stelle anklicken, Text eingeben. Mit gedrückter Maus ziehen = Hinweispfeil.", lupe: "Detail (Lupe): in einer Ansicht die Stelle anklicken, die vergrössert werden soll." }[modus]}</p>`; return; }
+    if (!e) {
+      const sc = plan.schrift || {}, hinweis = { auswahl: "Element anklicken und ziehen (Umschalt = gerade). «+ Ansicht» (auch Schnitte) oder «+ Bausteinschnitt» platziert eine Zeichnung; «Auto-Masse» bemasst die gewählte Ansicht.", mass: "Bemassen: zwei Eckpunkte einer Ansicht anklicken, dann die Lage des Masses (oben/unten = waagrecht, seitlich = senkrecht).", text: "Text: Stelle anklicken, Text eingeben. Mit gedrückter Maus ziehen = Hinweispfeil.", lupe: "Detail (Lupe): in einer Ansicht die Stelle anklicken, die vergrössert werden soll.", linie: "Linie: ziehen (Umschalt = waagrecht/senkrecht).", pfeil: "Pfeil: ziehen (Umschalt = waagrecht/senkrecht).", rechteck: "Rechteck: ziehen (Umschalt = Quadrat).", kreis: "Kreis: vom Mittelpunkt aus ziehen.", ballon: "Positionsnummer: Stelle anklicken, mit gedrückter Maus ziehen = Hinweispfeil." }[modus] || "";
+      const fe = (k, l, ph = "") => `<label class="feld"><span>${l}</span><input data-s="${k}" value="${esc(sc[k] || "")}" placeholder="${ph}"></label>`;
+      box.innerHTML = `<section class="plkarte"><div class="plkt">Blatt</div><label class="feld"><span>Fangraster</span><select data-fang="1">${[[0, "aus"], [1, "1 mm"], [2.5, "2.5 mm"], [5, "5 mm"], [10, "10 mm"]].map(([v, n]) => `<option value="${v}" ${+plan.fang === v ? "selected" : ""}>${n}</option>`).join("")}</select></label></section>
+        <section class="plkarte"><div class="plkt">Schriftfeld</div>${fe("zeichner", "Gezeichnet von")}${fe("geprueft", "Geprüft von")}${fe("index", "Index / Revision", "z. B. A")}${fe("datum", "Datum", "heute")}${fe("bemerkung", "Bemerkung")}</section>
+        <p class="hinweis">${hinweis}</p>`; return; }
     const ms = (v) => PLAN_MASSSTAEBE.map((m) => `<option value="${m}" ${+v === m ? "selected" : ""}>1:${m}</option>`).join("");
     if (e.lupe) box.innerHTML = `<label class="feld"><span>Vergrösserung</span><select data-e="faktor">${[1.5, 2, 3, 4, 5, 8, 10].map((k) => `<option value="${k}" ${+e.lupe.faktor === k ? "selected" : ""}>${k}×</option>`).join("")}</select></label>
       <label class="feld"><span>Radius auf dem Blatt (mm)</span><input data-e="r" type="number" step="1" value="${e.lupe.r}"></label>
@@ -253,8 +290,23 @@ ${out.join("\n")}
       <label class="feld"><span>Text statt Wert</span><input data-e="text" value="${esc(e.text || "")}" placeholder="z. B. 4× Ø8"></label>`;
     else if (plan.masse.includes(e)) box.innerHTML = `<label class="feld"><span>Art</span><select data-e="art"><option value="h" ${e.art === "h" ? "selected" : ""}>waagrecht</option><option value="v" ${e.art === "v" ? "selected" : ""}>senkrecht</option><option value="a" ${e.art === "a" ? "selected" : ""}>ausgerichtet</option></select></label>
       <label class="feld"><span>Text statt Wert</span><input data-e="text" value="${esc(e.text || "")}" placeholder="z. B. 1/3"></label>`;
+    else if (plan.formen.includes(e)) box.innerHTML = `<div class="plkt">${{ linie: "Linie", pfeil: "Pfeil", rechteck: "Rechteck", kreis: "Kreis" }[e.art]}</div><label class="feld"><span>Linienart</span><select data-e="linie"><option value="voll" ${e.linie !== "strich" && e.linie !== "strichpunkt" ? "selected" : ""}>durchgezogen</option><option value="strich" ${e.linie === "strich" ? "selected" : ""}>gestrichelt</option><option value="strichpunkt" ${e.linie === "strichpunkt" ? "selected" : ""}>Strichpunkt</option></select></label>
+      <label class="feld"><span>Linienstärke</span><select data-e="staerke">${[0.18, 0.25, 0.35, 0.5, 0.7, 1].map((v) => `<option value="${v}" ${+(e.staerke || 0.35) === v ? "selected" : ""}>${v} mm</option>`).join("")}</select></label>`;
+    else if (plan.tabellen.includes(e)) box.innerHTML = `<div class="plkt">${e.art === "biege" ? "Biegeliste" : "Stückliste"}</div><p class="hinweis">Die Tabelle wird aus dem Modell erzeugt und aktualisiert sich selbst. Ziehen verschiebt sie.</p>`;
     else box.innerHTML = `<label class="feld"><span>Text</span><input data-e="text" value="${esc(e.text)}"></label><label class="feld"><span>Grösse (mm)</span><input data-e="groesse" type="number" step="0.5" value="${e.groesse || 5}"></label>`;
-    box.insertAdjacentHTML("beforeend", `<div class="reihe ohnerand"><button class="knopf weg" data-pl="loeschen">Entfernen</button></div>`);
+    box.insertAdjacentHTML("beforeend", `<div class="reihe ohnerand"><button class="knopf" data-pl="kopie" title="Element duplizieren (Strg + D)">Duplizieren</button><button class="knopf weg" data-pl="loeschen">Entfernen</button></div>`);
+  }
+  function dupliziere() {
+    const e = sel && element(sel); if (!e) return ctx.status("Zuerst ein Element anklicken.");
+    const kopie = JSON.parse(JSON.stringify(e)); kopie.id = neuId(); const d = plan.fang > 0 ? plan.fang * Math.max(1, Math.round(10 / plan.fang)) : 10;
+    if (kopie.x1 !== undefined) { kopie.x1 += d; kopie.x2 += d; kopie.y1 += d; kopie.y2 += d; } else if (kopie.lage) kopie.lage = [kopie.lage[0] + d, kopie.lage[1] + d]; else { kopie.x += d; kopie.y += d; if (kopie.pfeil) kopie.pfeil = [kopie.pfeil[0] + d, kopie.pfeil[1] + d]; }
+    const liste = ["ansichten", "details", "masse", "texte", "formen", "tabellen"].find((k) => plan[k].includes(e)); plan[liste].push(kopie); sel = kopie.id; zeige(); ctx.status("Dupliziert.");
+  }
+  // Statuszeile unter dem Blatt: Zeigerposition, Zoom, Fangraster, Werkzeug
+  const MODUSNAMEN = { auswahl: "Auswahl", mass: "Bemassen", text: "Text", lupe: "Detail", linie: "Linie", pfeil: "Pfeil", rechteck: "Rechteck", kreis: "Kreis", ballon: "Positionsnummer" };
+  function statusZeile(q) {
+    const el = $("plStatus"); if (!el || !plan) return; const F = FORMATE[plan.format] || FORMATE.A3, b = aktBox();
+    el.innerHTML = `<span>${q ? `x ${z(q[0])} · y ${z(q[1])} mm` : "x – · y – mm"}</span><span>${plan.format} quer · ${F.b} × ${F.h} mm</span><span>Zoom ${Math.round((F.b / b.w) * 100)} %</span><span>Raster ${plan.fang > 0 ? plan.fang + " mm" : "aus"}</span><span>${MODUSNAMEN[modus] || modus}</span>`;
   }
   const blattPunkt = (ev) => { const svg = $("plFlaeche").querySelector("svg"), pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY; const q = pt.matrixTransform(svg.getScreenCTM().inverse()); return [q.x, q.y]; };
   function fang(q, px = 12) { // nächster Fangpunkt einer Ansicht (Radius in Bildschirmpixeln, Finger/Stift grösser)
@@ -263,9 +315,18 @@ ${out.join("\n")}
     for (const a of plan.ansichten) { const r = ansicht(a); if (!r) continue; for (const p of r.punkte) { const d = Math.hypot(p.x + a.x - q[0], p.y + a.y - q[1]); if (d < bd) { bd = d; best = { a, w: p.w, q: [p.x + a.x, p.y + a.y] }; } } }
     return best;
   }
+  const segAbst = (q, x1, y1, x2, y2) => { const dx = x2 - x1, dy = y2 - y1, l2 = dx * dx + dy * dy || 1e-9, t = Math.max(0, Math.min(1, ((q[0] - x1) * dx + (q[1] - y1) * dy) / l2)); return Math.hypot(q[0] - x1 - t * dx, q[1] - y1 - t * dy); };
+  function formNah(f, q) {
+    const tol = Math.max(2, (f.staerke || 0.35) * 4);
+    if (f.art === "rechteck") { const x = Math.min(f.x1, f.x2), X = Math.max(f.x1, f.x2), y = Math.min(f.y1, f.y2), Y = Math.max(f.y1, f.y2); return [[x, y, X, y], [X, y, X, Y], [X, Y, x, Y], [x, Y, x, y]].some((e) => segAbst(q, ...e) < tol); }
+    if (f.art === "kreis") return Math.abs(Math.hypot(q[0] - f.x1, q[1] - f.y1) - Math.hypot(f.x2 - f.x1, f.y2 - f.y1)) < tol;
+    return segAbst(q, f.x1, f.y1, f.x2, f.y2) < tol;
+  }
   function treffer(q) {
     for (const t of plan.texte) if (Math.abs(t.x - q[0]) < (t.text.length * (t.groesse || 5)) * 0.35 && Math.abs(t.y - q[1]) < (t.groesse || 5)) return t;
     for (const m of plan.masse) { const g = $("plFlaeche").querySelector(`[data-id="${m.id}"] text`); if (g) { const b = g.getBBox(); if (q[0] > b.x - 2 && q[0] < b.x + b.width + 2 && q[1] > b.y - 2 && q[1] < b.y + b.height + 2) return m; } }
+    for (const f of plan.formen) if (formNah(f, q)) return f;
+    for (const t of plan.tabellen) { const T = ctx.tabelle?.(t.art, t.fid); if (T) { const G = tabGroesse(T); if (q[0] > t.x && q[0] < t.x + G.b && q[1] > t.y && q[1] < t.y + G.h) return t; } }
     for (const d of plan.details) { const r = ctx.detailSvg(d.fid, d.massstab); if (r && q[0] > d.x && q[0] < d.x + r.b && q[1] > d.y && q[1] < d.y + r.h) return d; }
     for (const a of plan.ansichten) { const r = ansicht(a); if (r && q[0] > a.x && q[0] < a.x + r.breite && q[1] > a.y && q[1] < a.y + r.hoehe) return a; }
     return null;
@@ -278,7 +339,7 @@ ${out.join("\n")}
       if (ev.pointerType === "touch") { finger.set(ev.pointerId, [ev.clientX, ev.clientY]); if (finger.size === 2) { zug = null; schwenk = null; const [a, b] = [...finger.values()]; finger.gestur = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; return; } }
       if (ev.button === 1 || (ev.button === 0 && plLeer)) { ev.preventDefault(); return schwenkStart(ev); }
       const q = blattPunkt(ev);
-      if (modus === "auswahl") { const t = treffer(q); sel = t?.id || null; if (t) zug = { e: t, von: q, x: t.x ?? t.lage?.[0], y: t.y ?? t.lage?.[1] }; zeige(); if (!t && ev.button === 0) schwenkStart(ev); return; }
+      if (modus === "auswahl") { const t = treffer(q); sel = t?.id || null; if (t) zug = { e: t, von: q, x: t.x ?? t.lage?.[0], y: t.y ?? t.lage?.[1], ...(t.x1 !== undefined ? { orig: { x1: t.x1, y1: t.y1, x2: t.x2, y2: t.y2 } } : {}) }; zeige(); if (!t && ev.button === 0) schwenkStart(ev); return; }
       if (modus === "lupe") {
         const q0 = plan.ansichten.find((a) => { const r = ansicht(a); return !a.lupe && r && q[0] > a.x && q[0] < a.x + r.breite && q[1] > a.y && q[1] < a.y + r.hoehe; });
         if (!q0) return ctx.status("In eine Ansicht klicken – dort, wo vergrössert werden soll.");
@@ -286,6 +347,8 @@ ${out.join("\n")}
         const a = { id: neuId(), art: q0.art, massstab: q0.massstab, lupe: { quelle: q0.id, cx: q[0] - q0.x, cy: q[1] - q0.y, r: 12, faktor: 4, buchstabe: nB }, x: q0.x, y: Math.max(...plan.ansichten.map((v) => { const rv = ansicht(v); return rv ? v.y + rv.hoehe : 0; })) + 30 };
         plan.ansichten.push(a); sel = a.id; modus = "auswahl"; zeige(); return ctx.status(`Detail ${nB} angelegt – Vergrösserung und Radius rechts anpassen, Detail an seinen Platz ziehen.`);
       }
+      if (["linie", "pfeil", "rechteck", "kreis"].includes(modus)) { const f = { id: neuId(), art: modus, x1: snap(q[0]), y1: snap(q[1]), x2: snap(q[0]), y2: snap(q[1]), staerke: 0.35, linie: "voll" }; plan.formen.push(f); sel = f.id; zug = { e: f, neu: true }; return; }
+      if (modus === "ballon") { const nr = plan.texte.filter((t) => t.ballon).length + 1, t = { id: neuId(), x: snap(q[0]), y: snap(q[1]), text: String(nr), groesse: 5, ballon: true }; plan.texte.push(t); sel = t.id; zug = { e: t, pfeil: true }; zeige(); return; }
       if (modus === "text") { const text = prompt("Text (z. B. Detailbuchstabe)", "A"); if (!text) return; const t = { id: neuId(), x: q[0], y: q[1], text, groesse: 5 }; plan.texte.push(t); sel = t.id; zug = { e: t, pfeil: true }; zeige(); return; }
       if (modus === "mass") {
         const px = ev.pointerType === "touch" ? 26 : ev.pointerType === "pen" ? 20 : 12;
@@ -303,22 +366,28 @@ ${out.join("\n")}
       svg.insertAdjacentHTML("beforeend", `<g id="plFangZ" pointer-events="none"><circle cx="${z(f.q[0])}" cy="${z(f.q[1])}" r="${z(r)}" fill="none" stroke="#e0782b" stroke-width="${z(2 / k)}"/><circle cx="${z(f.q[0])}" cy="${z(f.q[1])}" r="${z(r / 4)}" fill="#e0782b"/><text x="${z(f.q[0] + r * 1.4)}" y="${z(f.q[1] - r * 1.2)}" font-size="${z(11 / k)}" fill="#e0782b" style="paint-order:stroke;stroke:#fff;stroke-width:${z(3 / k)}px">Punkt</text></g>`);
     };
     $("plFlaeche").addEventListener("pointermove", (ev) => {
+      if (plan) statusZeile(blattPunkt(ev));
       if (modus === "mass" && !zug && !schwenk && ev.buttons === 0 || (modus === "mass" && ev.pointerType !== "mouse" && !zug && !schwenk)) fangZeichen(fang(blattPunkt(ev), ev.pointerType === "touch" ? 26 : ev.pointerType === "pen" ? 20 : 12));
       if (ev.pointerType === "touch" && finger.has(ev.pointerId)) { finger.set(ev.pointerId, [ev.clientX, ev.clientY]);
         if (finger.size === 2 && finger.gestur) { const [a, b] = [...finger.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]), m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], svg = $("plFlaeche").querySelector("svg"), k = svg.getScreenCTM().a;
           const g = finger.gestur, bx = aktBox(); box = { ...bx, x: bx.x - (m[0] - g.m[0]) / k, y: bx.y - (m[1] - g.m[1]) / k }; zoomUm(blattPunkt({ clientX: m[0], clientY: m[1] }), d / g.d || 1); finger.gestur = { d, m }; } return; }
       if (schwenk && ev.pointerId === schwenk.id) { const svg = $("plFlaeche").querySelector("svg"), k = svg.getScreenCTM().a, b = aktBox(); box = { ...b, x: b.x - (ev.clientX - schwenk.x) / k, y: b.y - (ev.clientY - schwenk.y) / k }; schwenk.x = ev.clientX; schwenk.y = ev.clientY; wendeBox(); return; }
       if (!zug) return; const q = blattPunkt(ev);
-      if (zug.pfeil) { if (Math.hypot(q[0] - zug.e.x, q[1] - zug.e.y) > 3) zug.e.pfeil = q; }
+      if (zug.neu) { zug.e.x2 = snap(q[0]); zug.e.y2 = snap(q[1]); if (ev.shiftKey && zug.e.art !== "kreis") { const dx = zug.e.x2 - zug.e.x1, dy = zug.e.y2 - zug.e.y1; if (zug.e.art === "rechteck") { const m = Math.max(Math.abs(dx), Math.abs(dy)); zug.e.x2 = zug.e.x1 + Math.sign(dx || 1) * m; zug.e.y2 = zug.e.y1 + Math.sign(dy || 1) * m; } else if (Math.abs(dx) > Math.abs(dy) * 2) zug.e.y2 = zug.e.y1; else if (Math.abs(dy) > Math.abs(dx) * 2) zug.e.x2 = zug.e.x1; } }
+      else if (zug.pfeil) { if (Math.hypot(q[0] - zug.e.x, q[1] - zug.e.y) > 3) zug.e.pfeil = q; }
+      else if (zug.orig) { const o = zug.orig, dx = snap(o.x1 + q[0] - zug.von[0]) - o.x1, dy = snap(o.y1 + q[1] - zug.von[1]) - o.y1; Object.assign(zug.e, { x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy }); }
       else if (zug.e.lage) zug.e.lage = [zug.x + q[0] - zug.von[0], zug.y + q[1] - zug.von[1]];
-      else { zug.e.x = zug.x + q[0] - zug.von[0]; zug.e.y = zug.y + q[1] - zug.von[1]; }
+      else { zug.e.x = snap(zug.x + q[0] - zug.von[0]); zug.e.y = snap(zug.y + q[1] - zug.von[1]); }
       $("plFlaeche").innerHTML = blattSvg(plan, { auswahl: sel, bildschirm: true, nr: plaene().indexOf(plan) + 1, von: plaene().length }); wendeBox();
     });
-    addEventListener("pointerup", (ev) => { finger.delete(ev.pointerId); if (finger.size < 2) delete finger.gestur; if (schwenk) { schwenk = null; $("plFlaeche").style.cursor = ""; } if (zug) { zug = null; zeige(); } });
+    addEventListener("pointerup", (ev) => { finger.delete(ev.pointerId); if (finger.size < 2) delete finger.gestur; if (schwenk) { schwenk = null; $("plFlaeche").style.cursor = ""; } if (zug) { if (zug.neu) { const f = zug.e; if (Math.hypot(f.x2 - f.x1, f.y2 - f.y1) < 0.5) { plan.formen = plan.formen.filter((x) => x !== f); sel = null; } modus = "auswahl"; } zug = null; zeige(); } });
     addEventListener("keydown", (e) => { if (e.code === "Space" && !$("planEditor").hidden && !e.target.closest?.("input,select,textarea")) { plLeer = true; $("plFlaeche").style.cursor = "grab"; e.preventDefault(); } });
     addEventListener("keyup", (e) => { if (e.code === "Space") { plLeer = false; if (!schwenk) $("plFlaeche").style.cursor = ""; } });
     $("plEigen").addEventListener("change", (ev) => {
+      if (ev.target.dataset.fang) { plan.fang = +ev.target.value; return zeige(); }
+      if (ev.target.dataset.s) { plan.schrift[ev.target.dataset.s] = ev.target.value; return zeige(); }
       const e = element(sel), k = ev.target.dataset.e; if (!e || !k) return;
+      if (plan.formen.includes(e)) { e[k] = k === "staerke" ? +ev.target.value : ev.target.value; return zeige(); }
       if (e.lupe && ["faktor", "r", "cx", "cy", "buchstabe"].includes(k)) { e.lupe[k] = k === "buchstabe" ? ev.target.value : +ev.target.value; return zeige(); }
       if (e.schnitt && ["lage", "buchstabe"].includes(k)) { e.schnitt[k] = k === "lage" ? +ev.target.value : ev.target.value; return zeige(); }
       e[k] = k === "massstab" || k === "groesse" ? +ev.target.value : k === "verdeckt" ? !!ev.target.value : ev.target.value; zeige();
@@ -326,8 +395,9 @@ ${out.join("\n")}
     $("plEigen").addEventListener("click", (ev) => {
       const ag = ev.target.closest("[data-plaug],[data-plkomp]");
       if (ag) { plan.aus ||= { ids: [], komp: [] }; const liste = ag.dataset.plaug ? (plan.aus.ids ||= []) : (plan.aus.komp ||= []), id = ag.dataset.plaug || ag.dataset.plkomp, i = liste.indexOf(id); if (i >= 0) liste.splice(i, 1); else liste.push(id); zeige(); return; }
+      if (ev.target.dataset.pl === "kopie") { dupliziere(); return; }
       if (ev.target.dataset.pl !== "loeschen") return;
-      for (const k of ["ansichten", "details", "masse", "texte"]) plan[k] = plan[k].filter((x) => x.id !== sel);
+      for (const k of ["ansichten", "details", "masse", "texte", "formen", "tabellen"]) plan[k] = plan[k].filter((x) => x.id !== sel);
       plan.masse = plan.masse.filter((m) => plan.ansichten.some((a) => a.id === m.ansicht)); sel = null; zeige();
     });
     $("planEditor").addEventListener("click", (ev) => {
@@ -360,6 +430,11 @@ ${out.join("\n")}
       else if (b.id === "plNeuAnsicht") { const m = $("plAnsichtMenue"); m.querySelectorAll("[data-plskizze],[data-plabw],.plsk").forEach((x) => x.remove());
         const ab = ctx.abwicklungen(); if (ab.length) m.insertAdjacentHTML("beforeend", `<div class="kmgruppe plsk">Abwicklung (Zuschnitt, Biegelinien)</div>` + ab.map(([id, n]) => `<button data-plabw="${esc(id)}">Abwicklung: ${esc(n)}</button>`).join("")); const sk = ctx.skizzen(); if (sk.length) m.insertAdjacentHTML("beforeend", `<div class="kmgruppe plsk">Zeichnung aus Skizze (mit Layern)</div>` + [["alle", "Alle Skizzen"], ...sk].map(([id, n]) => `<button data-plskizze="${esc(id)}">${String(id).startsWith("dach:") ? "" : "Skizze: "}${esc(n)}</button>`).join("")); m.hidden = !m.hidden; }
       else if (b.id === "plNeuDetail") { const d = ctx.details(); $("plDetailMenue").innerHTML = d.length ? d.map(([id, n]) => `<button data-detail="${id}">${esc(n)}</button>`).join("") : '<p class="hinweis">Noch keine Kanten mit Baustein – Flächenblech wählen und Kanten antippen.</p>'; $("plDetailMenue").hidden = !$("plDetailMenue").hidden; }
+      else if (b.id === "plUndo") rueckgaengig();
+      else if (b.id === "plRedo") wiederholen();
+      else if (b.id === "plKopie") { const k = JSON.parse(JSON.stringify(plan)); k.id = neuId(); k.name = plan.name + " (Kopie)"; plaene().push(k); plan = k; sel = null; box = null; zeige(); ctx.status("Blatt dupliziert."); }
+      else if (b.id === "plNeuTab") { const l = ctx.tabellenListe?.() || []; $("plTabMenue").innerHTML = l.length ? l.map(([art, fid, n]) => `<button data-tab="${art}|${esc(fid || "")}">${esc(n)}</button>`).join("") : '<p class="hinweis">Zuerst ein Blechteil erstellen.</p>'; $("plTabMenue").hidden = !$("plTabMenue").hidden; }
+      else if (b.dataset.tab) { const [art, fid] = b.dataset.tab.split("|"), vorige = plan.tabellen.at(-1), F = FORMATE[plan.format]; plan.tabellen.push({ id: neuId(), art, fid: fid || null, x: vorige ? vorige.x : 30, y: vorige ? vorige.y + 40 : F.h - 90 }); sel = plan.tabellen.at(-1).id; $("plTabMenue").hidden = true; zeige(); }
       else if (b.id === "plNeu") { plan = neuerPlan(); sel = null; box = null; zeige(); }
       else if (b.id === "plZoomPlus") { const bx = aktBox(); zoomUm([bx.x + bx.w / 2, bx.y + bx.h / 2], 1.4); }
       else if (b.id === "plZoomMinus") { const bx = aktBox(); zoomUm([bx.x + bx.w / 2, bx.y + bx.h / 2], 1 / 1.4); }
@@ -373,6 +448,10 @@ ${out.join("\n")}
     });
     $("plBlatt").onchange = (e) => { plan = plaene()[+e.target.value]; sel = null; box = null; zeige(); };
     $("plFormat").onchange = (e) => { plan.format = e.target.value; box = null; zeige(); };
+    addEventListener("keydown", (e) => { // Strg+Z/Y/D im Planblatt: nur das Blatt, nicht das Modell dahinter
+      if ($("planEditor").hidden || e.target.closest?.("input,select,textarea") || !(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase(); if (k === "z" && !e.shiftKey) { e.preventDefault(); e.stopImmediatePropagation(); rueckgaengig(); } else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); e.stopImmediatePropagation(); wiederholen(); } else if (k === "d") { e.preventDefault(); e.stopImmediatePropagation(); dupliziere(); }
+    }, true);
     addEventListener("keydown", (e) => {
       if ($("planEditor").hidden || e.target.closest?.("input,select")) return;
       if ((e.key === "Delete" || e.key === "Backspace") && sel) { e.preventDefault(); $("plEigen").querySelector('[data-pl="loeschen"]')?.click(); }
