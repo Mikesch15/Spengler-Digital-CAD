@@ -1,9 +1,13 @@
 // Spengler Digital CAD – Kern: DXF-Export (R12, mm)
 // Abwicklung mit Biegelinien und darüber der Querschnitt. Öffnet in BricsCAD, AutoCAD, Fusion.
 import { polylinie, grenzen } from "./geometrie.js";
+import { abwicklungUmriss, laschenBiegelinien } from "./stirnflansch.js";
 
 // Zeichnet ein Teil ab (x0, y0) in out und gibt die belegte Höhe zurück
-function teil(out, res, laenge, titel, x0 = 0, y0 = 0) {
+// laschen: Stirnflansche (siehe stirnflansch.js) – ragen in der Abwicklung unten (Anfang) bzw. oben (Ende) über das Rechteck hinaus
+function teil(out, res, laenge, titel, x0 = 0, y0 = 0, laschen = []) {
+  const hu = Math.max(0, ...laschen.filter((q) => q.ende === "S1").map((q) => q.laenge)), ho = Math.max(0, ...laschen.filter((q) => q.ende === "S2").map((q) => q.laenge));
+  y0 += hu;
   const f = (v) => v.toFixed(4);
   const linie = (lay, x1, y1, x2, y2, farbe) => {
     out.push("0", "LINE", "8", lay);
@@ -16,22 +20,23 @@ function teil(out, res, laenge, titel, x0 = 0, y0 = 0) {
     out.push("10", f(x + x0), "20", f(y + y0), "30", "0", "40", h.toFixed(2), "1", ascii(s));
   };
   const W = res.zuschnitt, H = laenge;
-  [[0, 0, W, 0], [W, 0, W, H], [W, H, 0, H], [0, H, 0, 0]].forEach(([a, b, c, d]) => linie("ZUSCHNITT", a, b, c, d, 7));
+  if (laschen.length) { const U = abwicklungUmriss(W, H, laschen); U.forEach((p, i) => linie("ZUSCHNITT", p[0], p[1], U[(i + 1) % U.length][0], U[(i + 1) % U.length][1], 7)); for (const l of laschenBiegelinien(H, laschen)) linie("BIEGELINIEN", l.a[0], l.a[1], l.b[0], l.b[1], 1); }
+  else [[0, 0, W, 0], [W, 0, W, H], [W, H, 0, H], [0, H, 0, 0]].forEach(([a, b, c, d]) => linie("ZUSCHNITT", a, b, c, d, 7));
   for (const b of res.biegungen) {
     linie("BIEGELINIEN", b.pos, 0, b.pos, H, 1);
-    text("TEXT", b.pos + 1.5, H + 4, 4, `B${b.nr} ${Math.abs(b.winkel)} ${b.richtung}`, 1);
+    text("TEXT", b.pos + 1.5, H + ho + 4, 4, `B${b.nr} ${Math.abs(b.winkel)} ${b.richtung}`, 1);
   }
-  text("TEXT", 0, -10, 6, `${titel}  Zuschnitt ${W.toFixed(1)} x ${H.toFixed(0)} mm  (Kante A links)`);
+  text("TEXT", 0, -10 - hu, 6, `${titel}  Zuschnitt ${W.toFixed(1)} x ${H.toFixed(0)} mm  (Kante A links)${laschen.length ? `  + Stirnflansch ${laschen.length} Lasche${laschen.length === 1 ? "" : "n"}` : ""}`);
   const pts = polylinie(res.pfad);
   const g = grenzen(pts);
-  const ox = -g.x0, oy = H + 40 - g.y0;
+  const ox = -g.x0, oy = H + ho + 40 - g.y0;
   for (let i = 0; i < pts.length - 1; i++) linie("PROFIL", pts[i][0] + ox, pts[i][1] + oy, pts[i + 1][0] + ox, pts[i + 1][1] + oy, 5);
-  return H + 40 + (g.y1 - g.y0);
+  return hu + H + ho + 40 + (g.y1 - g.y0);
 }
 
-export function abwicklungDxf(res, laenge, titel) {
+export function abwicklungDxf(res, laenge, titel, laschen = []) {
   const out = ["0", "SECTION", "2", "ENTITIES"];
-  teil(out, res, laenge, titel);
+  teil(out, res, laenge, titel, 0, 0, laschen);
   out.push("0", "ENDSEC", "0", "EOF");
   return out.join("\n") + "\n";
 }
@@ -57,7 +62,7 @@ export function flaecheDxf(abw, titel) {
 export function abwicklungenDxf(teile, abstand = 80) {
   const out = ["0", "SECTION", "2", "ENTITIES"];
   let y = 0;
-  for (const t of teile) y += (t.abw ? flaeche(out, t.abw, t.titel, 0, y) : teil(out, t.res, t.laenge, t.titel, 0, y)) + abstand;
+  for (const t of teile) y += (t.abw ? flaeche(out, t.abw, t.titel, 0, y) : teil(out, t.res, t.laenge, t.titel, 0, y, t.laschen || [])) + abstand;
   out.push("0", "ENDSEC", "0", "EOF");
   return out.join("\n") + "\n";
 }

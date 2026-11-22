@@ -187,6 +187,8 @@ export function alsZeilen(start, ops) {
 // Nachträglich an ein Profil angesetzte Kantenbausteine / Flansche / Umschläge an Kante A (Anfang) oder Kante B (Ende)
 // extras: [{ ende: "A" | "B", zeilen }], zeilen = folge(`1 ${Abkantfolge}`) – der erste Schenkel (Länge 1) ist nur Platzhalter für das Profil selbst
 const bend = (z, m, vorz = 1) => (z.art === "umschlag" ? HEM(vorz * (z.winkel >= 0 ? 1 : -1), m, z.ri > 0 ? z.ri : null) : B(vorz * z.winkel, z.ri > 0 ? z.ri : null));
+// Operationen eines Bausteins (Biegung, Schenkel, Biegung …) ohne Platzhalter-Schenkel – für Stirnflansche (Kante S1/S2)
+export const erweiterungsOps = (z, m) => { const ops = [bend(z[0], m)]; for (let i = 1; i < z.length; i++) { ops.push(L(z[i].L)); if (i < z.length - 1) ops.push(bend(z[i], m)); } return ops; };
 export function profilErweitern(profil, extras, m) {
   let start = profil.start, ops = profil.ops.slice();
   for (const x of extras || []) {

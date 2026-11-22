@@ -14,6 +14,7 @@ import "./arbeitsbereich.js";
 import { initKontext, kontextAktionen } from "./kontext.js";
 import { zeigeMeldung } from "./meldungen.js";
 import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
+import { stirnLaschen } from "../kern/stirnflansch.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
 import { aufmassAusPunkt } from "../kern/dach/lukarneAufmass.js";
@@ -569,10 +570,34 @@ function nachAussen(geo) {
   geo.attributes.position.needsUpdate = true; geo.computeVertexNormals(); geo.userData.glatt = false;
   return geo;
 }
+// Stirnflansche (Kante S1 = Anfang, S2 = Ende der Länge): je Lasche ein Querschnitt (u = Fortsetzung der Blechebene, v = Abkantrichtung), über die Schenkellänge gezogen
+function spiegleFlaechen(geo) { for (const n of ["position", "normal", "uv"]) { const a = geo.attributes[n]; if (!a) continue; const sz = a.itemSize; for (let i = 0; i + 2 < a.count; i += 3) for (let k = 0; k < sz; k++) { const x = a.array[(i + 1) * sz + k]; a.array[(i + 1) * sz + k] = a.array[(i + 2) * sz + k]; a.array[(i + 2) * sz + k] = x; } a.needsUpdate = true; } geo.computeVertexNormals(); }
+function stirnMeshes(f, ebeneRef, versatz, zw, farbe) {
+  const rueck = rueckVersatz(zw.richtung, zw.tiefe), meshes = [];
+  for (const l of f._stirn || []) {
+    const len = Math.hypot(l.p2[0] - l.p1[0], l.p2[1] - l.p1[1]); if (len < 1e-6) continue;
+    const d = [(l.p2[0] - l.p1[0]) / len, (l.p2[1] - l.p1[1]) / len], sg = l.ende === "S1" ? -1 : 1, zEnde = l.ende === "S1" ? -rueck : zw.tiefe - rueck;
+    const geo = new THREE.ExtrudeGeometry(new THREE.Shape(l.ring.map(([u, v]) => new THREE.Vector2(u, v))), { depth: len, bevelEnabled: false, curveSegments: 48 });
+    const M = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, sg), new THREE.Vector3(-d[1], d[0], 0), new THREE.Vector3(d[0], d[1], 0)).setPosition(l.p1[0] + versatz[0], l.p1[1] + versatz[1], zEnde);
+    geo.applyMatrix4(M); if (M.determinant() < 0) spiegleFlaechen(geo);
+    geo.applyMatrix4(basis(ebeneRef)); meshes.push(koerperAusGeo(geo, farbe, f.id));
+  }
+  return meshes;
+}
+function stirnAnhaengen(f, m, ebeneRef, versatz) {
+  f._stirn = null; f._stirnFehler = null;
+  const er = stirnErweiterungen(f, m); if (!er.length) return;
+  const r = stirnLaschen(f._res, er, m); f._stirn = r.laschen; f._stirnFehler = r.fehler[0] || null;
+  if (f.versteckt) return;
+  for (const mesh of stirnMeshes(f, ebeneRef, versatz, zweiseitig(f, "laenge", "laenge2"), darstellungVon(f, m))) modell.add(mesh);
+}
 function koerper(formen_, ebene, tiefe, richtung, farbe, fid) {
   const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe, bevelEnabled: false, curveSegments: 48 });
   geo.translate(0, 0, -rueckVersatz(richtung, tiefe));
   geo.applyMatrix4(basis(ebene));
+  return koerperAusGeo(geo, farbe, fid);
+}
+function koerperAusGeo(geo, farbe, fid) {
   const mesh = new THREE.Mesh(geo, oberflaechenMaterial(farbe, geo)); mesh.userData.art = farbe;
   mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 28), new THREE.LineBasicMaterial({ color: 0x27303a, transparent: true, opacity: 0.6 })));
   mesh.userData.fid = fid;
@@ -1168,6 +1193,7 @@ function regen() {
         f._kernLage = { ebene: E_(s.ebene), versatz: vz0 }; // für den exakten CAD-Kern (gleiche Lage wie das Anzeige-Netz)
         wendeBisAn(f, s.ebene, vz0);
         if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, vz0)], s.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id));
+        stirnAnhaengen(f, m, s.ebene, vz0);
       } else if (f.typ === "vorlage") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         const m = material(f.material), v = VORLAGE[f.vorlage];
@@ -1175,6 +1201,7 @@ function regen() {
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         f._kernLage = null;
         if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; wendeBisAn(f, f.ebene, vz); modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
+        stirnAnhaengen(f, m, f.ebene, f._kernLage?.versatz ?? [0, 0]);
       } else if (f.typ === "flaeche") {
         f._bleche = null; f._teile = null; f._mitAbwicklung = false;
         if (!f.kantenBasis) f.kantenBasis = { ...(f.kanten || {}) };
@@ -1295,6 +1322,7 @@ function regen() {
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         f._kernLage = null;
         if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; wendeBisAn(f, f.ebene, vz); modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
+        stirnAnhaengen(f, m, f.ebene, f._kernLage?.versatz ?? [0, 0]);
       }
     } catch (e) { f._fehler = e.message; }
   }
@@ -1585,7 +1613,7 @@ function zeigeAuftrag(w) {
   $("kAlleDruck").onclick = () => drucke(blechteile(), true);
   $("kEtiketten").onclick = druckeEtiketten;
   $("kAlleDxf").onclick = () => herunterladen(`${doc.nr || "auftrag"} Abwicklungen.dxf`,
-    abwicklungenDxf(blechteile().map((f) => ({ res: f._res, abw: f._blech?.abw, laenge: laengeVon(f), titel: `${f.name} ${f.stueck ?? 1} Stk ${material(f.material).name}` })), einst.skizze.abstand), "application/dxf");
+    abwicklungenDxf(blechteile().map((f) => ({ res: f._res, abw: f._blech?.abw, laschen: f._stirn || [], laenge: laengeVon(f), titel: `${f.name} ${f.stueck ?? 1} Stk ${material(f.material).name}` })), einst.skizze.abstand), "application/dxf");
   $("kCsv").onclick = () => herunterladen(`${doc.nr || "auftrag"} Stückliste.csv`, stuecklisteCsv(a, [["Objekt", doc.objekt], ["Nr.", doc.nr], []]) + bedarfCsv(), "text/csv");
 }
 // Dach: Holzliste, Latten, Flächen, Ziegel (Werkstatt-Panel, CSV)
@@ -1645,11 +1673,11 @@ function zeigeWerkstatt() {
     </tbody></table>
     <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button>${f.typ === "profil" ? '<button class="knopf" id="kEigene">Als eigene Vorlage speichern</button>' : ""}${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
     <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
-    <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${laengeVon(f)} mm · ${f.stueck ?? 1} Stk.</dd></dl>`;
+    <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${laengeVon(f)} mm${f._stirn?.length ? ` + ${f._stirn.length} Stirnlaschen` : ""} · ${f.stueck ?? 1} Stk.</dd></dl>`;
   $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${laengeVon(f)} mm`, "",
     `Biegung\tAnschlag ab A (mm)${abB ? "\tAnschlag ab B (mm)" : ""}\tWinkel\tRichtung`,
     ...r.biegungen.map((b) => `B${b.nr}\t${f1(b.pos)}${abB ? `\t${f1(r.zuschnitt - b.pos)}` : ""}\t${f1(Math.abs(b.winkel))}\t${b.richtung}`)].join("\n"));
-  $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, laengeVon(f), f.name), "application/dxf");
+  $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, abwicklungDxf(r, laengeVon(f), f.name, f._stirn || []), "application/dxf");
   $("kDruck").onclick = () => drucke([f]);
   $("kKopie").onclick = () => dupliziere(f.eltern || f);
   if ($("k3D")) $("k3D").onclick = () => pruefe3D(f, $("k3DErg"));
@@ -1700,7 +1728,7 @@ function werkstattblatt(f) {
     <p class="hinweis">Masse in mm auf der Blechmitte. Anschlag ab Kante A (grüner Punkt)${abB ? ", «ab B» ab der anderen Kante für gewendetes Blech" : ""}. Richtung «oben/unten» mit Kante A links.
       Innenradius ${m.ri} mm, K-Faktor ${m.k}.</p>
     ${d.etikett ? `<dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
-      <dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${laengeVon(f)} mm · ${f.stueck ?? 1} Stk.</dd></dl>` : ""}
+      <dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${laengeVon(f)} mm${f._stirn?.length ? ` + ${f._stirn.length} Stirnlaschen` : ""} · ${f.stueck ?? 1} Stk.</dd></dl>` : ""}
   </section>`;
 }
 function stuecklisteBlatt() {
@@ -2846,8 +2874,12 @@ $("labels").addEventListener("pointerover", (e) => { // auch die Beschriftung «
   menueKante = { fid: kantenWz.f.id, key: kd.dataset.kante }; zeigeKanten();
 });
 // Nachträgliche Kantenbausteine eines Blechprofils (Kante A = Anfang, B = Ende) als Verlängerung der Abkantfolge
+// Stirnflansche an Anfang (S1) und Ende (S2) der Länge, je Schenkel (0 = alle geraden Schenkel)
+function stirnErweiterungen(f, m) {
+  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && (x.ende === "S1" || x.ende === "S2")).map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende, schenkel: +x.schenkel || 0, zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean);
+}
 function profilErweiterungen(f, m) {
-  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus).map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende === "B" ? "B" : "A", zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean);
+  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && x.ende !== "S1" && x.ende !== "S2").map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende === "B" ? "B" : "A", zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean);
 }
 const istProfil = (h) => h?.typ === "profil" || h?.typ === "vorlage" || h?.typ === "blech";
 function kantenWert(w, m) { // Baustein bzw. Werkzeug der Kantenleiste → Wert für einen Schritt
@@ -2857,9 +2889,10 @@ function kantenWert(w, m) { // Baustein bzw. Werkzeug der Kantenleiste → Wert 
 function wendeProfilKante(ende) { // Schritt «Profilkante» in der Zeitleiste anlegen (live)
   const w = kantenWz, f = w?.f; if (!istProfil(f)) return status("Zuerst ein Blechprofil anklicken.");
   const m = material(f.material), titel = w.typ === "flansch" ? "Flansch" : w.typ === "umschlag" ? "Umschlag" : bausteinName(w.baustein);
-  const n = { id: neueId(), typ: "profilkante", name: `${titel} ${f.name} · Kante ${ende}`, ziel: f.id, ende, wert: kantenWert(w, m) };
+  const stirn = ende === "S1" || ende === "S2", ort = stirn ? (ende === "S1" ? "Stirn 1" : "Stirn 2") : `Kante ${ende}`;
+  const n = { id: neueId(), typ: "profilkante", name: `${titel} ${f.name} · ${ort}`, ziel: f.id, ende, wert: kantenWert(w, m), ...(stirn ? { schenkel: Math.max(0, Math.round(+$("kbSchenkel").value || 0)) } : {}) };
   einfuegen(n); w.letzte = n; regen();
-  status(f._fehler ? "⚠ " + f._fehler : `Kante ${ende} von «${f.name}»: «${titel}» angesetzt (Schritt in der Zeitleiste). Weitere Kante wählen oder «Fertig».`);
+  status(f._fehler ? "⚠ " + f._fehler : f._stirnFehler ? "⚠ " + f._stirnFehler : `${ort} von «${f.name}»${stirn ? (n.schenkel ? `, Schenkel ${n.schenkel}` : ", alle geraden Schenkel") : ""}: «${titel}» angesetzt (Schritt in der Zeitleiste). Weitere Kante wählen oder «Fertig».`);
 }
 function starteKantenWz(typ, x = 200, y = 80) {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
@@ -2920,7 +2953,7 @@ function kanteDialog(f) {
 document.querySelectorAll("[data-kantenwz]").forEach((b) => b.addEventListener("click", () => { const r = b.getBoundingClientRect(); setTimeout(() => starteKantenWz(b.dataset.kantenwz, r.right + 6, r.top), 0); }));
 $("kbRichtung").onclick = () => { if (!kantenWz) return; kantenWz.seite = kantenWz.seite === -1 ? 1 : -1; kantenBarZeigen(); if (kantenWz.letzte && finde(kantenWz.letzte.id)) kanteUmkehren(kantenWz.letzte, kantenWz.letzte.key); };
 for (const id of ["kbWinkel", "kbLaenge"]) $(id).addEventListener("input", () => { const l = kantenWz?.letzte; if (!l || !finde(l.id) || !l.wert?.werkzeug) return; const wk = { ...l.wert.werkzeug }, a = parseFloat($("kbWinkel").value), c = parseFloat($("kbLaenge").value); if (a > 0 && wk.typ === "flansch") wk.winkel = a; if (c > 0) wk.laenge = c; l.wert = werkzeugNeu(l.wert, wk, material(kantenWz.f.material)); regen(); zeigeKanten(); });
-$("kbEnde").onclick = endeKantenWz; $("kbA").onclick = () => wendeProfilKante("A"); $("kbB").onclick = () => wendeProfilKante("B");
+$("kbEnde").onclick = endeKantenWz; $("kbA").onclick = () => wendeProfilKante("A"); $("kbB").onclick = () => wendeProfilKante("B"); $("kbS1").onclick = () => wendeProfilKante("S1"); $("kbS2").onclick = () => wendeProfilKante("S2");
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && kantenWz && !dlg && !skizze) { endeKantenWz(); status(""); } });
 function flaecheDialog(f) {
   const istNeu = !f;
