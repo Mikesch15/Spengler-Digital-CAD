@@ -47,7 +47,7 @@ function flaeche(out, abw, titel, x0 = 0, y0 = 0) {
   const linie = (lay, a, b, farbe) => out.push("0", "LINE", "8", lay, "62", String(farbe), "10", f(a[0] + dx), "20", f(a[1] + dy), "30", "0", "11", f(b[0] + dx), "21", f(b[1] + dy), "31", "0");
   U.forEach((p, i) => linie("ZUSCHNITT", p, U[(i + 1) % U.length], 7));
   for (const h of abw.loecher || []) { const H = h.map(R); H.forEach((p, i) => linie("AUSSCHNITT", p, H[(i + 1) % H.length], 3)); }
-  for (const l of abw.linien) { const q = l.punkte.map(R), lay = l.art === "quetsch" ? "QUETSCHFALTE" : l.art === "ecklinie" ? "ECKLINIE" : "BIEGELINIEN", farbe = l.art === "quetsch" ? 6 : l.art === "ecklinie" ? 8 : 1; for (let i = 1; i < q.length; i++) linie(lay, q[i - 1], q[i], farbe); }
+  for (const l of abw.linien) { const q = l.punkte.map(R), lay = l.art === "quetsch" ? "QUETSCHFALTE" : l.art === "ecklinie" ? "ECKLINIE" : l.art === "rip" ? "RIP" : "BIEGELINIEN", farbe = l.art === "quetsch" ? 6 : l.art === "ecklinie" ? 8 : l.art === "rip" ? 2 : 1; for (let i = 1; i < q.length; i++) linie(lay, q[i - 1], q[i], farbe); }
   out.push("0", "TEXT", "8", "TEXT", "10", f(x0), "20", f(y0 - 10), "30", "0", "40", "6.00", "1", ascii(`${titel}  Zuschnitt ${abw.breite.toFixed(1)} x ${abw.laenge.toFixed(1)} mm`));
   return g.y1 - g.y0;
 }

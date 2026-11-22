@@ -1257,6 +1257,10 @@ function regen() {
         koerperTransform(f, volumen);
       } else if (f.typ === "bohrung") {
         bohrungOp(f, volumen);
+      } else if (f.typ === "biegung") {
+        biegungOp(f);
+      } else if (f.typ === "rip") {
+        ripOp(f);
       } else if (f.typ === "rohr") {
         volumenKoerper(f, rohrGeometrie(f));
       } else if (f.typ === "spirale") {
@@ -1524,11 +1528,11 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { rip: "Rip (Auftrennen)", biegung: "Biegung an Linie", skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
-  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft", "rohr", "spirale", "rippe"].includes(f.typ) && (f.vorgang || "neu") !== "neu") && f.typ !== "bohrung" && !(f.typ === "skalieren" && !f.kopie) && f.typ !== "abwickeln" && f.typ !== "falten" && f.typ !== "kante" && f.typ !== "profilkante" && f.typ !== "quetschfalte"); // Flansche/Kanten/Falten gehören zum Blech (nur Zeitleiste); Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
+  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft", "rohr", "spirale", "rippe"].includes(f.typ) && (f.vorgang || "neu") !== "neu") && f.typ !== "bohrung" && f.typ !== "biegung" && f.typ !== "rip" && !(f.typ === "skalieren" && !f.kopie) && f.typ !== "abwickeln" && f.typ !== "falten" && f.typ !== "kante" && f.typ !== "profilkante" && f.typ !== "quetschfalte"); // Flansche/Kanten/Falten gehören zum Blech (nur Zeitleiste); Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
   const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span></li>`;
   $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, f.typ === "ebene" ? "ebene" : f.typ)).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
     <li class="kopf">Körper</li>${kp.filter((f) => !f.komponente).map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech")).join("") || (kp.length ? "" : '<li class="hinweis">Noch keine</li>')}` +
@@ -1553,7 +1557,7 @@ $("baum").addEventListener("dblclick", (e) => { const id = e.target.closest("li"
 
 // Zeitleiste: Symbole statt Namen (Name erscheint beim Überfahren)
 const ZEIT_ICON = {
-  skalieren: '<rect x="4" y="10" width="8" height="8"/><rect x="4" y="4" width="16" height="16" stroke-dasharray="2 2"/>', bohrung: '<circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4"/>', rohr: '<path d="M4 18h8a4 4 0 0 0 4-4V6"/>', spirale: '<path d="M6 20c8 0 8-4 0-4s-8-4 0-4 8-4 0-4"/>', rippe: '<path d="M4 20h16M12 20V6"/>',
+  rip: '<path d="M3 12h7l2-3 2 6 2-3h5"/>', biegung: '<path d="M3 17h8l6-9h4"/>', skalieren: '<rect x="4" y="10" width="8" height="8"/><rect x="4" y="4" width="16" height="16" stroke-dasharray="2 2"/>', bohrung: '<circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4"/>', rohr: '<path d="M4 18h8a4 4 0 0 0 4-4V6"/>', spirale: '<path d="M6 20c8 0 8-4 0-4s-8-4 0-4 8-4 0-4"/>', rippe: '<path d="M4 20h16M12 20V6"/>',
   skizze: '<path d="M4 17l4-7 3 4 4-6"/><circle cx="4" cy="17" r="1.3"/><circle cx="15" cy="8" r="1.3"/>', extrusion: '<path d="M4 15l8 4 8-4-8-4z"/><path d="M12 11V3M9 6l3-3 3 3"/>', drehung: '<path d="M12 3v18" stroke-dasharray="2 2.5"/><path d="M12 7h5c1.4 3.5 1.4 6.5 0 10h-5z"/>', sweep: '<path d="M5 18c0-7 5-10 14-12" stroke-dasharray="2 2.5"/><rect x="3" y="16" width="5" height="5" rx=".8"/>', loft: '<rect x="3" y="16" width="18" height="4" rx="1"/><ellipse cx="12" cy="6" rx="5" ry="2.5"/><path d="M3 17L7 7M21 17l-4-10"/>',
   blech: '<path d="M3 17h5l5-9h8"/>', vorlage: '<path d="M3 17h5l5-9h8"/>', profil: '<path d="M3 17h5l5-9h8"/>', flaeche: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>', kante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', profilkante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', quetschfalte: '<path d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/>',
   dach: '<path d="M3 12l9-8 9 8"/><path d="M6 11v8h12v-8"/>', gebaeude: '<path d="M5 20V9l7-5 7 5v11z"/>', dachbleche: '<path d="M3 12l9-8 9 8"/><path d="M7 12l5-4 5 4"/>', eindeckung: '<path d="M3 12l9-8 9 8"/><path d="M6 14h12M8 17h8"/>', dachelement: '<path d="M3 12l9-8 9 8"/><rect x="9" y="11" width="6" height="5"/>', lukarne: '<path d="M3 12l9-8 9 8"/><path d="M9 20v-6l3-3 3 3v6z"/>',
@@ -2071,6 +2075,8 @@ function bearbeite(f) {
   if (f.typ === "detail3d") return detail3dDialog(f);
   if (KOERPER_WZ[f.typ]) return koerperDialog(f.typ, f);
   if (KOERPER_WZ2[f.typ]) return koerper2Dialog(f.typ, f);
+  if (f.typ === "biegung") return biegungDialog(f);
+  if (f.typ === "rip") return ripDialog(f);
   if (f.typ === "loft") return loftDialog(f);
   if (f.typ === "blech") return blechDialog(f);
   if (f.typ === "vorlage") return vorlageDialog(f);
@@ -3201,6 +3207,8 @@ function kanteDialog(f) {
   featureDialog(f, false, felder, setze, "Kante bearbeiten", "Ändert den Flansch bzw. Baustein dieser Kante – das Blech passt sich sofort an. Richtung auch per Rechtsklick › «Richtung umkehren».", { wahlNr: -1, aktiveKante: f.key, nachRegen: () => zeigeKanten() });
   zeigeKanten();
 }
+$("wRip")?.addEventListener("click", () => { if (dlg) $("dAbbrechen").click(); ripDialog(); });
+$("wBiegung")?.addEventListener("click", () => { if (dlg) $("dAbbrechen").click(); biegungDialog(); });
 for (const [id, t] of [["wSkalieren", "skalieren"], ["wBohrung", "bohrung"], ["wRohr", "rohr"], ["wSpirale", "spirale"], ["wRippe", "rippe"]]) $(id).addEventListener("click", () => { if (dlg) $("dAbbrechen").click(); koerper2Dialog(t); });
 $("wQuetsch").addEventListener("click", () => setTimeout(starteQuetschWz, 0));
 document.querySelectorAll("[data-kantenwz]").forEach((b) => b.addEventListener("click", () => { const r = b.getBoundingClientRect(); setTimeout(() => starteKantenWz(b.dataset.kantenwz, r.right + 6, r.top), 0); }));
@@ -3546,6 +3554,57 @@ function schalenWerkzeug(z, f) {
 }
 // Körper eines Features in der Szene (auch Blechteile «id:n») und als Volumenkörper
 // ---- Weitere Körperwerkzeuge (wie in Fusion): Skalieren, Bohrung, Rohr, Spirale, Rippe ----
+// ---- Biegung an frei gezeichneter Linie (Flächenblech): Blech entlang einer Skizzenlinie um einen Winkel biegen ----
+const BLECH_WZ = { biegung: "Biegung an Linie", rip: "Rip (Auftrennen)" };
+const polyKlipp = (poly, nx, ny, c) => { // behält den Teil mit nx·x + ny·y − c ≥ 0 (Sutherland–Hodgman)
+  const out = [], n = poly.length; for (let i = 0; i < n; i++) { const a = poly[i], b = poly[(i + 1) % n], da = nx * a[0] + ny * a[1] - c, db = nx * b[0] + ny * b[1] - c;
+    if (da >= 0) out.push(a); if ((da > 0 && db < 0) || (da < 0 && db > 0)) { const t = da / (da - db); out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } } return out;
+};
+function unterteile(geo, h) { // Dreiecke so lange teilen, bis keine Kante länger als h ist (für die Biegezone)
+  const a = geo.index ? geo.toNonIndexed() : geo, P = a.attributes.position.array, out = [], mid = (A, B) => [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2, (A[2] + B[2]) / 2], dist = (A, B) => Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]);
+  const tri = (A, B, C, d) => { const ab = dist(A, B), bc = dist(B, C), ca = dist(C, A), m = Math.max(ab, bc, ca); if (m <= h || d > 40) { out.push(...A, ...B, ...C); return; }
+    if (ab >= bc && ab >= ca) { const M = mid(A, B); tri(A, M, C, d + 1); tri(M, B, C, d + 1); } else if (bc >= ca) { const M = mid(B, C); tri(A, B, M, d + 1); tri(A, M, C, d + 1); } else { const M = mid(C, A); tri(A, B, M, d + 1); tri(M, B, C, d + 1); } };
+  for (let i = 0; i + 8 < P.length; i += 9) tri([P[i], P[i + 1], P[i + 2]], [P[i + 3], P[i + 4], P[i + 5]], [P[i + 6], P[i + 7], P[i + 8]], 0);
+  const r = new THREE.BufferGeometry(); r.setAttribute("position", new THREE.Float32BufferAttribute(out, 3)); return r;
+}
+function biegungOp(f) {
+  const z = finde(f.ziel); if (z?.typ !== "flaeche" || !z._bleche?.length) throw new Error("Flächenblech fehlt"); if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
+  const bl = z._bleche[Math.min(+f.blech || 0, z._bleche.length - 1)];
+  if (bl.profile.some(Boolean)) throw new Error("Biegung an Linie: das Blech darf keine Kantenbausteine haben (erst die Biegung, Flansche an den Kanten danach nicht möglich)");
+  const sk = finde(f.skizze); if (!sk) throw new Error("Skizze mit der Biegelinie fehlt"); const el = sk.elemente.find((e) => e.art === "linie" && e.pts?.length >= 2); if (!el) throw new Error("In der Skizze eine Linie zeichnen – sie ist die Biegelinie");
+  const m = material(z.material), t = m.t, ri = +f.radius > 0 ? +f.radius : m.ri, kf = m.k, alpha = ((+f.winkel || 0) * Math.PI) / 180; if (!alpha) throw new Error("Biegewinkel angeben");
+  const skZ = finde(z.skizze), Ez = E_(skZ.ebene), lok = (p) => zuLokal(Ez, zuWeltK(E_(sk.ebene), p)), P0 = lok(el.pts[0]), P1 = lok(el.pts[1]);
+  const L = Math.hypot(P1[0] - P0[0], P1[1] - P0[1]); if (L < 1e-6) throw new Error("Die Biegelinie ist zu kurz"); const dx = (P1[0] - P0[0]) / L, dy = (P1[1] - P0[1]) / L, nx = -dy, ny = dx, a_ = Math.abs(alpha), sgn = Math.sign(alpha) * (f.richtung === "hinten" ? -1 : 1);
+  const R = ri + kf * t, BA = a_ * R, zn = t / 2 - kf * t, cu = nx * P0[0] + ny * P0[1], poly = bl.pts;
+  const A = polyKlipp(poly, -nx, -ny, -(cu - BA / 2)), B = polyKlipp(poly, nx, ny, cu + BA / 2), S = polyKlipp(polyKlipp(poly, nx, ny, cu - BA / 2), -nx, -ny, -(cu + BA / 2));
+  if (A.length < 3 || B.length < 3) throw new Error("Die Biegelinie muss das Blech ganz durchschneiden");
+  const ext = (poly2) => { if (poly2.length < 3) return null; const g = new THREE.ExtrudeGeometry(new THREE.Shape(poly2.map(([x, y]) => new THREE.Vector2(x, y))), { depth: t, bevelEnabled: false }); g.translate(0, 0, -t / 2); return g.index ? g.toNonIndexed() : g; };
+  const gs = [ext(A), ext(B)].filter(Boolean), gb = ext(S); if (gb) gs.push(unterteile(gb, Math.max(0.3, BA / 10)));
+  const geo = mergeGeos(gs), pos = geo.attributes.position, ctrB = zn + R;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), zz = pos.getZ(i), u = nx * (x - P0[0]) + ny * (y - P0[1]), v = dx * (x - P0[0]) + dy * (y - P0[1]), zs = sgn * zz; let a, b;
+    if (u <= -BA / 2) { a = u; b = zs; } else { const th = Math.min((u + BA / 2) / R, a_), rz = ri + t / 2 - zs; a = -BA / 2 + rz * Math.sin(th); b = ctrB - rz * Math.cos(th); if (u > BA / 2) { const e = u - BA / 2; a += e * Math.cos(a_); b += e * Math.sin(a_); } }
+    pos.setXYZ(i, P0[0] + dx * v + nx * a, P0[1] + dy * v + ny * a, sgn * b);
+  }
+  geo.computeVertexNormals(); geo.applyMatrix4(basis(blechEbene(skZ.ebene, z, m)));
+  const fid = `${z.id}:${bl.pi}`; for (const o of modell.children.filter((o) => o.isMesh && o.userData.fid === fid)) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); }
+  if (!f.versteckt) modell.add(koerperAusGeo(geo, darstellungVon(z, m), fid));
+  // Abwicklung: die beiden Biegelinien (Anfang/Ende der Biegezone) einzeichnen und in die Biegeliste aufnehmen
+  const vs = poly.map(([x, y]) => dx * (x - P0[0]) + dy * (y - P0[1])), v0 = Math.min(...vs), v1 = Math.max(...vs);
+  for (const off of [-BA / 2, BA / 2]) bl.abw.linien.push({ kante: -1, nr: 0, art: "biegung", punkte: [[P0[0] + dx * v0 + nx * off, P0[1] + dy * v0 + ny * off], [P0[0] + dx * v1 + nx * off, P0[1] + dy * v1 + ny * off]] });
+  const teil = z._teile?.[0]; if (teil) { teil._res.biegungen = [...teil._res.biegungen, { nr: teil._res.biegungen.length + 1, pos: BA / 2 + (cu - Math.min(...poly.map(([x, y]) => nx * x + ny * y))), winkel: (alpha * 180) / Math.PI * (f.richtung === "hinten" ? -1 : 1), art: "Abkanten", richtung: sgn > 0 ? "oben" : "unten", ri }]; }
+  f._biege = { BA, R, ri, winkel: (alpha * 180) / Math.PI };
+}
+function ripOp(f) { // Rip: Blech entlang einer Skizzenlinie auftrennen (Schlitz der Breite «Spalt»), damit z. B. Ecken ohne Zwang falten
+  const z = finde(f.ziel); if (z?.typ !== "flaeche" || !z._bleche?.length) throw new Error("Flächenblech fehlt"); if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
+  const sk = finde(f.skizze); if (!sk) throw new Error("Skizze mit der Trennlinie fehlt"); const el = sk.elemente.find((e) => e.art === "linie" && e.pts?.length >= 2); if (!el) throw new Error("In der Skizze eine Linie zeichnen – entlang ihr wird aufgetrennt");
+  const m = material(z.material), t = m.t, gap = Math.max(0.05, +f.spalt || 0.5), skZ = finde(z.skizze), Ez = E_(skZ.ebene), lok = (p) => zuLokal(Ez, zuWeltK(E_(sk.ebene), p)), A = lok(el.pts[0]), B = lok(el.pts.at(-1));
+  const L = Math.hypot(B[0] - A[0], B[1] - A[1]); if (L < 1e-6) throw new Error("Die Trennlinie ist zu kurz"); const nx = -(B[1] - A[1]) / L * gap / 2, ny = (B[0] - A[0]) / L * gap / 2;
+  const rechteck = [[A[0] + nx, A[1] + ny], [B[0] + nx, B[1] + ny], [B[0] - nx, B[1] - ny], [A[0] - nx, A[1] - ny]];
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(rechteck.map(([x, y]) => new THREE.Vector2(x, y))), { depth: 4 * t + 2, bevelEnabled: false }); g.translate(0, 0, -(2 * t + 1)); g.applyMatrix4(basis(blechEbene(skZ.ebene, z, m)));
+  for (const o of modell.children.filter((o) => o.isMesh && (o.userData.fid === z.id || String(o.userData.fid).startsWith(z.id + ":")))) verknuepfe(o, g, "ausschneiden");
+  const bl = z._bleche[0]; bl.abw.loecher = [...(bl.abw.loecher || []), rechteck]; bl.abw.linien.push({ kante: -1, nr: 0, art: "rip", punkte: [A, B] }); f._rip = { laenge: L, spalt: gap };
+}
 const KOERPER_WZ2 = { skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe" };
 const csgGeo = (a, b, op) => { const A = new Brush(nurPos(a)), B = new Brush(nurPos(b)); A.updateMatrixWorld(); B.updateMatrixWorld(); return csg.evaluate(A, B, op).geometry; };
 const vereinigeGeos = (liste) => liste.slice(1).reduce((acc, g) => csgGeo(acc, g, ADDITION), liste[0]);
@@ -3662,6 +3721,23 @@ const koerperOpt = (f) => vorher(f).filter((x) => ["extrusion", "drehung", "swee
 const KOERPER_WZ = {
   kantenrund: "Abrunden / Fasen", schale: "Schale", kmuster: "Muster (Körper)", kspiegel: "Spiegeln (Körper)", teilen: "Körper teilen", bewegen: "Verschieben / Kopieren",
 };
+function biegungDialog(f) {
+  const istNeu = !f, fl = doc.features.filter((x) => x.typ === "flaeche"), sk = doc.features.filter((x) => x.typ === "skizze" && x.elemente.some((e) => e.art === "linie" && e.pts?.length >= 2));
+  if (!fl.length) return status("Zuerst ein Flächenblech erstellen."); if (!sk.length) return status("Zuerst die Biegelinie als Linie in einer Skizze zeichnen (auf der Ebene des Blechs).");
+  f ||= { id: neueId(), typ: "biegung", name: "Biegung " + (doc.features.filter((x) => x.typ === "biegung").length + 1), ziel: (hauptVon(auswahl)?.typ === "flaeche" ? hauptVon(auswahl) : fl.at(-1)).id, skizze: sk.at(-1).id, winkel: 90, radius: 0, richtung: "vorne", blech: 0 };
+  featureDialog(f, istNeu, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "ziel", label: "Flächenblech", optionen: fl.map((x) => [x.id, x.name]), wert: ff.ziel }, { id: "skizze", label: "Biegelinie (Skizze, erste Linie)", optionen: sk.map((x) => [x.id, x.name]), wert: ff.skizze },
+    { id: "winkel", label: "Biegewinkel", einheit: "°", wert: ff.winkel }, { id: "radius", label: "Innenradius (0 = Material)", einheit: "mm", wert: ff.radius }, { id: "richtung", label: "Biegerichtung", optionen: [["vorne", "Nach oben (Normale)"], ["hinten", "Nach unten"]], wert: ff.richtung }],
+    (ff, w) => Object.assign(ff, w, { name: w.name?.trim() || ff.name }), "Biegung an Linie", "Biegt das Flächenblech entlang der ersten Linie der gewählten Skizze (muss das Blech ganz durchschneiden). Die Biegezone wird mit Innenradius und K-Faktor des Materials gerechnet; die Abwicklung zeigt die beiden Biegelinien.",
+    { info: () => (f._fehler ? "⚠ " + f._fehler : f._biege ? `Biegezone ${f1(f._biege.BA)} mm · Radius innen ${f1(f._biege.ri)} mm` : "") });
+}
+function ripDialog(f) {
+  const istNeu = !f, fl = doc.features.filter((x) => x.typ === "flaeche"), sk = doc.features.filter((x) => x.typ === "skizze" && x.elemente.some((e) => e.art === "linie" && e.pts?.length >= 2));
+  if (!fl.length) return status("Zuerst ein Flächenblech erstellen."); if (!sk.length) return status("Zuerst die Trennlinie als Linie in einer Skizze zeichnen (auf der Ebene des Blechs).");
+  f ||= { id: neueId(), typ: "rip", name: "Rip " + (doc.features.filter((x) => x.typ === "rip").length + 1), ziel: (hauptVon(auswahl)?.typ === "flaeche" ? hauptVon(auswahl) : fl.at(-1)).id, skizze: sk.at(-1).id, spalt: 0.5 };
+  featureDialog(f, istNeu, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "ziel", label: "Flächenblech", optionen: fl.map((x) => [x.id, x.name]), wert: ff.ziel }, { id: "skizze", label: "Trennlinie (Skizze, erste Linie)", optionen: sk.map((x) => [x.id, x.name]), wert: ff.skizze }, { id: "spalt", label: "Spalt (Schlitzbreite)", einheit: "mm", wert: ff.spalt }],
+    (ff, w) => Object.assign(ff, w, { name: w.name?.trim() || ff.name }), "Rip (Auftrennen)", "Trennt das Blech entlang der Linie auf (Schlitz mit Spalt): Eckentlastung bzw. Naht, damit sich Ecken ohne Zwang falten lassen. Der Schlitz erscheint auch in der Abwicklung.",
+    { info: () => (f._fehler ? "⚠ " + f._fehler : f._rip ? `Schlitz ${f1(f._rip.laenge)} × ${f1(f._rip.spalt)} mm` : "") });
+}
 function koerper2Dialog(typ, f) {
   const istNeu = !f, opt = koerperOpt(f), sk = (arten) => doc.features.filter((x) => x.typ === "skizze" && x.elemente.some((el) => arten.includes(el.art)));
   if (["skalieren", "bohrung"].includes(typ) && !opt.length) return status("Zuerst einen Körper erstellen.");
