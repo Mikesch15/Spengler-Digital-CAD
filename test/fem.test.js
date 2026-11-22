@@ -1,5 +1,5 @@
 import { test } from "node:test"; import assert from "node:assert/strict";
-import { loese } from "../kern/fem/loeser.js";
+import { loese, system } from "../kern/fem/loeser.js";
 const mat = { E: 210000, nu: 0.3 };
 // regelmäßiges Netz in der xy-Ebene
 function platte(a, b, nx, ny) { const nodes = [], tris = []; for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) nodes.push([(a * i) / nx, (b * j) / ny, 0]);
@@ -84,4 +84,15 @@ test("Studie: Schwerkraft und Flächendruck – Reaktionen stimmen mit der Gesam
   near(g.summeReaktion[1], 7.85e-9 * 2 * 100 * 200 * 9810, 0.01, "Gewicht");
   const d = rechneStudie(M, { lager, lasten: [{ art: "druck", sel: { art: "flaeche", p: [50, 0, 100] }, p: 0.002, modus: "richtung", dir: [0, -1, 0] }] }, mat).ergebnisse[0];
   near(d.summeReaktion[1], 0.002 * 100 * 200, 0.01, "Druck");
+});
+
+import { beulen } from "../kern/fem/beulen.js";
+test("Beulen: Platte unter Längsdruck, gelenkig – Plattenbeulen N_cr = k·π²D/b², k=4", () => {
+  const a = 200, b = 100, t = 2, nx = 20, ny = 10, { nodes, tris, id } = platte(a, b, nx, ny), N = 6 * nodes.length, mat = { E: 210000, nu: 0.3 }, fix = [], F = new Float64Array(N);
+  for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) { const k = id(i, j); if (j === 0 || j === ny || i === 0 || i === nx) fix.push(6 * k + 2); }
+  for (let k = 0; k < nodes.length; k++) fix.push(6 * k + 5);
+  fix.push(6 * id(0, 0), 6 * id(0, 0) + 1, 6 * id(nx, 0) + 1);
+  for (let j = 0; j <= ny; j++) { const w = (j === 0 || j === ny ? 0.5 : 1) * (b / ny) * 50; F[6 * id(0, j)] += w; F[6 * id(nx, j)] -= w; }
+  const sys = system(nodes, tris, t, mat, fix), erg = sys.solve(F), r = beulen({}, sys, erg), D = (mat.E * t ** 3) / (12 * (1 - mat.nu ** 2));
+  near(r.lambda * 50, (4 * Math.PI ** 2 * D) / b ** 2, 0.1, "N_cr");
 });
