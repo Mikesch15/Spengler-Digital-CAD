@@ -1253,8 +1253,16 @@ function regen() {
         const z = finde(f.ziel); if (z?.typ !== "extrusion" || (z.vorgang || "neu") !== "neu") throw new Error("Schale geht an einem Extrusionskörper (neuer Körper)");
         const m = volumen.get(z.id); if (!m) throw new Error("Zielkörper fehlt");
         verknuepfe(m, schalenWerkzeug(z, f), "ausschneiden");
-      } else if (f.typ === "kmuster" || f.typ === "kspiegel" || f.typ === "bewegen") {
+      } else if (f.typ === "kmuster" || f.typ === "kspiegel" || f.typ === "bewegen" || f.typ === "skalieren") {
         koerperTransform(f, volumen);
+      } else if (f.typ === "bohrung") {
+        bohrungOp(f, volumen);
+      } else if (f.typ === "rohr") {
+        volumenKoerper(f, rohrGeometrie(f));
+      } else if (f.typ === "spirale") {
+        volumenKoerper(f, spiraleGeometrie(f));
+      } else if (f.typ === "rippe") {
+        volumenKoerper(f, rippeGeometrie(f));
       } else if (f.typ === "teilen") {
         koerperTeilen(f, volumen, flachStand);
       } else if (f.typ === "drehung") {
@@ -1516,11 +1524,11 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { quetschfalte: "Quetschfalte", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
-  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft"].includes(f.typ) && (f.vorgang || "neu") !== "neu") && f.typ !== "abwickeln" && f.typ !== "falten" && f.typ !== "kante" && f.typ !== "profilkante" && f.typ !== "quetschfalte"); // Flansche/Kanten/Falten gehören zum Blech (nur Zeitleiste); Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
+  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft", "rohr", "spirale", "rippe"].includes(f.typ) && (f.vorgang || "neu") !== "neu") && f.typ !== "bohrung" && !(f.typ === "skalieren" && !f.kopie) && f.typ !== "abwickeln" && f.typ !== "falten" && f.typ !== "kante" && f.typ !== "profilkante" && f.typ !== "quetschfalte"); // Flansche/Kanten/Falten gehören zum Blech (nur Zeitleiste); Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
   const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span></li>`;
   $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, f.typ === "ebene" ? "ebene" : f.typ)).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
     <li class="kopf">Körper</li>${kp.filter((f) => !f.komponente).map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech")).join("") || (kp.length ? "" : '<li class="hinweis">Noch keine</li>')}` +
@@ -1545,6 +1553,7 @@ $("baum").addEventListener("dblclick", (e) => { const id = e.target.closest("li"
 
 // Zeitleiste: Symbole statt Namen (Name erscheint beim Überfahren)
 const ZEIT_ICON = {
+  skalieren: '<rect x="4" y="10" width="8" height="8"/><rect x="4" y="4" width="16" height="16" stroke-dasharray="2 2"/>', bohrung: '<circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4"/>', rohr: '<path d="M4 18h8a4 4 0 0 0 4-4V6"/>', spirale: '<path d="M6 20c8 0 8-4 0-4s-8-4 0-4 8-4 0-4"/>', rippe: '<path d="M4 20h16M12 20V6"/>',
   skizze: '<path d="M4 17l4-7 3 4 4-6"/><circle cx="4" cy="17" r="1.3"/><circle cx="15" cy="8" r="1.3"/>', extrusion: '<path d="M4 15l8 4 8-4-8-4z"/><path d="M12 11V3M9 6l3-3 3 3"/>', drehung: '<path d="M12 3v18" stroke-dasharray="2 2.5"/><path d="M12 7h5c1.4 3.5 1.4 6.5 0 10h-5z"/>', sweep: '<path d="M5 18c0-7 5-10 14-12" stroke-dasharray="2 2.5"/><rect x="3" y="16" width="5" height="5" rx=".8"/>', loft: '<rect x="3" y="16" width="18" height="4" rx="1"/><ellipse cx="12" cy="6" rx="5" ry="2.5"/><path d="M3 17L7 7M21 17l-4-10"/>',
   blech: '<path d="M3 17h5l5-9h8"/>', vorlage: '<path d="M3 17h5l5-9h8"/>', profil: '<path d="M3 17h5l5-9h8"/>', flaeche: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>', kante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', profilkante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', quetschfalte: '<path d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/>',
   dach: '<path d="M3 12l9-8 9 8"/><path d="M6 11v8h12v-8"/>', gebaeude: '<path d="M5 20V9l7-5 7 5v11z"/>', dachbleche: '<path d="M3 12l9-8 9 8"/><path d="M7 12l5-4 5 4"/>', eindeckung: '<path d="M3 12l9-8 9 8"/><path d="M6 14h12M8 17h8"/>', dachelement: '<path d="M3 12l9-8 9 8"/><rect x="9" y="11" width="6" height="5"/>', lukarne: '<path d="M3 12l9-8 9 8"/><path d="M9 20v-6l3-3 3 3v6z"/>',
@@ -2061,6 +2070,7 @@ function bearbeite(f) {
   if (f.typ === "rundblech") return rundDialog(f);
   if (f.typ === "detail3d") return detail3dDialog(f);
   if (KOERPER_WZ[f.typ]) return koerperDialog(f.typ, f);
+  if (KOERPER_WZ2[f.typ]) return koerper2Dialog(f.typ, f);
   if (f.typ === "loft") return loftDialog(f);
   if (f.typ === "blech") return blechDialog(f);
   if (f.typ === "vorlage") return vorlageDialog(f);
@@ -3191,6 +3201,7 @@ function kanteDialog(f) {
   featureDialog(f, false, felder, setze, "Kante bearbeiten", "Ändert den Flansch bzw. Baustein dieser Kante – das Blech passt sich sofort an. Richtung auch per Rechtsklick › «Richtung umkehren».", { wahlNr: -1, aktiveKante: f.key, nachRegen: () => zeigeKanten() });
   zeigeKanten();
 }
+for (const [id, t] of [["wSkalieren", "skalieren"], ["wBohrung", "bohrung"], ["wRohr", "rohr"], ["wSpirale", "spirale"], ["wRippe", "rippe"]]) $(id).addEventListener("click", () => { if (dlg) $("dAbbrechen").click(); koerper2Dialog(t); });
 $("wQuetsch").addEventListener("click", () => setTimeout(starteQuetschWz, 0));
 document.querySelectorAll("[data-kantenwz]").forEach((b) => b.addEventListener("click", () => { const r = b.getBoundingClientRect(); setTimeout(() => starteKantenWz(b.dataset.kantenwz, r.right + 6, r.top), 0); }));
 $("kbRichtung").onclick = () => { if (!kantenWz) return; kantenWz.seite = kantenWz.seite === -1 ? 1 : -1; kantenBarZeigen(); if (kantenWz.letzte && finde(kantenWz.letzte.id)) kanteUmkehren(kantenWz.letzte, kantenWz.letzte.key); };
@@ -3534,6 +3545,59 @@ function schalenWerkzeug(z, f) {
   geo.applyMatrix4(basis(s.ebene)); return geo;
 }
 // Körper eines Features in der Szene (auch Blechteile «id:n») und als Volumenkörper
+// ---- Weitere Körperwerkzeuge (wie in Fusion): Skalieren, Bohrung, Rohr, Spirale, Rippe ----
+const KOERPER_WZ2 = { skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe" };
+const csgGeo = (a, b, op) => { const A = new Brush(nurPos(a)), B = new Brush(nurPos(b)); A.updateMatrixWorld(); B.updateMatrixWorld(); return csg.evaluate(A, B, op).geometry; };
+const vereinigeGeos = (liste) => liste.slice(1).reduce((acc, g) => csgGeo(acc, g, ADDITION), liste[0]);
+function zylinderZwischen(a, b, r, seg = 24) { // Zylinder von Punkt a nach Punkt b
+  const d = b.clone().sub(a), L = d.length(); if (L < 1e-9) return null; const g = new THREE.CylinderGeometry(r, r, L, seg); g.translate(0, L / 2, 0);
+  g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())).setPosition(a)); return g;
+}
+function bohrungOp(f, volumen) {
+  const s = finde(f.skizze); if (!s) throw new Error("Skizze mit Punkten fehlt");
+  const pts = s.elemente.filter((e) => e.art === "punkt" || e.art === "kreis").map((e) => (e.art === "punkt" ? e.p : e.c)); if (!pts.length) throw new Error("In der Skizze Punkte setzen (Werkzeug «Punkt») – dort wird gebohrt");
+  const quellen = koerperVon(f.ziel, volumen); if (!quellen.length) { if (finde(f.ziel)?.versteckt) return; throw new Error("Körper fehlt (ausgeblendet, unterdrückt oder noch nicht da)"); }
+  const E = E_(s.ebene), n = V(E.n).normalize(), dir = f.seite === "normale" ? n : n.clone().negate(), bb = new THREE.Box3(); quellen.forEach((q) => bb.expandByObject(q));
+  const d = +f.d, r = d / 2, L = f.durch ? bb.getSize(new THREE.Vector3()).length() * 2 + 10 : +f.tiefe, dS = +f.dSenk || d * 2, tS = +f.tSenk || d, w = ((+f.winkel || 90) * Math.PI) / 360;
+  if (!(d > 0) || !(L > 0)) throw new Error("Durchmesser und Tiefe müssen grösser als 0 sein");
+  const geos = [];
+  for (const p of pts) {
+    const P = zu3D(s.ebene, p), A = P.clone().addScaledVector(dir, -1); // 1 mm ausserhalb starten: sauberer Schnitt
+    geos.push(zylinderZwischen(A, P.clone().addScaledVector(dir, L), r));
+    if (f.art === "senkung") geos.push(zylinderZwischen(A, P.clone().addScaledVector(dir, tS), dS / 2));
+    if (f.art === "kegel" && dS > d) { const h = (dS - d) / 2 / Math.tan(w), g = new THREE.CylinderGeometry(r, dS / 2, h, 32); g.translate(0, h / 2, 0); g.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir)).setPosition(P)); geos.push(g, zylinderZwischen(A, P, dS / 2)); }
+  }
+  for (const q of quellen) for (const g of geos.filter(Boolean)) verknuepfe(q, g, "ausschneiden");
+}
+function rohrGeometrie(f) {
+  const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt"); const kette = ketten(s)[f.kette || 0]; if (!kette) throw new Error("Skizze hat keinen offenen Linienzug (Pfad des Rohrs)");
+  const P = kette.pts.map((p) => zu3D(s.ebene, p)), R = (+f.d || 0) / 2, ri = f.wand > 0 ? R - f.wand : 0; if (!(R > 0)) throw new Error("Durchmesser muss grösser als 0 sein"); if (f.wand > 0 && !(ri > 0)) throw new Error("Wanddicke muss kleiner als der Radius sein");
+  const koerper = (rr, ueber = 0) => { const l = []; for (let i = 1; i < P.length; i++) { const d = P[i].clone().sub(P[i - 1]).normalize(), a = P[i - 1].clone().addScaledVector(d, -ueber), b = P[i].clone().addScaledVector(d, ueber); l.push(zylinderZwischen(a, b, rr)); if (i > 1) { const k = new THREE.SphereGeometry(rr, 24, 16); k.translate(P[i - 1].x, P[i - 1].y, P[i - 1].z); l.push(k); } } return vereinigeGeos(l.filter(Boolean)); };
+  const aussen = koerper(R); return ri > 0 ? csgGeo(aussen, koerper(ri, 1), SUBTRACTION) : aussen;
+}
+function mergeGeos(liste) { // einfache Zusammenfassung nicht indexierter Geometrien
+  const pos = []; for (const g of liste) { const n = g.index ? g.toNonIndexed() : g, a = n.attributes.position.array; for (let i = 0; i < a.length; i++) pos.push(a[i]); }
+  const r = new THREE.BufferGeometry(); r.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); r.computeVertexNormals(); return r;
+}
+function spiraleGeometrie(f) {
+  const D = +f.dm, steig = +f.steigung, n = +f.windungen, r = (+f.draht || 0) / 2; if (!(D > 0 && steig > 0 && n > 0 && r > 0)) throw new Error("Durchmesser, Steigung, Windungen und Drahtstärke müssen grösser als 0 sein");
+  const N = Math.max(24, Math.round(n * 48)), pts = []; for (let i = 0; i <= N; i++) { const a = (i / N) * n * 2 * Math.PI; pts.push(new THREE.Vector3((D / 2) * Math.cos(a), (steig * a) / (2 * Math.PI), (D / 2) * Math.sin(a))); }
+  const kurve = new THREE.CatmullRomCurve3(pts, false, "centripetal"), rohr = new THREE.TubeGeometry(kurve, N * 2, r, 16, false), kappen = [];
+  for (const [t, ri] of [[0, 0], [1, 1]]) { const c = new THREE.CircleGeometry(r, 16), tg = kurve.getTangentAt(t), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), ri ? tg : tg.clone().negate()); c.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q).setPosition(kurve.getPointAt(t))); kappen.push(c); }
+  const g = mergeGeos([rohr, ...kappen]); const ax = f.achse || "Y", M = new THREE.Matrix4();
+  if (ax === "X") M.makeRotationZ(-Math.PI / 2); else if (ax === "Z") M.makeRotationX(Math.PI / 2);
+  M.setPosition(+f.x || 0, +f.y || 0, +f.z || 0); g.applyMatrix4(M); return g;
+}
+function rippeGeometrie(f) {
+  const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt"); const kette = ketten(s)[f.kette || 0]; if (!kette) throw new Error("Skizze hat keinen offenen Linienzug (Verlauf der Rippe)");
+  const dk = +f.dicke, h = +f.hoehe; if (!(dk > 0 && h > 0)) throw new Error("Dicke und Höhe müssen grösser als 0 sein");
+  const geos = []; for (let i = 1; i < kette.pts.length; i++) {
+    const a = kette.pts[i - 1], b = kette.pts[i], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l < 1e-9) continue; const nx = -(b[1] - a[1]) / l * dk / 2, ny = (b[0] - a[0]) / l * dk / 2, ex = (b[0] - a[0]) / l * dk / 2, ey = (b[1] - a[1]) / l * dk / 2;
+    const sh = new THREE.Shape([[a[0] - ex + nx, a[1] - ey + ny], [b[0] + ex + nx, b[1] + ey + ny], [b[0] + ex - nx, b[1] + ey - ny], [a[0] - ex - nx, a[1] - ey - ny]].map(([x, y]) => new THREE.Vector2(x, y)));
+    const g = new THREE.ExtrudeGeometry(sh, { depth: h, bevelEnabled: false }); g.translate(0, 0, -rueckVersatz(f.richtung || "eine", h)); g.applyMatrix4(basis(s.ebene)); geos.push(g);
+  }
+  if (!geos.length) throw new Error("Der Linienzug ist zu kurz"); return vereinigeGeos(geos);
+}
 const koerperVon = (id, volumen) => {
   const l = modell.children.filter((o) => o.isMesh && (o.userData.fid === id || String(o.userData.fid).startsWith(id + ":")));
   const v = volumen.get(id); if (v && !l.includes(v)) l.push(v);
@@ -3541,6 +3605,8 @@ const koerperVon = (id, volumen) => {
 };
 function transformAus(f, k) {
   const M = new THREE.Matrix4();
+  if (f.typ === "skalieren") { const bb = new THREE.Box3(); koerperVon(f.ziel, new Map()).forEach((q) => bb.expandByObject(q)); const c = f.mitte === "ursprung" || bb.isEmpty() ? new THREE.Vector3() : bb.getCenter(new THREE.Vector3()), k0 = +f.faktor; if (!(k0 > 0)) throw new Error("Faktor muss grösser als 0 sein");
+    return new THREE.Matrix4().makeTranslation(c.x, c.y, c.z).multiply(new THREE.Matrix4().makeScale(k0, k0, k0)).multiply(new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z)); }
   if (f.typ === "bewegen") {
     M.makeTranslation(f.dx || 0, f.dy || 0, f.dz || 0);
     if (f.winkel && f.achse) { const a = bezugKante(f.achse), p = V(a.p), d = V(a.d).normalize(); M.multiply(new THREE.Matrix4().makeTranslation(p.x, p.y, p.z).multiply(new THREE.Matrix4().makeRotationAxis(d, (f.winkel * Math.PI) / 180)).multiply(new THREE.Matrix4().makeTranslation(-p.x, -p.y, -p.z))); }
@@ -3596,6 +3662,34 @@ const koerperOpt = (f) => vorher(f).filter((x) => ["extrusion", "drehung", "swee
 const KOERPER_WZ = {
   kantenrund: "Abrunden / Fasen", schale: "Schale", kmuster: "Muster (Körper)", kspiegel: "Spiegeln (Körper)", teilen: "Körper teilen", bewegen: "Verschieben / Kopieren",
 };
+function koerper2Dialog(typ, f) {
+  const istNeu = !f, opt = koerperOpt(f), sk = (arten) => doc.features.filter((x) => x.typ === "skizze" && x.elemente.some((el) => arten.includes(el.art)));
+  if (["skalieren", "bohrung"].includes(typ) && !opt.length) return status("Zuerst einen Körper erstellen.");
+  if (typ === "bohrung" && !sk(["punkt", "kreis"]).length) return status("Zuerst eine Skizze mit Punkten auf der Fläche setzen (Werkzeug «Punkt») – dort wird gebohrt.");
+  if ((typ === "rohr" || typ === "rippe") && !sk(["linie"]).some((x) => ketten(x).length)) return status(typ === "rohr" ? "Zuerst den Pfad des Rohrs als offenen Linienzug skizzieren." : "Zuerst den Verlauf der Rippe als offenen Linienzug skizzieren.");
+  const ziel = finde(auswahl)?.id && opt.some(([id]) => id === auswahl) ? auswahl : opt.at(-1)?.[0], letzteSk = (a) => sk(a).at(-1)?.id;
+  f ||= { id: neueId(), typ, name: KOERPER_WZ2[typ] + " " + (doc.features.filter((x) => x.typ === typ).length + 1), ...({
+    skalieren: { ziel, faktor: 1.5, mitte: "mitte", kopie: false },
+    bohrung: { ziel, skizze: letzteSk(["punkt", "kreis"]), art: "einfach", d: 8, durch: true, tiefe: 20, dSenk: 16, tSenk: 5, winkel: 90, seite: "gegen" },
+    rohr: { skizze: letzteSk(["linie"]), kette: 0, d: 20, wand: 2, vorgang: "neu" },
+    spirale: { dm: 40, steigung: 10, windungen: 6, draht: 3, achse: "Y", x: 0, y: 0, z: 0, vorgang: "neu" },
+    rippe: { skizze: letzteSk(["linie"]), kette: 0, dicke: 3, hoehe: 20, richtung: "eine", vorgang: "verbinden", ziel: "alle" } })[typ] };
+  const skF = (arten, label) => ({ id: "skizze", label, optionen: sk(arten).map((x) => [x.id, x.name]), wert: f.skizze }), zielF = (extra = {}) => ({ id: "ziel", label: "Körper", ...extra, optionen: opt, wert: f.ziel });
+  const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, ...({
+    skalieren: () => [{ ...zielF({ wahl: "koerper" }) }, { id: "faktor", label: "Faktor", wert: f.faktor }, { id: "mitte", label: "Skalieren um", optionen: [["mitte", "Mitte des Körpers"], ["ursprung", "Ursprung"]], wert: f.mitte },
+      { id: "kopie", label: "Kopie erstellen", optionen: [["", "Nein – Körper skalieren"], ["1", "Ja – skalierte Kopie"]], wert: f.kopie ? "1" : "" }],
+    bohrung: () => [zielF({ wahl: "koerper" }), skF(["punkt", "kreis"], "Bohrpunkte (Skizze)"), { id: "art", label: "Art", optionen: [["einfach", "Einfache Bohrung"], ["senkung", "Senkung (Flachsenkung)"], ["kegel", "Kegelsenkung"]], wert: f.art },
+      { id: "d", label: "Durchmesser", einheit: "mm", wert: f.d }, { id: "durch", label: "Tiefe", optionen: [["1", "Durchgehend"], ["", "Sacklochbohrung"]], wert: f.durch ? "1" : "" }, ...(f.durch ? [] : [{ id: "tiefe", label: "Tiefe", einheit: "mm", wert: f.tiefe }]),
+      ...(f.art === "einfach" ? [] : [{ id: "dSenk", label: "Senkdurchmesser", einheit: "mm", wert: f.dSenk }, ...(f.art === "senkung" ? [{ id: "tSenk", label: "Senktiefe", einheit: "mm", wert: f.tSenk }] : [{ id: "winkel", label: "Senkwinkel", einheit: "°", wert: f.winkel }])]),
+      { id: "seite", label: "Bohrrichtung", optionen: [["gegen", "Gegen die Skizzen-Normale (in den Körper)"], ["normale", "In Richtung der Normale"]], wert: f.seite }],
+    rohr: () => [skF(["linie"], "Pfad (Skizze)"), { id: "d", label: "Aussendurchmesser", einheit: "mm", wert: f.d }, { id: "wand", label: "Wanddicke (0 = Vollmaterial)", einheit: "mm", wert: f.wand }, ...vorgangFelder(f)],
+    spirale: () => [{ id: "dm", label: "Durchmesser (Mittellinie)", einheit: "mm", wert: f.dm }, { id: "steigung", label: "Steigung", einheit: "mm", wert: f.steigung }, { id: "windungen", label: "Windungen", wert: f.windungen }, { id: "draht", label: "Drahtstärke", einheit: "mm", wert: f.draht },
+      { id: "achse", label: "Achse", optionen: [["X", "X"], ["Y", "Y (Höhe)"], ["Z", "Z"]], wert: f.achse }, { id: "x", label: "Lage X", einheit: "mm", wert: f.x }, { id: "y", label: "Lage Y", einheit: "mm", wert: f.y }, { id: "z", label: "Lage Z", einheit: "mm", wert: f.z }, ...vorgangFelder(f)],
+    rippe: () => [skF(["linie"], "Verlauf (Skizze)"), { id: "dicke", label: "Rippendicke", einheit: "mm", wert: f.dicke }, { id: "hoehe", label: "Höhe", einheit: "mm", wert: f.hoehe }, { id: "richtung", label: "Richtung", optionen: [["eine", "Eine Seite (Normale)"], ["umgekehrt", "Gegenseite"], ["symmetrisch", "Symmetrisch"]], wert: f.richtung }, ...vorgangFelder(f)],
+  }[typ])()];
+  const hinweise = { skalieren: "Vergrössert oder verkleinert einen Körper gleichmässig (Faktor) um seine Mitte oder den Ursprung – optional als Kopie.", bohrung: "Bohrt an den Punkten einer Skizze: einfach, mit Senkung oder Kegelsenkung, durchgehend oder als Sackloch.", rohr: "Rohr entlang eines offenen Linienzugs (Skizze) mit Aussendurchmesser und Wanddicke.", spirale: "Spirale/Feder: Durchmesser, Steigung, Windungen und Drahtstärke.", rippe: "Rippe: der offene Linienzug der Skizze wird mit der Rippendicke zur Wand und über die Höhe extrudiert (Vereinigen mit dem Körper)." };
+  featureDialog(f, istNeu, felder, (f, w) => Object.assign(f, w, { name: w.name?.trim() || f.name, ...(typ === "skalieren" ? { kopie: !!w.kopie } : {}), ...(typ === "bohrung" ? { durch: !!w.durch } : {}) }), KOERPER_WZ2[typ], hinweise[typ], { wahlNr: -1, neuBei: ["art", "durch"] });
+}
 function koerperDialog(typ, f) {
   const istNeu = !f, opt = typ === "kantenrund" || typ === "schale" ? vorher(f).filter((x) => x.typ === "extrusion" && (x.vorgang || "neu") === "neu").map((x) => [x.id, x.name]) : koerperOpt(f);
   if (!opt.length) return status(typ === "kantenrund" || typ === "schale" ? "Zuerst einen Körper extrudieren." : "Zuerst einen Körper oder ein Blechteil erstellen.");
