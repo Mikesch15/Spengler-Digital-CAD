@@ -1,6 +1,7 @@
 // Spengler Digital CAD – Kern: Simulationsstudie (Lager, Lasten, Lastfälle, Auswertung) auf einem Schalenmodell
 // Einheiten: mm, N, N/mm². Ergebnisse sind Richtwerte, kein statischer Nachweis.
 import { system } from "./loeser.js";
+import { beulen } from "./beulen.js";
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -74,7 +75,7 @@ export function lastVektor(M, G, lasten, mat, faktorFn = (l) => l.faktor ?? 1) {
       const { elemente } = auswahl(M, G, l.sel), ref = l.nref || null;
       for (const e of elemente) {
         let d; if (l.modus === "richtung") d = nrm(l.dir || [0, 0, -1]); else { d = G.nor[e].slice(); if (ref && dot(d, ref) < 0) d = d.map((x) => -x); d = d.map((x) => -x * (l.vorzeichen || 1)); } // Druck wirkt auf die angeklickte Seite hinein
-        const Fe = (f * l.p * G.fl[e]) / 3; for (const i of tris[e]) for (let j = 0; j < 3; j++) F[6 * i + j] += Fe * d[j];
+        const Fe = (f * l.p * G.fl[e] * (l.projiziert ? Math.abs(dot(G.nor[e], d)) : 1)) / 3; for (const i of tris[e]) for (let j = 0; j < 3; j++) F[6 * i + j] += Fe * d[j];
       }
     } else if (l.art === "schwerkraft") {
       const g = l.g || [0, 0, -9810];
@@ -117,10 +118,12 @@ export function rechneStudie(M, studie, mat) {
     const vm = (s) => Math.sqrt(Math.max(0, s[0] * s[0] - s[0] * s[1] + s[1] * s[1] + 3 * s[2] * s[2]));
     for (const x of elem) x.vm = Math.max(vm(x.oben), vm(x.unten));
     const a = auswerten(M, sys, { u, reaktion: r, elem }, mat, { gammaM: studie.gammaM });
-    ergebnisse.push({ name: k.name, faktoren: k.faktoren, u, ...a });
+    const erg = { u, reaktion: r, elem }; let beul = null;
+    if (studie.beulen && (k.art || "GZT") !== "GZG") { try { beul = beulen(M, sys, erg); } catch (err) { beul = { fehler: err.message }; } }
+    ergebnisse.push({ name: k.name, art: k.art || "alle", faktoren: k.faktoren, u, beul, ...a });
   }
   let b = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity]; for (const p of M.nodes) for (let j = 0; j < 3; j++) { b[2 * j] = Math.min(b[2 * j], p[j]); b[2 * j + 1] = Math.max(b[2 * j + 1], p[j]); }
   const Lref = Math.max(b[1] - b[0], b[3] - b[2], b[5] - b[4]), grenze = studie.durchbiegung?.n ? (studie.durchbiegung.L || Lref) / studie.durchbiegung.n : null;
-  for (const e of ergebnisse) { e.wGrenze = grenze; e.faktorDurchbiegung = grenze && e.umax > 0 ? grenze / e.umax : Infinity; e.hoechstlast = Math.min(e.faktorZul, e.faktorDurchbiegung); }
-  return { G, sys, ergebnisse, Lref, massgebend: ergebnisse.reduce((m, e) => (e.smax > (m?.smax ?? -1) ? e : m), null), mat };
+  for (const e of ergebnisse) { e.wGrenze = grenze; e.faktorDurchbiegung = grenze && e.umax > 0 ? grenze / e.umax : Infinity; e.hoechstlast = e.art === "GZT" ? e.faktorZul : e.art === "GZG" ? e.faktorDurchbiegung : Math.min(e.faktorZul, e.faktorDurchbiegung); if (e.beul?.lambda) e.hoechstlast = Math.min(e.hoechstlast, e.beul.lambda); }
+  return { G, sys, ergebnisse, Lref, massgebend: ergebnisse.reduce((m, e) => (e.hoechstlast < (m?.hoechstlast ?? Infinity) ? e : m), null), mat };
 }

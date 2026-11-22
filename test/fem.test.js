@@ -96,3 +96,17 @@ test("Beulen: Platte unter Längsdruck, gelenkig – Plattenbeulen N_cr = k·π�
   const sys = system(nodes, tris, t, mat, fix), erg = sys.solve(F), r = beulen({}, sys, erg), D = (mat.E * t ** 3) / (12 * (1 - mat.nu ** 2));
   near(r.lambda * 50, (4 * Math.PI ** 2 * D) / b ** 2, 0.1, "N_cr");
 });
+
+import { schneelast, windlast, personenlast, kombinationen } from "../kern/fem/normen.js";
+test("Normlasten und Kombinationen", () => {
+  near(schneelast({ hoehe: 600, neigung: 10 }).qk_kNm2, 0.8 * (1 + (600 / 350) ** 2) * 0.4, 1e-9, "Schnee");
+  assert.equal(schneelast({ hoehe: 200, neigung: 70 }).q, 0); assert.ok(windlast({ qp: 1, cp: -1.2 }).sog); assert.equal(personenlast().F, 1000);
+  const k = kombinationen([{ id: "g", name: "Eigengewicht", art: "G" }, { id: "s", name: "Schnee", art: "Q" }, { id: "w", name: "Wind", art: "Q", psi0: 0.6 }]);
+  assert.equal(k.length, 4); near(k[0].faktoren.w, 0.9, 1e-9, "psi"); assert.equal(k[0].faktoren.s, 1.5);
+});
+
+import { berichtHtml } from "../kern/fem/bericht.js";
+test("Bericht enthält Hinweis, Ergebnis und Lager", () => {
+  const h = berichtHtml({ studie: { name: "T", lager: [{ art: "eingespannt", sel: { art: "kante" } }], lasten: [{ art: "druck", p: 0.001, sel: { art: "flaeche" }, lastfall: "a", vorzeichen: 1 }], lastfaelle: [{ id: "a", name: "Schnee", art: "Q" }] }, ergebnisse: [{ name: "K1", smax: 100, zul: 200, umax: 2, hoechstlast: 2, faktoren: { a: 1 } }], massgebend: { name: "K1", smax: 100, zul: 200, umax: 2, hoechstlast: 2 } });
+  assert.match(h, /kein statischer Nachweis/); assert.match(h, /Einspannung/); assert.match(h, /2-fachen/);
+});
