@@ -5,6 +5,7 @@
 // Querschnitt eines Bausteins: x = von der Kante nach aussen, y = zur Sichtseite. Reines JavaScript.
 import { bausteinFolge } from "./vorlagen/parameter.js";
 import { werkzeugAuf } from "./flansch.js";
+import { quetschEckeFlach } from "./quetschfalte.js";
 import { berechne, versatzLinie, grenzen, kontur } from "./geometrie.js";
 import { freiesProfil } from "./profile.js";
 import { folge } from "./details.js";
@@ -195,15 +196,16 @@ function lappenLinie(g, u, x, f) {
 }
 // Zuschnitt = aufgefaltetes 3D-Blech: Grundfläche + je Kante der Lappen bis zur Zugabe; an den Enden für jedes u
 // genau dort abgeschnitten, wo das gekantete Profil an der Ecke endet. Biegelinien auf denselben Lappen.
-export function abwicklung(pts, gruppen, profile) {
-  const ek = eckFaktoren(gruppen, profile), umriss = [];
+export function abwicklung(pts, gruppen, profile, quetsch = null) { // quetsch: Map k → Quetschfalte an der Ecke am Anfang der Kante k (siehe quetschEckeFlach)
+  const ek = eckFaktoren(gruppen, profile), umriss = [], n0 = gruppen.length, qA = (k) => quetsch?.get(k), qE = (k) => quetsch?.get((k + 1) % n0);
   gruppen.forEach((g, k) => {
     const p = profile[k];
     if (!p?.lage || !(p.zugabe > 0)) { umriss.push(...g.punkte.slice(0, -1)); return; }
     const lage = p.lage.filter(([u]) => u <= p.zugabe + 1e-9); if (lage.at(-1)[0] < p.zugabe - 1e-9) lage.push([p.zugabe, xBei(p.lage, p.zugabe)]);
-    for (const [u, x] of lage) umriss.push(lappenLinie(g, u, x, ek[k])[0]); // Anfang: von der Kante nach aussen
+    if (qA(k)) umriss.push(qA(k).P1); else for (const [u, x] of lage) umriss.push(lappenLinie(g, u, x, ek[k])[0]); // Anfang: von der Kante nach aussen (bei Quetschfalte: Spitze der Seitenkante)
     const aussen = lappenLinie(g, p.zugabe, lage.at(-1)[1], ek[k]); umriss.push(...aussen.slice(1, -1));
-    for (const [u, x] of lage.slice().reverse()) umriss.push(lappenLinie(g, u, x, ek[k]).at(-1)); // Ende: zurück zur Kante
+    if (qE(k)) { const q = qE(k); umriss.push(q.P2, ...(q.z.P2s[0] === q.z.P2[0] && q.z.P2s[1] === q.z.P2[1] ? [] : [q.P2s]), q.C, ...(q.z.P1s[0] === q.z.P1[0] && q.z.P1s[1] === q.z.P1[1] ? [] : [q.P1s])); } // Quetschfalte: Überschuss der Ecke
+    else for (const [u, x] of lage.slice().reverse()) umriss.push(lappenLinie(g, u, x, ek[k]).at(-1)); // Ende: zurück zur Kante
   });
   let sauber = umriss.filter((p, i) => len(sub(p, umriss[(i + umriss.length - 1) % umriss.length])) > 1e-6);
   sauber = sauber.filter((p, i) => { // Punkte auf einer Geraden zwischen ihren Nachbarn weglassen
@@ -211,7 +213,8 @@ export function abwicklung(pts, gruppen, profile) {
     return Math.abs(u[0] * v[1] - u[1] * v[0]) > 1e-6 * len(u) * len(v) || u[0] * v[0] + u[1] * v[1] < 0;
   });
   const linien = [];
-  gruppen.forEach((g, k) => (profile[k]?.biegungen || []).forEach((b) => { const u = Math.max(b.abstand, 0); linien.push({ kante: k, nr: b.nr, art: b.art, punkte: lappenLinie(g, u, xBei(profile[k].lage, u), ek[k]) }); }));
+  gruppen.forEach((g, k) => (profile[k]?.biegungen || []).forEach((b) => { const u = Math.max(b.abstand, 0), pk = lappenLinie(g, u, xBei(profile[k].lage, u), ek[k]); if (qA(k) && b === profile[k].biegungen[0]) pk[0] = qA(k).O; if (qE(k) && b === profile[k].biegungen[0]) pk[pk.length - 1] = qE(k).O; linien.push({ kante: k, nr: b.nr, art: b.art, punkte: pk }); }));
+  if (quetsch) for (const q of quetsch.values()) linien.push({ kante: -1, nr: 0, art: "quetsch", punkte: [q.O, q.C] }, { kante: -1, nr: 0, art: "ecklinie", punkte: [q.O, q.P1] }, { kante: -1, nr: 0, art: "ecklinie", punkte: [q.O, q.P2] });
   // Ausrichtung: längste gerade Kante waagrecht
   const gerade = gruppen.filter((g) => g.gerade).sort((a, b) => b.laenge - a.laenge)[0] || gruppen[0];
   const d = sub(gerade.punkte.at(-1), gerade.punkte[0]), w = -Math.atan2(d[1], d[0]), c = Math.cos(w), s = Math.sin(w);
@@ -230,11 +233,26 @@ export function plattenUmriss(pts, gruppen, kuerzen) {
   return pts.map((_, i) => { const L0 = lin[(i - 1 + n) % n], L1 = lin[i]; return schnitt(L0.p, L0.r, L1.p, L1.r) ?? L1.p; });
 }
 
+// Quetschfalte an der Ecke am Anfang der Kante k: beide Nachbarkanten brauchen einen Flansch (eine Biegung) – Winkel und Höhen dürfen verschieden sein
+export function quetschEcke(pts, gruppen, profile, k) {
+  const n = gruppen.length, kv = (k - 1 + n) % n, gk = gruppen[k], gv = gruppen[kv];
+  if (!gk?.gerade || !gv?.gerade) throw new Error("Quetschfalte: beide Kanten der Ecke müssen gerade sein.");
+  const fl = (p, nr) => { const b = p?.biegungen; if (!b?.length) throw new Error(`Quetschfalte: an Kante ${nr + 1} fehlt ein Flansch.`); if (b.length > 1) throw new Error(`Quetschfalte: Kante ${nr + 1} hat mehrere Biegungen – nur ein einfacher Flansch wird unterstützt.`); return { abstand: b[0].abstand, zugabe: p.zugabe, phi: Math.abs(b[0].winkel), vz: Math.sign(b[0].winkel) }; };
+  const F1 = fl(profile[k], k), F2 = fl(profile[kv], kv);
+  if (F1.vz !== F2.vz) throw new Error("Quetschfalte: beide Flansche müssen zur selben Seite abgekantet sein.");
+  const V = gk.punkte[0], dn = richtung(gk.punkte[0], gk.punkte[1]), dp = richtung(gv.punkte.at(-1), gv.punkte.at(-2));
+  return { ...quetschEckeFlach(V, dn, dp, F1, F2), vz: F1.vz, F1, F2 };
+}
+
 // Alles für ein Blech: Kanten, Profile der Bausteine, Abwicklung. kanten[k] = Baustein (oder null)
-export function flaechenblech(ptsRoh, kanten, m) {
+export function flaechenblech(ptsRoh, kanten, m, quetschEcken = []) { // quetschEcken: Ecken (Index k = Anfang der Kante k), an denen eine Quetschfalte gesetzt ist
   const pts = gegenUhrzeiger(ptsRoh), gruppen = kantenGruppen(pts);
   const profile = gruppen.map((_, k) => { const b = kanten[k]; try { return b ? { ...bausteinProfil(b, m), baustein: b } : null; } catch (e) { throw new Error(`Kante ${k + 1} (${b.name}): ${e.message}`); } });
-  return { pts, gruppen, profile, abw: abwicklung(pts, gruppen, profile) };
+  const quetsch = new Map(), fehlerQ = {};
+  for (const k of quetschEcken || []) {
+    try { quetsch.set(k, quetschEcke(pts, gruppen, profile, k)); } catch (e) { fehlerQ[k] = e.message; }
+  }
+  return { pts, gruppen, profile, quetsch, quetschFehler: fehlerQ, abw: abwicklung(pts, gruppen, profile, quetsch.size ? quetsch : null) };
 }
 
 // ------------------------------------------------------------------------------------------------------------------

@@ -23,6 +23,18 @@ ok(d && d.vol > 10, "Gefaltete Quetschfalte als Körper (Volumen " + Math.round(
 const q2 = await s.evaluate(() => window.sdcadTest.schirmUV("XY", [200, 120])); await s.evaluate(() => window.sdcadTest.waehle("fl")); await s.evaluate(() => document.getElementById("wQuetsch").click()); await s.waitForTimeout(200); await s.mouse.click(q2[0], q2[1]); await s.waitForTimeout(600);
 const st2 = await s.evaluate(() => document.getElementById("status")?.textContent || "");
 ok(/Flansch/.test(st2), "Ecke ohne Flansche: verständliche Meldung (" + st2.slice(0, 80) + ")");
+// Ungleiche Flansche (75° / 40 mm hoch an der linken Kante, 90° / 25 mm unten): Quetschfalte funktioniert, Zuschnitt enthält die Ecke
+{ const s2 = await b.newPage({ viewport: { width: 1280, height: 800 } }); s2.on("pageerror", (e) => pr.push(e.message));
+  await s2.addInitScript((d) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); }, mk({ "0:0": "ortgang", "0:3": { folge: "75 40", versatz: 0 } }));
+  await s2.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s2.waitForTimeout(1500);
+  await s2.evaluate(() => window.sdcadTest.waehle("fl")); await s2.evaluate(() => document.getElementById("wQuetsch").click()); await s2.waitForTimeout(300);
+  const qq = await s2.evaluate(() => window.sdcadTest.schirmUV("XY", [0, 0])); await s2.mouse.click(qq[0], qq[1]); await s2.waitForTimeout(800);
+  const a0 = await s2.evaluate(() => window.sdcadTest.quetschAbw("fl")), st3 = await s2.evaluate(() => document.getElementById("status").textContent);
+  ok(a0 && a0.quetsch.length === 1 && a0.arten.includes("quetsch"), "Ungleiche Winkel/Höhen: Quetschfalte angelegt und im Zuschnitt als Faltlinie enthalten (" + JSON.stringify(a0?.fehler || {}) + " " + st3.slice(0, 60) + ")");
+  const vol2 = await s2.evaluate(() => window.sdcadTest.koerper().filter((k) => /^f\d+$/.test(String(k.fid))).reduce((a, k) => a + Math.abs(k.volumen), 0));
+  ok(vol2 > 10, "Gefaltete Quetschfalte (zwei Lagen mit gerundeter Faltkante) als Körper (Volumen " + Math.round(vol2) + ")");
+  const gleich = await s.evaluate(() => window.sdcadTest.quetschAbw("fl")); ok(gleich && gleich.quetsch.length === 1 && gleich.arten.filter((x) => x === "ecklinie").length === 2 && gleich.arten.includes("quetsch") && Math.abs(gleich.umriss[0][1] + 24.3) < 0.2, "Gleiche Flansche (90°): Zuschnitt bleibt im Eck ein volles Quadrat (Überschuss wird gefaltet), Ecklinien und Faltlinie sind eingezeichnet");
+  await s2.close(); }
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Quetschfalte (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

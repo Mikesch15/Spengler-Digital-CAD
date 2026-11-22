@@ -15,7 +15,7 @@ import { initKontext, kontextAktionen } from "./kontext.js";
 import { zeigeMeldung } from "./meldungen.js";
 import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
 import { stirnLaschen, schenkelBereiche, laschenStart, laschenEnde } from "../kern/stirnflansch.js";
-import { quetschZuschnitt, quetschDreieck, quetschDxf, faltenPruefen } from "../kern/quetschfalte.js";
+import { quetschZuschnitt, quetschDreieck, quetschDxf, faltenPruefen, eckSchnitt2 } from "../kern/quetschfalte.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
 import { aufmassAusPunkt } from "../kern/dach/lukarneAufmass.js";
@@ -1314,7 +1314,7 @@ function regen() {
         f._bleche = nr.map((pi) => {
           if (!loops[pi]) throw new Error(`Fläche ${pi + 1} fehlt in der Skizze`);
           const n = kantenGruppen(gegenUhrzeiger(loops[pi])).length;
-          return { pi, ...flaechenblech(loops[pi], [...Array(n).keys()].map((k) => { const b = bausteinFuer(f.kanten?.[`${pi}:${k}`]), w = f.kantenWerte?.[`${pi}:${k}`]; return b && w ? { ...b, _werte: w } : b; }), m) };
+          return { pi, ...flaechenblech(loops[pi], [...Array(n).keys()].map((k) => { const b = bausteinFuer(f.kanten?.[`${pi}:${k}`]), w = f.kantenWerte?.[`${pi}:${k}`]; return b && w ? { ...b, _werte: w } : b; }), m, doc.features.filter((q) => q.typ === "quetschfalte" && q.ziel === f.id && !q._aus).map((q) => String(q.ecke).split(":").map(Number)).filter(([p0]) => p0 === pi).map(([, k0]) => k0)) };
         });
         const viele = f._bleche.length > 1;
         f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
@@ -1360,7 +1360,7 @@ function regen() {
         const z = finde(f.ziel); if (z?.typ !== "flaeche") throw new Error("Flächenblech fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
         f._q = quetschGeo(z, f);
-        if (!f.versteckt) modell.add(quetschMesh(z, f));
+        if (!f.versteckt) quetschMeshes(z, f).forEach((o) => modell.add(o));
       } else if (f.typ === "profilkante") { // Flansch/Umschlag/Baustein, nachträglich an Kante A oder B eines Blechprofils – wirkt im Profil (profilErweiterungen)
         const z = finde(f.ziel); if (!z || (z.typ !== "profil" && z.typ !== "vorlage" && z.typ !== "blech")) throw new Error("Das Blechprofil fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Blechprofil muss vor diesem Schritt stehen");
@@ -2478,6 +2478,11 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]); // + = links (konvexe Ecke)
   const ek = eckFaktoren(bl.gruppen, bl.profile); // dieselbe Eckregel wie die Abwicklung
   const n = bl.gruppen.length;
+  for (const k of bl.quetsch?.keys() || []) { // Quetschfalte: beide Flansche enden an der Ecklinie ε; der Flansch der vorigen Kante wird um die halbe Blechstärke zurückgesetzt, damit die Blechstärke nicht doppelt in der Ecke steckt
+    const e3 = quetschEcke3D(bl, k); if (!e3) continue; const { q, A, B, V, O, kv } = e3, g1 = q.z.gamma1 * Math.PI / 180, g2 = q.z.gamma2 * Math.PI / 180, cot = (x) => Math.cos(x) / Math.sin(x);
+    const dv = richt(bl.gruppen[kv].punkte.at(-2), bl.gruppen[kv].punkte.at(-1)), sO = (O[0] - V[0]) * q.dn[0] + (O[1] - V[1]) * q.dn[1], p = (O[0] - V[0]) * dv[0] + (O[1] - V[1]) * dv[1], ds = m.t / 2 / Math.sin(q.beta * Math.PI / 180);
+    ek[k] = { ...ek[k], k0: -cot(g1), e0: sO - A.a * cot(g1) }; ek[kv] = { ...ek[kv], k1: -cot(g2), e1: -(p + B.a * cot(g2)) + ds };
+  }
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p) return;
     const k2 = bausteinKontur(p.baustein, m); if (!k2) return;
@@ -3046,31 +3051,48 @@ function wendeProfilKante(key) { // Schritt «Profilkante» in der Zeitleiste an
 }
 // ---- Quetschfalte (Ecke zweier Aufkantungen eines Flächenblechs) ----
 let quetschWz = null; // { f } – Werkzeug aktiv: Ecke eines Flächenblechs anklicken
+// Flanschdaten im 3D (Mittellinie des Blechs): scharfe Linie = Schnitt der beiden Schenkel, Höhe bis zur Oberkante ab der scharfen Linie
+function quetschFlansch3D(bl, p) {
+  const pf = bl.profile[p].res.pfad, bg = pf.find((e) => e.typ === "bogen"), li = pf.filter((e) => e.typ === "linie")[1], d = [li.p2[0] - li.p1[0], li.p2[1] - li.p1[1]], L = Math.hypot(d[0], d[1]), phi = Math.abs(bg.winkel);
+  const t = -li.p1[1] / (d[1] / L), xv = li.p1[0] + (d[0] / L) * t, tang = bg.rm * Math.tan(phi * Math.PI / 360); // x der scharfen Ecke im Profilquerschnitt (y = 0: Blechebene)
+  return { leg: L, rm: bg.rm, phi, a: xv - 100 + (bl.profile[p].versatz || 0), h: L + tang };
+}
+// Ecke der scharfen Biegelinien im 3D und Flanschdaten beider Kanten
+function quetschEcke3D(bl, k) {
+  const n = bl.gruppen.length, kv = (k - 1 + n) % n, q = bl.quetsch?.get(k); if (!q) return null;
+  const A = quetschFlansch3D(bl, k), B = quetschFlansch3D(bl, kv), V = bl.gruppen[k].punkte[0];
+  return { q, A, B, V, O: eckSchnitt2(V, q.dn, q.dp, A.a, B.a), kv };
+}
 function quetschGeo(z, f) {
   const [pi, k] = String(f.ecke).split(":").map(Number), bl = z._bleche?.find((b) => b.pi === pi); if (!bl) throw new Error("Die Ecke gibt es nicht mehr – neu wählen");
-  const n = bl.gruppen.length, kv = (k - 1 + n) % n, gk = bl.gruppen[k], gv = bl.gruppen[kv]; if (!gk || !gv || gk.punkte.length < 2 || gv.punkte.length < 2) throw new Error("Die Ecke gibt es nicht mehr – neu wählen");
-  const O = gk.punkte[0], nr = (a, b) => { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
-  const dn = nr(O, gk.punkte[1]), dp = nr(O, gv.punkte.at(-2)), beta = Math.atan2(dn[0] * dp[1] - dn[1] * dp[0], dn[0] * dp[0] + dn[1] * dp[1]) * 180 / Math.PI;
-  if (!(beta > 0)) throw new Error("Eine Quetschfalte gibt es nur an einer Aussenecke (konvex)");
-  const fl = (p) => { const pf = p?.res?.pfad, bg = pf?.find((e) => e.typ === "bogen"), li = pf?.filter((e) => e.typ === "linie")[1]; return bg && li ? { phi: Math.abs(bg.winkel), vz: Math.sign(bg.winkel), h: Math.hypot(li.p2[0] - li.p1[0], li.p2[1] - li.p1[1]) } : null; };
-  const Fa = fl(bl.profile[k]), Fb = fl(bl.profile[kv]); if (!Fa || !Fb) throw new Error("An beiden Kanten der Ecke muss ein Flansch sitzen");
-  if (Fa.vz !== Fb.vz) throw new Error("Beide Flansche müssen zur selben Seite abgekantet sein");
-  const seite = z.sichtseite === -1 ? -1 : 1, Zs = Fa.vz * seite, tausch = Zs < 0; // von der Rückseite gesehen vertauschen sich die Kanten
-  const E1 = tausch ? dp : dn, F1 = tausch ? Fb : Fa, F2 = tausch ? Fa : Fb;
-  const zus = quetschZuschnitt(beta, F1.h, F1.phi, F2.phi);
-  if (Math.abs(zus.hoehe2 - F2.h) > 0.5) throw new Error(`Die Oberkanten der Flansche müssen sich an der Ecklinie treffen: der zweite Flansch müsste ${f1(zus.hoehe2)} mm hoch sein (ist ${f1(F2.h)} mm).`);
+  if (bl.quetschFehler?.[k]) throw new Error(bl.quetschFehler[k]);
+  const e3 = quetschEcke3D(bl, k); if (!e3) throw new Error("Die Ecke gibt es nicht mehr – neu wählen");
+  const { q, A, B } = e3, seite = z.sichtseite === -1 ? -1 : 1, Zs = q.vz * seite, tausch = Zs < 0; // von der Rückseite gesehen vertauschen sich die Kanten
+  const E1 = tausch ? q.dp : q.dn, [F1, F2] = tausch ? [B, A] : [A, B];
+  const zus = quetschZuschnitt(q.beta, F1.h, F1.phi, F2.phi, null, F2.h); // 3D: Höhen bis zu den scharfen Kanten
   const Z3 = [0, 0, Zs], X3 = [E1[0], E1[1], 0], Y3 = [Z3[1] * X3[2] - Z3[2] * X3[1], Z3[2] * X3[0] - Z3[0] * X3[2], 0];
-  return { zus, O, X3, Y3, Z3, pruefung: faltenPruefen(zus), wand: f.richtung === "rechts" ? "wand2" : "wand1" };
+  return { zus, flach: q.z, O: e3.O, X3, Y3, Z3, pruefung: faltenPruefen(zus), wand: f.richtung === "rechts" ? "wand2" : "wand1", ri: Math.min(A.rm, B.rm) };
 }
-function quetschMesh(z, f) {
+// Gefaltete Quetschfalte: zwei Blechlagen (2 t) hinter der Aussenfläche der Aufkantung; die Faltkante O–C' ist gerundet (geschlossener Saum, Innenradius 0 → Aussenradius t)
+function quetschMeshes(z, f) {
   const q = f._q, m = material(z.material), t = m.t, B = basis(blechEbene(finde(z.skizze).ebene, z, m)), tri = quetschDreieck(q.zus, q.wand), g = q.zus.geometrie;
   const v = (a) => new THREE.Vector3(...a), P = v(tri.P).sub(v(tri.O)), C = v(tri.C).sub(v(tri.O)), e = v(q.wand === "wand1" ? g.e1 : g.e2), d = v(q.wand === "wand1" ? g.d1 : g.d2);
   let n = new THREE.Vector3().crossVectors(e, d).normalize(); if (n.dot(new THREE.Vector3(Math.cos(g.beta * Math.PI / 360), Math.sin(g.beta * Math.PI / 360), 0)) > 0) n.negate(); // nach aussen
-  const u = P.clone().normalize(), y = new THREE.Vector3().crossVectors(n, u), pts = [[0, 0], [P.dot(u), P.dot(y)], [C.dot(u), C.dot(y)]].map(([a, b]) => new THREE.Vector2(a, b));
-  const geo = new THREE.ExtrudeGeometry(new THREE.Shape(pts), { depth: 2 * t, bevelEnabled: false });
-  geo.applyMatrix4(new THREE.Matrix4().makeBasis(u, y, n).setPosition(n.clone().multiplyScalar(t / 2)));
-  geo.applyMatrix4(new THREE.Matrix4().makeBasis(v(q.X3), v(q.Y3), v(q.Z3)).setPosition(q.O[0], q.O[1], 0)); geo.applyMatrix4(B);
-  return koerperAusGeo(geo, darstellungVon(z, m), f.id);
+  const u = P.clone().normalize(), y = new THREE.Vector3().crossVectors(n, u), O2 = new THREE.Vector2(0, 0), P2 = new THREE.Vector2(P.dot(u), P.dot(y)), C2 = new THREE.Vector2(C.dot(u), C.dot(y));
+  // Faltkante O–C: um t nach innen (zur Seite von P) zurückversetzt, dort sitzt der Wulst (Radius t) – so bleibt die Gesamtausdehnung gleich und die Kante ist rund
+  const ed = C2.clone().sub(O2), el = ed.length(), en = ed.clone().normalize(), nrm = new THREE.Vector2(-en.y, en.x); if (nrm.dot(P2) < 0) nrm.negate();
+  const dP = P2.dot(nrm), r = Math.min(t, dP * 0.45), schn = (a, b, c0, d0) => { const w = b.clone().sub(a), x = d0.clone().sub(c0), den = w.x * x.y - w.y * x.x; if (Math.abs(den) < 1e-12) return null; const tt = ((c0.x - a.x) * x.y - (c0.y - a.y) * x.x) / den; return a.clone().addScaledVector(w, tt); };
+  const o1 = O2.clone().addScaledVector(nrm, r), c1 = C2.clone().addScaledVector(nrm, r), Oi = schn(O2, P2, o1, c1) || O2, Ci = schn(P2, C2, o1, c1) || C2;
+  const mk = (geo, lage) => { geo.applyMatrix4(lage); geo.applyMatrix4(new THREE.Matrix4().makeBasis(v(q.X3), v(q.Y3), v(q.Z3)).setPosition(q.O[0], q.O[1], 0)); geo.applyMatrix4(B); return koerperAusGeo(geo, darstellungVon(z, m), f.id); };
+  const aussen = new THREE.Matrix4().makeBasis(u, y, n).setPosition(n.clone().multiplyScalar(t / 2));
+  const koerper = new THREE.ExtrudeGeometry(new THREE.Shape([Oi, P2, Ci]), { depth: 2 * t, bevelEnabled: false }), meshes = [mk(koerper, aussen)];
+  if (r > 1e-6) { // Wulst der Faltkante
+    const L = Ci.distanceTo(Oi), mitte = Oi.clone().add(Ci).multiplyScalar(0.5), ax = new THREE.Vector3(Ci.x - Oi.x, Ci.y - Oi.y, 0).normalize();
+    const cyl = new THREE.CylinderGeometry(r, r, L, 16, 1, false); cyl.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax)));
+    cyl.scale(1, 1, 1); cyl.translate(mitte.x, mitte.y, t); // Mitte der beiden Lagen (Dicke 2 t)
+    meshes.push(mk(cyl, aussen));
+  }
+  return meshes;
 }
 const quetschEcken = (z) => (z._bleche || []).flatMap((bl) => bl.gruppen.map((g, k) => ({ key: `${bl.pi}:${k}`, p: g.punkte[0] })));
 function zeigeQuetschEcken(z) {
@@ -3282,7 +3304,7 @@ function zeigeFlaechenteil(w, f) {
   $("kZumDetail").onclick = () => bearbeite(f.eltern);
   $("kFlBearb").onclick = () => bearbeite(f.eltern);
   $("kDxf").onclick = () => herunterladen(`${doc.nr} ${f.name}.dxf`, flaecheDxf(a, f.name), "application/dxf");
-  w.querySelectorAll("[data-qdxf]").forEach((bt) => { const q = quetschen[+bt.dataset.qdxf]; bt.onclick = () => herunterladen(`${doc.nr} ${q.name}.dxf`, quetschDxf(q._q.zus, q.name), "application/dxf"); });
+  w.querySelectorAll("[data-qdxf]").forEach((bt) => { const q = quetschen[+bt.dataset.qdxf]; bt.onclick = () => herunterladen(`${doc.nr} ${q.name}.dxf`, quetschDxf(q._q.flach, q.name), "application/dxf"); });
   $("kDruck").onclick = () => drucke([f]);
   $("kKopie").onclick = () => dupliziere(f.eltern);
 }
@@ -6440,7 +6462,7 @@ initKontext({
   dachAusSkizze: (id) => dachDialog(undefined, { skizze: id }),
   flaecheSkizze: (ref) => neueSkizze(ref), flaecheBlech: (ref) => blechAufFlaeche(ref), ebeneSkizze: (id) => neueSkizze(id),
 });
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { fov: () => kamera.fov, dachPunkt: (id, i, ds = 0.5, dt = 0.5) => { const d = finde(id), fl = d?._dach?.flaechen?.[i], g = d && finde(d.gebaeude); if (!fl || !g) return null; const R = dachRahmen(fl), p = dachWelt(g, R.S.punkt(R.s0 + (R.s1 - R.s0) * ds, R.t0 + (R.t1 - R.t0) * dt, d._schichten?.oben ?? 0)), q = aufSchirm(p), r = leinwand.getBoundingClientRect(); return [r.left + q[0], r.top + q[1]]; }, kantenWahl: (key) => wendeKantenWz(key), kantenAktiv: () => menueKante?.key ?? null, profilKanten: () => { const f = kantenWz?.f; return f ? profilKanten(f).map((k) => ({ key: k.key, mitte: (() => { const m = k.p[0].clone().add(k.p[1]).multiplyScalar(0.5), q = aufSchirm(m.toArray()), r = leinwand.getBoundingClientRect(); return [r.left + q[0], r.top + q[1]]; })() })) : []; }, kontext: kontextAktionen, zeigerAuswahl: () => zeigerAuswahl, pruefeNeueVersion, kameraBlick: () => kamera.getWorldDirection(new THREE.Vector3()).toArray(), kameraQ: () => kamera.quaternion.toArray(), griffe: () => griffe.map((g) => ({ feld: g.feld, faktor: g.faktor, dir: g.dir.toArray(), pos: g.pos.toArray(), schirm: (() => { const r = leinwand.getBoundingClientRect(), A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos) * 0.7).toArray()); return { b: [r.left + B[0], r.top + B[1]], a: [r.left + A[0], r.top + A[1]] }; })() })), kameraZiel: () => { const t = flaechenTreffer(new THREE.Vector2(0, 0)); return { abstand: t ? t.distance : null, kamera: kamera.position.toArray(), min: Math.max(4, modellRadius() * 0.0004) }; }, maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { fov: () => kamera.fov, quetschAbw: (id) => { const bl = finde(id)?._bleche?.[0]; return bl ? { umriss: bl.abw.umriss, arten: bl.abw.linien.map((l) => l.art), quetsch: [...(bl.quetsch?.keys() || [])], fehler: bl.quetschFehler } : null; }, dachPunkt: (id, i, ds = 0.5, dt = 0.5) => { const d = finde(id), fl = d?._dach?.flaechen?.[i], g = d && finde(d.gebaeude); if (!fl || !g) return null; const R = dachRahmen(fl), p = dachWelt(g, R.S.punkt(R.s0 + (R.s1 - R.s0) * ds, R.t0 + (R.t1 - R.t0) * dt, d._schichten?.oben ?? 0)), q = aufSchirm(p), r = leinwand.getBoundingClientRect(); return [r.left + q[0], r.top + q[1]]; }, kantenWahl: (key) => wendeKantenWz(key), kantenAktiv: () => menueKante?.key ?? null, profilKanten: () => { const f = kantenWz?.f; return f ? profilKanten(f).map((k) => ({ key: k.key, mitte: (() => { const m = k.p[0].clone().add(k.p[1]).multiplyScalar(0.5), q = aufSchirm(m.toArray()), r = leinwand.getBoundingClientRect(); return [r.left + q[0], r.top + q[1]]; })() })) : []; }, kontext: kontextAktionen, zeigerAuswahl: () => zeigerAuswahl, pruefeNeueVersion, kameraBlick: () => kamera.getWorldDirection(new THREE.Vector3()).toArray(), kameraQ: () => kamera.quaternion.toArray(), griffe: () => griffe.map((g) => ({ feld: g.feld, faktor: g.faktor, dir: g.dir.toArray(), pos: g.pos.toArray(), schirm: (() => { const r = leinwand.getBoundingClientRect(), A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos) * 0.7).toArray()); return { b: [r.left + B[0], r.top + B[1]], a: [r.left + A[0], r.top + A[1]] }; })() })), kameraZiel: () => { const t = flaechenTreffer(new THREE.Vector2(0, 0)); return { abstand: t ? t.distance : null, kamera: kamera.position.toArray(), min: Math.max(4, modellRadius() * 0.0004) }; }, maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

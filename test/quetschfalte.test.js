@@ -12,4 +12,11 @@ for (const [b, h, p1, p2] of [[90, 25, 90, 90], [80, 30, 90, 90], [100, 20, 90, 
 let fe = ""; try { quetschZuschnitt(5, 30); } catch (e) { fe = e.message; } ok(/zwischen 10/.test(fe), "Winkel ausserhalb → Fehlermeldung");
 const t = quetschDreieck(z, "wand1"); ok(nah(Math.hypot(...t.P), z.ell, 1e-9) && nah(Math.hypot(t.C[0] - t.P[0], t.C[1] - t.P[1], t.C[2] - t.P[2]), z.m, 1e-9), "Dreieck der gefalteten Quetschfalte");
 const dx = quetschDxf(z); ok(/QUETSCHFALTE/.test(dx) && dx.endsWith("EOF"), "DXF mit Quetschfalten-Layer");
+// Beliebige Winkel und unterschiedliche Höhen
+for (const [beta, h1, h2, p1, p2] of [[90, 30, 45, 90, 90], [90, 40, 25, 90, 90], [80, 30, 40, 75, 100], [90, 25, 35, 80, 100], [90, 30, 30, 100, 80]]) {
+  try { const zz = quetschZuschnitt(beta, h1, p1, p2, null, h2); const pr = faltenPruefen(zz);
+    ok(pr.ok && zz.sS <= Math.min(zz.s1, zz.s2) + 1e-9, `β ${beta}°, h ${h1}/${h2}, φ ${p1}/${p2}: Faltprobe ok (s* ${zz.sS.toFixed(2)}, Spitze ${zz.tSpitze.toFixed(2)}, Kontur ${zz.kontur.length} Punkte)`); }
+  catch (e) { ok(false, `β ${beta}°, h ${h1}/${h2}, φ ${p1}/${p2}: ${e.message}`); }
+}
+const un = quetschZuschnitt(90, 30, 90, 90, null, 45); ok(un.sS === 30 && un.s2 === 45 && un.kontur.length === 6, "Ungleiche Höhen: Falte bis zur niedrigeren Ecklinie, höherer Flansch behält freie Seitenkante");
 if (f) { console.error(`${f} Fehler`); process.exit(1); } else console.log("Quetschfalte: alle Tests bestanden");

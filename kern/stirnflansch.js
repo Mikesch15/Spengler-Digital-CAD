@@ -27,8 +27,11 @@ export function schenkelBereiche(res) {
 // Rückgabe: Verschiebung der Laschenkante in Schenkelrichtung über den Schenkelpunkt hinaus (+ = länger) bei Abkanthöhe v (links der Schenkelrichtung positiv)
 export function gehrungVersatz(b, v) {
   if (!b || !b.winkel) return 0;
-  const w = b.winkel * Math.PI / 180, vs = Math.sign(w) * v, k = Math.tan(Math.min(Math.abs(w), 2.6) / 2);
-  return Math.min((b.rm - vs) * k, (b.g || 0) / 2);
+  const w = b.winkel * Math.PI / 180, vs = Math.sign(w) * v, k = Math.tan(Math.min(Math.abs(w), 2.6) / 2), halb = (b.g || 0) / 2;
+  // Schnittebene: Gerade in v (x = (rm − v)·tan(β/2)). Die Begrenzung der Verlängerung wirkt als Verschiebung der ganzen Ebene (bei v = 0), nie je Punkt –
+  // so bleibt die Schnittfläche über die Blechstärke eben und die Stärke wird nicht schräg angeschnitten.
+  const versch = Math.max(0, b.rm * k - halb);
+  return Math.min((b.rm - vs) * k - versch, halb);
 }
 // Abkanthöhe v der Lasche an der abgewickelten Stelle pos (0 = Stirnkante)
 export function laschenHoehe(l, pos) {

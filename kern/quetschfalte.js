@@ -25,36 +25,42 @@ export function eckeGeometrie(beta, phi1 = 90, phi2 = 90) {
   return { beta, phi1, phi2, e1, e2, d1, d2, eps, gamma1, gamma2, psi: 360 - beta - gamma1 - gamma2 };
 }
 
-// Ebener Zuschnitt der Ecke (Ursprung = Ecke O). hoehe = Aufkantungshöhe von Flansch 1; Flansch 2 wird so hoch, dass die Oberkanten an ε zusammentreffen.
-export function quetschZuschnitt(beta, hoehe, phi1 = 90, phi2 = 90, laenge = null) {
+// Ebener Zuschnitt der Ecke (Ursprung = Ecke O, Abstände ab den Biegelinien e1/e2). Beliebige Winkel φ1/φ2 und unterschiedliche Flanschhöhen h1/h2
+// (Höhe = Abstand der Oberkante von der Biegelinie in der Flanschebene). Die Seitenkanten der Flansche treffen sich als Ecklinie ε, ihre Längen
+// s1 = h1/sin γ1 und s2 = h2/sin γ2 sind verschieden: bis s* = min(s1, s2) laufen beide Flansche an ε zusammen, dort liegt die Quetschfalte;
+// der höhere Flansch behält darüber seine freie Seitenkante. Die Spitze C liegt auf der Winkelhalbierenden des Überschusses, in der Verlängerung
+// der Oberkante des niedrigeren Flansches.
+export function quetschZuschnitt(beta, hoehe, phi1 = 90, phi2 = 90, laenge = null, hoehe2 = null) {
   const g = eckeGeometrie(beta, phi1, phi2), { gamma1: g1, gamma2: g2, psi } = g;
   if (!(hoehe > 0)) throw new Error("Die Aufkantungshöhe muss grösser als 0 sein.");
   if (!(psi >= 5 && psi <= 175)) throw new Error(`Der Überschuss ψ = ${psi.toFixed(1)}° liegt ausserhalb von 5°…175° – keine Quetschfalte möglich.`);
-  const ell = hoehe / Math.sin(g1 * D), h2 = ell * Math.sin(g2 * D), L = laenge || 2.5 * Math.max(hoehe, h2) + 10;
-  const a1 = (360 - g1) * D, a2 = (beta + g2) * D, P1 = [ell * Math.cos(a1), ell * Math.sin(a1)], P2 = [ell * Math.cos(a2), ell * Math.sin(a2)];
+  const s1 = hoehe / Math.sin(g1 * D), h2 = hoehe2 > 0 ? hoehe2 : s1 * Math.sin(g2 * D), s2 = h2 / Math.sin(g2 * D), sS = Math.min(s1, s2);
+  const L = laenge || 2.5 * Math.max(hoehe, h2) + 10;
+  const a1 = (360 - g1) * D, a2 = (beta + g2) * D, pol = (r, a) => [r * Math.cos(a), r * Math.sin(a)];
+  const P1 = pol(s1, a1), P2 = pol(s2, a2), P1s = pol(sS, a1), P2s = pol(sS, a2);
   const mid = a2 + (psi * D) / 2, d = [Math.cos(mid), Math.sin(mid)], f2 = [-Math.sin(beta * D), Math.cos(beta * D)];
   if (Math.abs(d[1]) < 1e-9 || Math.abs(d[0] * f2[0] + d[1] * f2[1]) < 1e-9) throw new Error("Die Winkelhalbierende verläuft parallel zu einer Oberkante – keine Spitze.");
-  const t1 = -hoehe / d[1], t2 = h2 / (d[0] * f2[0] + d[1] * f2[1]);
-  if (t1 <= ell || t2 <= ell) throw new Error("Die Spitze der Quetschfalte liegt vor der Ecklinie (Überschuss zu klein für diese Höhe).");
-  if (Math.abs(t1 - t2) > 1e-6 * Math.max(t1, t2)) throw new Error(`Asymmetrische Ecke (Spitzen ${t1.toFixed(3)} / ${t2.toFixed(3)} mm): die Quetschfalte wäre nicht deckungsgleich – noch nicht unterstützt.`);
-  const C = [t1 * d[0], t1 * d[1]], m = Math.hypot(C[0] - P1[0], C[1] - P1[1]), e2d = [Math.cos(beta * D), Math.sin(beta * D)];
-  const ende1 = [L, -hoehe], ende2 = [h2 * f2[0] + L * e2d[0], h2 * f2[1] + L * e2d[1]], O = [0, 0];
-  return { geometrie: g, hoehe1: hoehe, hoehe2: h2, ell, P1, P2, C, m, tSpitze: t1, laenge: L, beta, psi, gamma1: g1, gamma2: g2,
-    kontur: [ende1, P1, C, P2, ende2], faltlinien: { e1: [O, [L, 0]], e2: [O, [L * e2d[0], L * e2d[1]]], eps1: [O, P1], eps2: [O, P2], quetsch: [O, C] } };
+  const t1 = -hoehe / d[1], t2 = h2 / (d[0] * f2[0] + d[1] * f2[1]), tC = s1 <= s2 ? t1 : t2; // Spitze in der Verlängerung der Oberkante des niedrigeren Flansches
+  if (tC <= sS * (1 + 1e-9)) throw new Error("Die Spitze der Quetschfalte liegt vor der Ecklinie (Überschuss zu klein für diese Höhe).");
+  const C = [tC * d[0], tC * d[1]], m = Math.hypot(C[0] - P1s[0], C[1] - P1s[1]), e2d = [Math.cos(beta * D), Math.sin(beta * D)];
+  const ende1 = [L, -hoehe], ende2 = [h2 * f2[0] + L * e2d[0], h2 * f2[1] + L * e2d[1]], O = [0, 0], gl = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-9;
+  const kontur = [ende1, P1, ...(gl(P1, P1s) ? [] : [P1s]), C, ...(gl(P2, P2s) ? [] : [P2s]), P2, ende2];
+  return { geometrie: g, hoehe1: hoehe, hoehe2: h2, s1, s2, sS, ell: sS, P1, P2, P1s, P2s, C, m, tSpitze: tC, laenge: L, beta, psi, gamma1: g1, gamma2: g2, kontur,
+    faltlinien: { e1: [O, [L, 0]], e2: [O, [L * e2d[0], L * e2d[1]]], eps1: [O, P1], eps2: [O, P2], quetsch: [O, C] } };
 }
 
 // Rechnerische Faltprobe: Seitenkanten beider Flansche landen auf derselben Ecklinie, gleich lang; die Spiegelung an der Winkelhalbierenden deckt die Seiten.
 function rot(p, a, grad) { const c = Math.cos(grad * D), s = Math.sin(grad * D), k = kreuz(a, p), d = sk(a, p); return p.map((v, i) => v * c + k[i] * s + a[i] * d * (1 - c)); }
 export function faltenPruefen(z) {
-  const g = z.geometrie, p1 = rot([z.P1[0], z.P1[1], 0], g.e1, -g.phi1), p2 = rot([z.P2[0], z.P2[1], 0], g.e2, g.phi2), soll = g.eps.map((x) => z.ell * x);
-  const dist = (a, b) => betrag(a.map((v, i) => v - b[i])), d = norm([z.C[0], z.C[1], 0]), k = 2 * (z.P2[0] * d[0] + z.P2[1] * d[1]);
-  const sp = [k * d[0] - z.P2[0], k * d[1] - z.P2[1]], worst = Math.max(dist(p1, soll), dist(p2, soll), dist(p1, p2), Math.hypot(sp[0] - z.P1[0], sp[1] - z.P1[1]), Math.abs(Math.hypot(...z.P1) - Math.hypot(...z.P2)));
+  const g = z.geometrie, p1 = rot([z.P1s[0], z.P1s[1], 0], g.e1, -g.phi1), p2 = rot([z.P2s[0], z.P2s[1], 0], g.e2, g.phi2), soll = g.eps.map((x) => z.sS * x);
+  const dist = (a, b) => betrag(a.map((v, i) => v - b[i])), d = norm([z.C[0], z.C[1], 0]), k = 2 * (z.P2s[0] * d[0] + z.P2s[1] * d[1]);
+  const sp = [k * d[0] - z.P2s[0], k * d[1] - z.P2s[1]], worst = Math.max(dist(p1, soll), dist(p2, soll), dist(p1, p2), Math.hypot(sp[0] - z.P1s[0], sp[1] - z.P1s[1]), Math.abs(Math.hypot(...z.P1s) - Math.hypot(...z.P2s)));
   return { ok: worst < TOL, abweichung: worst };
 }
 
 // Die gefaltete Quetschfalte als Dreieck (O, P, C') in lokalen Ecke-Koordinaten, auf Wand 1 (an e1) oder Wand 2 (an e2) gelegt
 export function quetschDreieck(z, seite = "wand1") {
-  const g = z.geometrie, P = g.eps.map((x) => z.ell * x), e = seite === "wand1" ? g.e1 : g.e2;
+  const g = z.geometrie, P = g.eps.map((x) => z.sS * x), e = seite === "wand1" ? g.e1 : g.e2;
   return { O: [0, 0, 0], P, C: P.map((v, i) => v + z.m * e[i]) };
 }
 
@@ -68,4 +74,22 @@ export function quetschDxf(z, titel = "Quetschfalte") {
   linie("HILFSLINIE", ...z.faltlinien.eps1, 8); linie("HILFSLINIE", ...z.faltlinien.eps2, 8);
   o.push("0", "TEXT", "8", "BESCHRIFTUNG", "62", "7", "10", f(0), "20", f(-z.hoehe1 - 12), "30", "0", "40", "4.00", "1", `${titel} - beta ${z.beta.toFixed(1)} Grad, Hoehe ${z.hoehe1.toFixed(1)} / ${z.hoehe2.toFixed(1)} mm, Ueberschuss ${z.psi.toFixed(1)} Grad`);
   o.push("0", "ENDSEC", "0", "EOF"); return o.join("\n");
+}
+
+// Quetschfalte im ebenen Zuschnitt eines Flächenblechs: Ecke V (Umriss gegen den Uhrzeiger), dn = Richtung der Kante k (von V weg), dp = Richtung zur vorigen Ecke.
+// fl1 = Flansch an Kante k, fl2 = Flansch an Kante k−1: { abstand: Biegelinie ab gezeichneter Kante nach aussen, zugabe: Länge bis zur Oberkante (jeweils im Zuschnitt), phi: Abkantwinkel in ° }.
+// Rückgabe in Skizzenkoordinaten: Ecke O der beiden Biegelinien, Seitenkanten-Spitzen, Spitze C und alle Hilfsgrössen.
+// Schnittpunkt der beiden Linien, die um r1 (Kante k) bzw. r2 (Kante k−1) nach aussen von den Kanten der Ecke V versetzt sind
+export function eckSchnitt2(V, dn, dp, r1, r2) {
+  const n1 = [dn[1], -dn[0]], n2 = [-dp[1], dp[0]], det = n1[0] * n2[1] - n1[1] * n2[0];
+  if (Math.abs(det) < 1e-9) throw new Error("Die Kanten der Ecke sind parallel.");
+  return [V[0] + (r1 * n2[1] - r2 * n1[1]) / det, V[1] + (n1[0] * r2 - n2[0] * r1) / det];
+}
+export function quetschEckeFlach(V, dn, dp, fl1, fl2) {
+  const O = eckSchnitt2(V, dn, dp, fl1.abstand, fl2.abstand);
+  const beta = Math.atan2(dn[0] * dp[1] - dn[1] * dp[0], dn[0] * dp[0] + dn[1] * dp[1]) / D;
+  if (!(beta > 0)) throw new Error("Eine Quetschfalte gibt es nur an einer Aussenecke (konvex).");
+  const H1 = fl1.zugabe - fl1.abstand, H2 = fl2.zugabe - fl2.abstand, z = quetschZuschnitt(beta, H1, fl1.phi, fl2.phi, null, H2), Y = [-dn[1], dn[0]];
+  const W = (q) => [O[0] + q[0] * dn[0] + q[1] * Y[0], O[1] + q[0] * dn[1] + q[1] * Y[1]];
+  return { O, beta, z, P1: W(z.P1), P2: W(z.P2), P1s: W(z.P1s), P2s: W(z.P2s), C: W(z.C), dn, dp, Y };
 }
