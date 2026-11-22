@@ -9,16 +9,16 @@ const m = { id: "z", name: "Zink", t: 0.7, ri: 1, k: 0.4 };
 const w = (extra) => werkzeugAuf({ werkzeug: { ...flanschStandard("flansch"), ...extra } }, m);
 // 90°: Mittellinie unverändert, Aussenmass: Platte um t/2 kürzer (Versatz −t/2) und Schenkel t/2 kürzer
 let a = w({}); ok(a.folge === "90 25" && a.versatz === 0, "Flansch 90°, Mass bis Mittellinie: «90 25», Versatz 0");
-a = w({ bezug: "aussen" }); ok(a.folge === "90 24.65" && nah(a.versatz, -0.35), `Aussenkante: Schenkel 24.65, Versatz ${a.versatz} (= −t/2)`);
-a = w({ bezug: "innen" }); ok(a.folge === "90 25.35" && nah(a.versatz, 0.35), "Innenkante: Schenkel 25.35, Versatz +0.35");
-a = w({ winkel: 45, bezug: "aussen" }); const k = 0.35 * Math.tan(Math.PI / 8); ok(nah(parseFloat(a.folge.split(" ")[1]), 25 - k, 1e-3) && nah(a.versatz, -k, 1e-3), `45°: Korrektur (t/2)·tan(22.5°) = ${k.toFixed(4)}`);
+a = w({ bezug: "aussen", biegepos: "aussen" }); ok(a.folge === "90 24.65" && nah(a.versatz, -0.35), `Aussenkante: Schenkel 24.65, Versatz ${a.versatz} (= −t/2)`);
+a = w({ bezug: "innen", biegepos: "innen" }); ok(a.folge === "90 25.35" && nah(a.versatz, 0.35), "Innenkante: Schenkel 25.35, Versatz +0.35");
+a = w({ winkel: 45, bezug: "aussen", biegepos: "aussen" }); const k = 0.35 * Math.tan(Math.PI / 8); ok(nah(parseFloat(a.folge.split(" ")[1]), 25 - k, 1e-3) && nah(a.versatz, -k, 1e-3), `45°: Korrektur (t/2)·tan(22.5°) = ${k.toFixed(4)}`);
 a = w({ winkel: 135, seite: -1, radius: 2 }); ok(a.folge === "-135r2 25", "135° nach hinten mit Radius 2: «-135r2 25»");
 a = werkzeugAuf({ werkzeug: { ...flanschStandard("umschlag"), laenge: 7 } }, m); ok(a.folge === "U+ 7" && werkzeugAuf({ werkzeug: { ...flanschStandard("umschlag"), seite: -1, radius: 1.4, laenge: 40 } }, m).folge === "U-r1.4 40", "Umschlag: «U+ 7», nach hinten mit Radius «U-r1.4 40»");
 ok(werkzeugName({ ...flanschStandard(), bezug: "aussen" }) === "Flansch 90° 25 mm (aussen)", "Name des Werkzeugs");
 ok(werkzeugAuf({ folge: "90 25", versatz: 0 }, m).folge === "90 25", "Baustein ohne Werkzeug bleibt unverändert");
 // Rechnung: Aussenkante → Zugabe stimmt mit manuellem Versatz überein
 const rect = [[0, 0], [1000, 0], [1000, 500], [0, 500]];
-const mitW = bausteinProfil({ werkzeug: { ...flanschStandard(), bezug: "aussen" } }, m), manuell = bausteinProfil({ folge: "90 24.65", versatz: -0.35 }, m);
+const mitW = bausteinProfil({ werkzeug: { ...flanschStandard(), bezug: "aussen", biegepos: "aussen" } }, m), manuell = bausteinProfil({ folge: "90 24.65", versatz: -0.35 }, m);
 ok(nah(mitW.zugabe, manuell.zugabe) && nah(mitW.versatz, -0.35), `Zugabe mit Werkzeug = manuell (${mitW.zugabe.toFixed(4)} mm)`);
 // Runde Kante: Flansch und Umschlag am Kreis rechnen sich, exakter Körper ist gültig, Platte endet am Biegebeginn
 const kreis = Array.from({ length: 96 }, (_, i) => [150 * Math.cos((2 * Math.PI * i) / 96), 150 * Math.sin((2 * Math.PI * i) / 96)]);
@@ -41,4 +41,9 @@ const sehrKurz = flaechenblech(kreis, [{ werkzeug: flanschStandard("flansch") }]
   ok(rU.biegungen.length === 2 && rU.zuschnitt - r0.zuschnitt > 6, "Umschlag an Kante B angesetzt");
   const zwei = R(profilErweitern(p, [{ ende: "B", zeilen: folge("1 90 25") }, { ende: "B", zeilen: folge("1 90 10") }], m)); ok(zwei.biegungen.length === 3, "Zwei Schritte an derselben Kante setzen sich fort");
 }
+// Getrennte Bezüge wie in Fusion: Mass bis … (Länge) und Biegeposition
+{ const x = w({ bezug: "aussen" }); ok(x.folge === "90 24.65" && x.versatz === 0, "Mass bis Aussenkante, Biegung auf Mittelebene: Länge −t/2, Lage unverändert");
+  const y = w({ biegepos: "innen" }); ok(y.folge === "90 25" && nah(y.versatz, 0.35), "Biegeposition Innenfläche bündig: Lage +t/2, Länge unverändert");
+  const rm = 1 + 0.35, tz = w({ bezug: "tangente", biegepos: "tangente" }); ok(nah(parseFloat(tz.folge.split(" ")[1]), 25 + rm, 1e-3) && nah(tz.versatz, rm, 1e-3), `Tangente: gerader Schenkel 25 mm ab Biegungsende, Biegung beginnt an der Kante (rm ${rm})`);
+  const alt = werkzeugAuf({ werkzeug: { typ: "flansch", winkel: 90, laenge: 25, radius: null, bezug: "aussen", seite: 1 } }, m); ok(alt.folge === "90 24.65" && nah(alt.versatz, -0.35), "Ältere Flansche (ohne Biegeposition) bleiben unverändert"); }
 if (f) { console.error(f + " Fehler"); process.exit(1); } else console.log("Flansch/Umschlag: alle Tests bestanden");

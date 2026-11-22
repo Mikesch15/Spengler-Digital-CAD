@@ -38,14 +38,23 @@ await s.fill("#d_laenge", "50", { force: true }); await s.waitForTimeout(600); a
 const v4 = await vol(); ok(v4 - v3 > 1200, `Stirn-Flansch auf 50 mm verlängert: Volumen ${Math.round(v3)} → ${Math.round(v4)}`);
 await s.evaluate(() => { const l = window.sdcadTest.dok().features.filter((f) => f.typ === "profilkante"); window.sdcadTest.bearbeite(l[0].id); }); await s.waitForSelector("#dLoeschen:not([hidden])", { timeout: 4000 }); await s.click("#dLoeschen"); await s.waitForTimeout(600);
 ok(Math.abs((await vol()) - v3 + 0) > 100 && (await vol()) < v4, "Schritt löschen entfernt die Stirnlaschen wieder");
-{ await s.keyboard.press("Escape"); await s.evaluate(() => window.sdcadTest.waehle("b1")); await s.evaluate(() => document.querySelector('[data-kantenwz="flansch"]').click()); await s.waitForTimeout(400); // Wahl ohne Bestätigung legt nichts an; erst «Übernehmen» erzeugt die Flansche (Schritte, keine eigenen Körper im Browser)
-  const ks = await s.evaluate(() => window.sdcadTest.profilKanten()); for (const key of ["S1:1", "S2:2"]) { const k = ks.find((x) => x.key === key); await s.mouse.move(k.mitte[0], k.mitte[1]); await s.waitForTimeout(150); await s.mouse.click(k.mitte[0], k.mitte[1]); await s.waitForTimeout(300); }
-  const vorN = (await stirnAnz()).split(",").filter(Boolean).length; ok((await stirnAnz()).split(",").filter(Boolean).length === vorN && (await s.evaluate(() => document.getElementById("kbOk").textContent)).includes("(2)"), "Kanten nur gewählt (2), noch nichts angelegt");
-  await s.keyboard.press("Enter"); await s.waitForTimeout(700);
-  ok((await stirnAnz()).split(",").filter(Boolean).length === vorN + 2, "Enter/Übernehmen legt beide Flansche an (" + (await stirnAnz()) + ")");
+{ // Live-Vorschau: der Flansch erscheint sofort beim Anklicken (Pfeile in der Leiste), «Übernehmen» bestätigt, Esc verwirft
+  await s.keyboard.press("Escape"); await s.evaluate(() => window.sdcadTest.waehle("b1")); await s.evaluate(() => document.querySelector('[data-kantenwz="flansch"]').click()); await s.waitForTimeout(400);
+  const wahl = async (key) => { const k = (await s.evaluate(() => window.sdcadTest.profilKanten())).find((x) => x.key === key); await s.evaluate(() => { for (const id of ["kantenBar", "kantenMenue"]) document.getElementById(id).style.pointerEvents = "none"; document.querySelector("aside.browser").style.pointerEvents = "none"; }); await s.mouse.move(k.mitte[0], k.mitte[1]); await s.waitForTimeout(150); await s.mouse.click(k.mitte[0], k.mitte[1]); await s.waitForTimeout(450); };
+  const vorN = (await stirnAnz()).split(",").filter(Boolean).length; await wahl("S1:1"); await wahl("S2:2");
+  ok((await stirnAnz()).split(",").filter(Boolean).length === vorN + 2 && (await s.evaluate(() => document.getElementById("kbOk").textContent)).includes("(2)"), "Flansche erscheinen sofort als Vorschau (Übernehmen (2))");
+  const g = await s.evaluate(() => window.sdcadTest.griffe()); ok(g.filter((q) => q.feld === "laenge").length === 2 && g.filter((q) => q.feld === "winkel").length === 2, "Ziehpfeile für Länge und Winkel in beide Richtungen bei der Vorschau (" + g.map((q) => q.feld + (q.faktor > 0 ? "+" : "−")).join(",") + ")");
+  const q0 = g.find((q) => q.feld === "laenge" && q.faktor > 0), l0 = +(await s.inputValue("#kbLaenge")), dx = q0.schirm.b[0] - q0.schirm.a[0], dy = q0.schirm.b[1] - q0.schirm.a[1], dl = Math.hypot(dx, dy) || 1;
+  await s.mouse.move(q0.schirm.b[0], q0.schirm.b[1]); await s.mouse.down(); await s.mouse.move(q0.schirm.b[0] + dx / dl * 30, q0.schirm.b[1] + dy / dl * 30, { steps: 5 }); await s.mouse.up(); await s.waitForTimeout(500);
+  const l1 = +(await s.inputValue("#kbLaenge")), wl = await s.evaluate(() => window.sdcadTest.dok().features.filter((f) => f.typ === "profilkante").map((f) => f.wert?.werkzeug?.laenge));
+  ok(l1 > l0 && wl.slice(-2).every((x) => x === l1), `Pfeil ziehen ändert die Länge live für alle Vorschau-Flansche (${l0} → ${l1})`);
+  await s.keyboard.press("Escape"); await s.waitForTimeout(500);
+  ok((await stirnAnz()).split(",").filter(Boolean).length === vorN, "Esc verwirft die Vorschau-Flansche");
+  await s.evaluate(() => window.sdcadTest.waehle("b1")); await s.evaluate(() => document.querySelector('[data-kantenwz="flansch"]').click()); await s.waitForTimeout(400); await wahl("S1:1"); await wahl("S2:2");
+  await s.keyboard.press("Enter"); await s.waitForTimeout(600); await s.keyboard.press("Escape"); await s.waitForTimeout(500);
+  ok((await stirnAnz()).split(",").filter(Boolean).length === vorN + 2, "Enter/Übernehmen bestätigt – Esc danach entfernt nichts (" + (await stirnAnz()) + ")");
   ok(!(await s.evaluate(() => document.querySelector("aside.browser").textContent)).includes("Profilkante") && (await s.evaluate(() => [...document.querySelectorAll("aside.browser .eintrag, aside.browser li")].filter((e) => /Flansch/.test(e.textContent)).length)) === 0, "Flansche erscheinen nicht als eigene Körper im Browser");
-  await s.evaluate(() => document.getElementById("kbEnde").click()); await s.waitForTimeout(200);
-  }
+}
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Stirnflansch (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);
