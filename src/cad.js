@@ -14,7 +14,7 @@ import "./arbeitsbereich.js";
 import { initKontext, kontextAktionen } from "./kontext.js";
 import { zeigeMeldung } from "./meldungen.js";
 import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
-import { stirnLaschen, schenkelBereiche } from "../kern/stirnflansch.js";
+import { stirnLaschen, schenkelBereiche, laschenStart, laschenEnde } from "../kern/stirnflansch.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
 import { aufmassAusPunkt } from "../kern/dach/lukarneAufmass.js";
@@ -578,6 +578,11 @@ function stirnMeshes(f, ebeneRef, versatz, zw, farbe) {
     const len = Math.hypot(l.p2[0] - l.p1[0], l.p2[1] - l.p1[1]); if (len < 1e-6) continue;
     const d = [(l.p2[0] - l.p1[0]) / len, (l.p2[1] - l.p1[1]) / len], sg = l.ende === "S1" ? -1 : 1, zEnde = l.ende === "S1" ? -rueck : zw.tiefe - rueck;
     const geo = new THREE.ExtrudeGeometry(new THREE.Shape(l.ring.map(([u, v]) => new THREE.Vector2(u, v))), { depth: len, bevelEnabled: false, curveSegments: 48 });
+    if (l.gehrungStart || l.gehrungEnde) { // Gehrung: Endflächen als Ebene parallel zur Länge schräg stellen (Schnitt in der Winkelhalbierenden)
+      const P = geo.attributes.position;
+      for (let i = 0; i < P.count; i++) { const z = P.getZ(i), v = P.getY(i); if (Math.abs(z) < 1e-6) P.setZ(i, laschenStart(l, v)); else if (Math.abs(z - len) < 1e-6) P.setZ(i, len + laschenEnde(l, v)); }
+      P.needsUpdate = true; geo.computeVertexNormals();
+    }
     const M = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, sg), new THREE.Vector3(-d[1], d[0], 0), new THREE.Vector3(d[0], d[1], 0)).setPosition(l.p1[0] + versatz[0], l.p1[1] + versatz[1], zEnde);
     geo.applyMatrix4(M); if (M.determinant() < 0) spiegleFlaechen(geo);
     geo.applyMatrix4(basis(ebeneRef)); meshes.push(koerperAusGeo(geo, farbe, f.id));
@@ -5505,7 +5510,7 @@ function zeichneLive() {
   if (m) status(`u ${f1(m[0])}  v ${f1(m[1])} mm · ${f.name} auf ${ebenenName(f.ebene)}`, true);
 }
 function zeigeLabels() {
-  const box = $("labels"), alle = skizze ? labels : [...labels, ...kantenLabels];
+  const box = $("labels"), alle = labels; // Kantenbeschriftungen entfallen: Kanten werden direkt am Modell angeklickt
   while (box.children.length < alle.length) box.appendChild(document.createElement("div"));
   [...box.children].forEach((d, i) => {
     const l = alle[i];

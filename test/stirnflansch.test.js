@@ -1,6 +1,6 @@
 // Tests: Flansch/Umschlag/Baustein an den Stirnkanten (Anfang/Ende der Länge) eines Blechprofils
 import { berechne } from "../kern/geometrie.js";
-import { schenkelBereiche, stirnLaschen, abwicklungUmriss, laschenBiegelinien } from "../kern/stirnflansch.js";
+import { schenkelBereiche, stirnLaschen, abwicklungUmriss, laschenBiegelinien, laschenHoehe, laschenEnde, laschenStart } from "../kern/stirnflansch.js";
 import { folge } from "../kern/details.js";
 let f = 0; const ok = (b, t) => { if (!b) { f++; console.error("✗", t); } else console.log("✓", t); };
 const nah = (a, b, t = 1e-6) => Math.abs(a - b) < t;
@@ -27,4 +27,13 @@ const um2 = stirnLaschen(res, [{ ende: "S1", schenkel: 1, zeilen: folge("1 U+ 8"
 ok(um2.fehler.length === 0 && um2.laschen.length === 1, "Umschlag an der Stirnkante");
 const bs = stirnLaschen(res, [{ ende: "S2", schenkel: 1, zeilen: folge("1 90 20 -90 10") }], m);
 ok(bs.laschen.length === 1 && bs.laschen[0].biegungen.length === 2, "Baustein mit zwei Biegungen an der Stirnkante");
+// Gehrung zwischen den Laschen benachbarter Schenkel: innen zurückgenommen, aussen (höchstens halbe Biegezone) verlängert, Abwicklung bleibt überlappungsfrei
+{ const [l1, l2] = alle.laschen;
+  ok(l1.gehrungEnde && l2.gehrungStart && !l1.gehrungStart && !l2.gehrungEnde, "Gehrung nur an der gemeinsamen Biegung");
+  const v = laschenHoehe(l1, l1.laenge); ok(v > 20, `Abkanthöhe am Laschenende ≈ Flanschhöhe (${v.toFixed(1)})`);
+  ok(laschenEnde(l1, v) < -15 && laschenStart(l2, v) > 15, "Innenseite: Laschen werden an der Winkelhalbierenden zurückgenommen");
+  const rev = berechne(0, [{ typ: "schenkel", L: 100 }, { typ: "biegung", winkel: 90, ri: 1, modus: "sharp" }, { typ: "schenkel", L: 60 }], m.t, m.ri, m.k), aus = stirnLaschen(rev, [{ ende: "S1", schenkel: 0, zeilen: folge("1 -90 25") }], m).laschen;
+  const va = laschenHoehe(aus[0], aus[0].laenge), ea = laschenEnde(aus[0], va); ok(va < -20 && ea > 0 && ea <= aus[0].gehrungEnde.g / 2 + 1e-9, `Aussenseite: verlängert, höchstens halbe Biegezone (${ea.toFixed(2)})`);
+  const U = abwicklungUmriss(res.zuschnitt, 300, alle.laschen), dx = (a, c) => Math.abs(a[0] - c[0]);
+  ok(U.some((p, i) => i && Math.abs(p[0] - U[i - 1][0]) > 1e-6 && Math.abs(p[1] - U[i - 1][1]) > 1e-6), "Abwicklungsumriss hat schräge Gehrungskanten"); }
 if (f) { console.error(`${f} Fehler`); process.exit(1); } else console.log("Stirnflansch: alle Tests bestanden");
