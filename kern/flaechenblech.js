@@ -152,6 +152,23 @@ export function eckSchnitt(pA, pB, dA, dB) {
 }
 const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]);
 const richtung = (a, b) => { const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]; };
+// Innenfläche einer Aufkantung: kleinstes x (zur Platte hin, 0 = gezeichnete Kante) der Wand oberhalb der Biegezone
+function innenX(p) {
+  const zone = (p.ri || 1) + 1.5 * (p.t || 1), q = p.quer || [], hoch = q.filter(([, y]) => y > zone), xs = (hoch.length ? hoch : q).map(([x]) => x);
+  return xs.length ? Math.min(...xs) : 0;
+}
+// Ecke zweier Aufkantungen (konvex): Enden stehen 90° zur Blechfläche (rechtwinklig zur Kante geschnitten), die Innenecken treffen sich – an der Aussenecke bleibt eine Lücke von der Blechstärke
+function quadratEcken(gruppen, profile, ek) {
+  const n = gruppen.length;
+  gruppen.forEach((g, k) => {
+    const kv = (k - 1 + n) % n; if (kv === k || !profile[k]?.lage || !profile[kv]?.lage) return;
+    const dV = richtung(gruppen[kv].punkte.at(-2), gruppen[kv].punkte.at(-1)), d0 = richtung(g.punkte[0], g.punkte[1]), beta = knick(dV, d0), sb = Math.sin(beta);
+    if (beta < 0.2 || sb < 0.2) return; // gerade Fortsetzung oder einspringende Ecke: wie bisher
+    const nA = [dV[1], -dV[0]], nB = [d0[1], -d0[0]], xA = innenX(profile[kv]), xB = innenX(profile[k]);
+    const s = (xB - xA * (nA[0] * nB[0] + nA[1] * nB[1])) / sb, sB = xA * (nA[0] * d0[0] + nA[1] * d0[1]) + s * (dV[0] * d0[0] + dV[1] * d0[1]);
+    ek[kv].k1 = 0; ek[kv].e1 = -s; ek[k].k0 = 0; ek[k].e0 = sB;
+  });
+}
 export function eckFaktoren(gruppen, profile, opt = null) { // opt: { ecken: "gehrung" | "stoss" | "spalt", spalt, t } – Eckenschluss wie in Fusion (Gehrung, Stoss/Überlappung, offene Ecke mit Spalt)
   const n = gruppen.length;
   const ek = gruppen.map((g, k) => {
@@ -162,7 +179,7 @@ export function eckFaktoren(gruppen, profile, opt = null) { // opt: { ecken: "ge
     const a = pV?.quer && p?.quer ? eckSchnitt(pV, p, dV, d0) : null, b = p?.quer && pN?.quer ? eckSchnitt(p, pN, d1, dN) : null;
     return { k0: eckFaktor(knick(dV, d0), !!pV?.lage, !!a?.gehrung) - (a?.kB || 0), e0: a?.eB || 0, k1: eckFaktor(knick(d1, dN), !!pN?.lage, !!b?.gehrung) - (b?.kA || 0), e1: b?.eA || 0 };
   });
-  const art = opt?.ecken || "gehrung"; if (art === "gehrung") return ek;
+  const art = opt?.ecken || "gehrung"; if (art === "gehrung") { quadratEcken(gruppen, profile, ek); return ek; }
   const t = +opt?.t || 0.7, gap = Math.max(0, +opt?.spalt || 0);
   gruppen.forEach((g, k) => { // Ecke am Anfang der Kante k (zwischen Kante k−1 und k): nur wo beide Kanten einen Baustein haben
     const kv = (k - 1 + n) % n; if (!profile[k]?.lage || !profile[kv]?.lage || kv === k) return;

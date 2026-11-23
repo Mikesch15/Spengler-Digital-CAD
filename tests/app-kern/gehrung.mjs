@@ -13,11 +13,11 @@ await s.addInitScript(() => { localStorage.setItem("sdcad-einstellungen", JSON.s
 await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s.waitForTimeout(1800);
 const P = await s.evaluate(() => window.sdcadTest.meshPunkte("fl"));
 // Wand der unteren Kante: Punkte oberhalb der Biegung (z > 5), nahe der Ecke (x < 6), Dicke in y
-const wand = P.filter((p) => p[2] > 5 && p[0] < 6 && p[1] < 3 && p[1] > -1);
+const wand = P.filter((p) => p[2] > 5 && p[0] > 0.2 && p[0] < 6 && p[1] < 3 && p[1] > -1); // Wand A ohne die Stirn der Nachbarwand (x < 0.2)
 const proY = new Map(); for (const p of wand) { const k = Math.round(p[1] * 10) / 10; proY.set(k, Math.min(proY.get(k) ?? 1e9, p[0])); }
 const ys = [...proY.keys()].sort((a, c) => a - c), mins = [proY.get(ys[0]), proY.get(ys.at(-1))]; // Aussen- und Innenfläche der Wand
 ok(ys.length >= 2, `Wand der unteren Kante gefunden (${proY.size} Dickenlagen)`);
-ok(Math.max(...mins) - Math.min(...mins) < 0.02, `Gehrung: Stirnfläche steht senkrecht auf dem Blech – über die Blechstärke gleiche Endlage (${[...proY.entries()].map(([y, x]) => y + ":" + x.toFixed(2)).join(" ")})`);
+ok(Math.max(...mins) - Math.min(...mins) < 0.02 && Math.abs(mins[0] - 0.35) < 0.03, `Gehrung: Stirnfläche steht 90° zum Blech (über die Blechstärke gleiche Endlage) und trifft die Innenfläche der Nachbarwand bei x = t/2 (${[...proY.entries()].map(([y, x]) => y + ":" + x.toFixed(2)).join(" ")})`);
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Gehrung ohne Schnitt durch die Blechstärke (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

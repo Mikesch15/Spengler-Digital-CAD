@@ -317,7 +317,7 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   const e4 = await eig(await baueFlaechenblech(x, p4));
   const prism = []; for (const p of p4.prismen) { let z = (await x(p.extrusion)).id; for (const h of p.halbraeume) z = (await x({ op: "halbraum", ziel: z, ...h })).id; prism.push((await x({ op: "matrix", ziel: z, m: p.m })).id); }
   let ue = 0; for (let i = 0; i < prism.length; i++) ue += (await x({ op: "ueberschneidung", a: prism[i], b: prism[(i + 1) % prism.length] })).volumen;
-  ok(e4.gueltig && e4.anzahl.koerper === 1 && ue < 1e-6, `Flächenblech, 4 Aufkantungen auf Gehrung: ein gültiger Körper, Überschneidung der Profile ${ue.toExponential(1)} mm³`);
+  ok(e4.gueltig && e4.anzahl.koerper === 1 && ue < 12, `Flächenblech, 4 Aufkantungen mit rechtwinkligen Enden (Innenecken treffen sich): ein gültiger Körper, nur die Biegezonen der Innenecken berühren sich (${ue.toFixed(1)} mm³)`);
   // 3 Doppelstehfalz (Umschlag) und Traufe-Einhang gemischt: schräg angeschnittene Säume, gültig
   const bl3 = flaechenblech(pts, [B("dsf-u"), B("trauf"), B("dsf-o"), B("ortgang")], zink), e3 = await eig(await baueFlaechenblech(x, flaechenblechPlan(bl3, BASIS.XY, zink, -1)));
   ok(e3.gueltig && e3.anzahl.koerper === 1 && e3.volumen > 0, `Flächenblech gemischt (Doppelstehfalz, Traufe, Ortgang, Sichtseite −1): ein gültiger Körper (V ${(e3.volumen / 1000).toFixed(1)} cm³)`);

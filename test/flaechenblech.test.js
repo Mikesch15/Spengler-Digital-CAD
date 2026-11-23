@@ -42,9 +42,9 @@ for (const b of BAUSTEINE_STANDARD) { const p = bausteinProfil(b, m); ok(p.zugab
   const ende = (x) => sa.e1 - sa.k1 * x; // Rücksetzung des Saums je nach Lage x (innen negativ)
   ok(Math.abs(sa.k1) < 0.2 && ende(0) < 1.5 && ende(-10) < 0.5, `Saum + Aufkantung: keine Gehrung, Saum schräg angeschnitten (${ende(0).toFixed(2)} → ${ende(-10).toFixed(2)} mm)`);
   ok(Math.abs(ek("ortgang", "wasserfalz")) < 1e-9, "Aufkantung + Wasserfalz: gerade (nur Biegebereich)");
-  ok(Math.abs(ek("ortgang", "ortgang") - 1) < 1e-9, "zwei gleiche Aufkantungen: Gehrung");
-  ok(Math.abs(ek("saum-o", "saum-o") - 1) < 1e-9, "zwei Säume auf der Fläche: Gehrung 45°");
-  ok(Math.abs(ek("trauf", "trauf") - 1) < 1e-9, "zwei Traufsäume unter der Fläche: Gehrung 45°");
+  ok(Math.abs(ek("ortgang", "ortgang")) < 1e-9 && Math.abs(eck("ortgang", "ortgang").e1) < 3, "zwei gleiche Aufkantungen: Enden 90° zur Fläche, Innenecken treffen sich");
+  ok(Math.abs(ek("saum-o", "saum-o")) < 1e-9, "zwei Säume auf der Fläche: Enden rechtwinklig");
+  ok(Math.abs(ek("trauf", "trauf")) < 1e-9, "zwei Traufsäume unter der Fläche: Enden rechtwinklig");
 }
 // Gehrung: zwei Aufkantungen an einer Ecke – Enden symmetrisch zur Winkelhalbierenden
 {

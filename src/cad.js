@@ -3298,7 +3298,7 @@ function flaecheDialog(f) {
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "sichtseite", label: "Richtung der Abkantungen / Sichtseite", optionen: [["1", "Vorne (Richtung Ebenen-Normale)"], ["-1", "Hinten (gegen die Normale)"]], wert: String(f.sichtseite ?? 1) },
     { id: "lage", label: "Skizze liegt …", optionen: [["mitte", "in der Blechmitte"], ["vorne", "auf der Vorderseite (Blech dahinter)"], ["hinten", "auf der Rückseite (Blech davor)"]], wert: f.lage || "mitte" },
-    { id: "ecken", label: "Eckenschluss", optionen: [["gehrung", "Gehrung (Eckschnitt, Standard)"], ["stoss", "Stoss (Überlappung)"], ["spalt", "Offene Ecke mit Spalt"]], wert: f.ecken || "gehrung" },
+    { id: "ecken", label: "Eckenschluss", optionen: [["gehrung", "Gehrung (Enden 90° zum Blech, Innenecken treffen sich)"], ["stoss", "Stoss (Überlappung)"], ["spalt", "Offene Ecke mit Spalt"]], wert: f.ecken || "gehrung" },
     { id: "eckSpalt", label: "Eckspalt (offene Ecke)", einheit: "mm", wert: f.eckSpalt ?? 1 },
     { id: "eckEntl", label: "Eckentlastung", optionen: [["keine", "Keine"], ["rund", "Rund"], ["quadrat", "Quadratisch"]], wert: f.eckEntl || "keine" },
     { id: "eckEntlMass", label: "Entlastung: Radius / halbe Seite", einheit: "mm", wert: f.eckEntlMass ?? 2 },
