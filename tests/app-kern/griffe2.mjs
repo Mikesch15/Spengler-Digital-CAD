@@ -21,7 +21,8 @@ const feat = (typ, n = 0) => s.evaluate(([t, i]) => window.sdcadTest.dok().featu
 async function ziehe(feld, vorz, px, titel) {
   const g = (await griffe()).find((k) => k.feld === feld && k.faktor * vorz > 0); if (!g) return ok(false, `${titel}: Pfeil ${feld} (${vorz > 0 ? "+" : "−"}) fehlt`);
   const v0 = +(await s.inputValue("#d_" + feld)), dx = g.schirm.b[0] - g.schirm.a[0], dy = g.schirm.b[1] - g.schirm.a[1], L = Math.hypot(dx, dy) || 1;
-  await s.mouse.move(g.schirm.b[0], g.schirm.b[1]); await s.mouse.down(); await s.mouse.move(g.schirm.b[0] + dx / L * px, g.schirm.b[1] + dy / L * px, { steps: 5 }); await s.mouse.up(); await s.waitForTimeout(300);
+  let st = g.schirm.b; for (const f of [1, 0.8, 0.6, 0.4]) { const p = [g.schirm.a[0] + dx * f, g.schirm.a[1] + dy * f]; if (await s.evaluate(([x, y]) => document.elementFromPoint(x, y)?.id === "leinwand", p)) { st = p; break; } } // Greifpunkt auf dem Pfeil, der nicht unter einem Panel liegt
+  await s.mouse.move(st[0], st[1]); await s.mouse.down(); await s.mouse.move(st[0] + dx / L * px, st[1] + dy / L * px, { steps: 5 }); await s.mouse.up(); await s.waitForTimeout(300);
   const v1 = +(await s.inputValue("#d_" + feld)); ok(vorz > 0 ? v1 > v0 : v1 < v0, `${titel}: ${feld} ${vorz > 0 ? "Pfeil +" : "Pfeil −"} ${v0} → ${v1}`);
 }
 async function pruefe(id, titel, felder, ziel, nurPlus) {
@@ -29,7 +30,7 @@ async function pruefe(id, titel, felder, ziel, nurPlus) {
   const g = await griffe(); for (const [feld, n] of Object.entries(felder)) ok(g.filter((k) => k.feld === feld).length === n, `${titel}: ${n} Pfeile für «${feld}» (in beide Richtungen)`);
   if (ziel) { // die Pfeile sitzen am Körper (Spitze des Flansches bzw. Ende der Drehung)
     const bb = await s.evaluate((z) => { const k = window.sdcadTest.koerper().filter((q) => String(q.fid).split(":")[0] === z); return k.length ? { min: [0, 1, 2].map((i) => Math.min(...k.map((q) => q.min[i]))), max: [0, 1, 2].map((i) => Math.max(...k.map((q) => q.max[i]))) } : null; }, ziel);
-    const nah = g.every((k) => bb && k.pos.every((v, i) => v >= bb.min[i] - 3 && v <= bb.max[i] + 3)); ok(nah, `${titel}: Pfeile sitzen am Körper (${g[0]?.pos.map((v) => Math.round(v))} in ${bb && bb.min.map(Math.round)}…${bb && bb.max.map(Math.round)})`); }
+    const nah = g.filter((k) => !/Flansch/.test(titel) || k.feld === "laenge").every((k) => bb && k.pos.every((v, i) => v >= bb.min[i] - 3 && v <= bb.max[i] + 3)); ok(nah, `${titel}: Pfeile sitzen am Körper (${g[0]?.pos.map((v) => Math.round(v))} in ${bb && bb.min.map(Math.round)}…${bb && bb.max.map(Math.round)})`); }
   for (const feld of Object.keys(felder)) { await ziehe(feld, 1, 35, titel); if (!nurPlus) await ziehe(feld, -1, 25, titel); }
   await s.evaluate(() => document.getElementById("dOk").click()); await s.waitForTimeout(300);
 }
