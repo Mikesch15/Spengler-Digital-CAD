@@ -4,6 +4,8 @@
   "regeln": [
     { "muster": "src/kontext.js", "tests": ["kontext"] },
     { "muster": "kern/cad/featureBau", "tests": ["flanschende", "blechkanten"] },
+    { "muster": "kern/naht", "tests": ["naht"] },
+    { "muster": "kern/quetschfalte", "tests": ["quetschfalte", "stirnquetsch"] },
     { "muster": "src/simulation.js", "tests": ["simulation"] },
     { "muster": "kern/fem/", "tests": ["simulation"] },
     { "muster": "kern/dach/", "tests": ["dach", "dachbleche", "dachflaechen", "kopplung", "griffe"] },

@@ -17,6 +17,7 @@ import { zeigeMeldung } from "./meldungen.js";
 import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
 import { stirnLaschen, schenkelBereiche, laschenStart, laschenEnde } from "../kern/stirnflansch.js";
 import { stirnQuetsch, stirnQuetschKandidaten } from "../kern/stirnquetsch.js";
+import { nahtFolgen, nahtStandard, raupeMasse, raupenNetz, NAHT_ARTEN } from "../kern/naht.js";
 import { quetschZuschnitt, quetschDreieck, quetschDxf, faltenPruefen, eckSchnitt2 } from "../kern/quetschfalte.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
@@ -1474,6 +1475,13 @@ function regen() {
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
         f._q = quetschGeo(z, f);
         if (!f.versteckt) quetschMeshes(z, f).forEach((o) => modell.add(o));
+      } else if (f.typ === "naht") { // Verbindungsnaht zwischen zwei Blechen: Überlappung/Falz wirken über die Kantenbausteine (berechneKanten, profilErweiterungen), Raupen sind Darstellung
+        const za = finde(f.a?.ziel), zb = finde(f.b?.ziel); if (!za || !zb) throw new Error("Eines der beiden Bleche der Naht fehlt");
+        if (doc.features.indexOf(za) > doc.features.indexOf(f) || doc.features.indexOf(zb) > doc.features.indexOf(f)) throw new Error("Beide Bleche müssen vor der Naht stehen");
+        if (za.versteckt || zb.versteckt) throw new Error("Ein Blech der Naht ist ausgeblendet");
+        if (!nahtKante(f.a)) throw new Error("Die Kante an Blech A gibt es nicht mehr – Naht neu setzen");
+        if (!nahtKante(f.b)) throw new Error("Die Kante an Blech B gibt es nicht mehr – Naht neu setzen");
+        if ((f.art === "schweiss" || f.art === "ecke") && !f.versteckt) { const o = nahtRaupe(f); if (o) modell.add(o); }
       } else if (f.typ === "stirnquetsch") { // Quetschfalte an der Ecke Stirnlasche + Wand eines Blechprofils (Rechnung beim Profil: stirnBerechnen)
         const z = finde(f.ziel); if (!z || !istProfil(z)) throw new Error("Das Blechprofil fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Blechprofil muss vor diesem Schritt stehen");
@@ -1537,8 +1545,8 @@ function regen() {
       } else if (f.typ === "rundblech") { // Zylinder-/Kegelmantel: exakte Abwicklung (kern/abwicklungRund.js), 3D als Drehkörper
         const m = material(f.material), kegel = f.art !== "zylinder";
         if (!(f.d1 > m.t && f.h > 0) || (kegel && !(f.d2 >= 0)) || !(f.winkel > 0 && f.winkel <= 360)) throw new Error("Durchmesser, Höhe und Winkel prüfen (Winkel 1–360°)");
-        f._rund = rundblechAbwicklung({ art: kegel && Math.abs(f.d1 - f.d2) > 1e-9 ? "kegel" : "zylinder", d1: f.d1, d2: kegel ? f.d2 : f.d1, h: f.h, t: m.t, k: m.k, winkel: f.winkel, zugabe: f.zugabe, neigung: kegel ? 0 : +f.neigung || 0 });
-        if (!f.versteckt) { const mesh = koerperMesh(rundGeometrie(f, m), darstellungVon(f, m), f.id); if (rohrNeigung(f)) verknuepfe(mesh, rohrSchnittWerkzeug(f), "ausschneiden"); modell.add(mesh); }
+        f._rund = rundblechAbwicklung({ art: kegel && Math.abs(f.d1 - f.d2) > 1e-9 ? "kegel" : "zylinder", d1: f.d1, d2: kegel ? f.d2 : f.d1, h: f.h, t: m.t, k: m.k, winkel: f.winkel, zugabe: (+f.zugabe || 0) + rundNahtZugabe(f, m), neigung: kegel ? 0 : +f.neigung || 0 });
+        if (!f.versteckt) { const mesh = koerperMesh(rundGeometrie(f, m), darstellungVon(f, m), f.id); if (rohrNeigung(f)) verknuepfe(mesh, rohrSchnittWerkzeug(f), "ausschneiden"); modell.add(mesh); for (const o of rundNahtStreifen(f, m)) modell.add(o); }
       } else if (f.typ === "detail") {
         f._teile = null; throw new Error("Spenglerdetails gibt es nicht mehr – als Flächenblech mit Kantenbausteinen zeichnen und dieses Feature löschen");
       } else if (f.typ === "profil") {
@@ -1637,7 +1645,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { loftflansch: "Lofted Flange", rip: "Rip (Auftrennen)", biegung: "Biegung an Linie", skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", flanschende: "Flanschende", stirnquetsch: "Quetschfalte (Stirn)", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { loftflansch: "Lofted Flange", rip: "Rip (Auftrennen)", biegung: "Biegung an Linie", skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", flanschende: "Flanschende", stirnquetsch: "Quetschfalte (Stirn)", naht: "Naht", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
@@ -1668,7 +1676,7 @@ $("baum").addEventListener("dblclick", (e) => { const id = e.target.closest("li"
 const ZEIT_ICON = {
   loftflansch: '<path d="M3 18c4 0 5-12 9-12s5 12 9 12"/><path d="M3 21h18"/>', rip: '<path d="M3 12h7l2-3 2 6 2-3h5"/>', biegung: '<path d="M3 17h8l6-9h4"/>', skalieren: '<rect x="4" y="10" width="8" height="8"/><rect x="4" y="4" width="16" height="16" stroke-dasharray="2 2"/>', bohrung: '<circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4"/>', rohr: '<path d="M4 18h8a4 4 0 0 0 4-4V6"/>', spirale: '<path d="M6 20c8 0 8-4 0-4s-8-4 0-4 8-4 0-4"/>', rippe: '<path d="M4 20h16M12 20V6"/>',
   skizze: '<path d="M4 17l4-7 3 4 4-6"/><circle cx="4" cy="17" r="1.3"/><circle cx="15" cy="8" r="1.3"/>', extrusion: '<path d="M4 15l8 4 8-4-8-4z"/><path d="M12 11V3M9 6l3-3 3 3"/>', drehung: '<path d="M12 3v18" stroke-dasharray="2 2.5"/><path d="M12 7h5c1.4 3.5 1.4 6.5 0 10h-5z"/>', sweep: '<path d="M5 18c0-7 5-10 14-12" stroke-dasharray="2 2.5"/><rect x="3" y="16" width="5" height="5" rx=".8"/>', loft: '<rect x="3" y="16" width="18" height="4" rx="1"/><ellipse cx="12" cy="6" rx="5" ry="2.5"/><path d="M3 17L7 7M21 17l-4-10"/>',
-  blech: '<path d="M3 17h5l5-9h8"/>', vorlage: '<path d="M3 17h5l5-9h8"/>', profil: '<path d="M3 17h5l5-9h8"/>', flaeche: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>', kante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', profilkante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', stirnquetsch: '<path d="M4 18h12V6"/><path d="M16 18L8 10" stroke-dasharray="2 2"/>', flanschende: '<path d="M4 18h10l4-9"/><path d="M14 18l4-9" stroke-dasharray="2 2"/>', quetschfalte: '<path d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/>',
+  blech: '<path d="M3 17h5l5-9h8"/>', vorlage: '<path d="M3 17h5l5-9h8"/>', profil: '<path d="M3 17h5l5-9h8"/>', flaeche: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>', kante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', profilkante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', naht: '<path d="M3 15h8l2 3h8M3 9h8l2-3h8"/>', stirnquetsch: '<path d="M4 18h12V6"/><path d="M16 18L8 10" stroke-dasharray="2 2"/>', flanschende: '<path d="M4 18h10l4-9"/><path d="M14 18l4-9" stroke-dasharray="2 2"/>', quetschfalte: '<path d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/>',
   dach: '<path d="M3 12l9-8 9 8"/><path d="M6 11v8h12v-8"/>', gebaeude: '<path d="M5 20V9l7-5 7 5v11z"/>', dachbleche: '<path d="M3 12l9-8 9 8"/><path d="M7 12l5-4 5 4"/>', eindeckung: '<path d="M3 12l9-8 9 8"/><path d="M6 14h12M8 17h8"/>', dachelement: '<path d="M3 12l9-8 9 8"/><rect x="9" y="11" width="6" height="5"/>', lukarne: '<path d="M3 12l9-8 9 8"/><path d="M9 20v-6l3-3 3 3v6z"/>',
   ebene: '<path d="M3 16l5-8h13l-5 8z"/>', achse: '<path d="M4 20L20 4" stroke-dasharray="3 2"/>', konpunkt: '<circle cx="12" cy="12" r="2.5"/>', kmuster: '<rect x="3" y="3" width="6" height="6"/><rect x="14" y="3" width="6" height="6"/><rect x="3" y="14" width="6" height="6"/><rect x="14" y="14" width="6" height="6"/>', schale: '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M8 10l4-2 4 2v4l-4 2-4-2z"/>', kantenrund: '<path d="M4 20V8a4 4 0 0 1 4-4h12"/>', kanten3d: '<path d="M4 20V8a4 4 0 0 1 4-4h12"/>', teilen: '<path d="M4 12h16" stroke-dasharray="3 2"/><rect x="5" y="4" width="14" height="16" rx="1"/>', abwickeln: '<path d="M4 6h16v12H4z"/><path d="M9 6v12M15 6v12" stroke-dasharray="2 2"/>', falten: '<path d="M4 6l6 3v9l-6-3zM10 9l6-3 4 2v9l-4-2-6 3"/>', rundblech: '<ellipse cx="12" cy="8" rx="6" ry="3"/><path d="M6 8l-2 10h16L18 8"/>', bild: '<rect x="3" y="5" width="18" height="14" rx="1"/><circle cx="9" cy="10" r="1.5"/><path d="M4 18l5-5 4 3 3-3 4 4"/>', import: '<path d="M12 3v12M8 11l4 4 4-4M5 20h14"/>'
 };
@@ -2203,6 +2211,7 @@ function bearbeite(f) {
   if (f.typ === "quetschfalte") return quetschDialog(f);
   if (f.typ === "flanschende") return flanschEndeDialog(f);
   if (f.typ === "stirnquetsch") return stirnQuetschDialog(f);
+  if (f.typ === "naht") return nahtDialog(f);
   if (f.typ === "gebaeude") { const d = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id); return d ? dachDialog(d) : gebaeudeDialog(f); }
   if (f.typ === "abwickeln" || f.typ === "falten") return status(f.typ === "abwickeln" ? "Abwickeln: das Blech liegt flach, bis «Falten» folgt. Dazwischen Skizze + Extrusion «Ausschneiden»." : "Falten: bildet die Ausschnitte der Abwicklung aufs gekantete Blech ab.");
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
@@ -2659,6 +2668,7 @@ let kantenLabels = [];
 const kantenName = (f, key) => { const [pi, k] = key.split(":").map(Number); return `${f._bleche?.length > 1 ? `B${pi + 1} ` : ""}K${k + 1}`; };
 function zeigeKanten() {
   leeren(kantenZeiger); kantenLabels = [];
+  if (nahtWz && !skizze) { zeigeNahtKanten(); return; }
   if (quetschWz && !skizze) { if (quetschWz.art === "stirn") zeigeStirnQuetschPunkte(quetschWz.f); else zeigeQuetschEcken(quetschWz.f); return; }
   if (kantenWz?.schritt === "kante" && istProfil(kantenWz.f) && !skizze) return zeigeProfilKanten(kantenWz.f);
   const kd = dlg?.feature?.typ === "kante" ? dlg.feature : null; // Dialog eines Schritts «Kante»: dessen Kante leuchtet
@@ -2774,6 +2784,14 @@ function berechneKanten(f) {
     const vor = k[x.key];
     if (x.anhaengen && vor) { const bv = werkzeugAuf(bausteinFuer(vor), m), nb = werkzeugAuf(bausteinFuer(x.wert), m); k[x.key] = { folge: folgeAnhaengen(bausteinFolge(bv, m), bausteinFolge(nb, m)), versatz: +bv.versatz || 0 }; }
     else k[x.key] = x.wert;
+  }
+  for (const x of doc.features) { // Verbindungsnähte (Überlappung / Falz): Abkantfolge zusätzlich an die gewählte Kante – auch auf einem schon vorhandenen Flansch
+    if (x.typ !== "naht" || x._aus) continue;
+    for (const seite of ["a", "b"]) {
+      const s = x[seite]; if (s?.ziel !== f.id || !s.key) continue;
+      const folge = nahtFolgen(x, m)[seite]; if (!folge) continue;
+      const vor = k[s.key]; if (vor) { const bv = werkzeugAuf(bausteinFuer(vor), m); k[s.key] = { folge: folgeAnhaengen(bausteinFolge(bv, m), folge), versatz: +bv.versatz || 0 }; } else k[s.key] = { folge, versatz: 0 };
+    }
   }
   return k;
 }
@@ -3170,7 +3188,7 @@ function stirnErweiterungen(f, m) {
   return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && (x.ende === "S1" || x.ende === "S2")).map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende, schenkel: +x.schenkel || 0, zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean);
 }
 function profilErweiterungen(f, m) {
-  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && x.ende !== "S1" && x.ende !== "S2").map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende === "B" ? "B" : "A", zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean);
+  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && x.ende !== "S1" && x.ende !== "S2").map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende === "B" ? "B" : "A", zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean).concat(doc.features.filter((x) => x.typ === "naht" && !x._aus).flatMap((x) => ["a", "b"].filter((s) => x[s]?.ziel === f.id && (x[s].key === "A" || x[s].key === "B")).map((s) => { const fo = nahtFolgen(x, m)[s]; return fo ? { ende: x[s].key, zeilen: folge(`1 ${fo}`) } : null; }).filter(Boolean)));
 }
 const istProfil = (h) => h?.typ === "profil" || h?.typ === "vorlage" || h?.typ === "blech";
 function kantenWert(w, m) { // Baustein bzw. Werkzeug der Kantenleiste → Wert für einen Schritt
@@ -3300,6 +3318,104 @@ function stirnQuetschDialog(f) {
     (ff, w) => { if (w.name != null) ff.name = w.name; if (w.wand) ff.wand = w.wand; }, "Quetschfalte (Stirn)", "Der Überschuss an der Ecke zwischen Stirnlasche und Wand wird an seiner Winkelhalbierenden 180° gefaltet und liegt auf der gewählten Fläche. Die Abwicklung (DXF) enthält den Überschuss mit Faltlinie.",
     { info: () => (f._fehler ? "⚠ " + f._fehler : "") });
 }
+// ------------------------------------------------------------ Verbindungsnähte (Naht)
+// Kante eines Blechs: Flächenblech «pi:k» (auch gebogene Kanten) oder Blechprofil «A» / «B»; Rückgabe { punkte: [Vector3], normale (Sichtseite) }
+function nahtKante(s) {
+  const f = finde(s?.ziel); if (!f || !s.key) return null;
+  if (f.typ === "flaeche" && f._bleche) {
+    const [pi, k] = String(s.key).split(":").map(Number), bl = f._bleche.find((b) => b.pi === pi), g = bl?.gruppen[k], sk = finde(f.skizze); if (!g || !sk) return null;
+    const E = E_(sk.ebene), LM = lageVon(f), sg = f.sichtseite === -1 ? -1 : 1, pk = g.punkte.map((p) => { const v = V(zuWelt(blechEbene(sk.ebene, f, material(f.material)), p)); return LM ? v.applyMatrix4(LM) : v; });
+    const n = V(E.n).multiplyScalar(sg); if (LM) n.transformDirection(LM);
+    return { punkte: pk, normale: n, f, name: `${f.name} · ${kantenName(f, s.key)}` };
+  }
+  if (f.typ === "rundblech" && (s.key === "N0" || s.key === "N1") && !f._fehler) { // Längsnaht am Rohr/Kegel: Rand der Abwicklung bei Winkel 0 bzw. Endwinkel
+    const E = E_(f.ebene), M = new THREE.Matrix4().makeBasis(V(E.v), V(E.n), V(E.u)).setPosition(V(E.o)), phi = (Math.min(360, f.winkel || 360) * Math.PI) / 180, w = s.key === "N1" ? phi : 0, r1 = f.d1 / 2, r2 = (f.art === "zylinder" ? f.d1 : f.d2) / 2;
+    const p = (r, h) => new THREE.Vector3(r * Math.sin(w), h, r * Math.cos(w)).applyMatrix4(M), n = new THREE.Vector3(Math.sin(w), 0, Math.cos(w)).transformDirection(M), LM = lageVon(f);
+    const pk = [p(r1, 0), p(r2, f.h)]; if (LM) { pk.forEach((v) => v.applyMatrix4(LM)); n.transformDirection(LM); }
+    return { punkte: pk, normale: n, f, name: `${f.name} · Längsnaht ${s.key === "N1" ? "Ende" : "Anfang"}` };
+  }
+  if (istProfil(f) && (s.key === "A" || s.key === "B")) {
+    const e = profilKanten(f).find((x) => x.key === s.key), kl = f._kernLage, el = f._res?.pfad; if (!e || !kl || !el?.length) return null;
+    const seg = s.key === "A" ? el[0] : el.at(-1), d = [seg.p2[0] - seg.p1[0], seg.p2[1] - seg.p1[1]], l = Math.hypot(...d) || 1, M = basis(kl.ebene), n = new THREE.Vector3(-d[1] / l, d[0] / l, 0).transformDirection(M);
+    return { punkte: [e.p[0].clone(), e.p[1].clone()], normale: n, f, name: `${f.name} · Kante ${s.key}` };
+  }
+  return null;
+}
+// Alle wählbaren Kanten (sichtbare Flächenbleche und Blechprofile)
+function nahtKandidaten() {
+  const out = [];
+  for (const f of doc.features) {
+    if (f._aus || f.versteckt) continue;
+    if (f.typ === "flaeche" && f._bleche) for (const bl of f._bleche) bl.gruppen.forEach((_, k) => { const s = { ziel: f.id, key: `${bl.pi}:${k}` }, e = nahtKante(s); if (e) out.push({ ...s, ...e }); });
+    else if (istProfil(f)) for (const key of ["A", "B"]) { const s = { ziel: f.id, key }, e = nahtKante(s); if (e) out.push({ ...s, ...e }); }
+    else if (f.typ === "rundblech") for (const key of ["N0", "N1"]) { const s = { ziel: f.id, key }, e = nahtKante(s); if (e) out.push({ ...s, ...e }); }
+  }
+  return out;
+}
+// Schweissraupe (Stumpf-/Kehlnaht) entlang der Kante von Blech A
+function nahtRaupe(f) {
+  const e = nahtKante(f.a); if (!e) return null;
+  const t = material(e.f.material).t, { b, h } = raupeMasse(f, t), sg = f.seite === "unten" ? -1 : 1, pts = e.punkte.map((p) => p.toArray());
+  const arr = raupenNetz(pts, e.normale.clone().multiplyScalar(sg).toArray(), f.art, b, h), geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(arr, 3)); geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x7d8288, metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide })); mesh.userData.fid = f.id; mesh.userData.naht = true; return mesh;
+}
+let nahtWz = null; // { schritt: "a" | "b", a: { ziel, key } | null, kand }
+function starteNahtWz() {
+  if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
+  if (!nahtKandidaten().length) return status("Keine Bleche mit wählbaren Kanten vorhanden (Flächenblech oder Blechprofil anlegen).");
+  nahtWz = { schritt: "a", a: null }; zeigeKanten(); wkZeigen("Naht", "Schritt 1: Kante an Blech A anklicken (blaue Linien). Dann Schritt 2: Kante an Blech B.", endeNahtWz); status("Naht: Kante an Blech A anklicken – Esc bricht ab.");
+}
+function endeNahtWz() { nahtWz = null; wkZu(); zeigeKanten(); }
+function zeigeNahtKanten() {
+  for (const k of nahtKandidaten()) {
+    const gewaehlt = nahtWz?.a && nahtWz.a.ziel === k.ziel && nahtWz.a.key === k.key;
+    kantenZeiger.add(Object.assign(dickeLinie(k.punkte, gewaehlt ? 0xe0782b : 0x1f5fbf, gewaehlt ? 4 : 2, 13), { userData: { dicke: true } }));
+  }
+}
+function nahtKlick(e) {
+  const sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 30 : 16;
+  for (const k of nahtKandidaten()) {
+    if (nahtWz.a && nahtWz.a.ziel === k.ziel && nahtWz.a.key === k.key) continue;
+    for (let i = 1; i < k.punkte.length; i++) { const A = aufSchirm(k.punkte[i - 1].toArray()), B = aufSchirm(k.punkte[i].toArray()); if (A[2] > 1 || B[2] > 1) continue; const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = k; } }
+  }
+  if (!best) { status("Eine Kante anklicken (blaue Linien)."); return true; }
+  if (nahtWz.schritt === "a") { nahtWz = { schritt: "b", a: { ziel: best.ziel, key: best.key } }; wkZeigen("Naht", `Blech A: ${best.name}. Schritt 2: Kante an Blech B anklicken.`, endeNahtWz); zeigeKanten(); status("Naht: Kante an Blech B anklicken."); return true; }
+  const a = nahtWz.a, n = { id: neueId(), typ: "naht", name: `Naht ${doc.features.filter((x) => x.typ === "naht").length + 1}`, a, b: { ziel: best.ziel, key: best.key }, ...nahtStandard("punkt") };
+  nahtWz = null; wkZu(); einfuegen(n); regen(); zeigeKanten(); waehle(n.id); nahtDialog(n); status(n._fehler ? "⚠ " + n._fehler : "Naht angelegt – Art und Richtung im Fenster einstellen."); return true;
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && nahtWz && !dlg && !skizze) { endeNahtWz(); status(""); } });
+// Längsnaht am Rohr/Kegel: Zugabe in der Abwicklung (Summe der Abkantzugaben beider Seiten) und Überlappungsstreifen im Modell
+const rundNaehte = (f) => doc.features.filter((x) => x.typ === "naht" && !x._aus && (x.art === "punkt" || x.art === "falz") && ["a", "b"].some((s) => x[s]?.ziel === f.id && /^N[01]$/.test(x[s].key || "")));
+function rundNahtZugabe(f, m) {
+  let z = 0; for (const x of rundNaehte(f)) { const fo = nahtFolgen(x, m); for (const s of ["a", "b"]) if (x[s]?.ziel === f.id && fo[s]) { try { z += bausteinProfil({ name: "naht", folge: fo[s], versatz: 0 }, m).zugabe; } catch {} } }
+  return z;
+}
+function rundNahtStreifen(f, m) {
+  const out = [];
+  for (const x of rundNaehte(f)) {
+    const w = x.art === "falz" ? (x.mittig ? ((+x.falzA || 5) + (+x.falzB || 10)) / 2 : +x.falzB || 10) : +x.zugabe || 15, rm = f.d1 / 2, s = x.richtung === "unten" ? -1 : 1;
+    const q = rundMeridian(f, m).map(([r, h]) => new THREE.Vector2(r + s * m.t, h)), E = E_(f.ebene), M = new THREE.Matrix4().makeBasis(V(E.v), V(E.n), V(E.u)).setPosition(V(E.o));
+    const geo = new THREE.LatheGeometry(q, Math.max(6, Math.round(w / 4)), -w / rm, w / rm), n = geo.index ? geo.toNonIndexed() : geo; n.deleteAttribute("uv"); n.applyMatrix4(M);
+    out.push(koerperAusGeo(n, darstellungVon(f, m), f.id));
+  }
+  return out;
+}
+function nahtDialog(f) {
+  const ea = nahtKante(f.a), eb = nahtKante(f.b);
+  featureDialog(f, false, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "art", label: "Nahtart", optionen: Object.entries(NAHT_ARTEN), wert: ff.art || "punkt" },
+    { id: "absetz", label: "Abgesetztes Blech (Punkt/Falz)", optionen: [["b", "Blech B"], ["a", "Blech A"]], wert: ff.absetz === "a" ? "a" : "b" },
+    { id: "richtung", label: "Absetzung / Falz Richtung", optionen: [["oben", "zur Sichtseite"], ["unten", "zur Rückseite"]], wert: ff.richtung || "oben" },
+    { id: "absetzen", label: "Punktnaht mit Absetzung", optionen: [["ja", "ja – Bleche danach bündig"], ["nein", "nein – gerade Überlappung"]], wert: ff.absetzen === false ? "nein" : "ja" },
+    { id: "zugabe", label: "Überlappung (Punktnaht)", einheit: "mm", wert: ff.zugabe ?? 15 },
+    { id: "mittig", label: "Falz (Falznaht)", optionen: [["nein", "5 + 10 mm (Blech A/B, abgesetzt)"], ["ja", "mittig, je Hälfte der Summe"]], wert: ff.mittig ? "ja" : "nein" },
+    { id: "falzA", label: "Falzbreite nicht abgesetztes Blech", einheit: "mm", wert: ff.falzA ?? 5 }, { id: "falzB", label: "Falzbreite abgesetztes Blech", einheit: "mm", wert: ff.falzB ?? 10 },
+    { id: "seite", label: "Raupe auf der Seite (Schweiss-/Ecknaht)", optionen: [["oben", "Sichtseite"], ["unten", "Rückseite"]], wert: ff.seite || "oben" },
+    { id: "raupeBreite", label: "Raupenbreite (0 = automatisch)", einheit: "mm", wert: ff.raupeBreite ?? 0 }, { id: "raupeHoehe", label: "Raupenhöhe (0 = automatisch)", einheit: "mm", wert: ff.raupeHoehe ?? 0 }],
+    (ff, w) => { if (w.name != null) ff.name = w.name; if (w.art) ff.art = w.art; if (w.absetz) ff.absetz = w.absetz; if (w.richtung) ff.richtung = w.richtung; if (w.absetzen) ff.absetzen = w.absetzen !== "nein"; if (w.mittig) ff.mittig = w.mittig === "ja"; if (w.seite) ff.seite = w.seite;
+      for (const k of ["zugabe", "falzA", "falzB", "raupeBreite", "raupeHoehe"]) if (Number.isFinite(w[k])) ff[k] = Math.max(0, w[k]); },
+    "Naht", "Verbindung zweier Bleche an den gewählten Kanten. Punktnaht: Überlappung (Standard 15 mm), das abgesetzte Blech wird um eine Blechstärke gekröpft, so dass beide bündig liegen. Falznaht: einfacher liegender Falz, 5 mm + 10 mm (abgesetzt) oder mittig. Schweiss-/Ecknaht: nur Darstellung als Raupe. Sitzt an der Kante schon ein Flansch, läuft die Naht zusätzlich darauf.",
+    { info: () => (f._fehler ? "⚠ " + f._fehler : `A: ${ea?.name || "–"} · B: ${eb?.name || "–"}`) });
+}
 function endeQuetschWz() { quetschWz = null; wkZu(); zeigeKanten(); }
 function quetschKlick(e) {
   if (quetschWz.art === "stirn") {
@@ -3420,6 +3536,7 @@ $("wBiegung")?.addEventListener("click", () => { if (dlg) $("dAbbrechen").click(
 for (const [id, t] of [["wSkalieren", "skalieren"], ["wBohrung", "bohrung"], ["wRohr", "rohr"], ["wSpirale", "spirale"], ["wRippe", "rippe"]]) $(id).addEventListener("click", () => { if (dlg) $("dAbbrechen").click(); koerper2Dialog(t); });
 $("wQuetsch").addEventListener("click", () => setTimeout(starteQuetschWz, 0));
 $("wFlanschEnde").addEventListener("click", () => setTimeout(starteEndeWz, 0));
+$("wNaht").addEventListener("click", () => setTimeout(starteNahtWz, 0));
 document.querySelectorAll("[data-kantenwz]").forEach((b) => b.addEventListener("click", () => { const r = b.getBoundingClientRect(); setTimeout(() => starteKantenWz(b.dataset.kantenwz, r.right + 6, r.top), 0); }));
 $("kbRichtung").onclick = () => { if (!kantenWz) return; kantenWz.seite = kantenWz.seite === -1 ? 1 : -1; kantenBarZeigen(); for (const l of vorschauFeatures()) kanteUmkehren(l, l.key); zeichneGriffe(); };
 for (const id of ["kbWinkel", "kbLaenge"]) $(id).addEventListener("input", vorschauAktualisieren);
@@ -4574,7 +4691,7 @@ function femQuellen(ids = null) {
 simulation = simModul({
   $, esc, status, szene, modell, kamera, renderer, leeren, doc: () => doc, treffer: (e, ziele = null) => { strahl.setFromCamera(ndc(e), kamera); return strahl.intersectObjects(ziele || modell.children.filter((o) => o.isMesh), false)[0] || null; }, merke: () => merke(), material, drucken: (html) => { $("druck").innerHTML = html; window.print(); },
   quellen: (ids) => femQuellen().filter((q) => !ids || ids.includes(q.id)),
-  vorOeffnen: () => { if (dlg) $("dAbbrechen").click(); if (messen) messenUmschalten(false); if (quetschWz) endeQuetschWz(); },
+  vorOeffnen: () => { if (dlg) $("dAbbrechen").click(); if (messen) messenUmschalten(false); if (quetschWz) endeQuetschWz(); if (nahtWz) endeNahtWz(); },
 });
 const simStart = (fn) => () => { if (skizze) return status("Simulation ausserhalb der Skizze – erst die Skizze beenden."); if (dlg) $("dAbbrechen").click(); simulation.oeffnen(true); fn?.(); };
 $("wSimFenster").onclick = () => { if (skizze) return status("Erst die Skizze beenden."); if (dlg) $("dAbbrechen").click(); simulation.oeffnen(!simulation.offen()); };
@@ -6336,6 +6453,7 @@ leinwand.addEventListener("pointerup", (e) => {
   if (simulation?.klick(e)) return;
   if (dlg?.kantenWahl?.(e)) return;
   if (uebernimmWahl(e)) return;
+  if (nahtWz && !dlg && nahtKlick(e)) return;
   if (quetschWz && !dlg && quetschKlick(e)) return;
   if (kantenWz && !dlg && kantenWzKlick(e)) return;
   strahl.setFromCamera(ndc(e), kamera);

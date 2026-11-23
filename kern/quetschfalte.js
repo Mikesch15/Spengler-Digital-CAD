@@ -40,12 +40,12 @@ export function quetschZuschnitt(beta, hoehe, phi1 = 90, phi2 = 90, laenge = nul
   const P1 = pol(s1, a1), P2 = pol(s2, a2), P1s = pol(sS, a1), P2s = pol(sS, a2);
   const mid = a2 + (psi * D) / 2, d = [Math.cos(mid), Math.sin(mid)], f2 = [-Math.sin(beta * D), Math.cos(beta * D)];
   if (Math.abs(d[1]) < 1e-9 || Math.abs(d[0] * f2[0] + d[1] * f2[1]) < 1e-9) throw new Error("Die Winkelhalbierende verläuft parallel zu einer Oberkante – keine Spitze.");
-  const t1 = -hoehe / d[1], t2 = h2 / (d[0] * f2[0] + d[1] * f2[1]), tC = s1 <= s2 ? t1 : t2; // Spitze in der Verlängerung der Oberkante des niedrigeren Flansches
-  if (tC <= sS * (1 + 1e-9)) throw new Error("Die Spitze der Quetschfalte liegt vor der Ecklinie (Überschuss zu klein für diese Höhe).");
+  const t1 = -hoehe / d[1], t2 = h2 / (d[0] * f2[0] + d[1] * f2[1]); let tC = s1 <= s2 ? t1 : t2; // Spitze in der Verlängerung der Oberkante des niedrigeren Flansches
+  let spitzeFrei = false; if (!(tC > sS * (1 + 1e-9))) { tC = sS + Math.max(5, 0.25 * sS); spitzeFrei = true; } // Verlängerung trifft die Winkelhalbierende vor der Ecklinie (andere Winkel/Höhen): Spitze frei hinter der Ecklinie
   const C = [tC * d[0], tC * d[1]], m = Math.hypot(C[0] - P1s[0], C[1] - P1s[1]), e2d = [Math.cos(beta * D), Math.sin(beta * D)];
   const ende1 = [L, -hoehe], ende2 = [h2 * f2[0] + L * e2d[0], h2 * f2[1] + L * e2d[1]], O = [0, 0], gl = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) < 1e-9;
   const kontur = [ende1, P1, ...(gl(P1, P1s) ? [] : [P1s]), C, ...(gl(P2, P2s) ? [] : [P2s]), P2, ende2];
-  return { geometrie: g, hoehe1: hoehe, hoehe2: h2, s1, s2, sS, ell: sS, P1, P2, P1s, P2s, C, m, tSpitze: tC, laenge: L, beta, psi, gamma1: g1, gamma2: g2, kontur,
+  return { geometrie: g, spitzeFrei, hoehe1: hoehe, hoehe2: h2, s1, s2, sS, ell: sS, P1, P2, P1s, P2s, C, m, tSpitze: tC, laenge: L, beta, psi, gamma1: g1, gamma2: g2, kontur,
     faltlinien: { e1: [O, [L, 0]], e2: [O, [L * e2d[0], L * e2d[1]]], eps1: [O, P1], eps2: [O, P2], quetsch: [O, C] } };
 }
 

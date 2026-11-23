@@ -19,4 +19,14 @@ for (const [beta, h1, h2, p1, p2] of [[90, 30, 45, 90, 90], [90, 40, 25, 90, 90]
   catch (e) { ok(false, `β ${beta}°, h ${h1}/${h2}, φ ${p1}/${p2}: ${e.message}`); }
 }
 const un = quetschZuschnitt(90, 30, 90, 90, null, 45); ok(un.sS === 30 && un.s2 === 45 && un.kontur.length === 6, "Ungleiche Höhen: Falte bis zur niedrigeren Ecklinie, höherer Flansch behält freie Seitenkante");
+// Alle Kombinationen aus Eckwinkel, Abkantwinkeln und Flanschhöhen: rechenbar, solange der Überschuss ψ zwischen 5° und 175° liegt; Faltprobe stimmt immer
+{
+  let n = 0, schlecht = [];
+  for (const beta of [45, 60, 90, 120, 135]) for (const p1 of [30, 45, 60, 90, 110, 135]) for (const p2 of [30, 45, 60, 90, 110, 135]) for (const [h1, h2] of [[40, 40], [40, 25], [25, 40], [60, 20], [20, 60]]) {
+    let psi; try { psi = eckeGeometrie(beta, p1, p2).psi; } catch { continue; }
+    if (!(psi >= 5 && psi <= 175)) continue; n++;
+    try { const zz = quetschZuschnitt(beta, h1, p1, p2, null, h2); if (!faltenPruefen(zz).ok || !(zz.tSpitze > zz.sS)) schlecht.push(`β${beta} φ${p1}/${p2} h${h1}/${h2}`); } catch (e) { schlecht.push(`β${beta} φ${p1}/${p2} h${h1}/${h2}: ${e.message}`); }
+  }
+  ok(n > 300 && schlecht.length === 0, `${n} Kombinationen (Winkel gleich/verschieden, Höhen gleich/verschieden) rechnen mit stimmender Faltprobe${schlecht.length ? ": " + schlecht.slice(0, 3).join("; ") : ""}`);
+}
 if (f) { console.error(`${f} Fehler`); process.exit(1); } else console.log("Quetschfalte: alle Tests bestanden");

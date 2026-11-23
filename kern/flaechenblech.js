@@ -49,7 +49,7 @@ export function bausteinProfil(b0, m) {
   // Schenkelmass im Querschnitt: so wie eingegeben (Länge «bis» Mittellinie/Aussen/Innen/Tangente), nicht die rechnerische Länge der Mittellinie
   const w = b0?.werkzeug;
   if (w?.typ === "flansch" && res.beschriftungen?.[1]) { const bz = w.bezug || "mitte"; res.beschriftungen[1] = { ...res.beschriftungen[1], mass: +w.laenge, text: bz === "mitte" ? undefined : `${zahl(w.laenge)} ${{ aussen: "aussen", innen: "innen", tangente: "tang." }[bz] || ""}`.trim() }; }
-  const biegungen = res.biegungen.map((bg) => ({ ...bg, anschlag: res.zuschnitt - bg.pos, abstand: bg.pos - X + v }));
+  const biegungen = res.biegungen.filter((bg) => Math.abs(bg.winkel) > 1e-6).map((bg) => ({ ...bg, anschlag: res.zuschnitt - bg.pos, abstand: bg.pos - X + v })); // 0°-Biegung = gerade Verlängerung, keine Biegelinie
   // Querschnitt (x nach aussen, y Höhe) ohne den Anfangsschenkel auf der Fläche – für die Eckprüfung
   const quer = kontur(res.pfad, m.t, 6).map(([x, y]) => [x - X + v, y]);
   return { zeilen, res, zugabe, biegungen, versatz: v, lage: profilLage(res, m, v), lageY: profilLage(res, m, v, true), quer, t: m.t, ri: m.ri, k: m.k };
