@@ -2439,13 +2439,13 @@ function bausteinKontur(b0, m) {
   return null;
 }
 // Profil (x = nach aussen, y) entlang z extrudiert; Enden schräg: Anfang bei z = −x·k0, Ende bei z = L + x·k1
-function prisma(kont, L, k0, k1, e0 = 0, e1 = 0) { // e0/e1: an der Ecke zurückgesetzt (wie in der Abwicklung)
+function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0) { // e0/e1: an der Ecke zurückgesetzt (wie in der Abwicklung)
   // Die Gehrung gilt für die Mittellinie des Blechs: Jeder Ringpunkt wird mit dem x der nächsten Mittellinienstelle verschoben, so steht die Schnittfläche
   // senkrecht auf dem Blech (wie aus der Abwicklung geschnitten) und die Blechstärke wird nicht schräg angeschnitten.
-  const mitte = kont.mitte, mx = mitte ? (x, y) => { let best = 1e30, bx = x; for (let i = 1; i < mitte.length; i++) { const a = mitte[i - 1], b = mitte[i], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-12, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2)), px = a[0] + dx * t, py = a[1] + dy * t, d = (x - px) ** 2 + (y - py) ** 2; if (d < best) { best = d; bx = px; } } return bx; } : (x) => x;
+  const mitte = kont.mitte, mx = mitte ? (x, y) => { let best = 1e30, bx = x, by = y; for (let i = 1; i < mitte.length; i++) { const a = mitte[i - 1], b = mitte[i], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-12, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2)), px = a[0] + dx * t, py = a[1] + dy * t, d = (x - px) ** 2 + (y - py) ** 2; if (d < best) { best = d; bx = px; by = py; } } return [bx, by]; } : (x, y) => [x, y];
   let q = kont.slice(); if (gleich(q[0], q.at(-1))) q.pop(); if (flaeche(q) < 0) q = q.reverse();
   const luft = window.__prismaLuft || 0; // nur für Tests: Gehrungsflächen minimal auseinander
-  const z0 = (x, y) => -mx(x, y) * k0 + e0 + luft, z1 = (x, y) => Math.max(L + mx(x, y) * k1 - e1 - luft, z0(x, y) + 0.01), pos = [];
+  const z0 = (x, y) => { const [cx, cy] = mx(x, y); return -cx * k0 - cy * ky0 + e0 + luft; }, z1 = (x, y) => { const [cx, cy] = mx(x, y); return Math.max(L + cx * k1 + cy * ky1 - e1 - luft, z0(x, y) + 0.01); }, pos = [];
   const P = (x, y, z) => pos.push(x, y, z), n = q.length;
   for (let i = 0; i < n; i++) { const [xa, ya] = q[i], [xb, yb] = q[(i + 1) % n];
     P(xa, ya, z0(xa, ya)); P(xb, yb, z0(xb, yb)); P(xb, yb, z1(xb, yb)); P(xa, ya, z0(xa, ya)); P(xb, yb, z1(xb, yb)); P(xa, ya, z1(xa, ya)); }
@@ -2575,7 +2575,7 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
         }
         continue;
       }
-      const geo = prisma(k2, L, k0, k1, e0, e1);
+      const geo = prisma(k2, L, k0, k1, e0, e1, i > 1 ? 0 : ek[k].ky0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0);
       geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
       geo.applyMatrix4(B); geos.push(nachAussen(geo)); // Basis kann gespiegelt sein: Dreiecke wieder nach aussen
     }

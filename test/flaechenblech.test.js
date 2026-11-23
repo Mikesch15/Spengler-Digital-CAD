@@ -1,5 +1,5 @@
 // Prüft Flächenblech mit Kantenbausteinen (kern/flaechenblech.js)
-import { eckFaktoren, BAUSTEINE_STANDARD, bausteinProfil, kantenGruppen, flaechenblech, plattenUmriss } from "../kern/flaechenblech.js";
+import { innenWand, eckFaktoren, BAUSTEINE_STANDARD, bausteinProfil, kantenGruppen, flaechenblech, plattenUmriss } from "../kern/flaechenblech.js";
 import { bausteinQuerschnitt } from "../kern/cad/featureBau.js";
 import { MATERIALIEN } from "../kern/materialien.js";
 
@@ -79,3 +79,18 @@ for (const b of BAUSTEINE_STANDARD) { const p = bausteinProfil(b, m); ok(p.zugab
 }
 console.log(fehler ? `${fehler} Fehler im Flächenblech` : "Flächenblech: alle Tests bestanden");
 process.exit(fehler ? 1 : 0);
+// Gehrung geneigter Aufkantungen: Endebene geht durch die Schnittlinie der Innenflächen und steht senkrecht auf dem Blech
+{
+  const mm = { t: 1.5, ri: 1, k: 0.4 }, bs = { name: "Schräg", folge: "60 40", versatz: 0 }, r = flaechenblech([[0, 0], [200, 0], [200, 120], [0, 120]], [bs, bs, null, null], mm), ek = eckFaktoren(r.gruppen, r.profile), A = r.profile[0], B = r.profile[1], WA = innenWand(A), WB = innenWand(B);
+  ok(!!WA && !!WB && Math.abs(WA.w[1]) < 0.99, `Neigung erkannt (Wand ${WA?.w.map((v) => v.toFixed(2))})`);
+  const kA = ek[0], dA = [1, 0], nA = [0, -1], nB = [1, 0], dB = [0, 1], xin = (W, y) => W.f[0] + (y - W.f[1]) * (W.w[0] / W.w[1]);
+  let maxF = 0, maxS = 0;
+  for (const y of [3, 12, 25]) {
+    const ra = xin(WA, y), rb = xin(WB, y), q = [rb, -ra]; // q·nA = ra → q[1] = −ra; q·nB = rb → q[0] = rb  (Ecke bei (200,0): Vektor relativ)
+    const zA = q[0] * dA[0] + q[1] * dA[1], zEnd = kA.k1 * ra + (kA.ky1 || 0) * y - kA.e1; maxF = Math.max(maxF, Math.abs(zEnd - zA));
+    const wx = WA.w[0], wy = WA.w[1], lam = 3, x2 = ra - wy * lam, y2 = y + wx * lam; // Punkt senkrecht zur Wand verschoben
+    maxS = Math.max(maxS, Math.abs(kA.k1 * x2 + (kA.ky1 || 0) * y2 - kA.e1 - zEnd));
+  }
+  ok(maxF < 1e-6, `Endebene enthält die Schnittlinie der Innenflächen (Abweichung ${maxF.toExponential(1)} mm)`);
+  ok(maxS < 1e-6, `Endebene steht senkrecht auf dem Blech (Abweichung ${maxS.toExponential(1)} mm)`);
+}

@@ -80,8 +80,8 @@ export function bausteinQuerschnitt(b0, m) {
     try {
       const { start, ops } = freiesProfil(0, folge(`${L} ${b.folge}`), m), res = berechne(start, ops, m.t, m.ri, m.k), v = +b.versatz || 0;
       const q = blechQuerschnitt(res, m.t), g = res.pfad[0];
-      const xs = [q.profil.start, ...q.profil.segmente.flatMap((x) => [x.bis, x.bogenMitte].filter(Boolean))].map((p) => p[0] - L + v);
-      return { profil: verschiebeProfil(q.profil, -L + v, 0), xFlach: (g?.typ === "linie" ? g.p2[0] : 0) - L + v, xmin: Math.min(...xs), xmax: Math.max(...xs) };
+      const pk = [q.profil.start, ...q.profil.segmente.flatMap((x) => [x.bis, x.bogenMitte].filter(Boolean))], xs = pk.map((p) => p[0] - L + v), ys = pk.map((p) => p[1]);
+      return { profil: verschiebeProfil(q.profil, -L + v, 0), xFlach: (g?.typ === "linie" ? g.p2[0] : 0) - L + v, xmin: Math.min(...xs), xmax: Math.max(...xs), ymin: Math.min(...ys), ymax: Math.max(...ys) };
     } catch {}
   }
   return null;
@@ -112,10 +112,11 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
       const k1 = i < g.punkte.length - 1 ? Math.tan(knick(d, richt(b, g.punkte[i + 1])) / 2) : ek[k].k1, e1 = i < g.punkte.length - 1 ? 0 : ek[k].e1 || 0;
       // lokal: x nach aussen (d rechtwinklig), y = Sichtseite, z entlang der Kante ab a
       const lokal = [d[1], 0, d[0], a[0], -d[0], 0, d[1], a[1], 0, s, 0, 0], M = mal(B, lokal);
-      const zs = [bq.xmin, bq.xmax], z0 = Math.min(...zs.map((x) => -x * k0)) + e0 - 1, z1 = L + Math.max(...zs.map((x) => x * k1)) - e1 + 1;
+      const ky0 = i > 1 ? 0 : ek[k].ky0 || 0, ky1 = i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0, ecken = [[bq.xmin, bq.ymin], [bq.xmin, bq.ymax], [bq.xmax, bq.ymin], [bq.xmax, bq.ymax]];
+      const z0 = Math.min(...ecken.map(([x, y]) => -x * k0 - y * ky0)) + e0 - 1, z1 = L + Math.max(...ecken.map(([x, y]) => x * k1 + y * ky1)) - e1 + 1;
       plan.prismen.push({
         extrusion: { op: "extrusion", profil: bq.profil, ebene: { ursprung: [0, 0, z0], x: [1, 0, 0], n: [0, 0, 1] }, hoehe: z1 - z0 },
-        halbraeume: [{ punkt: [0, 0, e0], normale: [-k0, 0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, 0, 1] }],
+        halbraeume: [{ punkt: [0, 0, e0], normale: [-k0, -ky0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, -ky1, 1] }],
         m: M,
       });
       if (bq.xFlach < -1e-9) plan.schnitte.push({ quader: { min: [bq.xFlach, -t, 0], max: [1, t, L] }, m: M }); // Fläche bis zum Biegebeginn kürzen
