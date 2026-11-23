@@ -16,6 +16,7 @@ import { initKontext, kontextAktionen } from "./kontext.js";
 import { zeigeMeldung } from "./meldungen.js";
 import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
 import { stirnLaschen, schenkelBereiche, laschenStart, laschenEnde } from "../kern/stirnflansch.js";
+import { stirnQuetsch, stirnQuetschKandidaten } from "../kern/stirnquetsch.js";
 import { quetschZuschnitt, quetschDreieck, quetschDxf, faltenPruefen, eckSchnitt2 } from "../kern/quetschfalte.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
@@ -618,22 +619,69 @@ function stirnMeshes(f, ebeneRef, versatz, zw, farbe) {
       for (let i = 0; i < P.count; i++) { const z = P.getZ(i), v = vMitte(P.getX(i), P.getY(i)); if (Math.abs(z) < 1e-6) P.setZ(i, laschenStart(l, v)); else if (Math.abs(z - len) < 1e-6) P.setZ(i, len + laschenEnde(l, v)); }
       P.needsUpdate = true; geo.computeVertexNormals();
     }
+    if (l.quetschListe?.length) { // Quetschfalte: Lasche endet an der Ecklinie (Schnittebene durch die Ecke O, unabhängig von der Abkanthöhe)
+      const mitteQ = [[0, 0]]; let ang = 0, u0 = 0, v0 = 0, p0 = 0;
+      for (const b of [...l.biegungen].sort((a, c2) => a.pos - c2.pos).concat([{ pos: l.laenge, winkel: 0 }])) { const dd = b.pos - p0; u0 += dd * Math.cos(ang); v0 += dd * Math.sin(ang); mitteQ.push([u0, v0]); p0 = b.pos; ang += (b.winkel * Math.PI) / 180; }
+      const uMitte = (u, v) => { let best = 1e30, bu = u; for (let i = 1; i < mitteQ.length; i++) { const a = mitteQ[i - 1], c2 = mitteQ[i], dx = c2[0] - a[0], dy = c2[1] - a[1], l2 = dx * dx + dy * dy || 1e-12, t = Math.max(0, Math.min(1, ((u - a[0]) * dx + (v - a[1]) * dy) / l2)), px = a[0] + dx * t, py = a[1] + dy * t, dd = (u - px) ** 2 + (v - py) ** 2; if (dd < best) { best = dd; bu = px; } } return bu; };
+      const P = geo.attributes.position;
+      for (const q of l.quetschListe) {
+        const nach = q.seite === "nach", endZ = nach ? len : 0, zO = (q.S[0] - l.p1[0]) * d[0] + (q.S[1] - l.p1[1]) * d[1];
+        for (let i = 0; i < P.count; i++) if (Math.abs(P.getZ(i) - endZ) < 1e-6) P.setZ(i, zO + (nach ? -1 : 1) * q.cotLasche * (uMitte(P.getX(i), P.getY(i)) - q.us));
+      }
+      P.needsUpdate = true; geo.computeVertexNormals();
+    }
     const M = new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, sg), new THREE.Vector3(-d[1], d[0], 0), new THREE.Vector3(d[0], d[1], 0)).setPosition(l.p1[0] + versatz[0], l.p1[1] + versatz[1], zEnde);
     geo.applyMatrix4(M); if (M.determinant() < 0) spiegleFlaechen(geo);
     geo.applyMatrix4(basis(ebeneRef)); meshes.push(koerperAusGeo(geo, farbe, f.id));
+    for (const q of l.quetschListe || []) { // gefaltetes Dreieck an der Ecke (auf der Wand oder der Lasche)
+      const m = material(f.material), v3 = (a) => new THREE.Vector3(...a), zO3 = (q.ende === "S1" ? -rueck : zw.tiefe - rueck) - q.sgIn * q.us;
+      const FM = basis(ebeneRef).multiply(new THREE.Matrix4().makeBasis(v3(q.X3), v3(q.Y3), v3(q.Z3)).setPosition(q.S[0] + versatz[0], q.S[1] + versatz[1], zO3)), wandId = (q.wand === "wand") === q.laschIst1 ? "wand2" : "wand1";
+      meshes.push(...quetschFaltMeshes(q.zus, wandId, m.t, FM, farbe, f.id));
+    }
   }
   return meshes;
 }
-function stirnAnhaengen(f, m, ebeneRef, versatz) {
+// Stirnlaschen und Quetschfalten an Stirnecken rechnen (vor dem Körper, weil die Wand an der Ecklinie geschnitten wird)
+function stirnBerechnen(f, m) {
   f._stirn = null; f._stirnFehler = null;
+  for (const x of doc.features) if (x.typ === "stirnquetsch" && x.ziel === f.id) x._sqFehler = null;
   const er = stirnErweiterungen(f, m); if (!er.length) return;
   const r = stirnLaschen(f._res, er, m); f._stirn = r.laschen; f._stirnFehler = r.fehler[0] || null;
-  if (f.versteckt) return;
+  const H = laengeVon(f);
+  for (const x of doc.features) {
+    if (x.typ !== "stirnquetsch" || x.ziel !== f.id || x._aus) continue;
+    try {
+      const l = r.laschen.find((q) => q.ende === x.ende && q.schenkel === +x.schenkel); if (!l) throw new Error("Die Stirnlasche an diesem Schenkel fehlt");
+      const info = stirnQuetsch(f._res, r.laschen, { ende: x.ende, schenkel: +x.schenkel, seite: x.seite }, H); info.feature = x; info.wand = x.wand === "wand" ? "wand" : "lasche"; (l.quetschListe ||= []).push(info);
+    } catch (e) { x._sqFehler = e.message; }
+  }
+}
+function stirnAnhaengen(f, m, ebeneRef, versatz) {
+  if (!f._stirn || f.versteckt) return;
   for (const mesh of stirnMeshes(f, ebeneRef, versatz, zweiseitig(f, "laenge", "laenge2"), darstellungVon(f, m))) { mesh.userData.stirn = true; modell.add(mesh); } // Stirnlaschen bleiben Netz (der exakte Kern kennt sie noch nicht) – sie dürfen nicht durch den exakten Körper verschwinden
 }
-function koerper(formen_, ebene, tiefe, richtung, farbe, fid) {
+// Wand an der Ecklinie einer Quetschfalte schneiden: Endpunkte des Profils an der Stirn werden entlang der Länge auf die Schnittebene durch die Ecke O gelegt
+function stirnWandVor(f, versatz, zw) {
+  const qs = (f._stirn || []).flatMap((l) => l.quetschListe || []); if (!qs.length) return null;
+  const rueck = rueckVersatz(zw.richtung, zw.tiefe), mitte = polylinie(f._res.pfad, 6).map(([x, y]) => [x + versatz[0], y + versatz[1]]);
+  const nahe = (x, y) => { let best = 1e30, bp = [x, y]; for (let i = 1; i < mitte.length; i++) { const a = mitte[i - 1], b = mitte[i], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-12, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2)), px = a[0] + dx * t, py = a[1] + dy * t, d = (x - px) ** 2 + (y - py) ** 2; if (d < best) { best = d; bp = [px, py]; } } return bp; };
+  return (geo) => {
+    const P = geo.attributes.position;
+    for (const q of qs) {
+      const zEnde = q.ende === "S1" ? -rueck : zw.tiefe - rueck, sgIn = q.sgIn, zO = zEnde - sgIn * q.us, S = [q.S[0] + versatz[0], q.S[1] + versatz[1]], w = q.wandRichtung, tang = Math.max(q.tangW, 1e-6);
+      for (let i = 0; i < P.count; i++) {
+        if (Math.abs(P.getZ(i) - zEnde) > 1e-6) continue;
+        const [cx, cy] = nahe(P.getX(i), P.getY(i)), out = (cx - S[0]) * w[0] + (cy - S[1]) * w[1];
+        if (out <= -tang) continue;
+        P.setZ(i, out >= 0 ? zO + sgIn * q.cotWand * out : zEnde + (zO - zEnde) * ((out + tang) / tang));
+      }
+    }
+    P.needsUpdate = true; geo.computeVertexNormals();
+  };
+}
+function koerper(formen_, ebene, tiefe, richtung, farbe, fid, vor = null) {
   const geo = new THREE.ExtrudeGeometry(formen_, { depth: tiefe, bevelEnabled: false, curveSegments: 48 });
-  geo.translate(0, 0, -rueckVersatz(richtung, tiefe));
+  geo.translate(0, 0, -rueckVersatz(richtung, tiefe)); vor?.(geo);
   geo.applyMatrix4(basis(ebene));
   return koerperAusGeo(geo, farbe, fid);
 }
@@ -1352,15 +1400,16 @@ function regen() {
         }
         f._kernLage = { ebene: E_(s.ebene), versatz: vz0 }; // für den exakten CAD-Kern (gleiche Lage wie das Anzeige-Netz)
         wendeBisAn(f, s.ebene, vz0);
-        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, vz0)], s.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id));
+        stirnBerechnen(f, m);
+        if (!f.versteckt) modell.add(koerper([konturForm(f._res, m.t, vz0)], s.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id, stirnWandVor(f, vz0, zweiseitig(f, "laenge", "laenge2"))));
         stirnAnhaengen(f, m, s.ebene, vz0);
       } else if (f.typ === "vorlage") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
         const m = material(f.material), v = VORLAGE[f.vorlage];
         const { start, ops } = profilErweitern(v.bau(f.params, m), profilErweiterungen(f, m), m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        f._kernLage = null;
-        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; wendeBisAn(f, f.ebene, vz); modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
+        f._kernLage = null; stirnBerechnen(f, m);
+        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; wendeBisAn(f, f.ebene, vz); modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id, stirnWandVor(f, vz, zweiseitig(f, "laenge", "laenge2")))); }
         stirnAnhaengen(f, m, f.ebene, f._kernLage?.versatz ?? [0, 0]);
       } else if (f.typ === "flaeche") {
         f._bleche = null; f._teile = null; f._mitAbwicklung = false;
@@ -1425,6 +1474,10 @@ function regen() {
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
         f._q = quetschGeo(z, f);
         if (!f.versteckt) quetschMeshes(z, f).forEach((o) => modell.add(o));
+      } else if (f.typ === "stirnquetsch") { // Quetschfalte an der Ecke Stirnlasche + Wand eines Blechprofils (Rechnung beim Profil: stirnBerechnen)
+        const z = finde(f.ziel); if (!z || !istProfil(z)) throw new Error("Das Blechprofil fehlt");
+        if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Blechprofil muss vor diesem Schritt stehen");
+        if (f._sqFehler) throw new Error(f._sqFehler);
       } else if (f.typ === "flanschende") { // Ende eines Flansches nachträglich ändern (rechtwinklig / bündig / Winkel, Versatz) – wirkt im Flächenblech (eckFaktoren)
         const z = finde(f.ziel); if (z?.typ !== "flaeche") throw new Error("Flächenblech fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Flächenblech muss vor diesem Schritt stehen");
@@ -1494,8 +1547,8 @@ function regen() {
         if (f.zeilen.some((z) => !(z.L > 0))) throw new Error("Jeder Schenkel braucht eine Länge grösser als 0");
         const { start, ops } = profilErweitern(freiesProfil(f.start, f.zeilen, m), profilErweiterungen(f, m), m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
-        f._kernLage = null;
-        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; wendeBisAn(f, f.ebene, vz); modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id)); }
+        f._kernLage = null; stirnBerechnen(f, m);
+        if (!f.versteckt) { const vz = daneben(f._res); f._kernLage = { ebene: E_(f.ebene), versatz: vz }; wendeBisAn(f, f.ebene, vz); modell.add(koerper([konturForm(f._res, m.t, vz)], f.ebene, zweiseitig(f, "laenge", "laenge2").tiefe, zweiseitig(f, "laenge", "laenge2").richtung, darstellungVon(f, m), f.id, stirnWandVor(f, vz, zweiseitig(f, "laenge", "laenge2")))); }
         stirnAnhaengen(f, m, f.ebene, f._kernLage?.versatz ?? [0, 0]);
       }
     } catch (e) { f._fehler = e.message; }
@@ -1584,7 +1637,7 @@ const richtungSkalieren = () => [...richtung.children, ...(typeof messGruppe ===
 // Browser ein-/ausklappen (Kopfzeile antippen)
 document.querySelector(".browser .ptitel").addEventListener("click", () => document.querySelector(".browser").classList.toggle("zu"));
 // ------------------------------------------------------------ Browser und Zeitleiste
-const NAMEN = { loftflansch: "Lofted Flange", rip: "Rip (Auftrennen)", biegung: "Biegung an Linie", skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", flanschende: "Flanschende", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
+const NAMEN = { loftflansch: "Lofted Flange", rip: "Rip (Auftrennen)", biegung: "Biegung an Linie", skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", flanschende: "Flanschende", stirnquetsch: "Quetschfalte (Stirn)", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
@@ -1615,7 +1668,7 @@ $("baum").addEventListener("dblclick", (e) => { const id = e.target.closest("li"
 const ZEIT_ICON = {
   loftflansch: '<path d="M3 18c4 0 5-12 9-12s5 12 9 12"/><path d="M3 21h18"/>', rip: '<path d="M3 12h7l2-3 2 6 2-3h5"/>', biegung: '<path d="M3 17h8l6-9h4"/>', skalieren: '<rect x="4" y="10" width="8" height="8"/><rect x="4" y="4" width="16" height="16" stroke-dasharray="2 2"/>', bohrung: '<circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4"/>', rohr: '<path d="M4 18h8a4 4 0 0 0 4-4V6"/>', spirale: '<path d="M6 20c8 0 8-4 0-4s-8-4 0-4 8-4 0-4"/>', rippe: '<path d="M4 20h16M12 20V6"/>',
   skizze: '<path d="M4 17l4-7 3 4 4-6"/><circle cx="4" cy="17" r="1.3"/><circle cx="15" cy="8" r="1.3"/>', extrusion: '<path d="M4 15l8 4 8-4-8-4z"/><path d="M12 11V3M9 6l3-3 3 3"/>', drehung: '<path d="M12 3v18" stroke-dasharray="2 2.5"/><path d="M12 7h5c1.4 3.5 1.4 6.5 0 10h-5z"/>', sweep: '<path d="M5 18c0-7 5-10 14-12" stroke-dasharray="2 2.5"/><rect x="3" y="16" width="5" height="5" rx=".8"/>', loft: '<rect x="3" y="16" width="18" height="4" rx="1"/><ellipse cx="12" cy="6" rx="5" ry="2.5"/><path d="M3 17L7 7M21 17l-4-10"/>',
-  blech: '<path d="M3 17h5l5-9h8"/>', vorlage: '<path d="M3 17h5l5-9h8"/>', profil: '<path d="M3 17h5l5-9h8"/>', flaeche: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>', kante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', profilkante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', flanschende: '<path d="M4 18h10l4-9"/><path d="M14 18l4-9" stroke-dasharray="2 2"/>', quetschfalte: '<path d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/>',
+  blech: '<path d="M3 17h5l5-9h8"/>', vorlage: '<path d="M3 17h5l5-9h8"/>', profil: '<path d="M3 17h5l5-9h8"/>', flaeche: '<path d="M4 8l8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>', kante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', profilkante: '<path d="M4 18h10a4 4 0 0 0 0-8H8"/>', stirnquetsch: '<path d="M4 18h12V6"/><path d="M16 18L8 10" stroke-dasharray="2 2"/>', flanschende: '<path d="M4 18h10l4-9"/><path d="M14 18l4-9" stroke-dasharray="2 2"/>', quetschfalte: '<path d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/>',
   dach: '<path d="M3 12l9-8 9 8"/><path d="M6 11v8h12v-8"/>', gebaeude: '<path d="M5 20V9l7-5 7 5v11z"/>', dachbleche: '<path d="M3 12l9-8 9 8"/><path d="M7 12l5-4 5 4"/>', eindeckung: '<path d="M3 12l9-8 9 8"/><path d="M6 14h12M8 17h8"/>', dachelement: '<path d="M3 12l9-8 9 8"/><rect x="9" y="11" width="6" height="5"/>', lukarne: '<path d="M3 12l9-8 9 8"/><path d="M9 20v-6l3-3 3 3v6z"/>',
   ebene: '<path d="M3 16l5-8h13l-5 8z"/>', achse: '<path d="M4 20L20 4" stroke-dasharray="3 2"/>', konpunkt: '<circle cx="12" cy="12" r="2.5"/>', kmuster: '<rect x="3" y="3" width="6" height="6"/><rect x="14" y="3" width="6" height="6"/><rect x="3" y="14" width="6" height="6"/><rect x="14" y="14" width="6" height="6"/>', schale: '<path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M8 10l4-2 4 2v4l-4 2-4-2z"/>', kantenrund: '<path d="M4 20V8a4 4 0 0 1 4-4h12"/>', kanten3d: '<path d="M4 20V8a4 4 0 0 1 4-4h12"/>', teilen: '<path d="M4 12h16" stroke-dasharray="3 2"/><rect x="5" y="4" width="14" height="16" rx="1"/>', abwickeln: '<path d="M4 6h16v12H4z"/><path d="M9 6v12M15 6v12" stroke-dasharray="2 2"/>', falten: '<path d="M4 6l6 3v9l-6-3zM10 9l6-3 4 2v9l-4-2-6 3"/>', rundblech: '<ellipse cx="12" cy="8" rx="6" ry="3"/><path d="M6 8l-2 10h16L18 8"/>', bild: '<rect x="3" y="5" width="18" height="14" rx="1"/><circle cx="9" cy="10" r="1.5"/><path d="M4 18l5-5 4 3 3-3 4 4"/>', import: '<path d="M12 3v12M8 11l4 4 4-4M5 20h14"/>'
 };
@@ -2149,6 +2202,7 @@ function bearbeite(f) {
   if (f.typ === "profilkante") return kanteDialog(f);
   if (f.typ === "quetschfalte") return quetschDialog(f);
   if (f.typ === "flanschende") return flanschEndeDialog(f);
+  if (f.typ === "stirnquetsch") return stirnQuetschDialog(f);
   if (f.typ === "gebaeude") { const d = doc.features.find((x) => x.typ === "dach" && x.gebaeude === f.id); return d ? dachDialog(d) : gebaeudeDialog(f); }
   if (f.typ === "abwickeln" || f.typ === "falten") return status(f.typ === "abwickeln" ? "Abwickeln: das Blech liegt flach, bis «Falten» folgt. Dazwischen Skizze + Extrusion «Ausschneiden»." : "Falten: bildet die Ausschnitte der Abwicklung aufs gekantete Blech ab.");
   if (f.typ === "ebene") return ebeneDialog(f.art, f);
@@ -2605,7 +2659,7 @@ let kantenLabels = [];
 const kantenName = (f, key) => { const [pi, k] = key.split(":").map(Number); return `${f._bleche?.length > 1 ? `B${pi + 1} ` : ""}K${k + 1}`; };
 function zeigeKanten() {
   leeren(kantenZeiger); kantenLabels = [];
-  if (quetschWz && !skizze) { zeigeQuetschEcken(quetschWz.f); return; }
+  if (quetschWz && !skizze) { if (quetschWz.art === "stirn") zeigeStirnQuetschPunkte(quetschWz.f); else zeigeQuetschEcken(quetschWz.f); return; }
   if (kantenWz?.schritt === "kante" && istProfil(kantenWz.f) && !skizze) return zeigeProfilKanten(kantenWz.f);
   const kd = dlg?.feature?.typ === "kante" ? dlg.feature : null; // Dialog eines Schritts «Kante»: dessen Kante leuchtet
   const f = kd ? finde(kd.ziel) : dlg?.feature?.typ === "flaeche" ? dlg.feature : hauptVon(auswahl);
@@ -3174,7 +3228,12 @@ function quetschGeo(z, f) {
 }
 // Gefaltete Quetschfalte: zwei Blechlagen (2 t) hinter der Aussenfläche der Aufkantung; die Faltkante O–C' ist gerundet (geschlossener Saum, Innenradius 0 → Aussenradius t)
 function quetschMeshes(z, f) {
-  const q = f._q, m = material(z.material), t = m.t, B = basis(blechEbene(finde(z.skizze).ebene, z, m)), tri = quetschDreieck(q.zus, q.wand), g = q.zus.geometrie;
+  const q = f._q, m = material(z.material), B = basis(blechEbene(finde(z.skizze).ebene, z, m)), v = (a) => new THREE.Vector3(...a);
+  return quetschFaltMeshes(q.zus, q.wand, m.t, B.clone().multiply(new THREE.Matrix4().makeBasis(v(q.X3), v(q.Y3), v(q.Z3)).setPosition(q.O[0], q.O[1], 0)), darstellungVon(z, m), f.id);
+}
+// Gefaltetes Dreieck mit gerundeten Kanten; M = Matrix vom Eckensystem (O, X3, Y3, Z3) in die Welt
+function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
+  const q = { zus, wand }, tri = quetschDreieck(q.zus, q.wand), g = q.zus.geometrie;
   const v = (a) => new THREE.Vector3(...a), P = v(tri.P).sub(v(tri.O)), C = v(tri.C).sub(v(tri.O)), e = v(q.wand === "wand1" ? g.e1 : g.e2), d = v(q.wand === "wand1" ? g.d1 : g.d2);
   let n = new THREE.Vector3().crossVectors(e, d).normalize(); if (n.dot(new THREE.Vector3(Math.cos(g.beta * Math.PI / 360), Math.sin(g.beta * Math.PI / 360), 0)) > 0) n.negate(); // nach aussen
   const u = P.clone().normalize(), y = new THREE.Vector3().crossVectors(n, u), O2 = new THREE.Vector2(0, 0), P2 = new THREE.Vector2(P.dot(u), P.dot(y)), C2 = new THREE.Vector2(C.dot(u), C.dot(y));
@@ -3187,7 +3246,7 @@ function quetschMeshes(z, f) {
   const nF = zuSeite(fold, P2).multiplyScalar(r), nE = zuSeite(eps, C2).multiplyScalar(r);
   const fA = O2.clone().add(nF), fB = C2.clone().add(nF), eA = O2.clone().add(nE), eB = P2.clone().add(nE);
   const Oi = schn(fA, fB, eA, eB) || O2, Pi = schn(eA, eB, P2, C2) || P2, Ci = schn(fA, fB, P2, C2) || C2;
-  const mk = (geo, lage) => { geo.applyMatrix4(lage); geo.applyMatrix4(new THREE.Matrix4().makeBasis(v(q.X3), v(q.Y3), v(q.Z3)).setPosition(q.O[0], q.O[1], 0)); geo.applyMatrix4(B); return koerperAusGeo(geo, darstellungVon(z, m), f.id); };
+  const mk = (geo, lage) => { geo.applyMatrix4(lage); geo.applyMatrix4(M); return koerperAusGeo(geo, farbe, fid); };
   const aussen = new THREE.Matrix4().makeBasis(u, y, n).setPosition(n.clone().multiplyScalar(t / 2));
   const koerper = new THREE.ExtrudeGeometry(new THREE.Shape([Oi, Pi, Ci]), { depth: 2 * t, bevelEnabled: false }), meshes = [mk(koerper, aussen)];
   if (r > 1e-6) for (const [a0, b0] of [[Oi, Ci], [Oi, Pi]]) { // Wulst der Faltkante und der Anschlusskante
@@ -3211,7 +3270,12 @@ document.addEventListener("click", (e) => { const b = e.target.closest?.(".dklei
 $("wkAbbr").onclick = () => { const f = wkAbbruch; wkZu(); f?.(); status(""); };
 function starteQuetschWz() {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
-  const h = hauptVon(auswahl); if (h?.typ !== "flaeche" || h.versteckt) return status("Zuerst ein Flächenblech mit Flanschen an zwei Kanten anklicken.");
+  const h = hauptVon(auswahl);
+  if (istProfil(h) && !h.versteckt) {
+    if (!stirnQuetschPunkte(h).length) return status("Quetschfalte am Blechprofil: braucht eine Stirnlasche mit einer Biegung (Flansch an der Stirn) neben einer einfachen Wand – erst «Flansch» an der Stirnkante setzen.");
+    quetschWz = { f: h, art: "stirn" }; zeigeKanten(); wkZeigen("Quetschfalte", `Ecke von «${h.name}» anklicken (orange Punkte): dort treffen Stirnlasche und Wand zusammen – der Überschuss wird gefaltet.`, endeQuetschWz); return status("Quetschfalte: Ecke anklicken – Esc bricht ab.");
+  }
+  if (h?.typ !== "flaeche" || h.versteckt) return status("Zuerst ein Flächenblech mit Flanschen an zwei Kanten (oder ein Blechprofil mit Stirnlasche) anklicken.");
   quetschWz = { f: h, art: "quetsch" }; zeigeKanten(); wkZeigen("Quetschfalte", `Ecke des Flächenblechs «${h.name}» anklicken (orange Punkte). Beide Nachbarkanten brauchen einen Flansch; Winkel und Höhe dürfen verschieden sein.`, endeQuetschWz); status("Quetschfalte: Ecke anklicken – Esc bricht ab.");
 }
 function starteEndeWz() {
@@ -3219,8 +3283,32 @@ function starteEndeWz() {
   const h = hauptVon(auswahl); if (h?.typ !== "flaeche" || h.versteckt) return status("Zuerst ein Flächenblech mit Flansch anklicken.");
   quetschWz = { f: h, art: "ende" }; zeigeKanten(); wkZeigen("Flanschende", `Ecke des Flächenblechs «${h.name}» anklicken (orange Punkte): dort lässt sich das Ende des Flansches an einer der beiden Kanten ändern – rechtwinklig, bündig zur Nachbarkante oder mit Winkel, verlängern oder kürzen.`, endeQuetschWz); status("Flanschende: Ecke anklicken – Esc bricht ab.");
 }
+// Ecken eines Blechprofils, an denen eine Quetschfalte möglich ist (Stirnlasche + Wand), mit Lage im Raum
+function stirnQuetschPunkte(f) {
+  const kl = f._kernLage, zw = zweiseitig(f, "laenge", "laenge2"); if (!kl || !f._stirn?.length || f.versteckt) return [];
+  const rueck = rueckVersatz(zw.richtung, zw.tiefe), B = basis(kl.ebene), out = [];
+  for (const k of stirnQuetschKandidaten(f._res, f._stirn)) {
+    try { const q = stirnQuetsch(f._res, f._stirn, k, laengeVon(f)), zO = (k.ende === "S1" ? -rueck : zw.tiefe - rueck) - q.sgIn * q.us; const p = new THREE.Vector3(q.S[0] + kl.versatz[0], q.S[1] + kl.versatz[1], zO).applyMatrix4(B), L = lageVon(f); if (L) p.applyMatrix4(L); out.push({ ...k, p }); } catch {}
+  }
+  return out;
+}
+function zeigeStirnQuetschPunkte(f) {
+  for (const e of stirnQuetschPunkte(f)) { const r = new THREE.Mesh(new THREE.SphereGeometry(3, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe0782b, depthTest: false, transparent: true })); r.position.copy(e.p); r.renderOrder = 13; r.userData.bildschirm = 0.008; kantenZeiger.add(r); }
+}
+function stirnQuetschDialog(f) {
+  featureDialog(f, false, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "wand", label: "Falte liegt auf", optionen: [["lasche", "der Stirnlasche"], ["wand", "der Wand"]], wert: ff.wand || "lasche" }],
+    (ff, w) => { if (w.name != null) ff.name = w.name; if (w.wand) ff.wand = w.wand; }, "Quetschfalte (Stirn)", "Der Überschuss an der Ecke zwischen Stirnlasche und Wand wird an seiner Winkelhalbierenden 180° gefaltet und liegt auf der gewählten Fläche. Die Abwicklung (DXF) enthält den Überschuss mit Faltlinie.",
+    { info: () => (f._fehler ? "⚠ " + f._fehler : "") });
+}
 function endeQuetschWz() { quetschWz = null; wkZu(); zeigeKanten(); }
 function quetschKlick(e) {
+  if (quetschWz.art === "stirn") {
+    const f = quetschWz.f, sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 36 : 22;
+    for (const c of stirnQuetschPunkte(f)) { const w = aufSchirm(c.p.toArray()); const d = Math.hypot(w[0] - sm[0], w[1] - sm[1]); if (d < bd) { bd = d; best = c; } }
+    if (!best) { status("Eine Ecke anklicken (orange Punkte)."); return true; }
+    const n = { id: neueId(), typ: "stirnquetsch", name: `Quetschfalte ${f.name} · ${best.ende === "S1" ? "Stirn 1" : "Stirn 2"} Schenkel ${best.schenkel}`, ziel: f.id, ende: best.ende, schenkel: best.schenkel, seite: best.seite, wand: "lasche" };
+    quetschWz = null; wkZu(); einfuegen(n); regen(); zeigeKanten(); waehle(n.id); status(n._fehler ? "⚠ " + n._fehler : "Quetschfalte angesetzt (Schritt in der Zeitleiste)."); return true;
+  }
   const z = quetschWz.f, s = finde(z.skizze), B = basis(blechEbene(s.ebene, z, material(z.material))), sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 36 : 20;
   for (const c of quetschEcken(z)) { const w = aufSchirm(new THREE.Vector3(c.p[0], c.p[1], 0).applyMatrix4(B).toArray()); const d = Math.hypot(w[0] - sm[0], w[1] - sm[1]); if (d < bd) { bd = d; best = c; } }
   if (!best) { status("Eine Ecke des Flächenblechs anklicken (orange Punkte)."); return true; }

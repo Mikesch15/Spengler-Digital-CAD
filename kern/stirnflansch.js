@@ -58,31 +58,38 @@ export function stirnLaschen(res, extras, m) {
     const ring = kontur(pfad, m.t, 3), laenge = r2.zuschnitt - ol, biegungen = r2.biegungen.map((b) => ({ pos: b.pos - ol, winkel: b.winkel }));
     const wahl = x.schenkel > 0 ? bereiche.filter((b) => b.nr === x.schenkel) : bereiche;
     if (!wahl.length) fehler.push(`Schenkel ${x.schenkel} gibt es nicht (gerade Schenkel: 1–${bereiche.length})`);
-    for (const b of wahl) laschen.push({ ende: x.ende, schenkel: b.nr, s0: b.s0, s1: b.s1, p1: b.p1, p2: b.p2, laenge, biegungen, ring, b });
+    const bgn = pfad.find((e) => e.typ === "bogen"), lin = pfad.filter((e) => e.typ === "linie"), einzel = biegungen.length === 1 && bgn ? { rm: bgn.rm, winkel: bgn.winkel, gerade: lin[0] ? hyp(lin[0].p2[0] - lin[0].p1[0], lin[0].p2[1] - lin[0].p1[1]) : 0 } : null; // einfache Lasche (eine Biegung) – Voraussetzung für die Quetschfalte
+    for (const b of wahl) laschen.push({ ende: x.ende, schenkel: b.nr, s0: b.s0, s1: b.s1, p1: b.p1, p2: b.p2, laenge, biegungen, ring, einzel, b });
   }
   for (const l of laschen) { // Gehrung nur, wenn der Nachbarschenkel an derselben Stirnseite auch eine Lasche hat
     const hat = (nr) => laschen.some((q) => q.ende === l.ende && q.schenkel === nr);
-    l.gehrungStart = l.b.vor && hat(l.schenkel - 1) ? l.b.vor : null; l.gehrungEnde = l.b.nach && hat(l.schenkel + 1) ? l.b.nach : null; delete l.b;
+    l.gehrungStart = l.b.vor && hat(l.schenkel - 1) ? l.b.vor : null; l.gehrungEnde = l.b.nach && hat(l.schenkel + 1) ? l.b.nach : null; l.vor = l.b.vor; l.nach = l.b.nach; delete l.b;
   }
   return { laschen, fehler };
 }
 
-// Umriss der Abwicklung mit Laschen: Rechteck W × H, Laschen von S1 unten (y < 0), von S2 oben (y > H); Gehrungen als schräge Seitenkanten
+// Umriss der Abwicklung mit Laschen: Rechteck W × H, Laschen von S1 unten (y < 0), von S2 oben (y > H); Gehrungen als schräge Seitenkanten.
+// Quetschfalte (l.quetsch aus kern/stirnquetsch.js): an der Ecke Lasche/Wand ersetzt die Folge Spitze Lasche – Seitenkante – Falte – Seitenkante – Spitze Wand die Rechteckecke.
 const stuetz = (l) => [0, ...l.biegungen.map((b) => b.pos).filter((p) => p > 0 && p < l.laenge), l.laenge];
+const gleichP = (a, b) => hyp(a[0] - b[0], a[1] - b[1]) < 1e-9;
+function quetschFolge(q) { const f = q.flach, z = f.z; return [f.P2, ...(gleichP(f.P2s, f.P2) ? [] : [f.P2s]), f.C, ...(gleichP(f.P1s, f.P1) ? [] : [f.P1s]), f.P1]; }
+const qSeite = (l, seite) => (l.quetschListe || []).find((q) => q.seite === seite);
 export function abwicklungUmriss(W, H, laschen) {
-  const u = [[0, 0]], o = [];
+  const hat = (ende, seite) => laschen.some((l) => l.ende === ende && qSeite(l, seite));
+  const u = hat("S1", "vor") ? [] : [[0, 0]], o = [];
   for (const l of laschen.filter((q) => q.ende === "S1").sort((a, b) => a.s0 - b.s0)) {
-    const P = stuetz(l).map((p) => [p, laschenHoehe(l, p)]);
-    for (const [p, v] of P) u.push([l.s0 + laschenStart(l, v), -p]);
-    for (const [p, v] of [...P].reverse()) u.push([l.s1 + laschenEnde(l, v), -p]);
+    const P = stuetz(l).map((p) => [p, laschenHoehe(l, p)]), qv = qSeite(l, "vor"), qn = qSeite(l, "nach");
+    if (qv) u.push(...quetschFolge(qv)); else for (const [p, v] of P) u.push([l.s0 + laschenStart(l, v), -p]);
+    if (qn) u.push(...quetschFolge(qn)); else for (const [p, v] of [...P].reverse()) u.push([l.s1 + laschenEnde(l, v), -p]);
   }
-  u.push([W, 0], [W, H]);
+  if (!hat("S1", "nach")) u.push([W, 0]);
+  if (!hat("S2", "nach")) u.push([W, H]);
   for (const l of laschen.filter((q) => q.ende === "S2").sort((a, b) => b.s0 - a.s0)) {
-    const P = stuetz(l).map((p) => [p, laschenHoehe(l, p)]);
-    for (const [p, v] of P) o.push([l.s1 + laschenEnde(l, v), H + p]);
-    for (const [p, v] of [...P].reverse()) o.push([l.s0 + laschenStart(l, v), H + p]);
+    const P = stuetz(l).map((p) => [p, laschenHoehe(l, p)]), qv = qSeite(l, "vor"), qn = qSeite(l, "nach");
+    if (qn) o.push(...quetschFolge(qn)); else for (const [p, v] of P) o.push([l.s1 + laschenEnde(l, v), H + p]);
+    if (qv) o.push(...quetschFolge(qv)); else for (const [p, v] of [...P].reverse()) o.push([l.s0 + laschenStart(l, v), H + p]);
   }
-  o.push([0, H]);
+  if (!hat("S2", "vor")) o.push([0, H]);
   const pts = [...u, ...o].filter((p, i, a) => !i || hyp(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 1e-9);
   return pts;
 }
@@ -93,7 +100,18 @@ export function laschenBiegelinien(H, laschen) {
   for (const q of laschen) {
     const sg = q.ende === "S1" ? -1 : 1, y0 = q.ende === "S1" ? 0 : H;
     l.push({ a: [q.s0, y0], b: [q.s1, y0] });
-    for (const b of q.biegungen) { const v = laschenHoehe(q, b.pos); l.push({ a: [q.s0 + laschenStart(q, v), y0 + sg * b.pos], b: [q.s1 + laschenEnde(q, v), y0 + sg * b.pos] }); }
+    for (const b of q.biegungen) {
+      const v = laschenHoehe(q, b.pos), a = [q.s0 + laschenStart(q, v), y0 + sg * b.pos], c = [q.s1 + laschenEnde(q, v), y0 + sg * b.pos];
+      if (qSeite(q, "nach")) c[0] = qSeite(q, "nach").flach.O[0]; if (qSeite(q, "vor")) a[0] = qSeite(q, "vor").flach.O[0]; // Biegelinie der Lasche endet an der Ecke O
+      l.push({ a, b: c });
+    }
+    for (const qq of q.quetschListe || []) { const O = qq.flach.O; l.push({ a: O, b: [O[0], y0] }); } // Biegelinie der Wand läuft bis zur Ecke O
   }
   return l;
+}
+// Quetschfalte-Linien der Laschen: Faltlinie O–C (rot) und Ecklinien O–P (Hilfslinien)
+export function laschenQuetschLinien(laschen) {
+  const out = [];
+  for (const l of laschen) for (const q of l.quetschListe || []) { const f = q.flach; out.push({ art: "quetsch", a: f.O, b: f.C }, { art: "ecklinie", a: f.O, b: f.P1 }, { art: "ecklinie", a: f.O, b: f.P2 }); }
+  return out;
 }

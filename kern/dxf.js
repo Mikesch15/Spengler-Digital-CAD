@@ -1,7 +1,7 @@
 // Spengler Digital CAD – Kern: DXF-Export (R12, mm)
 // Abwicklung mit Biegelinien und darüber der Querschnitt. Öffnet in BricsCAD, AutoCAD, Fusion.
 import { polylinie, grenzen } from "./geometrie.js";
-import { abwicklungUmriss, laschenBiegelinien } from "./stirnflansch.js";
+import { abwicklungUmriss, laschenBiegelinien, laschenQuetschLinien } from "./stirnflansch.js";
 
 // Zeichnet ein Teil ab (x0, y0) in out und gibt die belegte Höhe zurück
 // laschen: Stirnflansche (siehe stirnflansch.js) – ragen in der Abwicklung unten (Anfang) bzw. oben (Ende) über das Rechteck hinaus
@@ -20,7 +20,7 @@ function teil(out, res, laenge, titel, x0 = 0, y0 = 0, laschen = []) {
     out.push("10", f(x + x0), "20", f(y + y0), "30", "0", "40", h.toFixed(2), "1", ascii(s));
   };
   const W = res.zuschnitt, H = laenge;
-  if (laschen.length) { const U = abwicklungUmriss(W, H, laschen); U.forEach((p, i) => linie("ZUSCHNITT", p[0], p[1], U[(i + 1) % U.length][0], U[(i + 1) % U.length][1], 7)); for (const l of laschenBiegelinien(H, laschen)) linie("BIEGELINIEN", l.a[0], l.a[1], l.b[0], l.b[1], 1); }
+  if (laschen.length) { const U = abwicklungUmriss(W, H, laschen); U.forEach((p, i) => linie("ZUSCHNITT", p[0], p[1], U[(i + 1) % U.length][0], U[(i + 1) % U.length][1], 7)); for (const l of laschenBiegelinien(H, laschen)) linie("BIEGELINIEN", l.a[0], l.a[1], l.b[0], l.b[1], 1); for (const l of laschenQuetschLinien(laschen)) linie(l.art === "quetsch" ? "QUETSCHFALTE" : "HILFSLINIE", l.a[0], l.a[1], l.b[0], l.b[1], l.art === "quetsch" ? 1 : 8); }
   else [[0, 0, W, 0], [W, 0, W, H], [W, H, 0, H], [0, H, 0, 0]].forEach(([a, b, c, d]) => linie("ZUSCHNITT", a, b, c, d, 7));
   for (const b of res.biegungen) {
     linie("BIEGELINIEN", b.pos, 0, b.pos, H, 1);
