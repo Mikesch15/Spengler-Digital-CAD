@@ -37,6 +37,7 @@ export const BAUSTEINE_STANDARD = [
 
 // Abkantfolge des Bausteins rechnen (wie ein Profil mit einem langen Anfangsschenkel auf der Fläche)
 const X = 100;
+const zahl = (x) => String(+(+x).toFixed(2));
 export function bausteinProfil(b0, m) {
   const b = werkzeugAuf(b0, m); // Flansch/Umschlag-Werkzeug → Abkantfolge und Versatz
   if (!b || !String(b.folge ?? "").trim()) return { zugabe: 0, biegungen: [], zeilen: [] };
@@ -45,6 +46,9 @@ export function bausteinProfil(b0, m) {
   const res = berechne(start, ops, m.t, m.ri, m.k);
   const v = +b.versatz || 0, zugabe = res.zuschnitt - X + v;
   // Anschlag ab Schnittkante des Zuschnitts; abstand = Lage der Biegelinie ab der gezeichneten Kante (nach aussen)
+  // Schenkelmass im Querschnitt: so wie eingegeben (Länge «bis» Mittellinie/Aussen/Innen/Tangente), nicht die rechnerische Länge der Mittellinie
+  const w = b0?.werkzeug;
+  if (w?.typ === "flansch" && res.beschriftungen?.[1]) { const bz = w.bezug || "mitte"; res.beschriftungen[1] = { ...res.beschriftungen[1], mass: +w.laenge, text: bz === "mitte" ? undefined : `${zahl(w.laenge)} ${{ aussen: "aussen", innen: "innen", tangente: "tang." }[bz] || ""}`.trim() }; }
   const biegungen = res.biegungen.map((bg) => ({ ...bg, anschlag: res.zuschnitt - bg.pos, abstand: bg.pos - X + v }));
   // Querschnitt (x nach aussen, y Höhe) ohne den Anfangsschenkel auf der Fläche – für die Eckprüfung
   const quer = kontur(res.pfad, m.t, 6).map(([x, y]) => [x - X + v, y]);

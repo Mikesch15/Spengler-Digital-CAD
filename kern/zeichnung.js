@@ -27,7 +27,7 @@ export function profilSvg(res, { breite = 300, hoehe = 220, rand = 34, schrift =
     const p = P([b.x, b.y]);
     let nx = Math.sin(b.richtung), ny = Math.cos(b.richtung); // Normale in SVG-Koordinaten
     if ((p[0] - mitte[0]) * nx + (p[1] - mitte[1]) * ny < 0) { nx = -nx; ny = -ny; }
-    marke(p, [nx, ny], +b.mass.toFixed(1), "mass", schrift * 0.6 + 4);
+    marke(p, [nx, ny], b.text ?? +b.mass.toFixed(1), "mass", schrift * 0.6 + 4);
   }
   const vonMitte = (p) => { const dx = p[0] - mitte[0], dy = p[1] - mitte[1], l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; };
   let nr = 0;
@@ -190,7 +190,7 @@ export function bausteinSvg(p, t, { breite = 320, hoehe = 220, rand = 26, schrif
   p.res.beschriftungen.slice(1).forEach((b) => { // Schenkelmasse (ohne die Fläche)
     const q = P(sx([b.x, b.y])); let nx = Math.sin(b.richtung), ny = Math.cos(b.richtung);
     if ((q[0] - mitte[0]) * nx + (q[1] - mitte[1]) * ny < 0) { nx = -nx; ny = -ny; }
-    out.push(`<text x="${z(q[0] + nx * schrift)}" y="${z(q[1] + ny * schrift)}" class="mass">${+b.mass.toFixed(1)}</text>`);
+    out.push(`<text x="${z(q[0] + nx * schrift)}" y="${z(q[1] + ny * schrift)}" class="mass">${esc(b.text ?? +b.mass.toFixed(1))}</text>`);
   });
   let nr = 0;
   for (const el of p.res.pfad) if (el.typ === "bogen") { const q = P(sx(el.pm)), c = P(sx(el.zentrum)), dx = q[0] - c[0], dy = q[1] - c[1], l = Math.hypot(dx, dy) || 1; out.push(`<text x="${z(q[0] + (dx / l) * schrift)}" y="${z(q[1] + (dy / l) * schrift)}" class="biegung">B${++nr}</text>`); }
