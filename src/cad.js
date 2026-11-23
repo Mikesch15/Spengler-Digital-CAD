@@ -1039,7 +1039,7 @@ function griffeKante(f) {
   const laenge = Math.max(1, +wk.laenge || 10), s = wk.seite === -1 ? -1 : 1, l = [];
   const mk = (tip, dir, tan, radius) => {
     l.push({ feld: "laenge", pos: tip, dir, faktor: 1, min: 0.5, farbe: 0xe0782b }, { feld: "laenge", pos: tip.clone(), dir: dir.clone().negate(), faktor: -1, min: 0.5, farbe: 0xe0782b });
-    if (wk.typ === "flansch") { const k = 180 / Math.PI / Math.max(4, radius); const bogen = { c: tip.clone().addScaledVector(dir, -radius), R: radius }; l.push({ feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(s), faktor: k, min: -170, max: 170, farbe: 0x2f7dd1, bogen, erst: true }, { feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(-s), faktor: -k, min: -170, max: 170, farbe: 0x2f7dd1, bogen }); }
+    if (wk.typ === "flansch") { const k = 180 / Math.PI / Math.max(4, radius); const bogen = { c: tip.clone().addScaledVector(dir, -radius), R: radius, versetzt: true }; l.push({ feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(s), faktor: k, min: -170, max: 170, farbe: 0x2f7dd1, bogen, erst: true }, { feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(-s), faktor: -k, min: -170, max: 170, farbe: 0x2f7dd1, bogen }); }
   };
   if (z.typ === "flaeche") {
     const [pi, k] = String(f.key).split(":").map(Number), bl = z._bleche?.find((b) => b.pi === pi), g = bl?.gruppen[k], pr = bl?.profile[k]; if (!g?.gerade || !pr?.res) return [];
@@ -1147,17 +1147,23 @@ function zeichneGriffe() {
   leeren(griffGruppe); griffe = [];
   const gf = dlg?.feature || vorschauFeature(); if (!gf || skizze) return;
   try { griffe = griffeFuer(gf).filter((g) => griffInput(g.feld)); } catch { griffe = []; }
+  for (const g of griffe) { // Drehgriff am Flansch: Bogen um die Biegekante mit mindestens bildschirmgrossem Radius, seitlich versetzt – so liegt er nicht auf dem Längenpfeil
+    const bg = g.bogen; if (!bg?.versetzt) continue;
+    if (g.erst) { bg.t0 = g.dir.clone(); bg.e1 = g.pos.clone().sub(bg.c).normalize(); bg.L = griffLaenge(g.pos); bg.Rv = Math.max(bg.R, bg.L * 1.7); bg.p0 = 0.55; }
+    const sg = g.erst ? 1 : -1, ph = bg.p0, nt = bg.e1.clone().multiplyScalar(-Math.sin(ph)).addScaledVector(bg.t0, Math.cos(ph)).normalize();
+    g.pos = bg.c.clone().addScaledVector(bg.e1, Math.cos(ph) * bg.Rv).addScaledVector(bg.t0, Math.sin(ph) * bg.Rv); g.dir = nt.multiplyScalar(sg); g.faktor = Math.sign(g.faktor) * (180 / Math.PI) / bg.Rv;
+  }
   const mat = (cl) => new THREE.MeshBasicMaterial({ color: cl, depthTest: false, transparent: true }), kegel = (pos, dirv, rK, h, cl, ord) => { const m = new THREE.Mesh(new THREE.ConeGeometry(rK, h, 20), mat(cl)); m.position.copy(pos); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirv); m.renderOrder = ord; return m; };
   const kugel = (pos, r, cl, ord) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), mat(cl)); m.position.copy(pos); m.renderOrder = ord; return m; };
   for (const g of griffe) { // wie in Fusion: Ziehpfeil = dünne Linie mit grossem Kegel; Drehgriff = Kreisbogen mit Pfeilspitzen an beiden Enden und Griffpunkt; blau, unter dem Zeiger orange
     const an = griffKey(g) === hoverGriff || (g.bogen && griffe.some((x) => x.bogen === g.bogen && griffKey(x) === hoverGriff)), farbe = an ? 0xe0782b : GRIFFFARBE, L = griffLaenge(g.pos), dir = g.dir;
     if (g.bogen) {
       if (!g.erst) continue;
-      const { c, R } = g.bogen, e1 = g.pos.clone().sub(c).normalize(), th = Math.max(0.3, Math.min(1.05, (L * 0.8) / Math.max(R, 1e-6))), pt = (p) => c.clone().addScaledVector(e1, Math.cos(p) * R).addScaledVector(dir, Math.sin(p) * R), tg = (p) => e1.clone().multiplyScalar(-Math.sin(p)).addScaledVector(dir, Math.cos(p)).normalize();
+      const bg = g.bogen, c = bg.c, R = bg.Rv ?? bg.R, e1 = bg.e1 || g.pos.clone().sub(c).normalize(), tn = bg.t0 || dir, p0 = bg.p0 || 0, th = Math.max(0.3, Math.min(1.05, (L * 0.8) / Math.max(R, 1e-6))), pt = (p) => c.clone().addScaledVector(e1, Math.cos(p0 + p) * R).addScaledVector(tn, Math.sin(p0 + p) * R), tg = (p) => e1.clone().multiplyScalar(-Math.sin(p0 + p)).addScaledVector(tn, Math.cos(p0 + p)).normalize();
       const kopfL = L * 0.22, dphi = kopfL / Math.max(R, 1e-6), pts = Array.from({ length: 25 }, (_, i) => pt(-th + dphi * 0.5 + ((2 * th - dphi) * i) / 24));
       const rohr = (cl, r, ord) => { const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, r, 8, false), mat(cl)); m.renderOrder = ord; return m; };
-      griffGruppe.add(rohr(0xffffff, L * 0.02, 29), kegel(pt(th), tg(th), L * 0.092, kopfL * 1.14, 0xffffff, 29), kegel(pt(-th), tg(-th).negate(), L * 0.092, kopfL * 1.14, 0xffffff, 29), kugel(g.pos, L * 0.05, 0xffffff, 29),
-        rohr(farbe, L * 0.011, 30), kegel(pt(th), tg(th), L * 0.07, kopfL, farbe, 31), kegel(pt(-th), tg(-th).negate(), L * 0.07, kopfL, farbe, 31), kugel(g.pos, L * 0.036, farbe, 31));
+      griffGruppe.add(rohr(0xffffff, L * 0.02, 29), kegel(pt(th), tg(th), L * 0.092, kopfL * 1.14, 0xffffff, 29), kegel(pt(-th), tg(-th).negate(), L * 0.092, kopfL * 1.14, 0xffffff, 29), kugel(pt(0), L * 0.05, 0xffffff, 29),
+        rohr(farbe, L * 0.011, 30), kegel(pt(th), tg(th), L * 0.07, kopfL, farbe, 31), kegel(pt(-th), tg(-th).negate(), L * 0.07, kopfL, farbe, 31), kugel(pt(0), L * 0.036, farbe, 31));
       continue;
     }
     const kopfL = L * 0.26, schaftL = L - kopfL, q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir), rS = L * (an ? 0.014 : 0.01), rK = L * (an ? 0.085 : 0.075);
