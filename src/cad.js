@@ -2554,6 +2554,13 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]); // + = links (konvexe Ecke)
   const ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt); // dieselbe Eckregel wie die Abwicklung
   const n = bl.gruppen.length;
+  for (const k of bl.quetsch?.keys() || []) { // Quetschfalte: die Fläche läuft in der Ecke bis zur gezeichneten Ecke durch, damit zwischen Fläche, Biegungen und Falte keine Lücke bleibt
+    const kv = (k - 1 + n) % n, V = bl.gruppen[k].punkte[0], dV = richt(bl.gruppen[kv].punkte.at(-2), bl.gruppen[kv].punkte.at(-1)), d0 = richt(bl.gruppen[k].punkte[0], bl.gruppen[k].punkte[1]), dA = kuerzen[kv] || 0, dB = kuerzen[k] || 0;
+    if (!(dA > 1e-6) && !(dB > 1e-6)) continue;
+    const nA = [-dV[1] * dA, dV[0] * dA], nB = [-d0[1] * dB, d0[0] * dB], ecke = [[V[0], V[1]], [V[0] + nB[0], V[1] + nB[1]], [V[0] + nA[0] + nB[0], V[1] + nA[1] + nB[1]], [V[0] + nA[0], V[1] + nA[1]]];
+    const patch = new THREE.ExtrudeGeometry(new THREE.Shape(ecke.map(([u, v]) => new THREE.Vector2(u, v))), { depth: m.t, bevelEnabled: false }); patch.translate(0, 0, -m.t / 2); patch.applyMatrix4(B);
+    geos.push(patch);
+  }
   for (const k of bl.quetsch?.keys() || []) { // Quetschfalte: beide Flansche enden an der Ecklinie ε; der Flansch der vorigen Kante wird um die halbe Blechstärke zurückgesetzt, damit die Blechstärke nicht doppelt in der Ecke steckt
     const e3 = quetschEcke3D(bl, k); if (!e3) continue; const { q, A, B, V, O, kv } = e3, g1 = q.z.gamma1 * Math.PI / 180, g2 = q.z.gamma2 * Math.PI / 180, cot = (x) => Math.cos(x) / Math.sin(x);
     const dv = richt(bl.gruppen[kv].punkte.at(-2), bl.gruppen[kv].punkte.at(-1)), sO = (O[0] - V[0]) * q.dn[0] + (O[1] - V[1]) * q.dn[1], p = (O[0] - V[0]) * dv[0] + (O[1] - V[1]) * dv[1], ds = m.t / 2 / Math.sin(q.beta * Math.PI / 180);
@@ -3167,17 +3174,22 @@ function quetschMeshes(z, f) {
   const v = (a) => new THREE.Vector3(...a), P = v(tri.P).sub(v(tri.O)), C = v(tri.C).sub(v(tri.O)), e = v(q.wand === "wand1" ? g.e1 : g.e2), d = v(q.wand === "wand1" ? g.d1 : g.d2);
   let n = new THREE.Vector3().crossVectors(e, d).normalize(); if (n.dot(new THREE.Vector3(Math.cos(g.beta * Math.PI / 360), Math.sin(g.beta * Math.PI / 360), 0)) > 0) n.negate(); // nach aussen
   const u = P.clone().normalize(), y = new THREE.Vector3().crossVectors(n, u), O2 = new THREE.Vector2(0, 0), P2 = new THREE.Vector2(P.dot(u), P.dot(y)), C2 = new THREE.Vector2(C.dot(u), C.dot(y));
-  // Faltkante O–C: um t nach innen (zur Seite von P) zurückversetzt, dort sitzt der Wulst (Radius t) – so bleibt die Gesamtausdehnung gleich und die Kante ist rund
-  const ed = C2.clone().sub(O2), el = ed.length(), en = ed.clone().normalize(), nrm = new THREE.Vector2(-en.y, en.x); if (nrm.dot(P2) < 0) nrm.negate();
-  const dP = P2.dot(nrm), r = Math.min(t, dP * 0.45), schn = (a, b, c0, d0) => { const w = b.clone().sub(a), x = d0.clone().sub(c0), den = w.x * x.y - w.y * x.x; if (Math.abs(den) < 1e-12) return null; const tt = ((c0.x - a.x) * x.y - (c0.y - a.y) * x.x) / den; return a.clone().addScaledVector(w, tt); };
-  const o1 = O2.clone().addScaledVector(nrm, r), c1 = C2.clone().addScaledVector(nrm, r), Oi = schn(O2, P2, o1, c1) || O2, Ci = schn(P2, C2, o1, c1) || C2;
+  // Beide Kanten der Lasche sind Biegungen: die Faltkante O–C (geschlossener Saum) und die Kante O–P an der Ecklinie, an der die Lasche mit den Flanschen verbunden ist.
+  // Jede Kante wird um den Radius r nach innen zurückversetzt, dort sitzt die Rundung (Radius r = t) – so bleibt die Gesamtausdehnung gleich und die Kanten sind rund.
+  const lin = (A, Bp) => { const ed = Bp.clone().sub(A), en = ed.clone().normalize(), nm = new THREE.Vector2(-en.y, en.x); return { A, Bp, en, nm, ed }; };
+  const fold = lin(O2, C2), eps = lin(O2, P2), schn = (a, b, c0, d0) => { const w = b.clone().sub(a), x = d0.clone().sub(c0), den = w.x * x.y - w.y * x.x; if (Math.abs(den) < 1e-12) return null; const tt = ((c0.x - a.x) * x.y - (c0.y - a.y) * x.x) / den; return a.clone().addScaledVector(w, tt); };
+  const zuSeite = (l, P) => (l.nm.dot(P.clone().sub(l.A)) < 0 ? l.nm.clone().negate() : l.nm.clone()); // Normale zur Dreiecksseite hin
+  const dF = zuSeite(fold, P2).dot(P2.clone().sub(O2)), dE = zuSeite(eps, C2).dot(C2.clone().sub(O2)), r = Math.min(t, dF * 0.3, dE * 0.3);
+  const nF = zuSeite(fold, P2).multiplyScalar(r), nE = zuSeite(eps, C2).multiplyScalar(r);
+  const fA = O2.clone().add(nF), fB = C2.clone().add(nF), eA = O2.clone().add(nE), eB = P2.clone().add(nE);
+  const Oi = schn(fA, fB, eA, eB) || O2, Pi = schn(eA, eB, P2, C2) || P2, Ci = schn(fA, fB, P2, C2) || C2;
   const mk = (geo, lage) => { geo.applyMatrix4(lage); geo.applyMatrix4(new THREE.Matrix4().makeBasis(v(q.X3), v(q.Y3), v(q.Z3)).setPosition(q.O[0], q.O[1], 0)); geo.applyMatrix4(B); return koerperAusGeo(geo, darstellungVon(z, m), f.id); };
   const aussen = new THREE.Matrix4().makeBasis(u, y, n).setPosition(n.clone().multiplyScalar(t / 2));
-  const koerper = new THREE.ExtrudeGeometry(new THREE.Shape([Oi, P2, Ci]), { depth: 2 * t, bevelEnabled: false }), meshes = [mk(koerper, aussen)];
-  if (r > 1e-6) { // Wulst der Faltkante
-    const L = Ci.distanceTo(Oi), mitte = Oi.clone().add(Ci).multiplyScalar(0.5), ax = new THREE.Vector3(Ci.x - Oi.x, Ci.y - Oi.y, 0).normalize();
+  const koerper = new THREE.ExtrudeGeometry(new THREE.Shape([Oi, Pi, Ci]), { depth: 2 * t, bevelEnabled: false }), meshes = [mk(koerper, aussen)];
+  if (r > 1e-6) for (const [a0, b0] of [[Oi, Ci], [Oi, Pi]]) { // Wulst der Faltkante und der Anschlusskante
+    const L = b0.distanceTo(a0), mitte = a0.clone().add(b0).multiplyScalar(0.5), ax = new THREE.Vector3(b0.x - a0.x, b0.y - a0.y, 0).normalize();
     const cyl = new THREE.CylinderGeometry(r, r, L, 16, 1, false); cyl.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax)));
-    cyl.scale(1, 1, 1); cyl.translate(mitte.x, mitte.y, t); // Mitte der beiden Lagen (Dicke 2 t)
+    cyl.translate(mitte.x, mitte.y, t); // Mitte der beiden Lagen (Dicke 2 t)
     meshes.push(mk(cyl, aussen));
   }
   return meshes;
