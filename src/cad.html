@@ -452,6 +452,11 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .dialog .feld[hidden]{display:none}
 
 
+
+/* Zuklappbare Werkzeuggruppen (Knopf mit ▾, Originalknöpfe im Menü) */
+.sammel { display: contents; } .sammelmenue { width: auto; min-width: 230px; }
+.sammelmenue .wz, .leiste:not(.imSkizze):not(.imDialog) .klappmenue .sammelmenue .wz { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; width: 100%; min-width: 0; text-align: left; gap: 10px; padding: 7px 10px; font-size: 13px; }
+.sammelmenue .wz svg, .leiste:not(.imSkizze):not(.imDialog) .klappmenue .sammelmenue .wz svg { width: 20px; height: 20px; flex: none; }
 /* Simulation */
 #simLegende { position: absolute; left: 12px; bottom: 44px; z-index: 6; background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: var(--r-s); padding: 6px 10px; font-size: 12px; box-shadow: var(--sh-panel); pointer-events: none; }
 #simLegende .lgrow { display: flex; gap: 6px; margin: 4px 0; height: 120px; } #simLegende .lgbar { width: 14px; border-radius: 3px; } #simLegende .lgtick { display: flex; flex-direction: column; justify-content: space-between; font: 11px var(--font-num); }

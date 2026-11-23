@@ -6284,12 +6284,38 @@ leiste.addEventListener("click", (e) => {
     return;
   }
   const b = e.target.closest(".klappmenue button"); if (!b) return;
-  if (!e.target.closest(".pfeil")) setTimeout(klappZu); // ▾ im Menü öffnet die Varianten, Menü bleibt offen
+  if (!e.target.closest(".pfeil, .sammelknopf")) setTimeout(klappZu); // ▾ im Menü öffnet die Varianten, Menü bleibt offen
   if (b.dataset.kwz || b.dataset.aus) { if (dlg) $("dAbbrechen").click();
     if (b.dataset.kwz === "kanten3d") return kantenDialog(); if (b.dataset.kwz) return koerperDialog(b.dataset.kwz);
     return b.dataset.aus === "import" ? $("importDatei").click() : b.dataset.aus === "bild" ? $("bildDatei").click() : exportiere(b.dataset.aus); }
 }, true);
 document.addEventListener("pointerdown", (e) => { if (!e.target.closest?.(".klapp") && !e.target.closest?.("#skizzenMenue")) klappZu(); });
+// Zuklappbare Gruppen (wie «Ebene ▾»): zusammengehörige Werkzeuge stehen hinter einem Knopf; die Originalknöpfe bleiben (mit Kennung und Funktion) im Menü
+const SAMMEL = [
+  ["Weitere Körper", "Rohr, Spirale, Rippe", ["#wRohr", "#wSpirale", "#wRippe"]],
+  ["Sonderformen", "Lofted Flange, Rund-/Kegelblech, Kehle/Grat, Blech auf Körperfläche", ["#wLoftFlansch", "#wRund", "#wKehle", "#wBlechAufFlaeche"]],
+  ["Biegen / Trennen", "Biegung an Linie, Rip", ["#wBiegung", "#wRip"]],
+  ["Abrunden", "Kanten abrunden / fasen, Extrusion ringsum abrunden", ['[data-kwz="kanten3d"]', '[data-kwz="kantenrund"]']],
+  ["Muster / Spiegeln", "Muster und Spiegeln", ['[data-kwz="kmuster"]', '[data-kwz="kspiegel"]']],
+  ["Analyse", "Kollision und Schnittanalyse", ["#wKollision", "#wSchnitt"]],
+  ["Export", "STEP, STEP exakt, STL", ['[data-aus="step"]', "#wStepExakt", '[data-aus="stl"]']],
+  ["Import", "STEP/STL und Bild/PDF-Plan einlesen", ['[data-aus="import"]', '[data-aus="bild"]']],
+  ["Lager", "Einspannung, gelenkig, Gleitlager, vorgegebene Verschiebung", ["#wSimFest", "#wSimGelenk", "#wSimGleit", "#wSimWeg"]],
+  ["Lasten", "Kraft, Druck, Linienlast, Eigengewicht, Normlast", ["#wSimKraft", "#wSimDruck", "#wSimStrecke", "#wSimGrav", "#wSimNorm"]],
+  ["Ergebnis ▸", "Spannung, Verschiebung, Sicherheit, Beulform", ["#wSimSpannung", "#wSimVerschiebung", "#wSimSicherheit", "#wSimBeulform"]],
+];
+function sammelZu(ausser = null) { leiste.querySelectorAll(".sammelmenue").forEach((m) => { if (m !== ausser) m.hidden = true; }); }
+for (const [label, titel, sels] of SAMMEL) {
+  const bts = sels.map((s) => leiste.querySelector(s)).filter(Boolean); if (bts.length < 2) continue;
+  const wrap = document.createElement("span"), kn = document.createElement("button"), m = document.createElement("div");
+  wrap.className = "sammel"; kn.className = "wz sammelknopf"; kn.type = "button"; kn.title = titel; kn.setAttribute("aria-haspopup", "true"); m.className = "menue sammelmenue"; m.hidden = true;
+  kn.innerHTML = (bts[0].querySelector("svg")?.outerHTML || "") + `<span class="kz">${label.replace(" ▸", "")}<span class="kpfeil">▾</span></span>`;
+  bts[0].before(wrap); wrap.append(kn, m); bts.forEach((b) => m.append(b));
+  kn.addEventListener("click", () => { const offen = !m.hidden; sammelZu(); if (offen) return; m.hidden = false; const r = kn.getBoundingClientRect(); Object.assign(m.style, { left: Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + "px", top: r.bottom + 4 + "px" }); });
+  m.addEventListener("click", () => { m.hidden = true; });
+}
+document.addEventListener("pointerdown", (e) => { if (!e.target.closest?.(".sammel")) sammelZu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") sammelZu(); });
 // Klappknopf zeigt das aktive Werkzeug darin
 new MutationObserver(() => leiste.querySelectorAll(".klapp").forEach((kp) => {
   const k = kp.querySelector(".klappknopf"), an = kp.querySelector(".klappmenue .wz[aria-pressed='true']");
