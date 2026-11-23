@@ -27,12 +27,14 @@ for (const b of BAUSTEINE_STANDARD) { const p = bausteinProfil(b, m); ok(p.zugab
   ok(r.abw.linien.length === r.profile.reduce((s, p) => s + p.biegungen.length, 0), "eine Biegelinie je Biegung");
   console.log(`Bahn 600: Zuschnitt ${r.abw.breite.toFixed(1)} × ${r.abw.laenge.toFixed(1)} mm (Unterfalz ${zu.toFixed(1)}, Oberfalz ${zo.toFixed(1)}, Traufe ${zt.toFixed(1)}, First ${zf.toFixed(1)})`);
 }
-// Konische Bahn: Lappen neben Kanten ohne Baustein enden bündig zur Nachbarkante (im gekanteten Zustand)
+// Konische Bahn: Lappen neben Kanten ohne Baustein enden rechtwinklig; mit «Flanschende» bündig zur Nachbarkante
 {
   const pts = [[0, 0], [500, 0], [400, 1500], [100, 1500]];
   const r = flaechenblech(pts, [B.trauf, null, null, null], m);
   const saum = r.abw.umriss.filter((p) => p[1] < -20);
-  ok(saum.length >= 2 && saum.every((p) => p[0] > 0 && p[0] < 500), "Traufsaum (unter dem Blech) kürzer als die Kante – ragt nicht über die schrägen Seiten");
+  ok(saum.length >= 2 && saum.every((p) => p[0] >= -1e-6 && p[0] <= 500 + 1e-6), "Traufsaum endet rechtwinklig zur Biegekante an den Plattenecken");
+  const rb = flaechenblech(pts, [B.trauf, null, null, null], m, [], { ecken: "gehrung", enden: { "0:start": { art: "buendig" }, "0:ende": { art: "buendig" } } }), sb = rb.abw.umriss.filter((p) => p[1] < -20);
+  ok(sb.length >= 2 && sb.every((p) => p[0] > 0 && p[0] < 500), "«Flanschende» bündig: Saum kürzer als die Kante – ragt nicht über die schrägen Seiten");
 }
 // Gehrung nur bei Überschneidung: Saum innen + Aufkantung aussen → gerade; zwei Säume innen → Gehrung
 {

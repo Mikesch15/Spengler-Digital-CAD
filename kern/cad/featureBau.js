@@ -101,7 +101,7 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
   const richt = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]);
   const plan = { platte: { op: "extrusion", profil: { start: bl.pts[0], segmente: bl.pts.slice(1).map((p) => ({ bis: p })) }, ebene: kernEbene(ebene, -t / 2), hoehe: t }, schnitte: [], prismen: [] };
-  const ek = eckFaktoren(bl.gruppen, bl.profile);
+  const ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt);
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p?.baustein) return;
     const bq = bausteinQuerschnitt(p.baustein, m); if (!bq) throw new Error(`Baustein «${p.baustein.name ?? p.baustein.folge}» lässt sich nicht rechnen`);

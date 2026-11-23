@@ -3,6 +3,7 @@
   "schnelltest": ["assistent", "kontext", "bedienung", "dach", "projektdatei", "kantenwz", "befehlssuche"],
   "regeln": [
     { "muster": "src/kontext.js", "tests": ["kontext"] },
+    { "muster": "kern/cad/featureBau", "tests": ["flanschende", "blechkanten"] },
     { "muster": "src/simulation.js", "tests": ["simulation"] },
     { "muster": "kern/fem/", "tests": ["simulation"] },
     { "muster": "kern/dach/", "tests": ["dach", "dachbleche", "dachflaechen", "kopplung", "griffe"] },
@@ -10,7 +11,7 @@
     { "muster": "kern/quetschfalte", "tests": ["quetschfalte"] },
     { "muster": "kern/profile.js", "tests": ["profilkante", "stirnflansch", "blechkanten"] },
     { "muster": "kern/flansch.js", "tests": ["kantenwz", "flansch", "blechkanten", "flanschmass"] },
-    { "muster": "kern/flaechenblech.js", "tests": ["flaechen", "kantenwz", "blechkanten", "abwickeln", "flanschmass"] },
+    { "muster": "kern/flaechenblech.js", "tests": ["flaechen", "kantenwz", "blechkanten", "abwickeln", "flanschmass", "flanschende"] },
     { "muster": "kern/dxf.js", "tests": ["stirnflansch", "zeichnen2d"] },
     { "muster": "kern/richtung.js", "tests": ["zweiseitig", "bis"] },
     { "muster": "src/befehlssuche.js", "tests": ["befehlssuche", "responsive"] },

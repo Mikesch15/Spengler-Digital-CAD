@@ -200,7 +200,19 @@ function innenX(p) {
   const zone = (p.ri || 1) + 1.5 * (p.t || 1), q = p.quer || [], hoch = q.filter(([, y]) => y > zone), xs = (hoch.length ? hoch : q).map(([x]) => x);
   return xs.length ? Math.min(...xs) : 0;
 }
-export function eckFaktoren(gruppen, profile, opt = null) { // opt: { ecken: "gehrung" | "stoss" | "spalt", spalt, t } – Eckenschluss wie in Fusion (Gehrung, Stoss/Überlappung, offene Ecke mit Spalt)
+// Eckfaktoren mit nachträglichen Überschreibungen je Flanschende (opt.enden["k:start"|"k:ende"] = { art: "rechtwinklig" | "buendig" | "winkel", winkel, versatz })
+export function eckFaktoren(gruppen, profile, opt = null) {
+  const ek = eckFaktorenRoh(gruppen, profile, opt), n = gruppen.length;
+  for (const [key, ov] of Object.entries(opt?.enden || {})) {
+    const [ks, seite] = key.split(":"), k = +ks, g = gruppen[k]; if (!g || !ek[k] || !ov) continue;
+    const start = seite === "start", nb = gruppen[start ? (k - 1 + n) % n : (k + 1) % n];
+    const beta = start ? knick(richtung(nb.punkte.at(-2), nb.punkte.at(-1)), richtung(g.punkte[0], g.punkte[1])) : knick(richtung(g.punkte.at(-2), g.punkte.at(-1)), richtung(nb.punkte[0], nb.punkte[1]));
+    const kw = ov.art === "buendig" ? eckFaktor(beta, false) : ov.art === "winkel" ? Math.tan((Math.max(-80, Math.min(80, +ov.winkel || 0)) * Math.PI) / 180) : 0, ver = +ov.versatz || 0;
+    if (start) Object.assign(ek[k], { k0: kw, ky0: 0, e0: -ver }); else Object.assign(ek[k], { k1: kw, ky1: 0, e1: -ver });
+  }
+  return ek;
+}
+function eckFaktorenRoh(gruppen, profile, opt = null) { // opt: { ecken: "gehrung" | "stoss" | "spalt", spalt, t } – Eckenschluss wie in Fusion (Gehrung, Stoss/Überlappung, offene Ecke mit Spalt)
   const n = gruppen.length;
   const ek = gruppen.map((g, k) => {
     const vor = gruppen[(k - 1 + n) % n], nach = gruppen[(k + 1) % n];
@@ -208,7 +220,8 @@ export function eckFaktoren(gruppen, profile, opt = null) { // opt: { ecken: "ge
     const pV = profile[(k - 1 + n) % n], p = profile[k], pN = profile[(k + 1) % n];
     // Gehrung nur bei gleichen oder sich überschneidenden Bausteinen; sonst gerade (evtl. minimal zurückgesetzt)
     const a = pV?.quer && p?.quer ? eckSchnitt(pV, p, dV, d0) : null, b = p?.quer && pN?.quer ? eckSchnitt(p, pN, d1, dN) : null;
-    return { k0: eckFaktor(knick(dV, d0), !!pV?.lage, !!a?.gehrung) - (a?.kB || 0), e0: a?.eB || 0, k1: eckFaktor(knick(d1, dN), !!pN?.lage, !!b?.gehrung) - (b?.kA || 0), e1: b?.eA || 0 };
+    const kk = (beta, mit, geh) => (mit ? eckFaktor(beta, true, geh) : 0); // Nachbar ohne Baustein: Ende rechtwinklig zur Biegekante (nachträglich mit «Flanschende» änderbar)
+    return { k0: kk(knick(dV, d0), !!pV?.lage, !!a?.gehrung) - (a?.kB || 0), e0: a?.eB || 0, k1: kk(knick(d1, dN), !!pN?.lage, !!b?.gehrung) - (b?.kA || 0), e1: b?.eA || 0 };
   });
   const art = opt?.ecken || "gehrung"; if (art === "gehrung") { quadratEcken(gruppen, profile, ek); return ek; }
   const t = +opt?.t || 0.7, gap = Math.max(0, +opt?.spalt || 0);
