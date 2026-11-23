@@ -15,7 +15,7 @@ await s.goto("http://localhost:" + (process.env.PORT || 8791) + "/index.html?tes
 const uv = (p) => s.evaluate((u) => window.sdcadTest.schirmUV("XY", u), p);
 const klick = async (p) => { const q = await uv(p); await s.mouse.move(q[0], q[1]); await s.waitForTimeout(120); await s.mouse.down(); await s.mouse.up(); await s.waitForTimeout(350); await s.evaluate(() => document.getElementById("kbOk")?.click()); await s.waitForTimeout(500); };
 const kanten = () => s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.id === "fl").kanten);
-const werkzeug = async (name) => { await s.click('[data-klapp="kanten"] .klappknopf'); await s.waitForTimeout(150); await s.click(`[data-kantenwz="${name}"]`); await s.waitForTimeout(250); };
+const werkzeug = async (name) => { await s.click('[data-klapp="blech"] .klappknopf'); await s.waitForTimeout(150); await s.click(`[data-kantenwz="${name}"]`); await s.waitForTimeout(250); };
 // ohne Werkzeug: Klick auf die Kante legt nichts an
 await klick([100, 50]); await klick([100, 0]); ok(Object.keys(await kanten()).length === 0, "Ohne Werkzeug legt ein Klick auf die Kante nichts an");
 await s.keyboard.press("Escape");

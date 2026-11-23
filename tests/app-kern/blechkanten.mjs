@@ -25,7 +25,7 @@ const uv = (p) => s.evaluate((u) => window.sdcadTest.schirmUV("XY", u), p);
 const klick = async (p) => { const q = await uv(p); await s.mouse.move(q[0], q[1]); await s.waitForTimeout(100); await s.mouse.down(); await s.mouse.up(); await s.waitForTimeout(300); await s.evaluate(() => document.getElementById("kbOk")?.click()); await s.waitForTimeout(500); };
 const kanten = (id) => s.evaluate((i) => window.sdcadTest.dok().features.find((f) => f.id === i).kanten, id);
 const fehler_ = (id) => s.evaluate((i) => window.sdcadTest.dok().features.find((f) => f.id === i)._fehler || "", id);
-const werkzeug = async (name) => { await s.evaluate(() => { document.getElementById("kantenMenue").style.pointerEvents = ""; }); await s.click('[data-klapp="kanten"] .klappknopf'); await s.waitForTimeout(120); await s.click(`[data-kantenwz="${name}"]`); await s.waitForTimeout(250); if (name === "baustein") { await s.click("#kantenMenue [data-kb]"); await s.waitForTimeout(250); } };
+const werkzeug = async (name) => { await s.evaluate(() => { document.getElementById("kantenMenue").style.pointerEvents = ""; }); await s.click('[data-klapp="blech"] .klappknopf'); await s.waitForTimeout(120); await s.click(`[data-kantenwz="${name}"]`); await s.waitForTimeout(250); if (name === "baustein") { await s.click("#kantenMenue [data-kb]"); await s.waitForTimeout(250); } };
 const mitte = (P, i) => { const a = P[i], b = P[(i + 1) % P.length]; return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; };
 // Flächenblech: jede Kante × jedes Werkzeug
 for (const [id, P, off, name] of [["fl", [[0, 0], [200, 0], [200, 100], [0, 100]], 0, "rechteckig"], ["fl2", L, 400, "L-förmig"]]) {

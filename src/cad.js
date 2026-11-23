@@ -6263,7 +6263,7 @@ $("wKehle").onclick = () => { if (dlg) $("dAbbrechen").click(); kehleDialog(); }
 const leiste = $("leiste");
 // Menüband (Desktop): die Klappmenüs der Hauptgruppe sind Reiter; das Menü des gewählten Reiters steht dauernd unter der Reiterzeile
 const bandAn = () => innerWidth > 1000 && !skizze && !dlg;
-let aktTab = (() => { try { return localStorage.getItem("sdcad-reiter") || "koerper"; } catch { return "koerper"; } })();
+let aktTab = (() => { try { const t = localStorage.getItem("sdcad-reiter") || "koerper"; return t === "kanten" ? "blech" : t; } catch { return "koerper"; } })();
 function klappZu() {
   leiste.querySelectorAll(".klappmenue").forEach((m) => (m.hidden = true)); leiste.querySelectorAll(".klappknopf").forEach((k) => { k.setAttribute("aria-expanded", "false"); k.removeAttribute("aria-selected"); });
   if (!bandAn()) return;
