@@ -47,6 +47,9 @@ import { ansichtAusProjektion, kameraAchsen, kettenAusKanten } from "../kern/cad
 import { zuschnittAusVolumen } from "../kern/cad/blech.js";
 import { dxfLesen } from "../kern/dxflesen.js";
 import { Font } from "three/examples/jsm/loaders/FontLoader.js";
+import { Line2 } from "three/examples/jsm/lines/Line2.js";
+import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import schriftDaten from "three/examples/fonts/droid/droid_sans_bold.typeface.json";
 import { ausschnittWerkzeug, ausschnittKante, profilPunkt } from "../kern/flaechenblech.js";
 import { BAUSTEINE_STANDARD, flaechenblech, plattenUmriss, kantenGruppen, gegenUhrzeiger, bausteinProfil, eckFaktoren } from "../kern/flaechenblech.js";
@@ -1036,7 +1039,7 @@ function griffeKante(f) {
   const laenge = Math.max(1, +wk.laenge || 10), s = wk.seite === -1 ? -1 : 1, l = [];
   const mk = (tip, dir, tan, radius) => {
     l.push({ feld: "laenge", pos: tip, dir, faktor: 1, min: 0.5, farbe: 0xe0782b }, { feld: "laenge", pos: tip.clone(), dir: dir.clone().negate(), faktor: -1, min: 0.5, farbe: 0xe0782b });
-    if (wk.typ === "flansch") { const k = 180 / Math.PI / Math.max(4, radius); l.push({ feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(s), faktor: k, min: -170, max: 170, farbe: 0x2f7dd1 }, { feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(-s), faktor: -k, min: -170, max: 170, farbe: 0x2f7dd1 }); }
+    if (wk.typ === "flansch") { const k = 180 / Math.PI / Math.max(4, radius); const bogen = { c: tip.clone().addScaledVector(dir, -radius), R: radius }; l.push({ feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(s), faktor: k, min: -170, max: 170, farbe: 0x2f7dd1, bogen, erst: true }, { feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(-s), faktor: -k, min: -170, max: 170, farbe: 0x2f7dd1, bogen }); }
   };
   if (z.typ === "flaeche") {
     const [pi, k] = String(f.key).split(":").map(Number), bl = z._bleche?.find((b) => b.pi === pi), g = bl?.gruppen[k], pr = bl?.profile[k]; if (!g?.gerade || !pr?.res) return [];
@@ -1071,7 +1074,7 @@ function griffeDrehung(f) {
   const p = loops.sort((x, y) => Math.abs(flaeche(y)) - Math.abs(flaeche(x)))[0], c = [p.reduce((q, r) => q + r[0], 0) / p.length, p.reduce((q, r) => q + r[1], 0) / p.length];
   const A = zu3D(s.ebene, a), ax = zu3D(s.ebene, [a[0] + d[0], a[1] + d[1]]).sub(A).normalize(), C = zu3D(s.ebene, c), rv = C.clone().sub(A); rv.addScaledVector(ax, -rv.dot(ax)); const R = rv.length(); if (R < 1e-6) return [];
   const th = (f.winkel ?? 360) * Math.PI / 180, r2 = rv.clone().applyAxisAngle(ax, th), pos = A.clone().add(C.clone().sub(A).projectOnVector(ax)).add(r2), tan = new THREE.Vector3().crossVectors(ax, r2).normalize(), k = 180 / Math.PI / R;
-  return [{ feld: "winkel", pos, dir: tan, faktor: k, min: 1, max: 360, farbe: 0x2f7dd1 }, { feld: "winkel", pos: pos.clone(), dir: tan.clone().negate(), faktor: -k, min: 1, max: 360, farbe: 0x2f7dd1 }];
+  const bogen = { c: pos.clone().sub(r2), R }; return [{ feld: "winkel", pos, dir: tan, faktor: k, min: 1, max: 360, farbe: 0x2f7dd1, bogen, erst: true }, { feld: "winkel", pos: pos.clone(), dir: tan.clone().negate(), faktor: -k, min: 1, max: 360, farbe: 0x2f7dd1, bogen }];
 }
 function griffeFuer(f) {
   if (f.bis && f.bis !== "mass" && (f.typ === "extrusion" || ["blech", "vorlage", "profil"].includes(f.typ))) return []; // Ausdehnung folgt der gewählten Fläche/Kante
@@ -1129,6 +1132,13 @@ function griffeFuer(f) {
   return l;
 }
 const GRIFFFARBE = 0x1f6fb2; const griffKey = (g) => `${g.feld}|${g.faktor}|${g.dir.x.toFixed(3)},${g.dir.y.toFixed(3)},${g.dir.z.toFixed(3)}`; let hoverGriff = null; // alle Ziehpfeile gleich (Akzentblau), unter dem Zeiger orange
+// Hervorgehobene Kante: scharfe Linie in Bildschirmpixeln (kein Leuchten, keine Röhre)
+function dickeLinie(punkte, farbe, px = 3, ordnung = 14) {
+  const g = new LineGeometry(); g.setPositions(punkte.flatMap((p) => (Array.isArray(p) ? p : p.toArray())));
+  const r = leinwand.getBoundingClientRect(), m = new LineMaterial({ color: farbe, linewidth: px, depthTest: false, transparent: true, opacity: 1 }); m.resolution.set(r.width || 800, r.height || 600);
+  const l = new Line2(g, m); l.renderOrder = ordnung; l.userData.dicke = true; return l;
+}
+addEventListener("resize", () => { const r = leinwand.getBoundingClientRect(); for (const g of [kantenZeiger, projGruppe]) g.traverse((o) => { if (o.userData?.dicke) o.material.resolution.set(r.width, r.height); }); });
 const griffLaenge = (pos) => kamera.position.distanceTo(pos) * 0.1;
 // Eingabefeld hinter einem Ziehpfeil: im Dialog «d_<feld>», beim Kantenwerkzeug die Felder der Kantenleiste (Länge/Winkel gelten für alle Vorschau-Flansche)
 const griffInput = (feld) => (dlg?.feature ? $("d_" + feld) : feld === "laenge" ? $("kbLaenge") : feld === "winkel" ? $("kbWinkel") : null);
@@ -1137,14 +1147,24 @@ function zeichneGriffe() {
   leeren(griffGruppe); griffe = [];
   const gf = dlg?.feature || vorschauFeature(); if (!gf || skizze) return;
   try { griffe = griffeFuer(gf).filter((g) => griffInput(g.feld)); } catch { griffe = []; }
-  for (const g of griffe) { // schlank und einheitlich: dünner Schaft, kleiner Pfeilkopf, heller Rand für Kontrast; unter dem Zeiger orange
-    const an = griffKey(g) === hoverGriff, farbe = an ? 0xe0782b : GRIFFFARBE, L = griffLaenge(g.pos), dir = g.dir, q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir), kopfL = L * 0.2, schaftL = L - kopfL;
-    const mat = (c, o = 1) => new THREE.MeshBasicMaterial({ color: c, depthTest: false, transparent: true, opacity: o }), teil = (geo, pos, c, ordnung, o) => { const m = new THREE.Mesh(geo, mat(c, o)); m.position.copy(pos); m.quaternion.copy(q); m.renderOrder = ordnung; return m; };
-    const mitteSchaft = g.pos.clone().addScaledVector(dir, schaftL / 2), kopfPos = g.pos.clone().addScaledVector(dir, schaftL + kopfL / 2), rS = L * (an ? 0.016 : 0.012), rK = L * (an ? 0.062 : 0.052);
-    griffGruppe.add(
-      teil(new THREE.CylinderGeometry(rS * 1.9, rS * 1.9, schaftL, 8), mitteSchaft, 0xffffff, 29, 0.85), teil(new THREE.ConeGeometry(rK * 1.35, kopfL * 1.12, 16), kopfPos, 0xffffff, 29, 0.85), // heller Rand
-      teil(new THREE.CylinderGeometry(rS, rS, schaftL, 8), mitteSchaft, farbe, 30, 1), teil(new THREE.ConeGeometry(rK, kopfL, 16), kopfPos, farbe, 31, 1),
-      teil(new THREE.SphereGeometry(L * 0.026, 12, 8), g.pos, farbe, 31, 1));
+  const mat = (cl) => new THREE.MeshBasicMaterial({ color: cl, depthTest: false, transparent: true }), kegel = (pos, dirv, rK, h, cl, ord) => { const m = new THREE.Mesh(new THREE.ConeGeometry(rK, h, 20), mat(cl)); m.position.copy(pos); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirv); m.renderOrder = ord; return m; };
+  const kugel = (pos, r, cl, ord) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), mat(cl)); m.position.copy(pos); m.renderOrder = ord; return m; };
+  for (const g of griffe) { // wie in Fusion: Ziehpfeil = dünne Linie mit grossem Kegel; Drehgriff = Kreisbogen mit Pfeilspitzen an beiden Enden und Griffpunkt; blau, unter dem Zeiger orange
+    const an = griffKey(g) === hoverGriff || (g.bogen && griffe.some((x) => x.bogen === g.bogen && griffKey(x) === hoverGriff)), farbe = an ? 0xe0782b : GRIFFFARBE, L = griffLaenge(g.pos), dir = g.dir;
+    if (g.bogen) {
+      if (!g.erst) continue;
+      const { c, R } = g.bogen, e1 = g.pos.clone().sub(c).normalize(), th = Math.max(0.3, Math.min(1.05, (L * 0.8) / Math.max(R, 1e-6))), pt = (p) => c.clone().addScaledVector(e1, Math.cos(p) * R).addScaledVector(dir, Math.sin(p) * R), tg = (p) => e1.clone().multiplyScalar(-Math.sin(p)).addScaledVector(dir, Math.cos(p)).normalize();
+      const kopfL = L * 0.22, dphi = kopfL / Math.max(R, 1e-6), pts = Array.from({ length: 25 }, (_, i) => pt(-th + dphi * 0.5 + ((2 * th - dphi) * i) / 24));
+      const rohr = (cl, r, ord) => { const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, r, 8, false), mat(cl)); m.renderOrder = ord; return m; };
+      griffGruppe.add(rohr(0xffffff, L * 0.02, 29), kegel(pt(th), tg(th), L * 0.092, kopfL * 1.14, 0xffffff, 29), kegel(pt(-th), tg(-th).negate(), L * 0.092, kopfL * 1.14, 0xffffff, 29), kugel(g.pos, L * 0.05, 0xffffff, 29),
+        rohr(farbe, L * 0.011, 30), kegel(pt(th), tg(th), L * 0.07, kopfL, farbe, 31), kegel(pt(-th), tg(-th).negate(), L * 0.07, kopfL, farbe, 31), kugel(g.pos, L * 0.036, farbe, 31));
+      continue;
+    }
+    const kopfL = L * 0.26, schaftL = L - kopfL, q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir), rS = L * (an ? 0.014 : 0.01), rK = L * (an ? 0.085 : 0.075);
+    const teil = (geo, pos, cl, ord) => { const m = new THREE.Mesh(geo, mat(cl)); m.position.copy(pos); m.quaternion.copy(q); m.renderOrder = ord; return m; };
+    const mitteSchaft = g.pos.clone().addScaledVector(dir, schaftL / 2), kopfPos = g.pos.clone().addScaledVector(dir, schaftL + kopfL / 2);
+    griffGruppe.add(teil(new THREE.CylinderGeometry(rS * 2, rS * 2, schaftL, 8), mitteSchaft, 0xffffff, 29), teil(new THREE.ConeGeometry(rK * 1.3, kopfL * 1.12, 20), kopfPos, 0xffffff, 29),
+      teil(new THREE.CylinderGeometry(rS, rS, schaftL, 8), mitteSchaft, farbe, 30), teil(new THREE.ConeGeometry(rK, kopfL, 20), kopfPos, farbe, 31), kugel(g.pos, L * 0.03, farbe, 31));
   }
 }steuerung.addEventListener("change", () => { if (griffe.length && !griffZug) zeichneGriffe(); });
 function griffAn(e) { // Pfeil unter dem Zeiger (Abstand zur Strecke Fuss–Spitze am Bildschirm)
@@ -2583,11 +2603,7 @@ function zeigeKanten() {
     const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(g.punkte.map((p) => zu3D(ebene, p))),
       new THREE.LineBasicMaterial({ color: an ? 0xe0782b : belegt ? 0x2e9b4f : 0x1f5fbf, depthTest: false, transparent: true, linewidth: an ? 3 : 1 }));
     l.renderOrder = 13; kantenZeiger.add(l);
-    if (an) { // dicker: zusätzlich eine Röhre
-      const kurve = new THREE.CatmullRomCurve3(g.punkte.map((p) => zu3D(ebene, p)), false, "catmullrom", 0);
-      const r = new THREE.Mesh(new THREE.TubeGeometry(kurve, Math.max(2, g.punkte.length * 2), Math.max(2, g.laenge / 150), 6), new THREE.MeshBasicMaterial({ color: 0xe0782b, depthTest: false, transparent: true, opacity: 0.85 }));
-      r.renderOrder = 14; kantenZeiger.add(r);
-    }
+    if (an) kantenZeiger.add(dickeLinie(g.punkte.map((p) => zu3D(ebene, p)), 0xe0782b, 3));
   }));
 }
 // Nächste Kante unter dem Mauszeiger (Bildschirmabstand) → «Blech:Kante»
@@ -2606,7 +2622,7 @@ function zeigeProfilKanten(f) { // alle wählbaren Kanten blau, die unter dem Ze
   for (const k of profilKanten(f)) {
     const an = aktiv === k.key || !!kantenWz?.sel?.includes(k.key), belegt = profilKanteBelegt(f, k.key), len = k.p[0].distanceTo(k.p[1]);
     const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(k.p), new THREE.LineBasicMaterial({ color: an ? 0xe0782b : belegt ? 0x2e9b4f : 0x1f5fbf, depthTest: false, transparent: true })); l.renderOrder = 13; kantenZeiger.add(l);
-    if (an) { const r = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(k.p[0], k.p[1]), 2, Math.max(1.5, len / 200), 6), new THREE.MeshBasicMaterial({ color: 0xe0782b, depthTest: false, transparent: true, opacity: 0.85 })); r.renderOrder = 14; kantenZeiger.add(r); }
+    if (an) kantenZeiger.add(dickeLinie([k.p[0], k.p[1]], 0xe0782b, 3));
     kantenLabels.push({ p: k.p[0].clone().add(k.p[1]).multiplyScalar(0.5), t: k.t + (belegt ? " ✓" : ""), kante: k.key, fid: f.id, an, belegt });
   }
 }
@@ -5676,11 +5692,9 @@ const e_projRadius = () => (leinwandTouch ? 30 : 12);
 function projZeichnen() {
   leeren(projGruppe); if (!skizze) return;
   const dist = kamera.position.distanceTo(steuerung.target), hoehe = 2 * dist * Math.tan(kamera.fov * Math.PI / 360), r = Math.max(0.2, hoehe / 380);
-  const zeige = (item, farbe, dick) => { for (const pts of item.vis) for (let i = 1; i < pts.length; i++) {
-    const a = V(pts[i - 1]), b = V(pts[i]); if (a.distanceTo(b) < 1e-9) continue;
-    const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.LineCurve3(a, b), 1, r * dick, 5), new THREE.MeshBasicMaterial({ color: farbe, depthTest: false, transparent: true, opacity: 0.9 })); m.renderOrder = 15; projGruppe.add(m); } };
-  if (skizze.projHover && !(skizze.projWahl || []).some((x) => x.key === skizze.projHover.key)) zeige(skizze.projHover, 0xf5b97a, 1);
-  for (const it of skizze.projWahl || []) zeige(it, 0xe0782b, 1.6);
+  const zeige = (item, farbe, dick) => { for (const pts of item.vis) if (pts.length > 1) projGruppe.add(dickeLinie(pts.map((p) => V(p)), farbe, dick, 15)); };
+  if (skizze.projHover && !(skizze.projWahl || []).some((x) => x.key === skizze.projHover.key)) zeige(skizze.projHover, 0xf5b97a, 3);
+  for (const it of skizze.projWahl || []) zeige(it, 0xe0782b, 3);
 }
 let projHoverWartet = false, leinwandTouch = false;
 leinwand.addEventListener("pointerdown", (e) => { leinwandTouch = e.pointerType === "touch"; }, true);
