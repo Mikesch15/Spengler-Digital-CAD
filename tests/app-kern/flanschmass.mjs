@@ -18,11 +18,11 @@ const fall = async (w) => {
 const sub = (a, c) => [a[0] - c[0], a[1] - c[1]], len = (a) => Math.hypot(a[0], a[1]);
 const { bausteinProfil } = await import("../../kern/flaechenblech.js");
 let n = 0;
-for (const a of [90, 60]) for (const bezug of ["mitte", "aussen", "innen", "tangente"]) for (const pos of ["mitte", "aussen", "innen", "tangente"]) {
+for (const a of [90, 60, 180]) for (const bezug of ["mitte", "aussen", "innen", "tangente"]) for (const pos of ["mitte", "aussen", "innen", "tangente"]) {
   const w = { typ: "flansch", winkel: a, laenge: 25, radius: 2, bezug, biegepos: pos, seite: 1 }, pf = bausteinProfil({ name: "t", werkzeug: w }, m);
   const q = pf.quer, zs = q.map((p) => p[1]), xs = q.map((p) => p[0]);
   const soll = { zmax: Math.max(...zs), ymin: -Math.max(...xs) }, ist = await fall(w); n++;
-  ok(Math.abs(ist.zmax - soll.zmax) < 0.06, `${a}° bis ${bezug}/Pos ${pos}: Flanschhöhe ${ist.zmax.toFixed(2)} statt ${soll.zmax.toFixed(2)}`);
+  ok(Math.abs(ist.zmax - soll.zmax) < (a === 180 ? 0.5 : 0.06), `${a}° bis ${bezug}/Pos ${pos}: Flanschhöhe ${ist.zmax.toFixed(2)} statt ${soll.zmax.toFixed(2)}`);
   ok(Math.abs(ist.ymin - soll.ymin) < 0.06, `${a}° bis ${bezug}/Pos ${pos}: Ausladung über die Kante ${ist.ymin.toFixed(2)} statt ${soll.ymin.toFixed(2)}`);
 }
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));

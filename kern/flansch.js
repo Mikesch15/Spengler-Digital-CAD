@@ -15,6 +15,12 @@ export function werkzeugAuf(b, m) {
     return { ...b, folge: `U${sg}${r ? "r" + zahl(r) : ""} ${L}`, versatz: 0 };
   }
   const a = Math.min(Math.max(+w.winkel || 90, 1), 179), ta = Math.tan((a * Math.PI) / 360), k = (t / 2) * ta, rm = ((r ?? +m?.ri) || 0) + t / 2, tang = rm * ta;
+  if (a >= 175) { // fast 180°: wie ein Saum – die scharfe Kante liegt im Unendlichen, das Profil rechnet «Mass bis Aussenkante des Bogens» (Rückversatz rm + t/2)
+    const bz = w.bezug || "mitte", po = w.biegepos || (bz === "aussen" || bz === "innen" ? bz : "mitte"), sb = rm + t / 2;
+    const bis = { aussen: sb, mitte: rm, innen: rm - t / 2, tangente: 0 }[bz] ?? rm; // Abstand der Bezugslinie vom geraden Schenkel (zur Falzspitze hin) → gerader Schenkel = Länge − bis
+    const vz = { aussen: 0, mitte: t / 2, innen: t, tangente: sb }[po] ?? t / 2; // Lage der Falzspitze zur gezeichneten Kante
+    return { ...b, folge: `${s * a}${r ? "r" + zahl(r) : ""} ${zahl(Math.max(0.1, w.laenge - bis + sb))}`, versatz: +vz.toFixed(4) };
+  }
   const bezug = w.bezug || "mitte", pos = w.biegepos || (bezug === "aussen" || bezug === "innen" ? bezug : "mitte"); // ältere Flansche: Bezug bestimmte auch die Lage
   const korr = bezug === "aussen" ? k : bezug === "innen" ? -k : bezug === "tangente" ? -tang : 0; // Länge bis zur scharfen Mittellinie = Länge − korr
   const versatz = pos === "aussen" ? -k : pos === "innen" ? k : pos === "tangente" ? tang : 0;

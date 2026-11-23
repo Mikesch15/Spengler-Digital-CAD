@@ -94,3 +94,11 @@ process.exit(fehler ? 1 : 0);
   ok(maxF < 1e-6, `Endebene enthält die Schnittlinie der Innenflächen (Abweichung ${maxF.toExponential(1)} mm)`);
   ok(maxS < 1e-6, `Endebene steht senkrecht auf dem Blech (Abweichung ${maxS.toExponential(1)} mm)`);
 }
+// Flansch mit 180° (Saum): Länge bezieht sich auf den geraden Schenkel bzw. die gewählte Bezugslinie – nie ein Vielfaches davon
+{
+  const mm = { t: 1, ri: 1, k: 0.4 };
+  for (const [bz, soll] of [["tangente", 25], ["mitte", 23.5], ["aussen", 23], ["innen", 24]]) for (const po of ["mitte", "aussen", "innen", "tangente"]) {
+    const p = bausteinProfil({ name: "t", werkzeug: { typ: "flansch", winkel: 180, laenge: 25, radius: null, bezug: bz, biegepos: po, seite: 1 } }, mm), ln = p.res.pfad.filter((e) => e.typ === "linie")[1];
+    ok(ln && Math.abs(Math.hypot(ln.p2[0] - ln.p1[0], ln.p2[1] - ln.p1[1]) - soll) < 0.01, `180°-Flansch bis ${bz}: gerader Schenkel ${soll} mm`);
+  }
+}
