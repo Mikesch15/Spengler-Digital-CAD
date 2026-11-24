@@ -100,7 +100,7 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
   const B = basisMatrix(ebene), t = m.t, s = seite === -1 ? -1 : 1;
   const richt = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]);
-  const plan = { platte: { op: "extrusion", profil: { start: bl.pts[0], segmente: bl.pts.slice(1).map((p) => ({ bis: p })) }, ebene: kernEbene(ebene, -t / 2), hoehe: t }, schnitte: [], prismen: [] };
+  const plan = { reliefs: [], platte: { op: "extrusion", profil: { start: bl.pts[0], segmente: bl.pts.slice(1).map((p) => ({ bis: p })) }, ebene: kernEbene(ebene, -t / 2), hoehe: t }, schnitte: [], prismen: [] };
   const ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt);
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p?.baustein) return;
@@ -119,6 +119,12 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
         halbraeume: [{ punkt: [0, 0, e0], normale: [-k0, -ky0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, -ky1, 1] }],
         m: M,
       });
+      const frS = i > 1 ? 0 : ek[k].fr0 || 0, frE = i < g.punkte.length - 1 ? 0 : ek[k].fr1 || 0, bg = p.res?.pfad?.find((e) => e.typ === "bogen");
+      if ((frS > 0 || frE > 0) && bg) { // Freistellung: Biegezone endet vor der Gehrungsecke (Quader durch die Biegezone, nach dem Vereinigen abgezogen)
+        const xe = bg.p2[0] - 100 + (p.versatz || 0), ye = bg.p2[1], x0 = Math.min(bq.xFlach, xe) - 1, x1 = Math.max(xe, bq.xFlach) + 0.01, y0 = Math.min(ye, -t) - 0.01, y1 = Math.max(ye, t) + 0.01;
+        if (frS > 0) plan.reliefs.push({ quader: { min: [x0, y0, e0 - 5], max: [x1, y1, e0 + frS] }, m: M });
+        if (frE > 0) plan.reliefs.push({ quader: { min: [x0, y0, L - e1 - frE], max: [x1, y1, L - e1 + 5] }, m: M });
+      }
       if (bq.xFlach < -1e-9) plan.schnitte.push({ quader: { min: [bq.xFlach, -t, 0], max: [1, t, L] }, m: M }); // Fläche bis zum Biegebeginn kürzen
     }
   });
@@ -137,5 +143,6 @@ export async function baueFlaechenblech(x, plan) {
     z = (await x({ op: "matrix", ziel: z, m: p.m })).id;
     k = (await x({ op: "boolesch", art: "vereinigen", a: k, b: z })).id;
   }
+  for (const r of plan.reliefs || []) { const q = (await x({ op: "quader", ...r.quader })).id, w = (await x({ op: "matrix", ziel: q, m: r.m })).id; k = (await x({ op: "boolesch", art: "abziehen", a: k, b: w })).id; } // Freistellungen
   return k;
 }

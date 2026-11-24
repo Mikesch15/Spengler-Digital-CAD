@@ -1423,7 +1423,7 @@ function regen() {
         f._bleche = nr.map((pi) => {
           if (!loops[pi]) throw new Error(`Fläche ${pi + 1} fehlt in der Skizze`);
           const n = kantenGruppen(gegenUhrzeiger(loops[pi])).length;
-          return { pi, ...flaechenblech(loops[pi], [...Array(n).keys()].map((k) => { const b = bausteinFuer(f.kanten?.[`${pi}:${k}`]), w = f.kantenWerte?.[`${pi}:${k}`]; return b && w ? { ...b, _werte: w } : b; }), m, doc.features.filter((q) => q.typ === "quetschfalte" && q.ziel === f.id && !q._aus).map((q) => String(q.ecke).split(":").map(Number)).filter(([p0]) => p0 === pi).map(([, k0]) => k0), (() => { const enden = {}; for (const q of doc.features) if (q.typ === "flanschende" && q.ziel === f.id && !q._aus) { const [p0, k0] = String(q.key).split(":").map(Number); if (p0 === pi) enden[`${k0}:${q.seite === "ende" ? "ende" : "start"}`] = { art: q.art || "rechtwinklig", winkel: +q.winkel || 0, versatz: +q.versatz || 0 }; } return Object.keys(enden).length || (f.ecken && f.ecken !== "gehrung") ? { ecken: f.ecken || "gehrung", spalt: +f.eckSpalt || 1, enden } : null; })()) };
+          return { pi, ...flaechenblech(loops[pi], [...Array(n).keys()].map((k) => { const b = bausteinFuer(f.kanten?.[`${pi}:${k}`]), w = f.kantenWerte?.[`${pi}:${k}`]; return b && w ? { ...b, _werte: w } : b; }), m, doc.features.filter((q) => q.typ === "quetschfalte" && q.ziel === f.id && !q._aus).map((q) => String(q.ecke).split(":").map(Number)).filter(([p0]) => p0 === pi).map(([, k0]) => k0), (() => { const enden = {}; for (const q of doc.features) if (q.typ === "flanschende" && q.ziel === f.id && !q._aus) { const [p0, k0] = String(q.key).split(":").map(Number); if (p0 === pi) enden[`${k0}:${q.seite === "ende" ? "ende" : "start"}`] = { art: q.art || "rechtwinklig", winkel: +q.winkel || 0, versatz: +q.versatz || 0 }; } return Object.keys(enden).length || (f.ecken && f.ecken !== "gehrung") || f.freistellung === "keine" ? { ecken: f.ecken || "gehrung", spalt: +f.eckSpalt || 1, enden, freistellung: f.freistellung } : null; })()) };
         });
         const viele = f._bleche.length > 1;
         f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
@@ -2500,19 +2500,22 @@ function bausteinKontur(b0, m) {
       const { start, ops } = freiesProfil(0, zeilen0(L), m), res = berechne(start, ops, m.t, m.ri, m.k), v = +b.versatz || 0;
       const ring = kontur(res.pfad, m.t, 6).map(([x, y]) => [x - L + v, y]), mitte = [];
       for (const el of res.pfad) { if (el.typ === "linie") { if (!mitte.length) mitte.push([el.p1[0] - L + v, el.p1[1]]); mitte.push([el.p2[0] - L + v, el.p2[1]]); } else { const a = (el.winkel * Math.PI) / 180; for (let i = 0; i <= 12; i++) { const w = el.start + (a * i) / 12; mitte.push([el.zentrum[0] + el.rm * Math.cos(w) - L + v, el.zentrum[1] + el.rm * Math.sin(w)]); } } }
+      const bg0 = res.pfad.find((e) => e.typ === "bogen"); if (bg0) ring.bisPunkt = [bg0.p2[0] - L + v, bg0.p2[1]]; // Ende der ersten Biegung (für die Freistellung)
       ring.mitte = mitte; return ring;
     } catch {}
   }
   return null;
 }
 // Profil (x = nach aussen, y) entlang z extrudiert; Enden schräg: Anfang bei z = −x·k0, Ende bei z = L + x·k1
-function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0) { // e0/e1: an der Ecke zurückgesetzt (wie in der Abwicklung)
+function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0, fr0 = 0, fr1 = 0) { // e0/e1: an der Ecke zurückgesetzt (wie in der Abwicklung)
   // Die Gehrung gilt für die Mittellinie des Blechs: Jeder Ringpunkt wird mit dem x der nächsten Mittellinienstelle verschoben, so steht die Schnittfläche
   // senkrecht auf dem Blech (wie aus der Abwicklung geschnitten) und die Blechstärke wird nicht schräg angeschnitten.
-  const mitte = kont.mitte, mx = mitte ? (x, y) => { let best = 1e30, bx = x, by = y; for (let i = 1; i < mitte.length; i++) { const a = mitte[i - 1], b = mitte[i], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-12, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2)), px = a[0] + dx * t, py = a[1] + dy * t, d = (x - px) ** 2 + (y - py) ** 2; if (d < best) { best = d; bx = px; by = py; } } return [bx, by]; } : (x, y) => [x, y];
+  const mitte = kont.mitte, mx = mitte ? (x, y) => { let best = 1e30, bx = x, by = y, bs = 0; for (let i = 1; i < mitte.length; i++) { const a = mitte[i - 1], b = mitte[i], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-12, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2)), px = a[0] + dx * t, py = a[1] + dy * t, d = (x - px) ** 2 + (y - py) ** 2; if (d < best) { best = d; bx = px; by = py; bs = cum[i - 1] + Math.hypot(px - a[0], py - a[1]); } } return [bx, by, bs]; } : (x, y) => [x, y, 0];
   let q = kont.slice(); if (gleich(q[0], q.at(-1))) q.pop(); if (flaeche(q) < 0) q = q.reverse();
   const luft = window.__prismaLuft || 0; // nur für Tests: Gehrungsflächen minimal auseinander
-  const z0 = (x, y) => { const [cx, cy] = mx(x, y); return -cx * k0 - cy * ky0 + e0 + luft; }, z1 = (x, y) => { const [cx, cy] = mx(x, y); return Math.max(L + cx * k1 + cy * ky1 - e1 - luft, z0(x, y) + 0.01); }, pos = [];
+  const cum = [0]; if (mitte) for (let i = 1; i < mitte.length; i++) cum.push(cum[i - 1] + Math.hypot(mitte[i][0] - mitte[i - 1][0], mitte[i][1] - mitte[i - 1][1]));
+  const sBis = mitte && kont.bisPunkt ? (() => { let bi = 0, bd = 1e30; mitte.forEach((p, i) => { const d = (p[0] - kont.bisPunkt[0]) ** 2 + (p[1] - kont.bisPunkt[1]) ** 2; if (d < bd) { bd = d; bi = i; } }); return cum[bi] + 1e-6; })() : -1; // Ende der ersten Biegung entlang der Mittellinie
+  const z0 = (x, y) => { const [cx, cy, cs] = mx(x, y); return -cx * k0 - cy * ky0 + e0 + (fr0 && cs <= sBis ? fr0 : 0) + luft; }, z1 = (x, y) => { const [cx, cy, cs] = mx(x, y); return Math.max(L + cx * k1 + cy * ky1 - e1 - (fr1 && cs <= sBis ? fr1 : 0) - luft, z0(x, y) + 0.01); }, pos = [];
   const P = (x, y, z) => pos.push(x, y, z), n = q.length;
   for (let i = 0; i < n; i++) { const [xa, ya] = q[i], [xb, yb] = q[(i + 1) % n];
     P(xa, ya, z0(xa, ya)); P(xb, yb, z0(xb, yb)); P(xb, yb, z1(xb, yb)); P(xa, ya, z0(xa, ya)); P(xb, yb, z1(xb, yb)); P(xa, ya, z1(xa, ya)); }
@@ -2649,7 +2652,7 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
         }
         continue;
       }
-      const geo = prisma(k2, L, k0, k1, e0, e1, i > 1 ? 0 : ek[k].ky0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0);
+      const geo = prisma(k2, L, k0, k1, e0, e1, i > 1 ? 0 : ek[k].ky0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0, i > 1 ? 0 : ek[k].fr0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].fr1 || 0);
       geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
       geo.applyMatrix4(B); geos.push(nachAussen(geo)); // Basis kann gespiegelt sein: Dreiecke wieder nach aussen
     }
@@ -2789,8 +2792,8 @@ function berechneKanten(f) {
     if (x.typ !== "naht" || x._aus) continue;
     for (const seite of ["a", "b"]) {
       const s = x[seite]; if (s?.ziel !== f.id || !s.key) continue;
-      const folge = nahtFolgen(x, m)[seite]; if (!folge) continue;
-      const vor = k[s.key]; if (vor) { const bv = werkzeugAuf(bausteinFuer(vor), m); k[s.key] = { folge: folgeAnhaengen(bausteinFolge(bv, m), folge), versatz: +bv.versatz || 0 }; } else k[s.key] = { folge, versatz: 0 };
+      const nf = nahtFolgen(x, m)[seite]; if (!nf) continue;
+      const vor = k[s.key]; if (vor) { const bv = werkzeugAuf(bausteinFuer(vor), m); k[s.key] = { folge: folgeAnhaengen(bausteinFolge(bv, m), nf.folge), versatz: +bv.versatz || 0 }; } else k[s.key] = { folge: nf.folge, versatz: nf.versatz || 0 }; // Rücksetzung der Kante nur ohne vorhandenen Flansch
     }
   }
   return k;
@@ -3188,7 +3191,7 @@ function stirnErweiterungen(f, m) {
   return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && (x.ende === "S1" || x.ende === "S2")).map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende, schenkel: +x.schenkel || 0, zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean);
 }
 function profilErweiterungen(f, m) {
-  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && x.ende !== "S1" && x.ende !== "S2").map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende === "B" ? "B" : "A", zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean).concat(doc.features.filter((x) => x.typ === "naht" && !x._aus).flatMap((x) => ["a", "b"].filter((s) => x[s]?.ziel === f.id && (x[s].key === "A" || x[s].key === "B")).map((s) => { const fo = nahtFolgen(x, m)[s]; return fo ? { ende: x[s].key, zeilen: folge(`1 ${fo}`) } : null; }).filter(Boolean)));
+  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && x.ende !== "S1" && x.ende !== "S2").map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende === "B" ? "B" : "A", zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean).concat(doc.features.filter((x) => x.typ === "naht" && !x._aus).flatMap((x) => ["a", "b"].filter((s) => x[s]?.ziel === f.id && (x[s].key === "A" || x[s].key === "B")).map((s) => { const fo = nahtFolgen(x, m)[s]; return fo && !/^0 /.test(fo.folge) ? { ende: x[s].key, zeilen: folge(`1 ${fo.folge}`) } : null; }).filter(Boolean)));
 }
 const istProfil = (h) => h?.typ === "profil" || h?.typ === "vorlage" || h?.typ === "blech";
 function kantenWert(w, m) { // Baustein bzw. Werkzeug der Kantenleiste → Wert für einen Schritt
@@ -3387,7 +3390,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && nahtWz &
 // Längsnaht am Rohr/Kegel: Zugabe in der Abwicklung (Summe der Abkantzugaben beider Seiten) und Überlappungsstreifen im Modell
 const rundNaehte = (f) => doc.features.filter((x) => x.typ === "naht" && !x._aus && (x.art === "punkt" || x.art === "falz") && ["a", "b"].some((s) => x[s]?.ziel === f.id && /^N[01]$/.test(x[s].key || "")));
 function rundNahtZugabe(f, m) {
-  let z = 0; for (const x of rundNaehte(f)) { const fo = nahtFolgen(x, m); for (const s of ["a", "b"]) if (x[s]?.ziel === f.id && fo[s]) { try { z += bausteinProfil({ name: "naht", folge: fo[s], versatz: 0 }, m).zugabe; } catch {} } }
+  let z = 0; for (const x of rundNaehte(f)) { const fo = nahtFolgen(x, m); for (const s of ["a", "b"]) if (x[s]?.ziel === f.id && fo[s]) { try { z += bausteinProfil({ name: "naht", folge: fo[s].folge, versatz: fo[s].versatz || 0 }, m).zugabe; } catch {} } }
   return z;
 }
 function rundNahtStreifen(f, m) {
@@ -3565,6 +3568,7 @@ function flaecheDialog(f) {
     { id: "lage", label: "Skizze liegt …", optionen: [["mitte", "in der Blechmitte"], ["vorne", "auf der Vorderseite (Blech dahinter)"], ["hinten", "auf der Rückseite (Blech davor)"]], wert: f.lage || "mitte" },
     { id: "ecken", label: "Eckenschluss", optionen: [["gehrung", "Gehrung (Enden 90° zum Blech, Innenecken treffen sich)"], ["stoss", "Stoss (Überlappung)"], ["spalt", "Offene Ecke mit Spalt"]], wert: f.ecken || "gehrung" },
     { id: "eckSpalt", label: "Eckspalt (offene Ecke)", einheit: "mm", wert: f.eckSpalt ?? 1 },
+    { id: "freistellung", label: "Freistellung der Biegezone (Gehrung)", optionen: [["eckig", "ja – Biegezone endet vor der Ecke"], ["keine", "nein"]], wert: f.freistellung === "keine" ? "keine" : "eckig" },
     { id: "eckEntl", label: "Eckentlastung", optionen: [["keine", "Keine"], ["rund", "Rund"], ["quadrat", "Quadratisch"]], wert: f.eckEntl || "keine" },
     { id: "eckEntlMass", label: "Entlastung: Radius / halbe Seite", einheit: "mm", wert: f.eckEntlMass ?? 2 },
     { id: "stueck", label: "Stück", wert: f.stueck ?? 1 },

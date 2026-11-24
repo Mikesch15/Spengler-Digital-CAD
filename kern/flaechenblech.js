@@ -49,7 +49,7 @@ export function bausteinProfil(b0, m) {
   // Schenkelmass im Querschnitt: so wie eingegeben (Länge «bis» Mittellinie/Aussen/Innen/Tangente), nicht die rechnerische Länge der Mittellinie
   const w = b0?.werkzeug;
   if (w?.typ === "flansch" && res.beschriftungen?.[1]) { const bz = w.bezug || "mitte"; res.beschriftungen[1] = { ...res.beschriftungen[1], mass: +w.laenge, text: bz === "mitte" ? undefined : `${zahl(w.laenge)} ${{ aussen: "aussen", innen: "innen", tangente: "tang." }[bz] || ""}`.trim() }; }
-  const biegungen = res.biegungen.filter((bg) => Math.abs(bg.winkel) > 1e-6).map((bg) => ({ ...bg, anschlag: res.zuschnitt - bg.pos, abstand: bg.pos - X + v })); // 0°-Biegung = gerade Verlängerung, keine Biegelinie
+  const biegungen = res.biegungen.filter((bg) => Math.abs(bg.winkel) > 1e-6).map((bg) => ({ ...bg, anschlag: res.zuschnitt - bg.pos, abstand: bg.pos - X + v, ende: bg.bis - X + v })); // 0°-Biegung = gerade Verlängerung, keine Biegelinie
   // Querschnitt (x nach aussen, y Höhe) ohne den Anfangsschenkel auf der Fläche – für die Eckprüfung
   const quer = kontur(res.pfad, m.t, 6).map(([x, y]) => [x - X + v, y]);
   return { zeilen, res, zugabe, biegungen, versatz: v, lage: profilLage(res, m, v), lageY: profilLage(res, m, v, true), quer, t: m.t, ri: m.ri, k: m.k };
@@ -171,7 +171,16 @@ export function innenWand(p) {
 // Ecke zweier Aufkantungen (konvex): Die Innenflächen schneiden sich in einer Linie; beide Enden werden in einer Ebene durch diese Linie geschnitten,
 // die senkrecht auf dem Blech steht (Schnittkante 90°) – die Innenecken treffen sich, an der Aussenecke bleibt ein Spalt.
 // Ebene je Ende: z = e + kx·x + ky·y (Querschnittskoordinaten x nach aussen, y Höhe)
-function quadratEcken(gruppen, profile, ek) {
+// Freistellung an der Gehrungsecke (wie in Fusion): die Biegezone endet um Biegeradius + Blechstärke vor der Ecke, damit sie nicht über die Ecke hinaussteht.
+// fr0/fr1 = Rücksetzung der Biegezone am Anfang/Ende der Kante, bisU = Ende der Biegung (Abwicklungsmass ab der gezeichneten Kante)
+function freistellen(ek, profile, kv, k, opt) {
+  if (opt?.freistellung === "keine") return;
+  const rel = (p) => { const b = p?.biegungen?.[0]; return b && Math.abs(b.winkel) > 1e-6 ? { fr: (b.ri ?? p.ri ?? 1) + (p.t || 1), bis: b.ende } : null; };
+  const a = rel(profile[kv]), b = rel(profile[k]);
+  if (a) { ek[kv].fr1 = a.fr; ek[kv].bisU = a.bis; }
+  if (b) { ek[k].fr0 = b.fr; ek[k].bisU = b.bis; }
+}
+function quadratEcken(gruppen, profile, ek, opt = null) {
   const n = gruppen.length;
   gruppen.forEach((g, k) => {
     const kv = (k - 1 + n) % n; if (kv === k || !profile[k]?.lage || !profile[kv]?.lage) return;
@@ -181,7 +190,7 @@ function quadratEcken(gruppen, profile, ek) {
     const xA = innenX(profile[kv]), xB = innenX(profile[k]);
     if (!WA && !WB) { // senkrechte oder flache Profile: Enden rechtwinklig zur Kante, Innenecken am Fuss
       const s = (xB - xA * (nA[0] * nB[0] + nA[1] * nB[1])) / sb, sB = xA * (nA[0] * d0[0] + nA[1] * d0[1]) + s * (dV[0] * d0[0] + dV[1] * d0[1]);
-      ek[kv].k1 = 0; ek[kv].ky1 = 0; ek[kv].e1 = -s; ek[k].k0 = 0; ek[k].ky0 = 0; ek[k].e0 = sB; return;
+      ek[kv].k1 = 0; ek[kv].ky1 = 0; ek[kv].e1 = -s; ek[k].k0 = 0; ek[k].ky0 = 0; ek[k].e0 = sB; freistellen(ek, profile, kv, k, opt); return;
     }
     // Innenflächen als x(y) = xf + (y − yf)·r: ohne Wand (senkrecht) r = 0, x = innenX
     const fa = WA ? { xf: WA.f[0], yf: WA.f[1], r: WA.w[0] / WA.w[1] } : { xf: xA, yf: 0, r: 0 }, fb = WB ? { xf: WB.f[0], yf: WB.f[1], r: WB.w[0] / WB.w[1] } : { xf: xB, yf: 0, r: 0 };
@@ -194,6 +203,7 @@ function quadratEcken(gruppen, profile, ek) {
     };
     const A = ebene(fa, WA?.w, zA0, aS), B = ebene(fb, WB?.w, zB0, bS);
     ek[kv].k1 = A.kx; ek[kv].ky1 = A.ky; ek[kv].e1 = -A.c; ek[k].k0 = -B.kx; ek[k].ky0 = -B.ky; ek[k].e0 = B.c;
+    freistellen(ek, profile, kv, k, opt);
   });
 }
 function innenX(p) {
@@ -223,7 +233,7 @@ function eckFaktorenRoh(gruppen, profile, opt = null) { // opt: { ecken: "gehrun
     const kk = (beta, mit, geh) => (mit ? eckFaktor(beta, true, geh) : 0); // Nachbar ohne Baustein: Ende rechtwinklig zur Biegekante (nachträglich mit «Flanschende» änderbar)
     return { k0: kk(knick(dV, d0), !!pV?.lage, !!a?.gehrung) - (a?.kB || 0), e0: a?.eB || 0, k1: kk(knick(d1, dN), !!pN?.lage, !!b?.gehrung) - (b?.kA || 0), e1: b?.eA || 0 };
   });
-  const art = opt?.ecken || "gehrung"; if (art === "gehrung") { quadratEcken(gruppen, profile, ek); return ek; }
+  const art = opt?.ecken || "gehrung"; if (art === "gehrung") { quadratEcken(gruppen, profile, ek, opt); return ek; }
   const t = +opt?.t || 0.7, gap = Math.max(0, +opt?.spalt || 0);
   gruppen.forEach((g, k) => { // Ecke am Anfang der Kante k (zwischen Kante k−1 und k): nur wo beide Kanten einen Baustein haben
     const kv = (k - 1 + n) % n; if (!profile[k]?.lage || !profile[kv]?.lage || kv === k) return;
@@ -261,9 +271,9 @@ const schnitt = (p, r, q, s) => { const d = r[0] * s[1] - r[1] * s[0]; if (Math.
 // Polylinie um d nach aussen (rechts bei Umriss gegen den Uhrzeiger) versetzen; Enden: Ausklinkung (senkrecht) oder
 // bis zur Verlängerung der Nachbarkante, wenn diese keine Zugabe hat
 // Lappen einer Kante im Zuschnitt bei Abwicklungsmass u: Kante um u nach aussen versetzt, Enden je nach Ecke (x(u)·k)
-function lappenLinie(g, u, x, f, y = 0) {
+function lappenLinie(g, u, x, f, y = 0, rel = null) {
   const pts = versatzLinie(g.punkte, -u), d0 = richtung(g.punkte[0], g.punkte[1]), d1 = richtung(g.punkte.at(-2), g.punkte.at(-1));
-  const a = -x * f.k0 - y * (f.ky0 || 0) + (f.e0 || 0), b = x * f.k1 + y * (f.ky1 || 0) - (f.e1 || 0); // Verschiebung längs der Kante am Anfang / Ende
+  const fr = rel ?? (f.bisU != null && u <= f.bisU + 1e-9), a = -x * f.k0 - y * (f.ky0 || 0) + (f.e0 || 0) + (fr ? f.fr0 || 0 : 0), b = x * f.k1 + y * (f.ky1 || 0) - (f.e1 || 0) - (fr ? f.fr1 || 0 : 0); // Verschiebung längs der Kante am Anfang / Ende
   pts[0] = [pts[0][0] + d0[0] * a, pts[0][1] + d0[1] * a];
   pts[pts.length - 1] = [pts.at(-1)[0] + d1[0] * b, pts.at(-1)[1] + d1[1] * b];
   return pts;
@@ -274,12 +284,14 @@ export function abwicklung(pts, gruppen, profile, quetsch = null, opt = null) { 
   const ek = eckFaktoren(gruppen, profile, opt), umriss = [], n0 = gruppen.length, qA = (k) => quetsch?.get(k), qE = (k) => quetsch?.get((k + 1) % n0);
   gruppen.forEach((g, k) => {
     const p = profile[k];
+    if (p?.lage && p.zugabe < -1e-9) { umriss.push(...lappenLinie(g, p.zugabe, 0, ek[k], 0, false).slice(0, -1)); return; } // Kante nach innen gesetzt (z. B. bei Nähten): Zuschnitt kürzer als gezeichnet
     if (!p?.lage || !(p.zugabe > 0)) { umriss.push(...g.punkte.slice(0, -1)); return; }
     const lage = p.lage.filter(([u]) => u <= p.zugabe + 1e-9); if (lage.at(-1)[0] < p.zugabe - 1e-9) lage.push([p.zugabe, xBei(p.lage, p.zugabe)]);
-    if (qA(k)) umriss.push(qA(k).P1); else for (const [u, x] of lage) umriss.push(lappenLinie(g, u, x, ek[k], yBei(p.lageY, u))[0]); // Anfang: von der Kante nach aussen (bei Quetschfalte: Spitze der Seitenkante)
+    const stufe = ek[k].bisU != null && (ek[k].fr0 || ek[k].fr1) ? lage.flatMap(([u, x], i) => (i + 1 < lage.length && u <= ek[k].bisU + 1e-9 && lage[i + 1][0] > ek[k].bisU + 1e-9 ? [[u, x, true], [u, x, false]] : [[u, x, u <= ek[k].bisU + 1e-9 ? true : false]])) : lage.map(([u, x]) => [u, x, null]); // Freistellung: Stufe am Ende der Biegung
+    if (qA(k)) umriss.push(qA(k).P1); else for (const [u, x, rel] of stufe) umriss.push(lappenLinie(g, u, x, ek[k], yBei(p.lageY, u), rel)[0]); // Anfang: von der Kante nach aussen (bei Quetschfalte: Spitze der Seitenkante)
     const aussen = lappenLinie(g, p.zugabe, lage.at(-1)[1], ek[k], yBei(p.lageY, p.zugabe)); umriss.push(...aussen.slice(1, -1));
     if (qE(k)) { const q = qE(k); umriss.push(q.P2, ...(q.z.P2s[0] === q.z.P2[0] && q.z.P2s[1] === q.z.P2[1] ? [] : [q.P2s]), q.C, ...(q.z.P1s[0] === q.z.P1[0] && q.z.P1s[1] === q.z.P1[1] ? [] : [q.P1s])); } // Quetschfalte: Überschuss der Ecke
-    else for (const [u, x] of lage.slice().reverse()) umriss.push(lappenLinie(g, u, x, ek[k], yBei(p.lageY, u)).at(-1)); // Ende: zurück zur Kante
+    else for (const [u, x, rel] of stufe.slice().reverse()) umriss.push(lappenLinie(g, u, x, ek[k], yBei(p.lageY, u), rel).at(-1)); // Ende: zurück zur Kante
   });
   let sauber = umriss.filter((p, i) => len(sub(p, umriss[(i + umriss.length - 1) % umriss.length])) > 1e-6);
   sauber = sauber.filter((p, i) => { // Punkte auf einer Geraden zwischen ihren Nachbarn weglassen
@@ -287,7 +299,7 @@ export function abwicklung(pts, gruppen, profile, quetsch = null, opt = null) { 
     return Math.abs(u[0] * v[1] - u[1] * v[0]) > 1e-6 * len(u) * len(v) || u[0] * v[0] + u[1] * v[1] < 0;
   });
   const linien = [];
-  gruppen.forEach((g, k) => (profile[k]?.biegungen || []).forEach((b) => { const u = Math.max(b.abstand, 0), pk = lappenLinie(g, u, xBei(profile[k].lage, u), ek[k], yBei(profile[k].lageY, u)); if (qA(k) && b === profile[k].biegungen[0]) pk[0] = qA(k).O; if (qE(k) && b === profile[k].biegungen[0]) pk[pk.length - 1] = qE(k).O; linien.push({ kante: k, nr: b.nr, art: b.art, punkte: pk }); }));
+  gruppen.forEach((g, k) => (profile[k]?.biegungen || []).forEach((b) => { const u = profile[k].zugabe < -1e-9 ? b.abstand : Math.max(b.abstand, 0), pk = lappenLinie(g, u, xBei(profile[k].lage, u), ek[k], yBei(profile[k].lageY, u)); if (qA(k) && b === profile[k].biegungen[0]) pk[0] = qA(k).O; if (qE(k) && b === profile[k].biegungen[0]) pk[pk.length - 1] = qE(k).O; linien.push({ kante: k, nr: b.nr, art: b.art, punkte: pk }); }));
   if (quetsch) for (const q of quetsch.values()) linien.push({ kante: -1, nr: 0, art: "quetsch", punkte: [q.O, q.C] }, { kante: -1, nr: 0, art: "ecklinie", punkte: [q.O, q.P1] }, { kante: -1, nr: 0, art: "ecklinie", punkte: [q.O, q.P2] });
   // Ausrichtung: längste gerade Kante waagrecht
   const gerade = gruppen.filter((g) => g.gerade).sort((a, b) => b.laenge - a.laenge)[0] || gruppen[0];

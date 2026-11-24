@@ -5,26 +5,30 @@ const zahl = (v) => String(+(+v).toFixed(3));
 export const NAHT_ARTEN = { punkt: "Punktschweissnaht (Überlappung)", falz: "Falznaht", schweiss: "Schweissnaht (Raupe)", ecke: "Ecknaht (Raupe)" };
 export const nahtStandard = (art = "punkt") => ({ art, absetz: art === "falz" || art === "punkt" ? "b" : "keine", richtung: "oben", zugabe: 15, falzA: 5, falzB: 10, mittig: false, absetzen: true, raupeBreite: 0, raupeHoehe: 0, seite: "oben" });
 
-// Kröpfung um eine Blechstärke mit 45°-Bögen: Schenkel zwischen den scharfen Kanten = t / sin 45°, Radius so klein, dass beide Tangentenlängen hineinpassen
-export function kroepfung(t, ri, vorz) {
-  const leg = t / Math.sin(Math.PI / 4), rMax = leg / (2 * Math.tan(Math.PI / 8)) - t / 2, r = Math.max(0.05, Math.min(ri > 0 ? ri : t, rMax * 0.98)), tang = (r + t / 2) * Math.tan(Math.PI / 8);
-  return { leg, r, tang, folge: `${vorz * 45}r${zahl(r)} ${zahl(leg)} ${-vorz * 45}r${zahl(r)}`, tangente: tang };
+// Kröpfung um die Höhe h (Standard eine Blechstärke) mit 45°-Bögen: Schenkel zwischen den scharfen Kanten = h / sin 45°, Radius so klein, dass beide Tangentenlängen hineinpassen
+export function kroepfung(t, ri, vorz, h = t) {
+  const leg = h / Math.sin(Math.PI / 4), rMax = leg / (2 * Math.tan(Math.PI / 8)) - t / 2, r = Math.max(0.05, Math.min(ri > 0 ? ri : t, rMax * 0.98)), tang = (r + t / 2) * Math.tan(Math.PI / 8);
+  return { leg, r, tang, folge: `${vorz * 45}r${zahl(r)} ${zahl(leg)} ${-vorz * 45}r${zahl(r)}`, tangente: tang, breite: h };
 }
 
-// Abkantfolgen der beiden Seiten: { a: folge | null, b: folge | null }; die Folge wird an die Kante des Blechs angehängt (wie ein Kantenbaustein)
+// Abkantfolgen der beiden Seiten: { a: { folge, versatz } | null, b: ... }. Die Folge hängt an der Kante des Blechs (wie ein Kantenbaustein), «versatz» setzt die Kante des nicht
+// abgesetzten Blechs zurück, so dass sich die Bleche nirgends durchdringen (Bleche liegen nur aufeinander, Falzhaken greifen ineinander).
+// Das abgesetzte Blech (n.absetz) wird gekröpft, die Oberflächen sind danach bündig; Richtung + = zur Sichtseite.
 export function nahtFolgen(n, m) {
-  const t = +m?.t || 0.7, ri = +m?.ri || 1, s = n.richtung === "unten" ? -1 : 1, art = n.art || "punkt";
+  const t = +m?.t || 0.7, ri = +m?.ri || 1, s = n.richtung === "unten" ? -1 : 1, art = n.art || "punkt", absB = n.absetz !== "a", kopf = (x) => (absB ? { a: x.flach, b: x.abg } : { a: x.abg, b: x.flach });
   if (art === "schweiss" || art === "ecke") return { a: null, b: null };
-  const kr = kroepfung(t, ri, s), absA = n.absetz === "a";
   if (art === "punkt") {
-    const zug = Math.max(1, +n.zugabe || 15), folge = n.absetzen === false ? `0 ${zahl(zug)}` : `${kr.folge} ${zahl(zug + kr.tang)}`; // ohne Absetzung: gerade Verlängerung (Zugabe)
-    return absA ? { a: folge, b: null } : { a: null, b: folge };
+    const zug = Math.max(1, +n.zugabe || 15), kr = kroepfung(t, ri, s), rueck = t + kr.tang + 0.3; // Kröpfung des einen Blechs reicht um t + Tangente über die Kante: das andere endet davor
+    return kopf({ abg: { folge: `${kr.folge} ${zahl(zug + kr.tang)}`, versatz: 0 }, flach: { folge: "0 2", versatz: -(rueck + 2) } });
   }
-  // Falz: ein Blech Falz «falzA» (einfacher Umschlag), das abgesetzte Blech Falz «falzB»; mittig = beide gleich (Summe), keine Absetzung
-  const sum = (+n.falzA || 5) + (+n.falzB || 10);
-  if (n.mittig) { const h = sum / 2; return { a: `U${s > 0 ? "+" : "-"} ${zahl(h)}`, b: `U${s > 0 ? "-" : "+"} ${zahl(h)}` }; }
-  const mid = kr.tang + (ri + t) + 0.3, hemA = `U${s > 0 ? "+" : "-"} ${zahl(+n.falzA || 5)}`, hemB = `${kr.folge} ${zahl(mid)} U${s > 0 ? "-" : "+"} ${zahl(+n.falzB || 10)}`; // kurzes gerades Stück zwischen Kröpfung und Falzbogen
-  return absA ? { a: hemB, b: hemA } : { a: hemA, b: hemB };
+  // Falz: das abgesetzte Blech (Falz «falzB») wird um 3 t gekröpft, läuft unter dem Haken des anderen Blechs (Falz «falzA») durch und hakt sich mit einem 180°-Bogen um dessen Ende
+  const fa = Math.max(2, +n.falzA || 5), fb = Math.max(2, +n.falzB || 10), mittig = !!n.mittig, hA = mittig ? (fa + fb) / 2 : fa, hB = mittig ? hA : fb;
+  const rA = t / 2, rmA = rA + t / 2, kr = kroepfung(t, ri, s, 3 * t), rB = t / 2, rmB = rB + t / 2;
+  const lauf = Math.max(hB, 2), setzen = lauf - hA + 3 * t + kr.tang + rmB - t / 2 - 0.3; // Rücksetzung des Hakenblechs: Haken endet vor dem Jog des anderen Blechs
+  const hemA = `U${s > 0 ? "+" : "-"}r${zahl(rA)} ${zahl(hA)}`;
+  const rueckB = Math.max(rmB + t / 2 + 1.5, hA - 0.5), mid = lauf + kr.tang + (rmB + t / 2); // gerader Lauf unter dem Haken, dann Haken um dessen Ende
+  const hemB = `${kr.folge} ${zahl(mid)} U${s > 0 ? "-" : "+"}r${zahl(rB)} ${zahl(rueckB)}`;
+  return kopf({ abg: { folge: hemB, versatz: 0 }, flach: { folge: hemA, versatz: -setzen } });
 }
 
 // Raupenmasse: Breite etwa 2 t, Höhe etwa t (mindestens 1.2 / 0.6 mm)
