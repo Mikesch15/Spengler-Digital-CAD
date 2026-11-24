@@ -18,6 +18,16 @@ const proY = new Map(); for (const p of wand) { const k = Math.round(p[1] * 10) 
 const ys = [...proY.keys()].sort((a, c) => a - c), mins = [proY.get(ys[0]), proY.get(ys.at(-1))]; // Aussen- und Innenfläche der Wand
 ok(ys.length >= 2, `Wand der unteren Kante gefunden (${proY.size} Dickenlagen)`);
 ok(Math.max(...mins) - Math.min(...mins) < 0.02 && Math.abs(mins[0] - 0.35) < 0.03, `Gehrung: Stirnfläche steht 90° zum Blech (über die Blechstärke gleiche Endlage) und trifft die Innenfläche der Nachbarwand bei x = t/2 (${[...proY.entries()].map(([y, x]) => y + ":" + x.toFixed(2)).join(" ")})`);
+// Freistellung: nur die Biegezone wird ausgeschnitten, die Wand der Gehrung bleibt unverändert (Vergleich mit freistellung = keine)
+{ const wand = async (frei) => { const p2 = await b.newPage({ viewport: { width: 1280, height: 800 } });
+    await p2.addInitScript((frei) => { localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] }));
+      localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 20, features: [
+        { id: "sk", typ: "skizze", name: "Rechteck", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [200, 120] }], bedingungen: [] },
+        { id: "fl", typ: "flaeche", name: "Blech 1", skizze: "sk", material: "zink07", flaechen: [[10, 10]], kanten: { "0:0": "abk-o", "0:1": "abk-o", "0:2": "abk-o", "0:3": "abk-o" }, ...(frei ? { freistellung: "keine" } : {}) }] })); }, frei);
+    await p2.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await p2.waitForTimeout(1800);
+    const Q = await p2.evaluate(() => window.sdcadTest.meshPunkte("fl")); await p2.close(); return Q.filter((p) => p[2] > 4).map((p) => p.map((v) => Math.round(v * 100) / 100).join(",")); };
+  const mit = new Set(await wand(false)), ohne = new Set(await wand(true)), abw = [...mit].filter((k) => !ohne.has(k)).length;
+  ok(mit.size >= 8 && abw === 0, `Freistellung ändert die Wand der Gehrung nicht (${mit.size} Wandpunkte, ${abw} abweichend)`); }
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Gehrung ohne Schnitt durch die Blechstärke (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

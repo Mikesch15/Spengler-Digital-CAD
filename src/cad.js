@@ -2515,6 +2515,12 @@ function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0, fr0 = 0, fr1 
   const luft = window.__prismaLuft || 0; // nur für Tests: Gehrungsflächen minimal auseinander
   const cum = [0]; if (mitte) for (let i = 1; i < mitte.length; i++) cum.push(cum[i - 1] + Math.hypot(mitte[i][0] - mitte[i - 1][0], mitte[i][1] - mitte[i - 1][1]));
   const sBis = mitte && kont.bisPunkt ? (() => { let bi = 0, bd = 1e30; mitte.forEach((p, i) => { const d = (p[0] - kont.bisPunkt[0]) ** 2 + (p[1] - kont.bisPunkt[1]) ** 2; if (d < bd) { bd = d; bi = i; } }); return cum[bi] + 1e-6; })() : -1; // Ende der ersten Biegung entlang der Mittellinie
+  if ((fr0 || fr1) && sBis > 0) { // Stufe der Freistellung scharf: an jeder Kontur-Strecke über die Grenze Biegung/Wand zwei Punkte dicht nebeneinander einfügen (sonst Schrägfläche über die ganze Wand)
+    const q2 = [], im = (a) => mx(a[0], a[1])[2] <= sBis;
+    for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; q2.push(a);
+      if (im(a) !== im(b)) { let lo = 0, hi = 1; for (let it = 0; it < 40; it++) { const m = (lo + hi) / 2, pm = [a[0] + (b[0] - a[0]) * m, a[1] + (b[1] - a[1]) * m]; if (im(pm) === im(a)) lo = m; else hi = m; }
+        for (const t of [lo, hi]) q2.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } }
+    q = q2; }
   const z0 = (x, y) => { const [cx, cy, cs] = mx(x, y); return -cx * k0 - cy * ky0 + e0 + (fr0 && cs <= sBis ? fr0 : 0) + luft; }, z1 = (x, y) => { const [cx, cy, cs] = mx(x, y); return Math.max(L + cx * k1 + cy * ky1 - e1 - (fr1 && cs <= sBis ? fr1 : 0) - luft, z0(x, y) + 0.01); }, pos = [];
   const P = (x, y, z) => pos.push(x, y, z), n = q.length;
   for (let i = 0; i < n; i++) { const [xa, ya] = q[i], [xb, yb] = q[(i + 1) % n];
