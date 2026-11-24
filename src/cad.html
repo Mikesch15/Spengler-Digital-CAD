@@ -713,6 +713,7 @@ body.stiftpalette .stiftleiste { display: flex; }
 /* Marke, Suchen, Einstellungen, Hilfe: ganz rechts; auf schmalen Geräten bleiben sie beim Wischen der Leiste stehen (nur das Zeichen statt des Namens) */
 .rechtsgruppe { display: flex; align-items: center; gap: 2px; order: 29; margin-left: auto; position: sticky; right: 0; z-index: 3; padding-left: 8px; background: var(--panel); box-shadow: -10px 0 10px -8px rgb(0 0 0 / .25); }
 @media (min-width: 1001px) { .leiste:not(.imSkizze):not(.imDialog) .rechtsgruppe { display: contents; } }
+@media (max-width: 700px) { .rechtsgruppe .marke { display: none; } .rechtsgruppe .wz { font-size: 0 !important; min-width: 40px; padding: 6px 8px; gap: 0; } .rechtsgruppe .wz svg { width: 20px; height: 20px; } }
 @media (max-width: 1000px) { .rechtsgruppe .marke { font-size: 0; gap: 0; padding: 0 4px; margin: 0; border: 0; } .rechtsgruppe .marke span { display: none; } }
 /* Datei steht auch auf schmalen Geräten ganz links */
 #gHaupt .klapp[data-klapp="datei"] { order: -1; }

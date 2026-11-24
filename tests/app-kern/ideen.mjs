@@ -28,6 +28,18 @@ await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringi
 await s.goto(basis + "?test"); await s.waitForTimeout(1500); await s.evaluate(() => window.sdcadTest.bearbeite("sk")); await s.waitForTimeout(900);
 const t = await s.evaluate(() => [...document.querySelectorAll("#labels div")].filter((d) => !d.hidden).map((d) => d.textContent));
 ok(t.some((x) => /°/.test(x)) && t.some((x) => /^R /.test(x)) && t.some((x) => /^Ø /.test(x)), `Winkel-, Radius- und Durchmessermass vorhanden (${t.join(" ")})`);
+// Winkel = Innenwinkel im Dreieck; Masszahl folgt der Masslinie
+c = await b.newContext({ viewport: { width: 1280, height: 800 } }); s = await c.newPage(); s.on("pageerror", (e) => pr.push(e.message));
+await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 20, features: [{ id: "sk", typ: "skizze", name: "S", ebene: "XY", elemente: [{ id: 1, art: "linie", pts: [[0, 0], [100, 0], [60, 70]], geschlossen: true, layer: "0" }], bedingungen: [] }] })); });
+await s.goto(basis + "?test"); await s.waitForTimeout(1500); await s.evaluate(() => window.sdcadTest.bearbeite("sk")); await s.waitForTimeout(900);
+await s.click("#tAuswahl"); await s.waitForTimeout(300);
+const lab = () => s.evaluate(() => [...document.querySelectorAll("#labels div")].filter((d) => !d.hidden && d.textContent).map((d) => { const r = d.getBoundingClientRect(); return { t: d.textContent, x: r.x + r.width / 2, y: r.y + r.height / 2 }; }));
+let L = await lab(); const wk = L.filter((l) => /°$/.test(l.t)).map((l) => parseFloat(l.t)), sum = wk.reduce((a, b) => a + b, 0);
+ok(wk.length === 3 && Math.abs(sum - 180) < 0.6, `Dreieck: Winkel sind die Innenwinkel (${wk.join(" + ")} = ${sum.toFixed(1)})`);
+const l0 = L.find((l) => l.t === "100.0"); await s.mouse.move(l0.x, l0.y); await s.mouse.down(); await s.mouse.move(l0.x + 40, l0.y + 5, { steps: 4 }); await s.mouse.move(l0.x + 80, l0.y + 5, { steps: 4 }); await s.mouse.up(); await s.waitForTimeout(300);
+L = await lab(); const l1 = L.find((l) => l.t === "100.0");
+ok(Math.abs(l1.x - l0.x) < 3, `Masszahl bleibt auf der Masslinie (nur der Abstand ändert sich: ${l0.x | 0}→${l1.x | 0}, ${l0.y | 0}→${l1.y | 0})`);
+await c.close();
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Startseite, Verlauf, Masslinien (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

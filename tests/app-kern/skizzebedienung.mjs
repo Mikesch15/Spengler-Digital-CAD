@@ -21,13 +21,13 @@ await s.click("#anzAbh"); await s.waitForTimeout(300); L = await lab(); ok(!L.so
 await s.click("#tAuswahl"); await s.waitForTimeout(200);
 L = await lab(); const m0 = L.find((l) => /^100/.test(l.t)); ok(!!m0 && m0.c.includes("mass"), "Mass ist im Auswahl-Werkzeug greifbar");
 await s.mouse.move(m0.x, m0.y); await s.mouse.down(); await s.mouse.move(m0.x + 20, m0.y + 30, { steps: 4 }); await s.mouse.move(m0.x + 40, m0.y + 70, { steps: 4 }); await s.mouse.up(); await s.waitForTimeout(300);
-L = await lab(); const m1 = L.find((l) => /^100/.test(l.t)); ok(m1 && Math.hypot(m1.x - m0.x, m1.y - m0.y) > 40, `Mass wurde frei verschoben (${m0.x | 0},${m0.y | 0} → ${m1?.x | 0},${m1?.y | 0})`);
+L = await lab(); const m1 = L.find((l) => /^100/.test(l.t)); ok(m1 && Math.hypot(m1.x - m0.x, m1.y - m0.y) > 30, `Mass wurde verschoben (${m0.x | 0},${m0.y | 0} → ${m1?.x | 0},${m1?.y | 0})`);
 ok(await s.evaluate(() => !document.querySelector("#massbox, .massbox")), "Verschieben öffnet kein Eingabefeld");
 // Mass auch im Zeichenwerkzeug (Linie) ziehen
 await s.click("#tLinie"); await s.waitForTimeout(200);
 L = await lab(); const w0 = L.find((l) => /^100/.test(l.t));
 await s.mouse.move(w0.x, w0.y); await s.mouse.down(); await s.mouse.move(w0.x - 30, w0.y + 20, { steps: 4 }); await s.mouse.move(w0.x - 60, w0.y + 40, { steps: 4 }); await s.mouse.up(); await s.waitForTimeout(300);
-L = await lab(); const w1 = L.find((l) => /^100/.test(l.t)); ok(w1 && Math.hypot(w1.x - w0.x, w1.y - w0.y) > 40, `Mass lässt sich auch im Linien-Werkzeug ziehen (${w0.x | 0},${w0.y | 0} → ${w1?.x | 0},${w1?.y | 0})`);
+L = await lab(); const w1 = L.find((l) => /^100/.test(l.t)); ok(w1 && Math.hypot(w1.x - w0.x, w1.y - w0.y) > 30, `Mass lässt sich auch im Linien-Werkzeug ziehen (${w0.x | 0},${w0.y | 0} → ${w1?.x | 0},${w1?.y | 0})`);
 ok(await s.evaluate(() => window.sdcadTest.dok().features[0].elemente.length) === 2, "…ohne dabei eine Linie zu beginnen");
 await s.click("#tAuswahl"); await s.waitForTimeout(200);
 // Löschen als Werkzeug
