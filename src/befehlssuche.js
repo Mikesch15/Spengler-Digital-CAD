@@ -17,7 +17,7 @@ function befehle() {
     if (b.id === "wSuche" || b.classList.contains("klappknopf") || b.disabled || gesehen.has(b)) continue;
     let versteckt = b.hidden; for (let e = b.parentElement; e && !versteckt && e !== document.body; e = e.parentElement) if (e.hidden && !e.classList.contains("klappmenue")) versteckt = true; // eingeklappte Menüs zählen mit
     if (versteckt) continue;
-    gesehen.add(b);
+    gesehen.add(b); if (b.hasAttribute("data-nosuche")) continue; // Doppel-Knöpfe (z. B. Skizze im Blech-Reiter) nur einmal
     const name = (b.querySelector("b")?.textContent || b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim(), tipp = b.title || b.querySelector("small")?.textContent || "";
     if (!name) continue;
     const g = b.closest("[data-klapp]")?.dataset.klapp, skizze = b.closest("#gSkizze");

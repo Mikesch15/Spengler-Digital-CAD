@@ -6751,6 +6751,7 @@ function neueSkizze(ebenenId) {
   const f = { id: neueId(), typ: "skizze", name: "Skizze " + (doc.features.filter((x) => x.typ === "skizze").length + 1), ebene: id, elemente: [] };
   einfuegen(f); setTimeout(() => starteSkizze(f));
 }
+$("wSkizzeBlech").onclick = () => $("wSkizze").click(); // Skizze direkt aus dem Blech-Reiter
 $("wSkizze").onclick = () => {
   if (dlg) $("dAbbrechen").click();
   const vor = finde(auswahl)?.typ === "ebene" && finde(auswahl)._ebene ? auswahl : einst.neu.ebene;

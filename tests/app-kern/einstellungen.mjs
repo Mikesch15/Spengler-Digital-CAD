@@ -38,6 +38,16 @@ const p2 = await s.evaluate(() => { const r = document.getElementById("stiftleis
 ok(Math.abs(p2.x - p1.x) < 4 && Math.abs(p2.y - p1.y) < 4, "Lage der Palette bleibt nach dem Neuladen erhalten");
 await s.dblclick(".stiftgriff"); await s.waitForTimeout(200);
 ok(Math.abs(await s.evaluate(() => document.getElementById("stiftleiste").getBoundingClientRect().x) - p0.x) < 4, "Doppelklick auf den Griff stellt die Ausgangslage her");
+// Datei ganz links, Suchen/Einstellungen/Hilfe ganz rechts; Skizze im Blech-Reiter
+const lage = () => s.evaluate(() => { const x = (q) => document.querySelector(q)?.getBoundingClientRect().left ?? -1, tabs = [...document.querySelectorAll("#leiste .klappknopf")].filter((e) => e.getBoundingClientRect().width > 0).map((e) => e.getBoundingClientRect().left); return { datei: x('[data-klapp="datei"] > .klappknopf'), min: Math.min(...tabs), such: x("#wSuche"), einst: x("#wEinst"), hilfe: x("#wHilfe"), marke: x("#leiste .marke") }; });
+let L = await lage(); ok(L.datei === L.min && L.datei < L.such && L.such < L.einst && L.einst < L.hilfe && L.marke < L.such, `Desktop: Datei ganz links, Suchen/Einstellungen/Hilfe ganz rechts (${JSON.stringify(L)})`);
+await s.setViewportSize({ width: 900, height: 700 }); await s.waitForTimeout(400); L = await lage();
+ok(L.datei === L.min && L.datei < L.such && L.such < L.einst && L.einst < L.hilfe, `Schmal: Datei ganz links, Suchen/Einstellungen/Hilfe rechts (${JSON.stringify(L)})`);
+await s.setViewportSize({ width: 1280, height: 800 }); await s.waitForTimeout(300);
+await s.click('.klappknopf:visible:has-text("Blech")'); await s.waitForTimeout(300);
+await s.click("#wSkizzeBlech"); await s.waitForTimeout(500);
+ok(await s.evaluate(() => document.getElementById("dTitel").textContent === "Skizze erstellen"), "Blech-Reiter: Skizze lässt sich direkt erstellen");
+await s.click("#dAbbrechen"); await s.waitForTimeout(200);
 // Firmenlogo hochladen, Vorname, Startseite/Druck
 await s.click("#wEinst"); await s.waitForTimeout(300);
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNkYPhfz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC", "base64");
