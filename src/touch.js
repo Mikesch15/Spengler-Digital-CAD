@@ -3,12 +3,13 @@ export const grob = () => { try { return matchMedia("(pointer: coarse)").matches
 export const maus = () => { try { return matchMedia("(pointer: fine)").matches; } catch { return true; } };
 
 // Langdruck (Finger, ~0,55 s ohne Verschieben) löst das Kontextmenü von `el` aus – falls der Browser es nicht schon selbst auslöst.
+export const schalter = { langdruck: true };
 export function langdruck(el, wahl, ms = 550) {
   let t = null, x0 = 0, y0 = 0, nativ = false, ziel = null, verschluckt = 0;
   el.addEventListener("contextmenu", () => { nativ = true; setTimeout(() => (nativ = false), 900); }, true);
   const ab = () => { clearTimeout(t); t = null; };
   el.addEventListener("pointerdown", (e) => {
-    verschluckt = 0; ab(); if (e.pointerType !== "touch" || !e.isPrimary || !e.target.closest(wahl)) return;
+    verschluckt = 0; ab(); if (!schalter.langdruck || e.pointerType !== "touch" || !e.isPrimary || !e.target.closest(wahl)) return;
     ziel = e.target; x0 = e.clientX; y0 = e.clientY; nativ = false;
     t = setTimeout(() => { t = null; if (nativ || !ziel?.isConnected) return; verschluckt = Date.now(); navigator.vibrate?.(15);
       ziel.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: x0, clientY: y0, button: 2 })); }, ms);

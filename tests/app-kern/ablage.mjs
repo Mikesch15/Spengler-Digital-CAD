@@ -38,13 +38,15 @@ ok(db.ordner.find((o) => o.pfad === pr1)?.project_id === "7", "Projektordner mer
 // nochmals zuordnen: nichts doppelt
 await s.evaluate(() => window.sdcadTest.setzeAuftrag({ nr: "2026-114", objekt: "Müller, Test", appProjekt: { id: 7, name: "Dach Müller" } })); await s.waitForTimeout(600);
 ok(pfade().length === 6, "Erneutes Zuordnen legt nichts doppelt an");
-// Modell speichern (Button in der Ablage)
-await s.evaluate(() => document.getElementById("wAblage").click()); await s.waitForSelector('[data-ab="modell"]', { timeout: 4000 });
-await s.click('[data-ab="modell"]'); await s.waitForTimeout(800);
+// Modell speichern: Dialog «Speichern» (Name + Ort Cloud); zweites Mal fragt vor dem Überschreiben
+s.on("dialog", (d) => d.accept());
+const cloudSpeichern = async () => { await s.evaluate(() => document.getElementById("wSpeichern").click()); await s.waitForSelector("#d_ort", { timeout: 4000 }); await s.selectOption("#d_ort", "cloud"); await s.evaluate(() => document.getElementById("dOk").click()); await s.waitForTimeout(1000); };
+await cloudSpeichern();
 const md = db.dateien.find((d) => d.art === "modell");
 ok(md && md.ordner === `${pr1}/Modelle` && /^2026-114 /.test(md.name) && JSON.parse(md.inhalt).features.length === 1, `Modell liegt in «Modelle»: ${md?.name}`);
-await s.click('[data-ab="modell"]'); await s.waitForTimeout(600);
-ok(db.dateien.filter((d) => d.art === "modell").length === 1 && db.dateien[0].version === 2, "Nochmals speichern = neue Version derselben Datei (v2)");
+await cloudSpeichern();
+ok(db.dateien.filter((d) => d.art === "modell").length === 1 && db.dateien[0].version === 2, "Nochmals speichern (nach Rückfrage) = neue Version derselben Datei (v2)");
+await s.evaluate(() => document.getElementById("wAblage").click()); await s.waitForSelector('[data-ab="aktualisieren"]', { timeout: 4000 });
 // Export und Plan
 await s.evaluate(() => { window.sdcadTest.exportiere("Abwicklung.dxf", "0\nEOF\n", "export"); window.sdcadTest.exportiere("Plan 1.svg", "<svg/>", "plan"); }); await s.waitForTimeout(900);
 ok(db.dateien.some((d) => d.art === "export" && d.name === "Abwicklung.dxf" && d.ordner === `${pr1}/Exporte`), "DXF-Export liegt in «Exporte»");

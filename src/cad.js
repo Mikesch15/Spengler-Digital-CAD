@@ -63,7 +63,7 @@ import { vorbereiten, loeseSkizze, analyse, fuegeHinzu, bereinige, punkte as ski
 import { abstandGerade, winkelZwischen } from "../kern/bedingungen.js";
 import { rechne, parameterWerte, istZahl, namenIn, NAME as PARAMNAME } from "../kern/ausdruck.js";
 import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
-import { langdruck, tastaturSichtbar, wertBlase, maus } from "./touch.js";
+import { langdruck, tastaturSichtbar, wertBlase, maus, schalter as touchSchalter } from "./touch.js";
 import { fensterVerschieben } from "./fenster.js";
 import { dateiName as sicherName, modellDateiName } from "../kern/cloud/ablage.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
@@ -155,9 +155,10 @@ const standardEinst = () => JSON.parse(JSON.stringify({
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
   druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
   etiketten: { spalten: 3, zeilen: 8, breite: 70, hoehe: 37, oben: 0, links: 0, abstandX: 0, abstandY: 0 }, // mm
+  allgemein: { stiftpalette: "auto", langdruck: true, masse: true, abh: true, speichern: "zuletzt", startAnsicht: "iso" }, // Voreinstellungen für das ganze Programm
   programm: { darstellung: "auto", updates: true, zuletzt: 8, kern: "netz" },      // kern: "netz" (wie 0.2) | "occt" (exakter CAD-Kern, Beta)
 }));
-const GRUPPEN = ["neu", "skizze", "anzeige", "druck", "etiketten", "programm"];
+const GRUPPEN = ["neu", "skizze", "anzeige", "druck", "etiketten", "programm", "allgemein"];
 // Gespeicherte oder geladene Einstellungen über die Standardwerte legen (neue Werte bekommen ihren Standard)
 function mitStandard(e) {
   const s = standardEinst();
@@ -4937,8 +4938,8 @@ const PROBE_SKIZZE = `<svg class="probeskizze" viewBox="0 0 250 150" role="img" 
 const probeWerte = { mat: 0, z: 130, a: "", b: "" };
 const meldung = (t) => { $("eMeldung").textContent = t; };
 const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
-let einstRegister = "material";
-const EINST_REGISTER = [["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["detail3d", "Details 3D"], ["vorlagen", "Vorlagen & Sichern"], ["dach", "Dach"], ["konto", "Konto & Cloud"]];
+let einstRegister = "allgemein";
+const EINST_REGISTER = [["allgemein", "Allgemein"], ["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["detail3d", "Details 3D"], ["vorlagen", "Vorlagen & Sichern"], ["dach", "Dach"], ["konto", "Konto & Cloud"]];
 // Feld an einen Wert der Einstellungen binden: data-e="gruppe.schluessel", data-typ zahl|text|janein|wahl
 function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
   const [g, k] = pfad.split("."), w = entwurf[g][k], id = "e_" + g + "_" + k;
@@ -4951,6 +4952,25 @@ function zeigeEinst() {
   const e = entwurf, feld = (i, k, wert, schritt = "any") => `<input data-i="${i}" data-k="${k}" type="${k === "name" ? "text" : "number"}" step="${schritt}" inputmode="decimal" value="${esc(wert)}">`;
   const reiter = `<div class="register eregister" role="tablist">${EINST_REGISTER.map(([id, t]) => `<button role="tab" data-ereg="${id}" aria-selected="${id === einstRegister}">${t}</button>`).join("")}</div>`;
   const inhalt = {
+    allgemein: `
+    <h4>Darstellung</h4>
+    <div class="egitter">${einstFeld("programm.darstellung", "Farben", "wahl", [["auto", "Wie das Gerät"], ["hell", "Hell"], ["dunkel", "Dunkel"]])}</div>
+    <h4>Bedienung mit Stift und Finger</h4>
+    <div class="egitter">
+      ${einstFeld("allgemein.stiftpalette", "Stiftpalette", "wahl", [["auto", "Automatisch (nur auf Tablets)"], ["ein", "Immer anzeigen"], ["aus", "Nie anzeigen"]], "Knöpfe am rechten Bildrand: Auswahl, Linie, Rechteck, Kreis, Löschen, Bemassung, Rückgängig …")}
+      ${einstFeld("allgemein.langdruck", "Langer Fingerdruck öffnet das Kontextmenü", "janein")}
+    </div>
+    <h4>Skizze: beim Öffnen anzeigen</h4>
+    <div class="egitter">
+      ${einstFeld("allgemein.masse", "Masse", "janein")}
+      ${einstFeld("allgemein.abh", "Abhängigkeitssymbole", "janein")}
+    </div>
+    <h4>Speichern und Ansicht</h4>
+    <div class="egitter">
+      ${einstFeld("allgemein.speichern", "Speichern in (Vorauswahl)", "wahl", [["zuletzt", "Wie zuletzt gewählt"], ["cloud", "Cloud"], ["pc", pc ? "Auf dem PC" : "Auf dem Gerät"]])}
+      ${einstFeld("allgemein.startAnsicht", "Ansicht nach dem Öffnen", "wahl", [["iso", "Isometrisch"], ["vorne", "Vorne"], ["oben", "Oben"], ["rechts", "Rechts"]])}
+    </div>
+    <p class="hinweis">Weitere Voreinstellungen: Fangraster und Vorgaben für neue Teile unter «Neue Teile», Druck und Etiketten unter «Druck» und «Etiketten», Konto unter «Konto & Cloud».</p>`,
     material: `
     <h4>Materialien</h4>
     <div class="tabwrap"><table class="zeilen mat"><thead><tr><th>Name</th><th>Dicke mm</th><th>Innenradius mm</th><th>K-Faktor</th><th>Dichte kg/dm³</th><th title="Simulation: Elastizitätsmodul in N/mm² – leer = Richtwert nach Werkstoff">E-Modul N/mm²</th><th title="Simulation: Streckgrenze Rp0,2 in N/mm² – leer = Richtwert nach Werkstoff">Rp0,2 N/mm²</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand stauchen">Stauchen max %</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand strecken">Strecken max %</th><th></th></tr></thead><tbody>
@@ -5020,8 +5040,6 @@ function zeigeEinst() {
     </div>
     <p class="hinweis" id="eEtikPruef"></p>`,
     programm: `
-    <h4>Darstellung</h4>
-    <div class="egitter">${einstFeld("programm.darstellung", "Farben", "wahl", [["auto", "Wie das Gerät"], ["hell", "Hell"], ["dunkel", "Dunkel"]])}</div>
     <h4>Exakter CAD-Kern (Beta)</h4>
     <div class="egitter">${einstFeld("programm.kern", "CAD-Kern", "wahl", [["netz", "Aus – wie Version 0.2"], ["occt", "Ein – OpenCascade 8.0 (Beta)"]])}</div>
     <p class="hinweis">Ein: exakter STEP-Export (B-Rep, AP242) für Blechteile und 3D-Prüfung des Zuschnitts in der Werkstatt. Lädt beim ersten Gebrauch einmalig ~7 MB; braucht die Web-Version oder das PC-Programm (nicht als Datei per Doppelklick). Lizenz: OpenCascade LGPL 2.1, Hinweise im Ordner «cad/LIZENZEN».</p>
@@ -5208,7 +5226,7 @@ $("eOk").onclick = () => {
   if (fehler) { einstRegister = fehler[0]; zeigeEinst(); return meldung(fehler[1]); }
   sichereEinst(einst, entwurf, "Vor «Übernehmen»"); { const g = geloeschte(einst, entwurf); g.baustein = g.baustein.filter((b) => !BAUSTEINE_STANDARD.some((s) => s.id === b.id)); g.material = g.material.filter((m) => !MATERIALIEN.some((s) => s.id === m.id)); cloud.loeschungen(g); }
   einst = entwurf; entwurf = null; $("einst").hidden = true;
-  einstSpeichern(); darstellung(); kernAnzeige();
+  einstSpeichern(); darstellung(); kernAnzeige(); bedienungAnwenden(true);
   regen(); status("Einstellungen gespeichert. Alle Teile neu berechnet.");
 };
 
@@ -5337,7 +5355,24 @@ function loescheSkizzenAuswahl() {
   else status("Zuerst ein Element anklicken (Werkzeug Auswahl).");
 }
 // Anzeige in der Skizze: Masse und Abhängigkeitssymbole lassen sich ausblenden
-const skAnz = (() => { try { return { masse: true, abh: true, ...JSON.parse(localStorage.getItem("sdcad-skizze-anzeige") || "{}") }; } catch { return { masse: true, abh: true }; } })();
+const skAnz = (() => { try { return { masse: einst.allgemein.masse !== false, abh: einst.allgemein.abh !== false, ...JSON.parse(localStorage.getItem("sdcad-skizze-anzeige") || "{}") }; } catch { return { masse: true, abh: true }; } })();
+// Programmweite Voreinstellungen (Einstellungen › Allgemein) anwenden: Stiftpalette, Langdruck, Skizzenanzeige
+function bedienungAnwenden(neuSetzen = false) {
+  const a = einst.allgemein, p = a.stiftpalette, an = p === "ein" || (p !== "aus" && matchMedia("(pointer: coarse), (any-pointer: coarse)").matches);
+  document.body.classList.toggle("stiftpalette", an); touchSchalter.langdruck = a.langdruck !== false;
+  if (an) stiftBauen();
+  if (neuSetzen) { skAnz.masse = a.masse !== false; skAnz.abh = a.abh !== false; try { localStorage.setItem("sdcad-skizze-anzeige", JSON.stringify(skAnz)); } catch {} for (const [id, k] of [["anzMasse", "masse"], ["anzAbh", "abh"]]) $(id).setAttribute("aria-pressed", String(skAnz[k])); if (skizze) zeichneLive(); }
+}
+// Stiftpalette: Kopien der wichtigsten Knöpfe (Symbol + Aktion), die Zustände folgen den Originalen
+const STIFT = [["tAuswahl", "skizze"], ["tLinie", "skizze"], ["tRechteck", "skizze"], ["tKreis", "skizze"], ["tMass", "skizze"], ["tEntf", "skizze"], ["-", "skizze"], ["tFertig", "skizze"], ["zurueck", null], ["vor", null], ["-", "modell"], ["wSkizze", "modell"], ["wExtrusion", "modell"]];
+function stiftBauen() {
+  const box = $("stiftleiste"); if (box.dataset.fertig) return stiftSync(); box.dataset.fertig = "1"; box.hidden = false;
+  box.innerHTML = STIFT.map(([id, nur]) => { if (id === "-") return `<hr data-nur="${nur}">`; const q = $(id); if (!q) return ""; const sv = q.querySelector("svg")?.outerHTML || `<svg viewBox="0 0 24 24">${id === "zurueck" ? '<path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10"/>' : '<path d="M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10"/>'}</svg>`; return `<button data-for="${id}" ${nur ? `data-nur="${nur}"` : ""} title="${esc((q.title || q.textContent).replace(/\s+/g, " ").trim())}" aria-label="${esc(q.textContent.replace(/\s+/g, " ").trim() || q.title)}">${sv}</button>`; }).join("");
+  box.addEventListener("click", (e) => { const b = e.target.closest("button[data-for]"); if (b) { $(b.dataset.for).click(); setTimeout(stiftSync, 50); } });
+  stiftSync();
+}
+function stiftSync() { for (const b of $("stiftleiste").querySelectorAll("button[data-for]")) { const q = $(b.dataset.for); b.disabled = q.disabled; b.setAttribute("aria-pressed", q.getAttribute("aria-pressed") === "true" ? "true" : "false"); } }
+new MutationObserver(() => stiftSync()).observe(document.getElementById("leiste"), { subtree: true, attributes: true, attributeFilter: ["aria-pressed", "disabled"] });
 // Erklärung zu «n FG» (auch mit Stift/Finger: beim Überfahren bzw. Antippen)
 { const tip = document.body.appendChild(Object.assign(document.createElement("div"), { className: "zeitTip", hidden: true })); let zeit = 0;
   Object.assign(tip.style, { whiteSpace: "normal", maxWidth: "320px", lineHeight: "1.4" });
@@ -6783,7 +6818,7 @@ function ladeProjekt(text, pfad = null) {
     const d = JSON.parse(text); if (!d.features) throw 0;
     doc = d; auswahl = null; projektPfad = pfad; titel(); merkeDatei(pfad); verlauf.stapel = []; verlauf.pos = -1;
     $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; $("aModell").value = doc.modellName || ""; auftragAnzeige(); regen();
-    waehle(doc.features.find((f) => f._res)?.id || null); ansicht("iso"); status("Projekt geöffnet.");
+    waehle(doc.features.find((f) => f._res)?.id || null); ansicht(einst.allgemein.startAnsicht || "iso"); status("Projekt geöffnet.");
   } catch { status("Diese Datei ist kein Spengler-Digital-CAD-Projekt."); }
 }
 async function projektOeffnen() {
@@ -6826,7 +6861,7 @@ async function pcAusfuehren() {
 }
 function speichernStart(schnell = false) {
   let z = null; try { z = localStorage.getItem(ZIEL); } catch {}
-  const ort0 = z === "cloud" || (z == null && cloudBereit()) ? "cloud" : "pc";
+  const v = einst.allgemein.speichern, ort0 = v === "cloud" || v === "pc" ? v : z === "cloud" || (z == null && cloudBereit()) ? "cloud" : "pc";
   const tun = (ort) => { try { localStorage.setItem(ZIEL, ort); } catch {} return ort === "cloud" ? cloudAusfuehren() : pcAusfuehren(); };
   if (schnell && doc.modellName && ((ort0 === "cloud" && cloudBereit() && bestaetigt.has("cloud:" + modellDateiName(doc))) || (ort0 === "pc" && projektPfad && bestaetigt.has("pc:" + projektPfad)))) return tun(ort0); // Strg+S: dieselbe Datei wie zuvor
   if (dlg) $("dAbbrechen").click();
@@ -7277,7 +7312,7 @@ if (!doc.features.length) { // Beispiel: Traufblech als Vorlage
 regen();
 auswahl = doc.features.find((f) => f._res)?.id || null; markiere(); zeigeBrowser(); zeigeWerkstatt();
 ansicht("iso");
-kernAnzeige();
+kernAnzeige(); bedienungAnwenden();
 function skizzeSenkrecht() { // Blick immer genau senkrecht auf die Skizzenebene (nur Drehung in der Ebene erlaubt)
   const E = E_(skizze.f.ebene), n = V(E.n), d = kamera.position.clone().sub(steuerung.target), L = d.length(); if (L < 1e-6) return;
   const c = d.dot(n) / L; if (Math.abs(c) > 0.9999999) return;
