@@ -3,6 +3,7 @@
   "schnelltest": ["assistent", "kontext", "bedienung", "dach", "projektdatei", "kantenwz", "befehlssuche"],
   "regeln": [
     { "muster": "src/kontext.js", "tests": ["kontext"] },
+    { "muster": "src/touch.js", "tests": ["touch"] },
     { "muster": "kern/cad/featureBau", "tests": ["flanschende", "blechkanten"] },
     { "muster": "kern/naht", "tests": ["naht"] },
     { "muster": "kern/quetschfalte", "tests": ["quetschfalte", "stirnquetsch"] },

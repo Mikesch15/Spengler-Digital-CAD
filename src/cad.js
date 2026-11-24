@@ -63,6 +63,7 @@ import { vorbereiten, loeseSkizze, analyse, fuegeHinzu, bereinige, punkte as ski
 import { abstandGerade, winkelZwischen } from "../kern/bedingungen.js";
 import { rechne, parameterWerte, istZahl, namenIn, NAME as PARAMNAME } from "../kern/ausdruck.js";
 import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
+import { langdruck, tastaturSichtbar, wertBlase, maus } from "./touch.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
 import { BASIS, ACHSEN, versetzt, unterWinkel, mittelebene, zweiKanten, dreiPunkte, tangential, entlangPfad, aufFlaeche, zuWelt, zuLokal } from "../kern/ebenen.js";
 const zuWeltK = zuWelt;
@@ -1243,8 +1244,10 @@ leinwand.addEventListener("pointermove", (e) => {
   const { g, m0, v0, d, pxProMm } = griffZug, sm = smPos(e), delta = ((sm[0] - m0[0]) * d[0] + (sm[1] - m0[1]) * d[1]) / pxProMm;
   let v = v0 + delta * g.faktor; v = Math.round(v * (e.shiftKey ? 100 : 2)) / (e.shiftKey ? 100 : 2); if (g.min != null) v = Math.max(g.min, v); if (g.max != null) v = Math.min(g.max, v);
   const el = griffInput(g.feld); if (!el) return; el.value = String(v); el.dispatchEvent(new Event("input"));
+  if (e.pointerType !== "mouse") griffBlase.zeige(`${g.feld === "winkel" ? v + "°" : v + " mm"}`, e.clientX, e.clientY);
 }, true);
-const griffEnde = (e) => { if (!griffZug) return; try { leinwand.releasePointerCapture(e.pointerId); } catch {} griffZug = null; zeichneGriffe(); leinwand.style.cursor = ""; };
+const griffBlase = wertBlase();
+const griffEnde = (e) => { griffBlase.weg(); if (!griffZug) return; try { leinwand.releasePointerCapture(e.pointerId); } catch {} griffZug = null; zeichneGriffe(); leinwand.style.cursor = ""; };
 leinwand.addEventListener("pointerup", (e) => { if (griffZug) { e.stopImmediatePropagation(); griffEnde(e); } }, true);
 leinwand.addEventListener("pointercancel", griffEnde, true);
 
@@ -1689,8 +1692,9 @@ function projektHinweis() {
 }
 function zeigeZeit() {
   const m = doc.marke ?? doc.features.length;
-  const knopf = (f) => `<button data-id="${f.id}" data-name="${esc(f.name)}" draggable="true" class="${f._aus ? "aus " + f._aus : ""}${f._fehler ? " fehler" : ""}" aria-label="${esc(f.name)}" title="${esc(f.name + (f._fehler ? " – ⚠ " + f._fehler : f._aus === "unterdrueckt" ? " – unterdrückt" : f._aus ? " – zurückgerollt" : ""))}">${zeitIcon(f.typ)}<span class="zn">${esc(f.name)}</span>${f._fehler ? '<i class="zw">!</i>' : ""}</button>`;
-  const marke = `<span class="marke" draggable="true" title="Rückrollmarke: ziehen oder Rechtsklick auf ein Feature → «Bis hier zurückrollen»"></span>`;
+  const zieh = maus() ? ' draggable="true"' : ""; // Finger: kein HTML5-Ziehen (Langdruck öffnet das Menü mit «nach links/rechts», Marke über die Pfeile)
+  const knopf = (f) => `<button data-id="${f.id}" data-name="${esc(f.name)}"${zieh} class="${f._aus ? "aus " + f._aus : ""}${f._fehler ? " fehler" : ""}" aria-label="${esc(f.name)}" title="${esc(f.name + (f._fehler ? " – ⚠ " + f._fehler : f._aus === "unterdrueckt" ? " – unterdrückt" : f._aus ? " – zurückgerollt" : ""))}">${zeitIcon(f.typ)}<span class="zn">${esc(f.name)}</span>${f._fehler ? '<i class="zw">!</i>' : ""}</button>`;
+  const marke = `<span class="marke"${zieh} title="Rückrollmarke: ziehen oder Rechtsklick auf ein Feature → «Bis hier zurückrollen»"></span>`;
   $("zeit").innerHTML = doc.features.length ? [...doc.features.slice(0, m).map(knopf), marke, ...doc.features.slice(m).map(knopf)].join("")
     : '<span class="hinweis">Leer: mit «Skizze» oder «Spengler-Vorlage» beginnen</span>';
   $("rueckgaengig").disabled = !doc.features.length || !!skizze;
@@ -1699,7 +1703,10 @@ function zeigeZeit() {
 }
 const zeitTip = document.body.appendChild(Object.assign(document.createElement("div"), { className: "zeitTip", hidden: true }));
 $("zeit").addEventListener("pointerover", (e) => { const b = e.target.closest("button[data-name]"); if (!b) return; zeitTip.textContent = b.dataset.name; zeitTip.hidden = false; const r = b.getBoundingClientRect(), t = zeitTip.getBoundingClientRect(); zeitTip.style.left = Math.max(6, Math.min(r.left + r.width / 2 - t.width / 2, innerWidth - t.width - 6)) + "px"; zeitTip.style.top = r.top - t.height - 8 + "px"; });
-$("zeit").addEventListener("pointerout", (e) => { if (e.target.closest("button[data-name]")) zeitTip.hidden = true; });
+let zeitTipZeit = 0;
+$("zeit").addEventListener("pointerover", (e) => { if (e.pointerType === "touch") { clearTimeout(zeitTipZeit); zeitTipZeit = setTimeout(() => (zeitTip.hidden = true), 1800); } });
+$("zeit").addEventListener("pointerout", (e) => { if (e.pointerType !== "touch" && e.target.closest("button[data-name]")) zeitTip.hidden = true; }); // Finger: Name bleibt kurz stehen
+langdruck($("zeit"), "button[data-id]"); langdruck($("baum"), "li[data-id]"); tastaturSichtbar();
 $("zeit").addEventListener("click", (e) => { const id = e.target.closest("button")?.dataset.id; const f = finde(id); if (!f) return; if (f._aus) return status(`«${f.name}» ist ${f._aus === "zurueck" ? "zurückgerollt – Marke dahinter ziehen" : "unterdrückt – Rechtsklick → Aktivieren"}.`); bearbeite(f); });
 // Ziehen: Feature verschieben (nur wenn Bezüge davor bleiben) oder Rückrollmarke setzen
 let gezogen = null;
