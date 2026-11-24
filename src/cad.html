@@ -93,8 +93,8 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .typ.ebene { border: 1.5px solid #c77d16; background: color-mix(in srgb, #e8a33d 35%, transparent); transform: skewX(-20deg); }
 /* Wahlfelder im Dialog: das aktive Feld nimmt den Klick in der Ansicht auf */
 .feld[data-wahl] label { cursor: pointer; }
-.feld.waehlt { outline: 2px solid #e8a33d; outline-offset: 2px; border-radius: var(--r-s); }
-.feld.waehlt label { color: #c77d16; font-weight: 600; }
+.feld.waehlt { outline: none; }
+.feld.waehlt label { font-weight: 600; }
 /* Ansicht */
 .ansicht { position: relative; background: var(--view); border: 1px solid var(--line); border-radius: var(--r-s); overflow: hidden; min-height: 300px; }
 #leinwand { width: 100%; height: 100%; display: block; touch-action: none; }
@@ -104,7 +104,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 #status:empty { display: none; } #status.warn { color: var(--fehler); border-left: 3px solid var(--fehler); }
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 #labels div { position: absolute; transform: translate(-50%, -50%); font: 600 11px var(--font-num); color: var(--sketch); background: color-mix(in srgb, var(--view) 80%, transparent); padding: 0 3px; border-radius: var(--r-s); white-space: nowrap; }
-#labels div.mass { pointer-events: auto; cursor: pointer; border: 1px solid transparent; }
+#labels div.mass { touch-action: none; pointer-events: auto; cursor: pointer; border: 1px solid transparent; }
 #labels div.mass:hover { border-color: var(--sketch); }
 #labels div.winkel { color: #c25e14; transform: translate(8px, -130%); }
 #labels div.treibend { color: var(--fg); font-weight: 700; border: 1px solid color-mix(in srgb, var(--sketch) 55%, transparent); }
@@ -663,6 +663,23 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 #dInfo.fehler { color: var(--bend); }
 .modalbox h4 { color: var(--fx-text); border-bottom: 1px solid var(--fx-rand); padding-bottom: 3px; }
 .browser .ptitel::after { margin-left: auto; }
+/* kompakte Fenster */
+.dialog { width: 300px; }
+.dialog > h3, .modalbox > h3 { padding: 5px 32px 5px 8px; font-size: 12px; }
+.dialog .dklein { top: 2px; }
+.dialog .inhalt, .modalbox .inhalt { padding: 8px 10px; gap: 5px; align-content: start; }
+.feld { grid-template-columns: minmax(84px, 40%) minmax(0, 1fr); gap: 6px; min-height: 0; }
+.feld > span, .feld > label, .feld > :first-child:not(input):not(select) { font-size: 12px; line-height: 1.25; }
+.dialog input, .dialog select, .dialog textarea, .modalbox input:not([type=checkbox]):not([type=radio]):not([type=range]), .modalbox select, .modalbox textarea, .feld input, .feld select { padding: 2px 6px; min-height: 24px; font-size: 12px; }
+.dialog select, .modalbox select, .feld select { padding-right: 22px; background-position: right 7px center; }
+.dialog .fuss, .modalbox .fuss { padding: 2px 10px 8px; gap: 6px; }
+.dialog .knopf, .modalbox .knopf, .modalbox button.knopf { padding: 3px 12px; min-width: 64px; font-size: 12px; }
+.dialog .hinweis, .dialog .info { font-size: 11px; line-height: 1.3; }
+.dialog .inhalt .hinweis { margin: 2px 0 0; }
+#dInfo { font-size: 11px; }
+.dialog .inhalt { max-height: 60vh; }
+.modalbox h4 { margin: 8px 0 4px; font-size: 11px; }
+@media (max-width: 1000px) { .dialog { width: auto; } }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 16px var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 </style>

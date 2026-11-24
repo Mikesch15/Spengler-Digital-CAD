@@ -6311,9 +6311,16 @@ $("labels").addEventListener("pointerdown", (e) => {
   const d = e.target.closest(".mass"); if (!d || !skizze || e.button > 0) return; const l = labels[+d.dataset.i]; if (!l?.key) return;
   massZug = { key: l.key, uv0: l.uv0, x: e.clientX, y: e.clientY, id: e.pointerId, bewegt: false, d };
 });
+// auch in den Zeichenwerkzeugen: am Mass ziehen verschiebt es (ein Klick ohne Ziehen geht wie bisher an das Werkzeug)
+leinwand.addEventListener("pointerdown", (e) => {
+  if (!skizze || e.button > 0 || ["auswahl", "loeschen"].includes(skizze.werkzeug)) return;
+  for (const d of $("labels").children) { if (d.hidden || d.dataset.i === "" || d.dataset.kante != null && d.dataset.kante !== "") continue; const l = labels[+d.dataset.i], r = d.getBoundingClientRect();
+    if (l?.key && e.clientX > r.left - 6 && e.clientX < r.right + 6 && e.clientY > r.top - 6 && e.clientY < r.bottom + 6) { massZug = { key: l.key, uv0: l.uv0, x: e.clientX, y: e.clientY, id: e.pointerId, bewegt: false, d: leinwand }; return; } }
+}, true);
 document.addEventListener("pointermove", (e) => {
   if (!massZug || e.pointerId !== massZug.id || !skizze) return;
-  if (!massZug.bewegt) { if (Math.hypot(e.clientX - massZug.x, e.clientY - massZug.y) < 8) return; massZug.bewegt = true; try { massZug.d.setPointerCapture(e.pointerId); } catch {} }
+  if (!massZug.bewegt) { if (Math.hypot(e.clientX - massZug.x, e.clientY - massZug.y) < 8) return; massZug.bewegt = true; runter = null; try { massZug.d.setPointerCapture(e.pointerId); } catch {} }
+  e.stopPropagation();
   const uv = planUV(e); if (!uv) return;
   (skizze.f.massV ||= {})[massZug.key] = [uv[0] - massZug.uv0[0], uv[1] - massZug.uv0[1]]; zeichneLive(); zeigeLabels(); e.preventDefault();
 }, true);
@@ -6399,13 +6406,19 @@ function zeichneLive() {
   }
   const frei = (k) => !getrieben.has(k);
   const mv = f.massV || {};
-  const setzeLabel = (uv, l) => { const key = massKey(l.edit), o = key && mv[key]; labels.push({ ...l, p: zu3D(f.ebene, o ? [uv[0] + o[0], uv[1] + o[1]] : uv), key, uv0: uv, verb: o ? uv : null }); }; // frei verschobene Masse: Versatz je Mass in der Skizze
-  const lab = (a, b, txt, edit, winkel) => { if (skAnz.masse) setzeLabel([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { t: txt, edit, winkel }); };
+  const pxA = bildschirm([0, 0]), pxB = bildschirm([1, 0]), mmProPx = 1 / (Math.hypot(pxB[0] - pxA[0], pxB[1] - pxA[1]) || 1);
+  // Längenmasse haben eine Masslinie von Punkt zu Punkt (parallel zur Strecke, Abstand = Versatz des Masses, Standard 14 px); frei verschobene Masse: Versatz je Mass in der Skizze
+  const setzeLabel = (uv, l, seg = null) => {
+    const key = massKey(l.edit); let o = key && mv[key];
+    if (!o && seg) { const dx = seg[1][0] - seg[0][0], dy = seg[1][1] - seg[0][1], L = Math.hypot(dx, dy); if (L > 1e-9) o = [(-dy / L) * 14 * mmProPx, (dx / L) * 14 * mmProPx]; }
+    labels.push({ ...l, p: zu3D(f.ebene, o ? [uv[0] + o[0], uv[1] + o[1]] : uv), key, uv0: uv, verb: !seg && mv[key] ? uv : null, seg, off: o });
+  };
+  const lab = (a, b, txt, edit, winkel, seg = false) => { if (skAnz.masse) setzeLabel([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { t: txt, edit, winkel }, seg ? [a, b] : null); };
   const fest = new Set(f.elemente);
   for (const el of [...f.elemente, ...temp.elemente]) {
     const ed = fest.has(el);
     if (el.art === "linie") {
-      el.pts.forEach((p, i) => { const j = el.pts[i + 1] ? i + 1 : el.geschlossen ? 0 : -1, q = el.pts[j]; if (q && frei("L:" + el.id + ":" + ["p" + i, "p" + j].sort().join(":"))) lab(p, q, f1(Math.hypot(q[0] - p[0], q[1] - p[1])), ed && { el, art: "laenge", i }); });
+      el.pts.forEach((p, i) => { const j = el.pts[i + 1] ? i + 1 : el.geschlossen ? 0 : -1, q = el.pts[j]; if (q && frei("L:" + el.id + ":" + ["p" + i, "p" + j].sort().join(":"))) lab(p, q, f1(Math.hypot(q[0] - p[0], q[1] - p[1])), ed && { el, art: "laenge", i }, false, true); });
       const n = el.pts.length;
       for (let i = el.geschlossen ? 0 : 1; i < (el.geschlossen ? n : n - 1); i++) {
         const w = drehung(el.pts, i);
@@ -6413,15 +6426,15 @@ function zeichneLive() {
       }
       for (const [i, R] of Object.entries(el.radien || {})) { const a = abrundung(el.pts, +i, R, el.geschlossen); if (a) lab(a.m, a.m, "R " + f1(a.r), ed && { el, art: "radius", i: +i }, true); }
     } else if (el.art === "rechteck") {
-      lab(el.a, [el.b[0], el.a[1]], f1(Math.abs(el.b[0] - el.a[0])), ed && { el, art: "breite" });
-      lab(el.a, [el.a[0], el.b[1]], f1(Math.abs(el.b[1] - el.a[1])), ed && { el, art: "hoehe" });
+      lab(el.a, [el.b[0], el.a[1]], f1(Math.abs(el.b[0] - el.a[0])), ed && { el, art: "breite" }, false, true);
+      lab(el.a, [el.a[0], el.b[1]], f1(Math.abs(el.b[1] - el.a[1])), ed && { el, art: "hoehe" }, false, true);
     } else if (el.art === "kreis") { if (frei("K:" + el.id)) lab(el.c, [el.c[0] + el.r * 2, el.c[1]], "Ø " + f1(el.r * 2), ed && { el, art: "durchmesser" }); }
     else if (el.art === "bogen") { const d = bogenDaten(el); if (d && frei("K:" + el.id)) lab(el.m, el.m, "R " + f1(d.r), ed && { el, art: "bogenR" }, true); }
     else if (el.art === "ellipse") { lab(el.c, el.a, "a " + f1(abst(el.c, el.a)), false); lab(el.c, el.c, "b " + f1(el.r2), false, true); }
-    else if (el.art === "langloch") { if (frei("L:" + el.id + ":a:b")) lab(el.a, el.b, f1(abst(el.a, el.b)), ed && { el, art: "langL" }); if (frei("K:" + el.id)) lab(el.b, el.b, "B " + f1(el.r * 2), ed && { el, art: "langB" }, true); }
+    else if (el.art === "langloch") { if (frei("L:" + el.id + ":a:b")) lab(el.a, el.b, f1(abst(el.a, el.b)), ed && { el, art: "langL" }, false, true); if (frei("K:" + el.id)) lab(el.b, el.b, "B " + f1(el.r * 2), ed && { el, art: "langB" }, true); }
   }
   // Treibende Masse (fett, umrandet) und Symbole der Abhängigkeiten (anklicken → Entf löscht)
-  const dim = (uv, t, b, w) => uv && skAnz.masse && setzeLabel(uv, { t: b.ausdruck ? `fx ${t}` : t, edit: { bed: b }, bed: b, treibend: true, winkel: w });
+  const dim = (uv, t, b, w, seg = null) => uv && skAnz.masse && setzeLabel(uv, { t: b.ausdruck ? `fx ${t}` : t, edit: { bed: b }, bed: b, treibend: true, winkel: w }, seg);
   const zaehler = new Map(), lm = (r) => { const l = B.L(r); return l && mitte(l[0], l[1]); };
   const glyph = (uv, b) => {
     if (!uv || !skAnz.abh) return;
@@ -6430,9 +6443,9 @@ function zeichneLive() {
   };
   const nahMaus = (uv) => { if (!uv || !m) return false; const a = bildschirm(uv), c = bildschirm(m); return Math.hypot(a[0] - c[0], a[1] - c[1]) < 30; };
   for (const b of f.bedingungen || []) switch (b.typ) {
-    case "abstand": { const a = B.P(b.a), q = B.P(b.b); if (a && q) dim(mitte(a, q), f1(b.w), b); break; }
-    case "abstandH": case "abstandV": { const a = B.P(b.a), q = B.P(b.b); if (a && q) dim(mitte(a, q), (b.typ === "abstandH" ? "↔ " : "↕ ") + f1(b.w), b); break; }
-    case "punktLinie": { const p = B.P(b.p), l = B.L(b.l); if (p && l) dim(mitte(p, projektion(p, l)), f1(b.w), b); break; }
+    case "abstand": { const a = B.P(b.a), q = B.P(b.b); if (a && q) dim(mitte(a, q), f1(b.w), b, false, [a, q]); break; }
+    case "abstandH": case "abstandV": { const a = B.P(b.a), q = B.P(b.b); if (a && q) dim(mitte(a, q), (b.typ === "abstandH" ? "↔ " : "↕ ") + f1(b.w), b, false, b.typ === "abstandH" ? [a, [q[0], a[1]]] : [a, [a[0], q[1]]]); break; }
+    case "punktLinie": { const p = B.P(b.p), l = B.L(b.l); if (p && l) dim(mitte(p, projektion(p, l)), f1(b.w), b, false, [p, projektion(p, l)]); break; }
     case "winkel": { const l = B.L(b.l2); if (l) dim(lm(b.l2), grad(b.w), b, true); break; }
     case "knick": dim(B.P(b.p), grad(b.w), b, true); break;
     case "radius": { const k = B.K(b.k); if (k) dim(k.anker, "R " + f1(b.w), b, true); break; }
@@ -6453,9 +6466,32 @@ function zeichneLive() {
     case "fix": glyph(b.p ? B.P(b.p) : b.l ? lm(b.l) : skizzenPunkte({ elemente: [B.els.get(b.e)].filter(Boolean) })[1]?.uv, b); break;
   }
   for (const l of labels) if (l.verb) { const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints([zu3D(f.ebene, l.verb), l.p]), new THREE.LineBasicMaterial({ color: 0x7a8794, depthTest: false })); ln.renderOrder = 10; live.add(ln); } // Hilfslinie zum verschobenen Mass
+  massStand++;
   if (m) status(`u ${f1(m[0])}  v ${f1(m[1])} mm · ${f.name} auf ${ebenenName(f.ebene)}`, true);
 }
+// Masslinien (Hilfslinien, Masslinie mit Pfeilen) wie im Plan; Pfeil- und Überstandsgrösse folgen dem Zoom
+const massGruppe = new THREE.Group(); szene.add(massGruppe); let massStand = 0, massLinienKey = "";
+function baueMassLinien() {
+  const key = skizze ? [massStand, skizze.f.id, ...kamera.position.toArray().map((v) => Math.round(v * 2)), kamera.zoom].join("|") : "";
+  if (key === massLinienKey) return; massLinienKey = key; leeren(massGruppe);
+  if (!skizze) return;
+  const f = skizze.f, pos = [], P = (uv) => { const v = zu3D(f.ebene, uv); pos.push(v.x, v.y, v.z); };
+  const seg = (a, b) => { P(a); P(b); };
+  for (const l of labels) if (l.seg && l.off) {
+    const [a, b] = l.seg, L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
+    const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], n = [-d[1], d[0]], h = l.off[0] * n[0] + l.off[1] * n[1]; if (Math.abs(h) < 1e-6) continue;
+    const pa = [a[0] + n[0] * h, a[1] + n[1] * h], pb = [b[0] + n[0] * h, b[1] + n[1] * h], px = bildschirm([a[0] + 1, a[1]]), p0 = bildschirm(a), mm = 1 / (Math.hypot(px[0] - p0[0], px[1] - p0[1]) || 1);
+    const ue = 4 * mm * Math.sign(h), sz = Math.min(9 * mm, L / 3);
+    seg(a, [pa[0] + n[0] * ue, pa[1] + n[1] * ue]); seg(b, [pb[0] + n[0] * ue, pb[1] + n[1] * ue]); // Hilfslinien
+    seg(pa, pb); // Masslinie
+    for (const [t, r] of [[pa, 1], [pb, -1]]) for (const w of [1, -1]) seg(t, [t[0] + r * d[0] * sz + w * n[0] * sz * 0.28, t[1] + r * d[1] * sz + w * n[1] * sz * 0.28]); // Pfeile
+  }
+  if (!pos.length) return;
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  const ln = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x56616c, depthTest: false })); ln.renderOrder = 10; massGruppe.add(ln);
+}
 function zeigeLabels() {
+  baueMassLinien();
   const box = $("labels"), alle = labels; // Kantenbeschriftungen entfallen: Kanten werden direkt am Modell angeklickt
   while (box.children.length < alle.length) box.appendChild(document.createElement("div"));
   [...box.children].forEach((d, i) => {
