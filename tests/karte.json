@@ -4,6 +4,7 @@
   "regeln": [
     { "muster": "src/kontext.js", "tests": ["kontext"] },
     { "muster": "src/touch.js", "tests": ["touch"] },
+    { "muster": "android-app/", "tests": ["datei"] },
     { "muster": "kern/cad/featureBau", "tests": ["flanschende", "blechkanten"] },
     { "muster": "kern/naht", "tests": ["naht"] },
     { "muster": "kern/quetschfalte", "tests": ["quetschfalte", "stirnquetsch"] },

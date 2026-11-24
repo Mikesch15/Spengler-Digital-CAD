@@ -26,6 +26,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npx cap add android
+          # Druck-Plugin (window.print fehlt im WebView): eigene Klassen in die erzeugte Hülle kopieren
+          cp native/DruckPlugin.java native/MainActivity.java android/app/src/main/java/ch/spenglerdigital/cad/
           # Symbol: eckiges Symbol statt adaptivem Standardsymbol
           rm -rf android/app/src/main/res/mipmap-anydpi-v26
           IM=$(command -v magick || command -v convert || { sudo apt-get install -y imagemagick >/dev/null && command -v convert; })

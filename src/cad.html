@@ -741,11 +741,11 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <button class="wz" data-aus="stl"><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 11v6M9 14l3 3 3-3"/></svg><span><b>STL exportieren</b><small>3D-Druck, Visualisierung</small></span></button>
       </div>
       <div class="mgr" data-titel="Import">
-      <button class="wz" data-aus="import"><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 17v-6M9 14l3-3 3 3"/></svg><span><b>STEP / STL importieren</b><small>als Körper ins Modell</small></span></button>
+      <button class="wz" data-aus="import"><svg viewBox="0 0 24 24"><path class="f" d="M5 3h9l5 5v13H5z"/><path d="M12 17v-6M9 14l3-3 3 3"/></svg><span><b>STEP / STL / DXF importieren</b><small>STEP/STL als Körper, DXF als Skizze (DWG vorher als DXF speichern)</small></span></button>
       <button class="wz" data-aus="bild"><svg viewBox="0 0 24 24"><rect class="f" x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.6"/><path d="M4 18l5-5 4 4 3-3 4 4"/></svg><span><b>Bild / PDF-Plan als Hintergrund</b><small>auf Ebene legen, kalibrieren</small></span></button>
       </div>
       <input type="file" id="datei" accept=".json,.sdcad" hidden>
-      <input type="file" id="importDatei" accept=".step,.stp,.stl" hidden>
+      <input type="file" id="importDatei" accept=".step,.stp,.stl,.dxf,.dwg" hidden>
       <input type="file" id="detailDatei" accept=".step,.stp" hidden>
       <input type="file" id="bildDatei" accept="image/*,.pdf,application/pdf" hidden>
       <input type="file" id="dxfDatei" accept=".dxf" hidden>
@@ -1071,6 +1071,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   <div class="fuss"><button class="knopf haupt" id="hZu">Schliessen</button></div>
 </div></div>
 <div class="menue" id="zuletztMenue" hidden></div>
+<div class="menue" id="dateiMenue" hidden></div>
 <div class="menue" id="ebenenMenue" hidden></div>
 <div class="menue" id="skizzenMenue" hidden></div>
 <div class="menue" id="featureMenue" hidden></div>

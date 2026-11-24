@@ -2024,13 +2024,29 @@ function druckeEtiketten() {
   const stil = `grid-template-columns: repeat(${e.spalten}, ${e.breite}mm); grid-auto-rows: ${e.hoehe}mm; column-gap: ${e.abstandX}mm; row-gap: ${e.abstandY}mm; padding: ${e.oben}mm 0 0 ${e.links}mm;`;
   for (let i = 0; i < etiketten.length; i += proBogen) boegen.push(`<section class="etikettenbogen" style="${stil}">${etiketten.slice(i, i + proBogen).join("")}</section>`);
   $("druck").innerHTML = boegen.join("");
-  window.print();
+  druckeAusgabe("Etiketten");
 }
 function drucke(teile, mitListe = false) {
   teile = teile.filter((f) => f._res);
   if (!teile.length) return status("Keine Blechteile zum Drucken.");
   $("druck").innerHTML = (mitListe ? stuecklisteBlatt() : "") + teile.map(werkstattblatt).join("");
-  window.print();
+  druckeAusgabe("Werkstattblätter");
+}
+// Drucken: Browser und PC-Programm mit dem Druckdialog; Android-App (Capacitor, dort fehlt window.print) über das Druck-Plugin der Hülle,
+// ältere Hüllen ohne Plugin: druckfertige HTML-Seite über das Teilen-Menü (im Browser öffnen → drucken / als PDF)
+async function druckeAusgabe(titel = "Spengler Digital CAD") {
+  const cap = window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins : null;
+  if (!cap) return window.print();
+  try { if (cap.Druck?.drucken) { await cap.Druck.drucken({ name: `${doc.nr ? doc.nr + " – " : ""}${titel}` }); return; } } catch (e) { if (!/not implemented|nicht/i.test(String(e?.message ?? e))) return status("Drucken fehlgeschlagen: " + (e?.message ?? e)); }
+  if (!(cap.Filesystem && cap.Share)) return status("Drucken wird hier nicht unterstützt – die Seite als PDF exportieren geht im Browser.");
+  try {
+    const stile = [...document.styleSheets].map((b) => { try { return [...b.cssRules].map((r) => r.cssText).join("\n"); } catch { return ""; } }).join("\n");
+    const html = `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(titel)}</title><style>${stile}\n@media screen { body { background: #fff; display: block; padding: 8px; } #druck { display: block; color: #000; } }</style></head><body><div id="druck">${$("druck").innerHTML}</div><script>addEventListener("load", () => setTimeout(() => print(), 500));<\/script></body></html>`;
+    const name = `${(doc.nr || "druck").replace(/[\\/:*?"<>|]+/g, "-")}-${titel.replace(/[^\wäöüÄÖÜ-]+/g, "-")}.html`;
+    const r = await cap.Filesystem.writeFile({ path: name, data: html, directory: "CACHE", encoding: "utf8" });
+    await cap.Share.share({ title: name, url: r.uri, dialogTitle: "Druckseite im Browser öffnen und drucken" });
+    status("Druckseite bereit – im Browser öffnen, dann drucken oder als PDF speichern.");
+  } catch (e) { if (!/cancel/i.test(String(e?.message ?? e))) status("Drucken fehlgeschlagen: " + (e?.message ?? e)); }
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 for (const [id, k] of [["aObjekt", "objekt"], ["aNr", "nr"]]) { $(id).value = doc[k]; $(id).addEventListener("input", (e) => { doc[k] = e.target.value; speichern(); zeigeWerkstatt(); }); }
@@ -4709,7 +4725,7 @@ function femQuellen(ids = null) {
   return out;
 }
 simulation = simModul({
-  $, esc, status, szene, modell, kamera, renderer, leeren, doc: () => doc, treffer: (e, ziele = null) => { strahl.setFromCamera(ndc(e), kamera); return strahl.intersectObjects(ziele || modell.children.filter((o) => o.isMesh), false)[0] || null; }, merke: () => merke(), material, drucken: (html) => { $("druck").innerHTML = html; window.print(); },
+  $, esc, status, szene, modell, kamera, renderer, leeren, doc: () => doc, treffer: (e, ziele = null) => { strahl.setFromCamera(ndc(e), kamera); return strahl.intersectObjects(ziele || modell.children.filter((o) => o.isMesh), false)[0] || null; }, merke: () => merke(), material, drucken: (html) => { $("druck").innerHTML = html; druckeAusgabe("Plan"); },
   quellen: (ids) => femQuellen().filter((q) => !ids || ids.includes(q.id)),
   vorOeffnen: () => { if (dlg) $("dAbbrechen").click(); if (messen) messenUmschalten(false); if (quetschWz) endeQuetschWz(); if (nahtWz) endeNahtWz(); },
 });
@@ -6691,8 +6707,36 @@ async function projektOeffnen() {
   try { const d = await pc.invoke("datei_oeffnen", { filter: DATEITYPEN.sdcad, endungen: ["sdcad", "json"] }); if (d) ladeProjekt(d.inhalt, d.pfad); }
   catch (e) { status("Öffnen fehlgeschlagen: " + e); }
 }
-$("wSpeichern").onclick = () => projektSpeichern();
-$("wOeffnen").onclick = projektOeffnen;
+// Öffnen / Speichern: Cloud oder PC/Gerät zur Wahl
+const dateiMenue = $("dateiMenue"); let dateiAktionen = {};
+function dateiWahl(knopf, eintraege) {
+  if (!dateiMenue.hidden && dateiMenue.dataset.knopf === knopf.id) { dateiMenue.hidden = true; return; }
+  dateiMenue.dataset.knopf = knopf.id; dateiAktionen = Object.fromEntries(eintraege.map(([k, , , fn]) => [k, fn]));
+  dateiMenue.innerHTML = eintraege.map(([k, t, u]) => `<button data-k="${k}"><b>${t}</b><small>${u}</small></button>`).join("");
+  const r = knopf.getBoundingClientRect(), ok = r.width > 0;
+  Object.assign(dateiMenue.style, { left: (ok ? Math.max(8, Math.min(r.left, innerWidth - 340)) : 12) + "px", top: (ok ? r.bottom + 4 : 64) + "px" }); dateiMenue.hidden = false;
+}
+dateiMenue.onclick = (e) => { const k = e.target.closest("button")?.dataset.k; if (!k) return; dateiMenue.hidden = true; dateiAktionen[k]?.(); };
+document.addEventListener("click", (e) => { if (!e.target.closest?.("#dateiMenue, #wOeffnen, #wSpeichern")) dateiMenue.hidden = true; });
+const ZIEL = "sdcad-speichern-ziel";
+const cloudBereit = () => cloud.angemeldet && !!doc.appProjekt;
+async function cloudSpeichern() {
+  if (!cloud.angemeldet) return status("Zuerst anmelden (Einstellungen › Konto & Cloud), dann lässt sich in der Cloud speichern.");
+  if (!doc.appProjekt) { status("Zuerst dem Modell ein App-Projekt zuordnen (Datei › Projekte)."); return projekte.oeffnen(); }
+  const r = await ablage.modellSpeichern(); if (r) try { localStorage.setItem(ZIEL, "cloud"); } catch {}
+}
+async function pcSpeichern(unter = false) { try { localStorage.setItem(ZIEL, "pc"); } catch {} return projektSpeichern(unter); }
+function speichernSchnell() { // Strg+S: wie zuletzt gewählt (Cloud, sobald angemeldet und ein Projekt zugeordnet ist)
+  let z = null; try { z = localStorage.getItem(ZIEL); } catch {}
+  return z === "cloud" && cloudBereit() ? cloudSpeichern() : pcSpeichern();
+}
+$("wSpeichern").onclick = () => dateiWahl($("wSpeichern"), [
+  ["cloud", "In der Cloud speichern", cloudBereit() ? `Projekt «${esc(doc.appProjekt.name)}» › Modelle` : cloud.angemeldet ? "Zuerst ein App-Projekt zuordnen" : "Zuerst anmelden (Einstellungen)", cloudSpeichern],
+  ["pc", pc ? "Auf dem PC speichern" : "Auf dem Gerät speichern", pc ? (projektPfad ? dateiname(projektPfad) : "Datei wählen") : "Datei herunterladen bzw. teilen", () => pcSpeichern()],
+  ...(pc ? [["unter", "Speichern unter …", "Neuer Ort oder Name auf dem PC", () => pcSpeichern(true)]] : [])]);
+$("wOeffnen").onclick = () => dateiWahl($("wOeffnen"), [
+  ["cloud", "Aus der Cloud öffnen", cloud.angemeldet ? "Modelle der Cloud-Ablage durchsuchen" : "Zuerst anmelden (Einstellungen)", () => ablage.oeffnen()],
+  ["pc", pc ? "Vom PC öffnen" : "Vom Gerät öffnen", "Projektdatei (.sdcad) wählen", projektOeffnen]]);
 // ------------------------------------------------------------ Konto & Cloud (Spengler-Digital-App)
 function setzeAuftrag({ nr, objekt, appProjekt }) { doc.nr = nr; doc.objekt = objekt; if (appProjekt) doc.appProjekt = appProjekt; else delete doc.appProjekt; $("aNr").value = nr; $("aObjekt").value = objekt; auftragAnzeige(); speichern(); if (appProjekt) ablage?.sicherstellen(); } // Projekt zugeordnet: Cloud-Ordner anlegen (falls es sie noch nicht gibt)
 const cloud = cloudModul({
@@ -7054,8 +7098,24 @@ async function importiereDatei(datei) {
       const alle = new Float32Array(teile.reduce((s, t) => s + t.length, 0)); let o2 = 0; for (const t of teile) { alle.set(t, o2); o2 += t.length; }
       return importFeature(name, alle, new TextDecoder().decode(puffer));
     }
-    status("Nur STEP (.step/.stp) und STL lassen sich importieren.");
+    if (endung === "dxf") return dxfImport(name, new TextDecoder().decode(puffer));
+    if (endung === "dwg") return status("DWG ist ein geschlossenes Format und lässt sich hier noch nicht lesen – bitte in der CAD-Software als DXF speichern («Speichern unter … DXF», z. B. AutoCAD, BricsCAD, LibreCAD) und die DXF-Datei importieren.");
+    status("Importierbar sind STEP (.step/.stp), STL und DXF.");
   } catch (err) { status("Import fehlgeschlagen: " + err.message); }
+}
+// DXF über Datei › Import: eigene Skizze auf der gewählten Ebene (Elemente fixiert wie beim Einfügen in eine offene Skizze)
+function dxfImport(name, text) {
+  const r = dxfLesen(text); if (!r.elemente.length) return status("In der DXF-Datei sind keine Linien, Bögen oder Kreise.");
+  if (r.elemente.length > 3000 && !confirm(`${r.elemente.length} Elemente – das kann langsam werden. Trotzdem importieren?`)) return;
+  if (dlg) $("dAbbrechen").click();
+  dialog({ titel: `DXF importieren: ${name}`, sofort: true, felder: [{ id: "ebene", label: "Auf Ebene", wahl: "ebene", optionen: ebenenOpt(null), wert: einst.neu.ebene }],
+    hinweis: `${r.elemente.length} Elemente${r.faktor !== 1 ? `, Einheit umgerechnet ×${r.faktor}` : ""}. Ebene wählen und OK – die Zeichnung wird als fixierte Skizze angelegt (Schritt in der Zeitleiste).`,
+    ok: (w) => {
+      const f = { id: neueId(), typ: "skizze", name: `DXF ${name}`, ebene: w.ebene, elemente: [], bedingungen: [] };
+      einfuegen(f); for (const el of r.elemente) { el.id = neueElementId(f); f.elemente.push(el); f.bedingungen.push({ typ: "fix", e: el.id }); }
+      loeseSkizze(f); regen(); ansicht("iso"); const weg = Object.entries(r.uebersprungen).map(([k, n]) => `${n}× ${k}`).join(", ");
+      status(`${r.elemente.length} Elemente aus «${name}.dxf» importiert${weg ? ` · übersprungen: ${weg}` : ""}.`);
+    } });
 }
 $("tDxf").onclick = () => { if (skizze) $("dxfDatei").click(); };
 $("importDatei").onchange = async (e) => { const d = e.target.files[0]; e.target.value = ""; if (d) await importiereDatei(d); };
@@ -7085,10 +7145,10 @@ $("datei").onchange = async (e) => { ladeProjekt(await e.target.files[0].text())
 document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
-  if (k === "s") { e.preventDefault(); projektSpeichern(e.shiftKey); }
+  if (k === "s") { e.preventDefault(); e.shiftKey ? pcSpeichern(true) : speichernSchnell(); }
   else if (k === "p") { e.preventDefault(); drucke(blechteile(), true); }
   else if (k === "d" && !e.target.closest?.("input,select,textarea")) { e.preventDefault(); dupliziere(hauptVon(auswahl)); }
-  else if (k === "o") { e.preventDefault(); projektOeffnen(); }
+  else if (k === "o") { e.preventDefault(); $("wOeffnen").click(); }
 });
 // Entf: gewähltes Teil löschen (Rückgängig holt es zurück)
 document.addEventListener("keydown", (e) => {
