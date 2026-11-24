@@ -1649,7 +1649,7 @@ const NAMEN = { loftflansch: "Lofted Flange", rip: "Rip (Auftrennen)", biegung: 
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
   const KON = ["ebene", "achse", "konpunkt", "bild"];
-  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft", "rohr", "spirale", "rippe"].includes(f.typ) && (f.vorgang || "neu") !== "neu") && f.typ !== "bohrung" && f.typ !== "biegung" && f.typ !== "rip" && !(f.typ === "skalieren" && !f.kopie) && f.typ !== "abwickeln" && f.typ !== "falten" && f.typ !== "kante" && f.typ !== "profilkante" && f.typ !== "quetschfalte"); // Flansche/Kanten/Falten gehören zum Blech (nur Zeitleiste); Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
+  const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft", "rohr", "spirale", "rippe"].includes(f.typ) && (f.vorgang || "neu") !== "neu") && f.typ !== "bohrung" && f.typ !== "biegung" && f.typ !== "rip" && !(f.typ === "skalieren" && !f.kopie) && f.typ !== "abwickeln" && f.typ !== "falten" && f.typ !== "kante" && f.typ !== "profilkante" && f.typ !== "quetschfalte" && f.typ !== "naht"); // Flansche/Kanten/Falten gehören zum Blech (nur Zeitleiste); Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
   const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span></li>`;
   $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, f.typ === "ebene" ? "ebene" : f.typ)).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
     <li class="kopf">Körper</li>${kp.filter((f) => !f.komponente).map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech")).join("") || (kp.length ? "" : '<li class="hinweis">Noch keine</li>')}` +
@@ -1694,6 +1694,7 @@ function zeigeZeit() {
   $("zeit").innerHTML = doc.features.length ? [...doc.features.slice(0, m).map(knopf), marke, ...doc.features.slice(m).map(knopf)].join("")
     : '<span class="hinweis">Leer: mit «Skizze» oder «Spengler-Vorlage» beginnen</span>';
   $("rueckgaengig").disabled = !doc.features.length || !!skizze;
+  $("zeitZurueck").disabled = m <= 0 || !doc.features.length; $("zeitVor").disabled = doc.marke == null;
   projektHinweis();
 }
 const zeitTip = document.body.appendChild(Object.assign(document.createElement("div"), { className: "zeitTip", hidden: true }));
@@ -1808,6 +1809,8 @@ $("featureMenue").onclick = (e) => {
   else if (k === "kopie") dupliziere(f);
   else if (k === "weg") { entferneFeature(f); if (auswahl === f.id) auswahl = null; regen(); status(`«${f.name}» gelöscht. Strg+Z holt es zurück.`); }
 };
+$("zeitZurueck").addEventListener("click", () => { const m = doc.marke ?? doc.features.length; if (m <= 0) return; doc.marke = m - 1; regen(); status(`Zurückgerollt vor «${doc.features[doc.marke].name}».`); });
+$("zeitVor").addEventListener("click", () => { if (doc.marke == null) return; const m = doc.marke + 1; doc.marke = m >= doc.features.length ? null : m; regen(); status(doc.marke == null ? "Alle Features aktiv." : `Zurückgerollt vor «${doc.features[doc.marke].name}».`); });
 $("rueckgaengig").addEventListener("click", () => { const f = doc.features[(doc.marke ?? doc.features.length) - 1]; if (f) entferneFeature(f); auswahl = null; regen(); });
 
 function waehle(id, behalteZeiger = false) { // behalteZeiger: Klick im Raum setzt Kante/Fläche vorher selbst
@@ -3411,19 +3414,19 @@ function rundNahtStreifen(f, m) {
 }
 function nahtDialog(f) {
   const ea = nahtKante(f.a), eb = nahtKante(f.b);
+  const NUR = { punkt: ["absetz", "richtung", "zugabe"], falz: ["absetz", "richtung", "mittig", "falzA", "falzB"], schweiss: ["seite", "raupeBreite", "raupeHoehe"], ecke: ["seite", "raupeBreite", "raupeHoehe"] }; // je Nahtart nur die passenden Felder
   featureDialog(f, false, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "art", label: "Nahtart", optionen: Object.entries(NAHT_ARTEN), wert: ff.art || "punkt" },
     { id: "absetz", label: "Abgesetztes Blech (Punkt/Falz)", optionen: [["b", "Blech B"], ["a", "Blech A"]], wert: ff.absetz === "a" ? "a" : "b" },
     { id: "richtung", label: "Absetzung / Falz Richtung", optionen: [["oben", "zur Sichtseite"], ["unten", "zur Rückseite"]], wert: ff.richtung || "oben" },
-    { id: "absetzen", label: "Punktnaht mit Absetzung", optionen: [["ja", "ja – Bleche danach bündig"], ["nein", "nein – gerade Überlappung"]], wert: ff.absetzen === false ? "nein" : "ja" },
     { id: "zugabe", label: "Überlappung (Punktnaht)", einheit: "mm", wert: ff.zugabe ?? 15 },
     { id: "mittig", label: "Falz (Falznaht)", optionen: [["nein", "5 + 10 mm (Blech A/B, abgesetzt)"], ["ja", "mittig, je Hälfte der Summe"]], wert: ff.mittig ? "ja" : "nein" },
     { id: "falzA", label: "Falzbreite nicht abgesetztes Blech", einheit: "mm", wert: ff.falzA ?? 5 }, { id: "falzB", label: "Falzbreite abgesetztes Blech", einheit: "mm", wert: ff.falzB ?? 10 },
     { id: "seite", label: "Raupe auf der Seite (Schweiss-/Ecknaht)", optionen: [["oben", "Sichtseite"], ["unten", "Rückseite"]], wert: ff.seite || "oben" },
-    { id: "raupeBreite", label: "Raupenbreite (0 = automatisch)", einheit: "mm", wert: ff.raupeBreite ?? 0 }, { id: "raupeHoehe", label: "Raupenhöhe (0 = automatisch)", einheit: "mm", wert: ff.raupeHoehe ?? 0 }],
-    (ff, w) => { if (w.name != null) ff.name = w.name; if (w.art) ff.art = w.art; if (w.absetz) ff.absetz = w.absetz; if (w.richtung) ff.richtung = w.richtung; if (w.absetzen) ff.absetzen = w.absetzen !== "nein"; if (w.mittig) ff.mittig = w.mittig === "ja"; if (w.seite) ff.seite = w.seite;
+    { id: "raupeBreite", label: "Raupenbreite (0 = automatisch)", einheit: "mm", wert: ff.raupeBreite ?? 0 }, { id: "raupeHoehe", label: "Raupenhöhe (0 = automatisch)", einheit: "mm", wert: ff.raupeHoehe ?? 0 }].filter((x) => x.id === "name" || x.id === "art" || (NUR[ff.art || "punkt"] || []).includes(x.id)),
+    (ff, w) => { if (w.name != null) ff.name = w.name; if (w.art) ff.art = w.art; if (w.absetz) ff.absetz = w.absetz; if (w.richtung) ff.richtung = w.richtung; if (w.mittig) ff.mittig = w.mittig === "ja"; if (w.seite) ff.seite = w.seite;
       for (const k of ["zugabe", "falzA", "falzB", "raupeBreite", "raupeHoehe"]) if (Number.isFinite(w[k])) ff[k] = Math.max(0, w[k]); },
     "Naht", "Verbindung zweier Bleche an den gewählten Kanten. Punktnaht: Überlappung (Standard 15 mm), das abgesetzte Blech wird um eine Blechstärke gekröpft, so dass beide bündig liegen. Falznaht: einfacher liegender Falz, 5 mm + 10 mm (abgesetzt) oder mittig. Schweiss-/Ecknaht: nur Darstellung als Raupe. Sitzt an der Kante schon ein Flansch, läuft die Naht zusätzlich darauf.",
-    { info: () => (f._fehler ? "⚠ " + f._fehler : `A: ${ea?.name || "–"} · B: ${eb?.name || "–"}`) });
+    { neuBei: ["art"], info: () => (f._fehler ? "⚠ " + f._fehler : `A: ${ea?.name || "–"} · B: ${eb?.name || "–"}`) });
 }
 function endeQuetschWz() { quetschWz = null; wkZu(); zeigeKanten(); }
 function quetschKlick(e) {

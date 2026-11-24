@@ -69,7 +69,17 @@ const f = await p.evaluate(() => window.sdcadTest.dok().features.find((x) => x.t
 ok(!!f && f.a.ziel !== f.b.ziel && f.art === "punkt", "zwei Kanten angeklickt → Schritt «Naht»");
 ok(await p.isVisible("#d_art") && await p.isVisible("#d_zugabe"), "Dialog mit Nahtart, Richtung, Überlappung");
 await p.evaluate(() => { const e = document.getElementById("d_art"); e.value = "falz"; e.dispatchEvent(new Event("change", { bubbles: true })); }); await p.waitForTimeout(500);
-ok(!(await fe(p)), "Art im Dialog auf Falz gestellt, rechnet"); await p.click("#dOk"); await p.waitForTimeout(300); await p.close();
+ok(!(await fe(p)), "Art im Dialog auf Falz gestellt, rechnet");
+const da = async (art) => { await p.evaluate((a) => { const e = document.getElementById("d_art"); e.value = a; e.dispatchEvent(new Event("change", { bubbles: true })); }, art); await p.waitForTimeout(400); return p.evaluate(() => ["zugabe", "falzA", "falzB", "mittig", "seite", "raupeBreite", "absetz", "absetzen"].filter((i) => document.getElementById("d_" + i))); };
+ok((await da("falz")).join() === "falzA,falzB,mittig,absetz", "Dialog Falznaht: nur Falzfelder");
+ok((await da("punkt")).join() === "zugabe,absetz", "Dialog Punktnaht: nur Überlappung/Absetzung");
+ok((await da("schweiss")).join() === "seite,raupeBreite", "Dialog Schweissnaht: nur Raupenfelder");
+await da("falz");
+ok(!(await p.evaluate(() => document.getElementById("baum").textContent.includes("Naht 1"))), "Naht erscheint nicht im Browser (nur Zeitleiste)");
+const zb = async (id) => p.evaluate((i) => { document.getElementById(i).click(); return window.sdcadTest.dok().marke ?? null; }, id);
+const m0 = await p.evaluate(() => window.sdcadTest.dok().features.length); const z1 = await zb("zeitZurueck");
+ok(z1 === m0 - 1, `Zeitleistenpfeil zurück (Marke ${z1})`); ok((await zb("zeitVor")) === null, "Zeitleistenpfeil vor (alles aktiv)");
+await p.click("#dOk"); await p.waitForTimeout(300); await p.close();
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Naht (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);
