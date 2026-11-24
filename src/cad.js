@@ -155,7 +155,7 @@ const standardEinst = () => JSON.parse(JSON.stringify({
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
   druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
   etiketten: { spalten: 3, zeilen: 8, breite: 70, hoehe: 37, oben: 0, links: 0, abstandX: 0, abstandY: 0 }, // mm
-  allgemein: { stiftpalette: "auto", langdruck: true, masse: true, abh: true, speichern: "zuletzt", startAnsicht: "iso", stift: ["tAuswahl", "tLinie", "tRechteck", "tKreis", "tMass", "tEntf", "tFertig", "zurueck", "vor", "wSkizze", "wExtrusion"] }, // Voreinstellungen für das ganze Programm
+  allgemein: { startseite: true, stiftpalette: "auto", langdruck: true, masse: true, abh: true, speichern: "zuletzt", startAnsicht: "iso", stift: ["tAuswahl", "tLinie", "tRechteck", "tKreis", "tMass", "tEntf", "tFertig", "zurueck", "vor", "wSkizze", "wExtrusion"] }, // Voreinstellungen für das ganze Programm
   programm: { darstellung: "auto", updates: true, zuletzt: 8, kern: "netz" },      // kern: "netz" (wie 0.2) | "occt" (exakter CAD-Kern, Beta)
 }));
 const GRUPPEN = ["neu", "skizze", "anzeige", "druck", "etiketten", "programm", "allgemein"];
@@ -1582,15 +1582,23 @@ function regen() {
 
 // ------------------------------------------------------------ Rückgängig / Wiederholen
 // Nach jedem abgeschlossenen Schritt (nicht während Dialog oder Skizze) wird der Projektzustand gemerkt.
-const verlauf = { stapel: [], pos: -1 };
+const verlauf = { stapel: [], namen: [], pos: -1 };
+// Beschriftung eines Schritts: was gegenüber dem vorigen Stand neu, geändert oder gelöscht ist
+function verlaufName(a, b) {
+  try { const A = JSON.parse(a), B = JSON.parse(b), ia = new Map(A.features.map((f) => [f.id, JSON.stringify(f)]));
+    for (const f of B.features) { if (!ia.has(f.id)) return `Neu: ${f.name}`; if (ia.get(f.id) !== JSON.stringify(f)) return `Geändert: ${f.name}`; }
+    for (const f of A.features) if (!B.features.some((x) => x.id === f.id)) return `Gelöscht: ${f.name}`;
+    return "Dokument geändert"; } catch { return "Änderung"; }
+}
 const zustand = () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v));
 function merke() {
   // nicht während Dialog/Skizze und nicht für eine eben angelegte, noch leere Skizze
   if (dlg || skizze || doc.features.some((f) => f.typ === "skizze" && !f.elemente.length)) return zeigeVerlauf();
   const z = zustand();
   if (z !== verlauf.stapel[verlauf.pos]) {
-    verlauf.stapel.splice(verlauf.pos + 1, Infinity, z);
-    if (verlauf.stapel.length > 200) verlauf.stapel.shift();
+    const vorher = verlauf.stapel[verlauf.pos], name = vorher === undefined ? "Start" : verlaufName(vorher, z);
+    verlauf.stapel.splice(verlauf.pos + 1, Infinity, z); verlauf.namen.splice(verlauf.pos + 1, Infinity, name);
+    if (verlauf.stapel.length > 200) { verlauf.stapel.shift(); verlauf.namen.shift(); }
     verlauf.pos = verlauf.stapel.length - 1;
   }
   zeigeVerlauf();
@@ -1601,13 +1609,21 @@ function springe(d) {
   verlauf.pos = i; doc = JSON.parse(verlauf.stapel[i]);
   if (!finde(auswahl) && !hauptVon(auswahl)) auswahl = null;
   $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; $("aModell").value = doc.modellName || "";
-  regen(); status(d < 0 ? "Rückgängig gemacht." : "Wiederhergestellt.");
+  regen(); status(d < 0 ? "Rückgängig gemacht." : "Wiederhergestellt."); $("verlaufMenue").hidden = true;
 }
 function zeigeVerlauf() {
   const gesperrt = !!(dlg || skizze);
   $("zurueck").disabled = gesperrt || verlauf.pos <= 0;
   $("vor").disabled = gesperrt || verlauf.pos >= verlauf.stapel.length - 1;
 }
+// Verlaufsliste: zu jedem früheren Stand springen
+$("verlaufBtn").onclick = (e) => {
+  e.stopPropagation(); const m = $("verlaufMenue"); if (!m.hidden) { m.hidden = true; return; }
+  const n = verlauf.stapel.length; m.innerHTML = n ? [...Array(n).keys()].reverse().map((i) => `<button data-i="${i}" class="${i === verlauf.pos ? "jetzt" : ""}"><b>${esc(verlauf.namen[i] || "Änderung")}</b><small>${i === verlauf.pos ? "aktueller Stand" : i < verlauf.pos ? "zurückgehen" : "wiederherstellen"} · Schritt ${i + 1}</small></button>`).join("") : '<p class="hinweis">Noch keine Änderungen.</p>';
+  const r = $("verlaufBtn").getBoundingClientRect(); Object.assign(m.style, { right: Math.max(8, innerWidth - r.right) + "px", left: "auto", bottom: innerHeight - r.top + 6 + "px", top: "auto" }); m.hidden = false; m.querySelector(".jetzt")?.scrollIntoView({ block: "center" });
+};
+$("verlaufMenue").onclick = (e) => { const i = e.target.closest("button")?.dataset.i; if (i == null) return; $("verlaufMenue").hidden = true; springe(+i - verlauf.pos); };
+document.addEventListener("click", (e) => { if (!e.target.closest?.("#verlaufMenue, #verlaufBtn")) $("verlaufMenue").hidden = true; });
 $("zurueck").onclick = () => springe(-1);
 $("vor").onclick = () => springe(1);
 document.addEventListener("keydown", (e) => {
@@ -4953,6 +4969,8 @@ function zeigeEinst() {
   const reiter = `<div class="register eregister" role="tablist">${EINST_REGISTER.map(([id, t]) => `<button role="tab" data-ereg="${id}" aria-selected="${id === einstRegister}">${t}</button>`).join("")}</div>`;
   const inhalt = {
     allgemein: `
+    <h4>Start</h4>
+    <div class="egitter">${einstFeld("allgemein.startseite", "Startseite beim Programmstart zeigen", "janein")}</div>
     <h4>Darstellung</h4>
     <div class="egitter">${einstFeld("programm.darstellung", "Farben", "wahl", [["auto", "Wie das Gerät"], ["hell", "Hell"], ["dunkel", "Dunkel"]])}</div>
     <h4>Bedienung mit Stift und Finger</h4>
@@ -6866,7 +6884,7 @@ async function projektSpeichern(unter = false) {
 function ladeProjekt(text, pfad = null) {
   try {
     const d = JSON.parse(text); if (!d.features) throw 0;
-    doc = d; auswahl = null; projektPfad = pfad; titel(); merkeDatei(pfad); verlauf.stapel = []; verlauf.pos = -1;
+    doc = d; auswahl = null; projektPfad = pfad; titel(); merkeDatei(pfad); verlauf.stapel = []; verlauf.namen = []; verlauf.pos = -1;
     $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; $("aModell").value = doc.modellName || ""; auftragAnzeige(); regen();
     waehle(doc.features.find((f) => f._res)?.id || null); ansicht(einst.allgemein.startAnsicht || "iso"); status("Projekt geöffnet.");
   } catch { status("Diese Datei ist kein Spengler-Digital-CAD-Projekt."); }
@@ -7408,4 +7426,30 @@ async function pruefeNeueVersion() {
   try { const j = await (await fetch("version.json?t=" + Date.now(), { cache: "no-store" })).json(); if (j?.version && j.version !== VERSION && j.version !== neueVersionGemeldet) { neueVersionGemeldet = j.version; zeigeMeldung(`Neue Version ${j.version} ist verfügbar (du nutzt ${VERSION}).`, "ok", 0, { text: "Jetzt neu laden", fn: () => location.reload() }); } } catch { /* offline: nichts melden */ }
 }
 setTimeout(pruefeNeueVersion, 3000); setInterval(pruefeNeueVersion, 5 * 60 * 1000); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") pruefeNeueVersion(); });
+// Startseite: neues Modell, Öffnen, zuletzt geöffnete Projekte, Hilfe – abschaltbar in Einstellungen › Allgemein
+function startseite() {
+  if (new URLSearchParams(location.search).has("test") || einst.allgemein.startseite === false || document.querySelector(".modal:not([hidden])")) return;
+  const el = document.createElement("div"); el.className = "modal"; el.id = "startseite"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Startseite");
+  const liste = pc ? zuletzt() : [], zu = () => el.remove();
+  const aktion = (id) => { zu(); $(id).click(); };
+  el.innerHTML = `<div class="modalbox startbox"><h3>Willkommen</h3><div class="inhalt"><div class="startgitter">
+    <div class="startspalte"><h4>Beginnen</h4>
+      <button class="startknopf haupt" data-a="wNeu"><b>Neues Modell</b><small>Leeres Projekt anlegen</small></button>
+      <button class="startknopf" data-a="wOeffnen"><b>Öffnen</b><small>Aus der Cloud oder vom ${pc ? "PC" : "Gerät"}</small></button>
+      <button class="startknopf" data-a="weiter"><b>Weiterarbeiten</b><small>${esc(doc.modellName || doc.objekt || "Letzter Stand")} · ${doc.features.length} Schritte</small></button>
+      <button class="startknopf" data-a="wHilfe"><b>Hilfe</b><small>Kurzanleitung und Tastenkürzel (F1)</small></button></div>
+    <div class="startspalte"><h4>Zuletzt geöffnet</h4>${liste.length ? liste.slice(0, 6).map((pf, i) => `<button class="startknopf" data-z="${i}" title="${esc(pf)}"><b>${esc(dateiname(pf))}</b><small>${esc(pf.slice(0, -dateiname(pf).length))}</small></button>`).join("") : '<p class="hinweis">Hier erscheinen die zuletzt geöffneten oder gespeicherten Projekte (PC-Programm).</p>'}</div></div></div>
+    <div class="fuss"><label class="hinweis"><input type="checkbox" id="startNie"> Startseite nicht mehr zeigen</label><span style="flex:1"></span><button class="knopf" data-a="weiter">Schliessen</button></div></div>`;
+  document.body.appendChild(el);
+  el.addEventListener("click", async (e) => {
+    if (e.target === el) return zu();
+    const b = e.target.closest("button"); if (!b) return;
+    if (el.querySelector("#startNie")?.checked) { einst.allgemein.startseite = false; einstSpeichern(); }
+    if (b.dataset.a === "weiter") return zu();
+    if (b.dataset.a) return aktion(b.dataset.a);
+    if (b.dataset.z != null) { const pf = zuletzt()[+b.dataset.z]; zu(); try { const d = await pc.invoke("datei_lesen", { pfad: pf }); ladeProjekt(d.inhalt, d.pfad); } catch (err) { status("Datei nicht gefunden: " + err); } }
+  });
+  el.addEventListener("keydown", (e) => { if (e.key === "Escape") zu(); });
+}
 status("Beispiel geladen. Neu zeichnen: «Skizze» → Ebene wählen → Linienzug zeichnen → «Blechprofil».");
+startseite();
