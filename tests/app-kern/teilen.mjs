@@ -20,7 +20,7 @@ ok(info.some((k) => k[0] === "fl:0" && k[1] === 14000), "Flächenblech mit Skizz
 // Löschen-Knopf in der Skizze
 await s.evaluate(() => window.sdcadTest.bearbeite("sk2")); await s.waitForTimeout(700);
 await s.click("#tAuswahl"); const p = await s.evaluate(() => window.sdcadTest.schirmUV("XY", [60, 0])); await s.mouse.move(p[0] + 3, p[1] + 2, { steps: 4 }); await s.mouse.move(p[0], p[1]); await s.waitForTimeout(200); await s.mouse.down(); await s.mouse.up(); await s.waitForTimeout(250);
-await s.click("#tEntf"); await s.waitForTimeout(300); console.log(await s.evaluate(() => document.getElementById("status")?.textContent));
+await s.click("#tEntf"); await s.waitForTimeout(300); await s.mouse.move(p[0] + 3, p[1] + 2, { steps: 4 }); await s.mouse.move(p[0], p[1]); await s.waitForTimeout(200); await s.mouse.down(); await s.mouse.up(); await s.waitForTimeout(300); // Löschen ist ein Werkzeug: erst wählen, dann anklicken
 const n = await s.evaluate(() => window.sdcadTest.dok().features.find((f) => f.id === "sk2").elemente.length);
 ok(n === 0, `Löschen-Knopf ausgeführt (Elemente übrig: ${n})`);
 await s.evaluate(() => window.sdcadTest.beendeSkizze?.());

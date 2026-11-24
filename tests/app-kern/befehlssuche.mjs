@@ -19,8 +19,8 @@ ok(await s.evaluate(() => !document.querySelector(".bs")), "Esc schliesst die Su
 await s.keyboard.press("/"); await s.waitForSelector(".bs input"); await s.keyboard.type("extru"); await s.keyboard.press("Enter");
 await s.waitForSelector("#d_abstand", { state: "attached", timeout: 4000 });
 ok(await s.evaluate(() => !document.getElementById("dialog").hidden && !document.querySelector(".bs")), "Enter startet «Extrudieren» (Dialog offen, Suche zu)");
-const pos = await s.evaluate(() => { const d = document.getElementById("dialog").getBoundingClientRect(), a = document.getElementById("ansicht").getBoundingClientRect(); return { dl: d.left, ar: a.right, parent: document.getElementById("dialog").parentElement.className }; });
-ok(pos.parent === "mitte" && pos.dl >= pos.ar - 1, "Dialog ist rechts angedockt und überdeckt die 3D-Ansicht nicht (" + JSON.stringify(pos) + ")");
+const pos = await s.evaluate(() => { const d = document.getElementById("dialog").getBoundingClientRect(), a = document.getElementById("ansicht").getBoundingClientRect(), m = document.querySelector(".mitte").getBoundingClientRect(); return { dr: d.right, mr: m.right, aw: a.width, mw: m.width, parent: document.getElementById("dialog").parentElement.className }; });
+ok(pos.parent === "mitte" && pos.aw >= pos.mw - 2 && pos.dr <= pos.mr + 1, "Dialog schwebt rechts über der 3D-Ansicht, die Ansicht behält die ganze Breite (" + JSON.stringify(pos) + ")");
 await s.click("#dAbbrechen"); await s.waitForTimeout(300);
 ok(await s.evaluate(() => document.getElementById("dialog").hidden && getComputedStyle(document.querySelector(".werkstatt")).display !== "none"), "Nach dem Schliessen ist Teil/Auftrag wieder da");
 // Esc bricht den Dialog ab; Enter geht im Assistenten weiter, auf der letzten Seite/ohne Schritte = OK
