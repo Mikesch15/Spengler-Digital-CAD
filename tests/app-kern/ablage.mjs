@@ -54,6 +54,12 @@ ok(db.dateien.some((d) => d.art === "plan" && d.name === "Plan 1.svg" && d.ordne
 // Anzeige
 await s.click('[data-ab="aktualisieren"]'); await s.waitForTimeout(700);
 const txt = await s.textContent("#abInhalt"); ok(/Modelle/.test(txt) && /Exporte/.test(txt) && /Pläne/.test(txt) && /2026-114 Dach Müller/.test(txt), "Ablage zeigt den Ordnerbaum");
+// Startseite zeigt das Cloud-Modell und öffnet es
+await s.evaluate(() => { document.querySelectorAll(".modal").forEach((m) => (m.hidden = true)); window.sdcadTest.startseite(); }); await s.waitForTimeout(1500);
+const sc = await s.evaluate(() => [...document.querySelectorAll("#startCloud .startknopf b")].map((x) => x.textContent));
+ok(sc.length === 1 && /^2026-114 /.test(sc[0]), `Startseite zeigt das zuletzt gespeicherte Cloud-Modell (${sc})`);
+await s.click("#startCloud .startknopf"); await s.waitForTimeout(800);
+ok(await s.evaluate(() => !document.getElementById("startseite")) && /aus der Cloud geöffnet/.test(await s.evaluate(() => document.getElementById("status").textContent)), "Klick auf das Cloud-Modell öffnet es");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Cloud-Ablage: alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);
