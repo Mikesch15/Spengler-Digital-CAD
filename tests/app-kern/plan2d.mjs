@@ -41,11 +41,11 @@ svg = await s.innerHTML("#plFlaeche"); ok(/Abwicklung Blech 1/.test(svg) && /str
 // grössere Formate
 await s.selectOption("#plFormat", "A1"); await s.waitForTimeout(300); ok((await vb())[2] === 841, "Format A1 quer (841 × 594 mm) einstellbar");
 await s.selectOption("#plFormat", "A3"); await s.waitForTimeout(200);
-// Fangmarke beim Bemassen: Zeiger nahe an einem Eckpunkt zeigt die orange Marke
+// Fangmarke beim Bemassen: Zeiger nahe an einem Eckpunkt zeigt die blaue Marke
 await s.click('[data-pltab="beschriften"]'); await s.click('[data-modus="mass"]'); await s.waitForTimeout(150);
 const eck = await s.evaluate(() => { const svg = document.querySelector("#plFlaeche svg"), p = svg.querySelector("path.sichtbar"); const d = p.getAttribute("d").match(/M([\d.]+) ([\d.]+)/), g = p.closest("g"), t = g.getAttribute("transform").match(/translate\(([\d.]+) ([\d.]+)\)/), pt = svg.createSVGPoint(); pt.x = +d[1] + +t[1]; pt.y = +d[2] + +t[2]; const q = pt.matrixTransform(svg.getScreenCTM()); return [q.x, q.y]; });
 await s.mouse.move(eck[0] + 6, eck[1] + 5, { steps: 4 }); await s.waitForTimeout(200);
-ok(await s.locator("#plFangZ").count() === 1, "Beim Bemassen zeigt eine orange Marke den Fangpunkt (auch ca. 8 px daneben)");
+ok(await s.locator("#plFangZ").count() === 1, "Beim Bemassen zeigt eine blaue Marke den Fangpunkt (auch ca. 8 px daneben)");
 await s.click('[data-pltab="ausgabe"]'); ok(await s.isVisible("#plDruck"), "Knopf «Drucken / PDF» vorhanden");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();

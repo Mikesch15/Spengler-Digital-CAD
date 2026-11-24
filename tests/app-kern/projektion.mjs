@@ -18,7 +18,7 @@ await s.evaluate(() => document.getElementById("tProjizieren").click()); await s
 // Rechteckkante von Skizze 1 (Welt: x = u, y = v auf der Ebene XY): untere Kante bei y = 0
 const p = await s.evaluate(() => window.sdcadTest.schirm([50, 0, 0]));
 await s.mouse.click(p[0], p[1]); await s.waitForTimeout(400);
-ok(await eltn() === 0 && (await s.evaluate(() => document.getElementById("pbOk").textContent)).includes("(1)"), "Klick wählt nur (orange) – projiziert wird erst mit OK");
+ok(await eltn() === 0 && (await s.evaluate(() => document.getElementById("pbOk").textContent)).includes("(1)"), "Klick wählt nur (blau) – projiziert wird erst mit OK");
 await s.evaluate(() => document.getElementById("pbOk").click()); await s.waitForTimeout(400);
 const n1 = await eltn(); ok(n1 >= 1, "Linie einer anderen Skizze (Rechteck) projiziert: " + n1 + " Element(e)");
 ok(await s.evaluate(() => { const l = window.sdcadTest.dok().features.find((f) => f.id === "s2").elemente; return l.length === 1 && l[0].pts?.length === 2; }), "Rechteck: nur die angeklickte Kante wird projiziert (eine Strecke)");

@@ -741,7 +741,7 @@ const EBENEN_ARTEN = {
 function ebenenObjekt(e, id, grund = false) {
   const g = new THREE.Group();
   g.position.copy(V(e.o)); g.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(V(e.u), V(e.v), V(e.n)));
-  const flaeche = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: grund ? 0x8a969e : 0xe8a33d, transparent: true, opacity: grund ? 0.14 : 0.2, side: THREE.DoubleSide, depthWrite: false }));
+  const flaeche = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: grund ? 0x8a969e : 0x4da3ff, transparent: true, opacity: grund ? 0.14 : 0.2, side: THREE.DoubleSide, depthWrite: false }));
   const rand = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(1, 1)), new THREE.LineBasicMaterial({ color: grund ? 0x5f6b74 : 0xc77d16 }));
   flaeche.userData.ebene = rand.userData.ebene = g.userData.ebene = id; flaeche.renderOrder = 5;
   g.add(flaeche, rand);
@@ -965,9 +965,9 @@ function zeigeWahl() {
     punkt: "Punkt anklicken: Skizzenpunkt, Körperecke oder Ursprung.", zylinder: "Zylindrische Fläche anklicken (extrudierter Kreis).", pfad: "Linie, Kreis oder Körperkante als Pfad anklicken.",
     profil: "Skizzenprofil anklicken – in die geschlossene Fläche oder auf ihre Linie.", flaechen: "Fläche(n) in der Skizze anklicken (jede Teilfläche einzeln, nochmals anklicken = abwählen).", kette: "Offenen Linienzug einer Skizze anklicken.", koerper: "Körper in der Ansicht anklicken.", dach: "Dach in der Ansicht anklicken.", dachflaeche: "Dachfläche anklicken – dort sitzt das Element (Lage wird übernommen)." }[a.wahl] + ` (Feld «${a.label}»)`);
 }
-// Vorschau beim Überfahren: was angeklickt würde, leuchtet orange auf (Fläche, Ebene, Kante, Punkt, Profil) – wie in Fusion
+// Vorschau beim Überfahren: was angeklickt würde, leuchtet blau auf (Fläche, Ebene, Kante, Punkt, Profil) – wie in Fusion
 const hoverGruppe = new THREE.Group(); szene.add(hoverGruppe);
-const HOVERFARBE = 0xff8a1f, hoverMat = () => new THREE.MeshBasicMaterial({ color: HOVERFARBE, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+const HOVERFARBE = 0x59b0ff, hoverMat = () => new THREE.MeshBasicMaterial({ color: HOVERFARBE, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 const hoverCache = new WeakMap(); // Geometrie → Dreiecke je Eckpunkt (für zusammenhängende ebene Flächen)
 function flaechenRegion(hit) { // alle zusammenhängenden Dreiecke der Fläche unter dem Zeiger (Weltkoordinaten): ebene Fläche oder gebogene Fläche (Biegung eines Blechs)
   const m = hit.object, geo = m.geometry, pos = geo.attributes.position, idx = geo.index, n = (idx ? idx.count : pos.count) / 3;
@@ -1079,7 +1079,7 @@ const griffGruppe = new THREE.Group(); szene.add(griffGruppe);
 let griffe = [], griffZug = null;
 // Pfeile an beiden Enden einer Extrusion/Länge: plus = Ende in +Normalenrichtung. Einseitig: der ferne Pfeil ändert das Mass, der nahe zieht es durch Null (negatives Mass = Gegenrichtung)
 function beidseitig(f, feld, feld2) {
-  const farbe = 0xe0782b, v = +f[feld] || 0, vz = v < 0 ? -1 : 1;
+  const farbe = 0x1d8fff, v = +f[feld] || 0, vz = v < 0 ? -1 : 1;
   if (f.richtung === "zwei") return [{ plus: true, feld, faktor: 1, min: 0.1, farbe }, { plus: false, feld: feld2, faktor: 1, min: 0.1, farbe }];
   if (f.richtung === "symmetrisch") return [{ plus: true, feld, faktor: 2, min: 0.1, farbe }, { plus: false, feld, faktor: 2, min: 0.1, farbe }];
   const d = f.richtung === "umgekehrt" ? -1 : 1, fern = d * vz; // Richtung des fernen Endes (+1 = Normale)
@@ -1090,7 +1090,7 @@ function griffeKante(f) {
   const z = finde(f.ziel), wk = f.wert?.werkzeug; if (!z || !wk || typeof wk !== "object") return [];
   const laenge = Math.max(1, +wk.laenge || 10), s = wk.seite === -1 ? -1 : 1, l = [];
   const mk = (tip, dir, tan, radius) => {
-    l.push({ feld: "laenge", pos: tip, dir, faktor: 1, min: 0.5, farbe: 0xe0782b }, { feld: "laenge", pos: tip.clone(), dir: dir.clone().negate(), faktor: -1, min: 0.5, farbe: 0xe0782b });
+    l.push({ feld: "laenge", pos: tip, dir, faktor: 1, min: 0.5, farbe: 0x1d8fff }, { feld: "laenge", pos: tip.clone(), dir: dir.clone().negate(), faktor: -1, min: 0.5, farbe: 0x1d8fff });
     if (wk.typ === "flansch") { const k = 180 / Math.PI / Math.max(4, radius); const bogen = { c: tip.clone().addScaledVector(dir, -radius), R: radius, versetzt: true }; l.push({ feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(s), faktor: k, min: -170, max: 170, farbe: 0x2f7dd1, bogen, erst: true }, { feld: "winkel", pos: tip.clone(), dir: tan.clone().multiplyScalar(-s), faktor: -k, min: -170, max: 170, farbe: 0x2f7dd1, bogen }); }
   };
   if (z.typ === "flaeche") {
@@ -1147,23 +1147,23 @@ function griffeFuer(f) {
     const bb = mitte(modell.children.filter((o) => o.isMesh && (String(o.userData.fid) === f.ziel || String(o.userData.fid).startsWith(f.ziel + ":")))); if (!bb) return l;
     const c = bb.getCenter(new THREE.Vector3());
     if (f.typ === "kmuster") { // Abstand der Kopien entlang der Mustrichtung(en)
-      if (f.art !== "kreis") for (const [feld, ref] of [["abstand", f.richtung1], ["abstand2", f.richtung2]]) { if (feld === "abstand2" && !(f.anzahl2 > 1)) continue; try { const k = bezugKante(ref), d = V(k.d).normalize(); l.push({ feld, pos: c.clone(), dir: d, faktor: 1, min: 0, farbe: 0xe0782b }); } catch {} }
+      if (f.art !== "kreis") for (const [feld, ref] of [["abstand", f.richtung1], ["abstand2", f.richtung2]]) { if (feld === "abstand2" && !(f.anzahl2 > 1)) continue; try { const k = bezugKante(ref), d = V(k.d).normalize(); l.push({ feld, pos: c.clone(), dir: d, faktor: 1, min: 0, farbe: 0x1d8fff }); } catch {} }
       return l;
     }
     [["dx", [1, 0, 0], 0xd23c3c], ["dy", [0, 1, 0], 0x3aa655], ["dz", [0, 0, 1], 0x2f7dd1]].forEach(([feld, d, farbe]) => l.push({ feld, pos: c.clone(), dir: V(d), faktor: 1, farbe }));
   } else if (f.typ === "schale" || f.typ === "kantenrund") { // Wanddicke bzw. Radius/Fase: Pfeil an der Aussenseite nach innen
     const bb = mitte(modell.children.filter((o) => o.isMesh && (o.userData.fid === f.ziel || String(o.userData.fid).startsWith(f.ziel + ":")))); if (!bb) return l;
     const c = bb.getCenter(new THREE.Vector3());
-    if (f.typ === "schale") l.push({ feld: "dicke", pos: new THREE.Vector3(bb.max.x, c.y, c.z), dir: new THREE.Vector3(-1, 0, 0), faktor: 1, min: 0.1, farbe: 0xe0782b });
-    else l.push({ feld: "mass", pos: new THREE.Vector3(bb.max.x, bb.max.y, bb.max.z), dir: new THREE.Vector3(-1, -1, -1).normalize(), faktor: 1 / Math.sqrt(3) * 1.0, min: 0.1, farbe: 0xe0782b });
+    if (f.typ === "schale") l.push({ feld: "dicke", pos: new THREE.Vector3(bb.max.x, c.y, c.z), dir: new THREE.Vector3(-1, 0, 0), faktor: 1, min: 0.1, farbe: 0x1d8fff });
+    else l.push({ feld: "mass", pos: new THREE.Vector3(bb.max.x, bb.max.y, bb.max.z), dir: new THREE.Vector3(-1, -1, -1).normalize(), faktor: 1 / Math.sqrt(3) * 1.0, min: 0.1, farbe: 0x1d8fff });
   } else if (f.typ === "kanten3d") { // Radius/Fase der angeklickten Kanten: Pfeil in der Mitte der ersten Kante zum Körper hin
     const k = f.kanten?.[0]; if (!k) return l;
     const a = V(k.a), b = V(k.b), mid = a.clone().add(b).multiplyScalar(0.5), e = b.clone().sub(a).normalize();
     const bb = mitte(modell.children.filter((o) => o.isMesh && o.userData.fid === f.ziel)); if (!bb) return l;
     const zu = bb.getCenter(new THREE.Vector3()).sub(mid); zu.addScaledVector(e, -zu.dot(e)); if (zu.length() < 1e-6) return l;
-    l.push({ feld: "mass", pos: mid, dir: zu.normalize(), faktor: 1, min: 0.1, farbe: 0xe0782b });
+    l.push({ feld: "mass", pos: mid, dir: zu.normalize(), faktor: 1, min: 0.1, farbe: 0x1d8fff });
   } else if (f.typ === "ebene" && f.art === "versatz" && f._ebene) {
-    l.push({ feld: "abstand", pos: V(f._ebene.o), dir: V(f._ebene.n).normalize(), faktor: 1, farbe: 0xe0782b });
+    l.push({ feld: "abstand", pos: V(f._ebene.o), dir: V(f._ebene.n).normalize(), faktor: 1, farbe: 0x1d8fff });
   } else if (f.typ === "dachelement" || f.typ === "lukarne") { // Kamin, Dachfenster, Lukarne: Pfeile quer (links/rechts) und entlang der Fallinie (Traufe/First) auf der Dachfläche
     const r = f._rect || f._luk?.rect, d = finde(f.dach), g = finde(d?.gebaeude), fl = d?._dach?.flaechen?.[f.flaeche]; if (!r || !g || !fl) return l;
     const S = dachRahmen(fl).S, n = d._schichten?.oben ?? 0, sm = (r.s0 + r.s1) / 2, tm = (r.t0 + r.t1) / 2, P = (s, t) => V(dachWelt(g, S.punkt(s, t, n))), c = P(sm, tm);
@@ -1179,7 +1179,7 @@ function griffeFuer(f) {
     const bb = mitte(modell.children.filter((o) => o.isMesh && o.userData.fid === f.id)); if (!bb) return l;
     const E = E_(f.ebene), n = V(E.n).normalize(), c = bb.getCenter(new THREE.Vector3());
     let ext = 0; for (const x of [bb.min.x, bb.max.x]) for (const y of [bb.min.y, bb.max.y]) for (const z of [bb.min.z, bb.max.z]) ext = Math.max(ext, new THREE.Vector3(x, y, z).sub(c).dot(n));
-    l.push({ feld: "h", pos: c.addScaledVector(n, ext), dir: n, faktor: 1, min: 0.1, farbe: 0xe0782b });
+    l.push({ feld: "h", pos: c.addScaledVector(n, ext), dir: n, faktor: 1, min: 0.1, farbe: 0x1d8fff });
   }
   return l;
 }
@@ -1208,7 +1208,7 @@ function zeichneGriffe() {
   const mat = (cl) => new THREE.MeshBasicMaterial({ color: cl, depthTest: false, transparent: true }), kegel = (pos, dirv, rK, h, cl, ord) => { const m = new THREE.Mesh(new THREE.ConeGeometry(rK, h, 20), mat(cl)); m.position.copy(pos); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirv); m.renderOrder = ord; return m; };
   const kugel = (pos, r, cl, ord) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), mat(cl)); m.position.copy(pos); m.renderOrder = ord; return m; };
   for (const g of griffe) { // wie in Fusion: Ziehpfeil = dünne Linie mit grossem Kegel; Drehgriff = Kreisbogen mit Pfeilspitzen an beiden Enden und Griffpunkt; blau, unter dem Zeiger orange
-    const an = griffKey(g) === hoverGriff || (g.bogen && griffe.some((x) => x.bogen === g.bogen && griffKey(x) === hoverGriff)), farbe = an ? 0xe0782b : GRIFFFARBE, L = griffLaenge(g.pos), dir = g.dir;
+    const an = griffKey(g) === hoverGriff || (g.bogen && griffe.some((x) => x.bogen === g.bogen && griffKey(x) === hoverGriff)), farbe = an ? 0x1d8fff : GRIFFFARBE, L = griffLaenge(g.pos), dir = g.dir;
     if (g.bogen) {
       if (!g.erst) continue;
       const bg = g.bogen, c = bg.c, R = bg.Rv ?? bg.R, e1 = bg.e1 || g.pos.clone().sub(c).normalize(), tn = bg.t0 || dir, p0 = bg.p0 || 0, th = Math.max(0.3, Math.min(1.05, (L * 0.8) / Math.max(R, 1e-6))), pt = (p) => c.clone().addScaledVector(e1, Math.cos(p0 + p) * R).addScaledVector(tn, Math.sin(p0 + p) * R), tg = (p) => e1.clone().multiplyScalar(-Math.sin(p0 + p)).addScaledVector(tn, Math.cos(p0 + p)).normalize();
@@ -1345,7 +1345,7 @@ function regen() {
         const m = volumen.get(f.ziel); if (!m) throw new Error("Körper fehlt – Kanten eines Volumenkörpers anklicken");
         if (doc.features.indexOf(finde(f.ziel)) > doc.features.indexOf(f)) throw new Error("Der Körper muss vor dem Abrunden stehen");
         const fehlt = kantenBearbeiten(m, f);
-        if (dlg?.feature === f) for (const k of f.kanten || []) { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(k.a), V(k.b)]), new THREE.LineBasicMaterial({ color: 0xe0782b, depthTest: false })); l.renderOrder = 15; l.userData.konstruktion = true; modell.add(l); }
+        if (dlg?.feature === f) for (const k of f.kanten || []) { const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(k.a), V(k.b)]), new THREE.LineBasicMaterial({ color: 0x1d8fff, depthTest: false })); l.renderOrder = 15; l.userData.konstruktion = true; modell.add(l); }
         if (fehlt) throw new Error(`${fehlt} Kante${fehlt === 1 ? "" : "n"} nicht mehr gefunden (Körper geändert?) – neu anklicken`);
       } else if (f.typ === "kantenrund") {
         const z = finde(f.ziel); if (z?.typ !== "extrusion") throw new Error("Abrunden/Fasen geht an Extrusionen – Extrusion wählen");
@@ -1634,11 +1634,11 @@ function zeigeRichtung() {
   if (!f?._linie || skizze) return;
   const { pts, ebene } = f._linie, p3 = pts.map((p) => zu3D(ebene, p));
   const ohneTiefe = (m) => Object.assign(m, { depthTest: false, transparent: true });
-  const linie = new THREE.Line(new THREE.BufferGeometry().setFromPoints(p3), ohneTiefe(new THREE.LineBasicMaterial({ color: 0xe0782b })));
+  const linie = new THREE.Line(new THREE.BufferGeometry().setFromPoints(p3), ohneTiefe(new THREE.LineBasicMaterial({ color: 0x1d8fff })));
   // Punkt und Pfeil in Einheitsgrösse; die Bildschleife skaliert sie nach Kameraabstand (immer gleich gross sichtbar)
   const punkt = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), ohneTiefe(new THREE.MeshBasicMaterial({ color: 0x2e9b4f })));
   punkt.position.copy(p3[0]); punkt.userData.bildschirm = 0.008;
-  const pfeil = new THREE.ArrowHelper(p3[1].clone().sub(p3[0]).normalize(), p3[0], 1, 0xe0782b, 0.35, 0.22);
+  const pfeil = new THREE.ArrowHelper(p3[1].clone().sub(p3[0]).normalize(), p3[0], 1, 0x1d8fff, 0.35, 0.22);
   pfeil.traverse((o) => { if (o.material) ohneTiefe(o.material); });
   pfeil.userData.bildschirm = 0.07;
   [linie, punkt, pfeil].forEach((o) => { o.renderOrder = 12; richtung.add(o); });
@@ -1708,6 +1708,11 @@ $("zeit").addEventListener("pointerover", (e) => { const b = e.target.closest("b
 let zeitTipZeit = 0;
 $("zeit").addEventListener("pointerover", (e) => { if (e.pointerType === "touch") { clearTimeout(zeitTipZeit); zeitTipZeit = setTimeout(() => (zeitTip.hidden = true), 1800); } });
 $("zeit").addEventListener("pointerout", (e) => { if (e.pointerType !== "touch" && e.target.closest("button[data-name]")) zeitTip.hidden = true; }); // Finger: Name bleibt kurz stehen
+// Unerwartete Fehler: nie stumm bleiben – Stand sichern und verständlich melden (höchstens alle 10 s, Browser-Rauschen ignorieren)
+{ let letzte = 0;
+  const melden = (text) => { text = String(text ?? "").trim(); if (!text || /ResizeObserver|^Script error|AbortError|cancel/i.test(text) || Date.now() - letzte < 10000) return; letzte = Date.now();
+    try { speichern(); } catch {} zeigeMeldung(`Unerwarteter Fehler: ${text.slice(0, 140)}. Dein Modell ist automatisch gesichert – mit «Rückgängig» oder nach einem Neustart geht es weiter.`, "warn", 12000); };
+  addEventListener("error", (e) => melden(e.message)); addEventListener("unhandledrejection", (e) => melden(e.reason?.message ?? e.reason)); }
 fensterVerschieben(); langdruck($("zeit"), "button[data-id]"); langdruck($("baum"), "li[data-id]"); tastaturSichtbar();
 $("zeit").addEventListener("click", (e) => { const id = e.target.closest("button")?.dataset.id; const f = finde(id); if (!f) return; if (f._aus) return status(`«${f.name}» ist ${f._aus === "zurueck" ? "zurückgerollt – Marke dahinter ziehen" : "unterdrückt – Rechtsklick → Aktivieren"}.`); bearbeite(f); });
 // Ziehen: Feature verschieben (nur wenn Bezüge davor bleiben) oder Rückrollmarke setzen
@@ -2359,7 +2364,7 @@ function blechDialog(f) {
     ...zweiFeld(f, "laenge"),
     ...bisFelder(f),
   ], REGELN), (f, w) => Object.assign(f, w, { kette: Math.min(+w.kette || 0, ketten(finde(w.skizze)).length - 1), umkehren: w.umkehren === "1" }), "Blechprofil",
-  "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Pfeilrichtung gesehen links bzw. rechts davon. In der Ansicht: grüner Punkt = Kante A, oranger Pfeil = Richtung.", { neuBei: ["richtung", "bis"] });
+  "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Pfeilrichtung gesehen links bzw. rechts davon. In der Ansicht: grüner Punkt = Kante A, blauer Pfeil = Richtung.", { neuBei: ["richtung", "bis"] });
 }
 
 function vorlageDialog(f) {
@@ -2719,9 +2724,9 @@ function zeigeKanten() {
     const mitte = g.punkte[Math.floor((g.punkte.length - 1) / 2)], nach = g.punkte[Math.floor((g.punkte.length - 1) / 2) + 1] || mitte;
     kantenLabels.push({ p: zu3D(ebene, [(mitte[0] + nach[0]) / 2, (mitte[1] + nach[1]) / 2]), t: kantenName(f, `${bl.pi}:${k}`) + (belegt ? " ✓" : ""), kante: `${bl.pi}:${k}`, fid: f.id, an, belegt });
     const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(g.punkte.map((p) => zu3D(ebene, p))),
-      new THREE.LineBasicMaterial({ color: an ? 0xe0782b : belegt ? 0x2e9b4f : 0x1f5fbf, depthTest: false, transparent: true, linewidth: an ? 3 : 1 }));
+      new THREE.LineBasicMaterial({ color: an ? 0x1d8fff : belegt ? 0x2e9b4f : 0x1f5fbf, depthTest: false, transparent: true, linewidth: an ? 3 : 1 }));
     l.renderOrder = 13; kantenZeiger.add(l);
-    if (an) kantenZeiger.add(dickeLinie(g.punkte.map((p) => zu3D(ebene, p)), 0xe0782b, 3));
+    if (an) kantenZeiger.add(dickeLinie(g.punkte.map((p) => zu3D(ebene, p)), 0x1d8fff, 3));
   }));
 }
 // Nächste Kante unter dem Mauszeiger (Bildschirmabstand) → «Blech:Kante»
@@ -2735,12 +2740,12 @@ function profilKanten(f) {
   return l;
 }
 const profilKanteBelegt = (f, key) => { const [e, n] = key.split(":"); return doc.features.some((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && x.ende === e && (e === "A" || e === "B" || !x.schenkel || x.schenkel === +n)); };
-function zeigeProfilKanten(f) { // alle wählbaren Kanten blau, die unter dem Zeiger orange und dick, bereits belegte grün
+function zeigeProfilKanten(f) { // alle wählbaren Kanten blau, die unter dem Zeiger hellblau und dick, bereits belegte grün
   const aktiv = menueKante?.fid === f.id ? menueKante.key : null;
   for (const k of profilKanten(f)) {
     const an = aktiv === k.key || !!kantenWz?.sel?.includes(k.key), belegt = profilKanteBelegt(f, k.key), len = k.p[0].distanceTo(k.p[1]);
-    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(k.p), new THREE.LineBasicMaterial({ color: an ? 0xe0782b : belegt ? 0x2e9b4f : 0x1f5fbf, depthTest: false, transparent: true })); l.renderOrder = 13; kantenZeiger.add(l);
-    if (an) kantenZeiger.add(dickeLinie([k.p[0], k.p[1]], 0xe0782b, 3));
+    const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(k.p), new THREE.LineBasicMaterial({ color: an ? 0x1d8fff : belegt ? 0x2e9b4f : 0x1f5fbf, depthTest: false, transparent: true })); l.renderOrder = 13; kantenZeiger.add(l);
+    if (an) kantenZeiger.add(dickeLinie([k.p[0], k.p[1]], 0x1d8fff, 3));
     kantenLabels.push({ p: k.p[0].clone().add(k.p[1]).multiplyScalar(0.5), t: k.t + (belegt ? " ✓" : ""), kante: k.key, fid: f.id, an, belegt });
   }
 }
@@ -3315,7 +3320,7 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
 const quetschEcken = (z) => (z._bleche || []).flatMap((bl) => bl.gruppen.map((g, k) => ({ key: `${bl.pi}:${k}`, p: g.punkte[0] })));
 function zeigeQuetschEcken(z) {
   const s = finde(z.skizze), B = basis(blechEbene(s.ebene, z, material(z.material)));
-  for (const e of quetschEcken(z)) { const w = new THREE.Vector3(e.p[0], e.p[1], 0).applyMatrix4(B); const r = new THREE.Mesh(new THREE.SphereGeometry(3, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe0782b, depthTest: false, transparent: true })); r.position.copy(w); r.renderOrder = 13; r.scale.setScalar(Math.max(1, kamera.position.distanceTo(w) / 120)); kantenZeiger.add(r); }
+  for (const e of quetschEcken(z)) { const w = new THREE.Vector3(e.p[0], e.p[1], 0).applyMatrix4(B); const r = new THREE.Mesh(new THREE.SphereGeometry(3, 12, 8), new THREE.MeshBasicMaterial({ color: 0x1d8fff, depthTest: false, transparent: true })); r.position.copy(w); r.renderOrder = 13; r.scale.setScalar(Math.max(1, kamera.position.distanceTo(w) / 120)); kantenZeiger.add(r); }
 }
 // Hinweisfenster für Werkzeuge ohne eigene Felder (gleiche Optik wie alle Werkzeugfenster)
 let wkAbbruch = null;
@@ -3328,15 +3333,15 @@ function starteQuetschWz() {
   const h = hauptVon(auswahl);
   if (istProfil(h) && !h.versteckt) {
     if (!stirnQuetschPunkte(h).length) return status("Quetschfalte am Blechprofil: braucht eine Stirnlasche mit einer Biegung (Flansch an der Stirn) neben einer einfachen Wand – erst «Flansch» an der Stirnkante setzen.");
-    quetschWz = { f: h, art: "stirn" }; zeigeKanten(); wkZeigen("Quetschfalte", `Ecke von «${h.name}» anklicken (orange Punkte): dort treffen Stirnlasche und Wand zusammen – der Überschuss wird gefaltet.`, endeQuetschWz); return status("Quetschfalte: Ecke anklicken – Esc bricht ab.");
+    quetschWz = { f: h, art: "stirn" }; zeigeKanten(); wkZeigen("Quetschfalte", `Ecke von «${h.name}» anklicken (blaue Punkte): dort treffen Stirnlasche und Wand zusammen – der Überschuss wird gefaltet.`, endeQuetschWz); return status("Quetschfalte: Ecke anklicken – Esc bricht ab.");
   }
   if (h?.typ !== "flaeche" || h.versteckt) return status("Zuerst ein Flächenblech mit Flanschen an zwei Kanten (oder ein Blechprofil mit Stirnlasche) anklicken.");
-  quetschWz = { f: h, art: "quetsch" }; zeigeKanten(); wkZeigen("Quetschfalte", `Ecke des Flächenblechs «${h.name}» anklicken (orange Punkte). Beide Nachbarkanten brauchen einen Flansch; Winkel und Höhe dürfen verschieden sein.`, endeQuetschWz); status("Quetschfalte: Ecke anklicken – Esc bricht ab.");
+  quetschWz = { f: h, art: "quetsch" }; zeigeKanten(); wkZeigen("Quetschfalte", `Ecke des Flächenblechs «${h.name}» anklicken (blaue Punkte). Beide Nachbarkanten brauchen einen Flansch; Winkel und Höhe dürfen verschieden sein.`, endeQuetschWz); status("Quetschfalte: Ecke anklicken – Esc bricht ab.");
 }
 function starteEndeWz() {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
   const h = hauptVon(auswahl); if (h?.typ !== "flaeche" || h.versteckt) return status("Zuerst ein Flächenblech mit Flansch anklicken.");
-  quetschWz = { f: h, art: "ende" }; zeigeKanten(); wkZeigen("Flanschende", `Ecke des Flächenblechs «${h.name}» anklicken (orange Punkte): dort lässt sich das Ende des Flansches an einer der beiden Kanten ändern – rechtwinklig, bündig zur Nachbarkante oder mit Winkel, verlängern oder kürzen.`, endeQuetschWz); status("Flanschende: Ecke anklicken – Esc bricht ab.");
+  quetschWz = { f: h, art: "ende" }; zeigeKanten(); wkZeigen("Flanschende", `Ecke des Flächenblechs «${h.name}» anklicken (blaue Punkte): dort lässt sich das Ende des Flansches an einer der beiden Kanten ändern – rechtwinklig, bündig zur Nachbarkante oder mit Winkel, verlängern oder kürzen.`, endeQuetschWz); status("Flanschende: Ecke anklicken – Esc bricht ab.");
 }
 // Ecken eines Blechprofils, an denen eine Quetschfalte möglich ist (Stirnlasche + Wand), mit Lage im Raum
 function stirnQuetschPunkte(f) {
@@ -3348,7 +3353,7 @@ function stirnQuetschPunkte(f) {
   return out;
 }
 function zeigeStirnQuetschPunkte(f) {
-  for (const e of stirnQuetschPunkte(f)) { const r = new THREE.Mesh(new THREE.SphereGeometry(3, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe0782b, depthTest: false, transparent: true })); r.position.copy(e.p); r.renderOrder = 13; r.userData.bildschirm = 0.008; kantenZeiger.add(r); }
+  for (const e of stirnQuetschPunkte(f)) { const r = new THREE.Mesh(new THREE.SphereGeometry(3, 12, 8), new THREE.MeshBasicMaterial({ color: 0x1d8fff, depthTest: false, transparent: true })); r.position.copy(e.p); r.renderOrder = 13; r.userData.bildschirm = 0.008; kantenZeiger.add(r); }
 }
 function stirnQuetschDialog(f) {
   featureDialog(f, false, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "wand", label: "Falte liegt auf", optionen: [["lasche", "der Stirnlasche"], ["wand", "der Wand"]], wert: ff.wand || "lasche" }],
@@ -3406,7 +3411,7 @@ function endeNahtWz() { nahtWz = null; wkZu(); zeigeKanten(); }
 function zeigeNahtKanten() {
   for (const k of nahtKandidaten()) {
     const gewaehlt = nahtWz?.a && nahtWz.a.ziel === k.ziel && nahtWz.a.key === k.key;
-    kantenZeiger.add(Object.assign(dickeLinie(k.punkte, gewaehlt ? 0xe0782b : 0x1f5fbf, gewaehlt ? 4 : 2, 13), { userData: { dicke: true } }));
+    kantenZeiger.add(Object.assign(dickeLinie(k.punkte, gewaehlt ? 0x1d8fff : 0x1f5fbf, gewaehlt ? 4 : 2, 13), { userData: { dicke: true } }));
   }
 }
 function nahtKlick(e) {
@@ -3458,13 +3463,13 @@ function quetschKlick(e) {
   if (quetschWz.art === "stirn") {
     const f = quetschWz.f, sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 36 : 22;
     for (const c of stirnQuetschPunkte(f)) { const w = aufSchirm(c.p.toArray()); const d = Math.hypot(w[0] - sm[0], w[1] - sm[1]); if (d < bd) { bd = d; best = c; } }
-    if (!best) { status("Eine Ecke anklicken (orange Punkte)."); return true; }
+    if (!best) { status("Eine Ecke anklicken (blaue Punkte)."); return true; }
     const n = { id: neueId(), typ: "stirnquetsch", name: `Quetschfalte ${f.name} · ${best.ende === "S1" ? "Stirn 1" : "Stirn 2"} Schenkel ${best.schenkel}`, ziel: f.id, ende: best.ende, schenkel: best.schenkel, seite: best.seite, wand: "lasche" };
     quetschWz = null; wkZu(); einfuegen(n); regen(); zeigeKanten(); waehle(n.id); status(n._fehler ? "⚠ " + n._fehler : "Quetschfalte angesetzt (Schritt in der Zeitleiste)."); return true;
   }
   const z = quetschWz.f, s = finde(z.skizze), B = basis(blechEbene(s.ebene, z, material(z.material))), sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 36 : 20;
   for (const c of quetschEcken(z)) { const w = aufSchirm(new THREE.Vector3(c.p[0], c.p[1], 0).applyMatrix4(B).toArray()); const d = Math.hypot(w[0] - sm[0], w[1] - sm[1]); if (d < bd) { bd = d; best = c; } }
-  if (!best) { status("Eine Ecke des Flächenblechs anklicken (orange Punkte)."); return true; }
+  if (!best) { status("Eine Ecke des Flächenblechs anklicken (blaue Punkte)."); return true; }
   if (quetschWz.art === "ende") {
     const [p0, k0] = best.key.split(":").map(Number), bl = z._bleche?.find((b) => b.pi === p0), n0 = bl?.gruppen.length || 1, kv = (k0 - 1 + n0) % n0, hat = (k) => !!(z.kanten?.[`${p0}:${k}`] || z.kantenBasis?.[`${p0}:${k}`]);
     const seite = hat(k0) || !hat(kv) ? { key: best.key, seite: "start" } : { key: `${p0}:${kv}`, seite: "ende" };
@@ -3507,7 +3512,7 @@ function kantenWzKlick(e) { // true = Klick verbraucht
   w.f = h; w.schritt = "kante"; waehle(h.id); zeigeKanten(); kantenBarZeigen(); status(kantenWzText()); return true;
 }
 // Kanten werden nur gewählt (orange); erst «Übernehmen» (Enter) legt Flansch/Umschlag/Baustein an
-function waehleKante(key) { // Kante wählen: der Flansch/Umschlag/Baustein erscheint sofort als Vorschau (orange Kante); «Übernehmen» bestätigt, Esc verwirft
+function waehleKante(key) { // Kante wählen: der Flansch/Umschlag/Baustein erscheint sofort als Vorschau (blaue Kante); «Übernehmen» bestätigt, Esc verwirft
   const w = kantenWz; if (!w) return; w.vorschau ||= new Map();
   if (w.vorschau.has(key)) { for (const id of w.vorschau.get(key)) { const f0 = finde(id); if (f0) entferneFeature(f0); } w.vorschau.delete(key); w.letzte = [...w.vorschau.values()].flat().map(finde).filter(Boolean).at(-1) || null; regen(); }
   else { const n0 = doc.features.length; wendeKantenWz(key); const neu = doc.features.slice(n0); neu.forEach((x) => { x._vorschau = true; }); w.vorschau.set(key, neu.map((x) => x.id)); w.letzte = neu.find((x) => x.wert?.werkzeug) || neu.at(-1) || null; }
@@ -4686,7 +4691,7 @@ function messPunkt(e) {
   const hit = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0];
   return hit ? { p: hit.point.toArray(), art: "Fläche", fa: "flaeche", s: sm } : null;
 }
-function messMarke(p, farbe = 0xe0782b) {
+function messMarke(p, farbe = 0x1d8fff) {
   const k = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ color: farbe, depthTest: false }));
   k.position.set(...p); k.userData.bildschirm = 0.006; k.renderOrder = 15; messGruppe.add(k); return k;
 }
@@ -4695,7 +4700,7 @@ function messKlick(e) {
   if (!messen.a || messen.b) { leeren(messGruppe); messen = { a: q.p }; messMarke(q.p); $("messInhalt").innerHTML = `<b>Punkt 1</b> (${q.art}) ${q.p.map((v) => f1(v)).join(" / ")} – zweiten Punkt anklicken`; return; }
   messen.b = q.p; messMarke(q.p);
   const a = messen.a, b = q.p, d = b.map((v, i) => v - a[i]), L = Math.hypot(...d);
-  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(a), V(b)]), new THREE.LineBasicMaterial({ color: 0xe0782b, depthTest: false }));
+  const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(a), V(b)]), new THREE.LineBasicMaterial({ color: 0x1d8fff, depthTest: false }));
   l.renderOrder = 15; messGruppe.add(l);
   $("messInhalt").innerHTML = `<b>Abstand ${f1(L)} mm</b><br>ΔX ${f1(d[0])} · ΔY ${f1(d[1])} · ΔZ ${f1(d[2])} <small>(${q.art})</small>`;
   status(`Abstand ${f1(L)} mm – nächster Klick beginnt eine neue Messung, Esc beendet.`);
@@ -5276,7 +5281,7 @@ const WERKZEUGE = {
   drehen: { aendern: true, knopf: "tVerschieben", ein: () => ["∠"], immer: true, text: "Drehen: Elemente anklicken, dann Drehpunkt; Winkel eintippen und Enter – oder Bezugs- und Zielrichtung anklicken." },
   musterR: { aendern: true, knopf: "tMuster", text: "Rechteckiges Muster: Elemente anklicken, dann auf eine freie Stelle klicken (oder Enter) – Anzahl und Abstände eingeben." },
   musterK: { aendern: true, knopf: "tMuster", text: "Kreisförmiges Muster: Elemente anklicken, dann den Mittelpunkt anklicken – Anzahl und Winkel eingeben." },
-  projizieren: { aendern: true, knopf: "tProjizieren", text: "Projizieren: Körperkante, Körperfläche (auch Blech und Biegungen) oder Linie einer anderen Skizze anklicken – sie leuchtet orange; mehrere wählen, dann «OK» (Enter) projiziert (Umschalt + Klick: ganze Skizze). Kreise und Bögen parallel liegender Skizzen bleiben Kreise/Bögen. Projizierte Linien sind fixiert (violett)." },
+  projizieren: { aendern: true, knopf: "tProjizieren", text: "Projizieren: Körperkante, Körperfläche (auch Blech und Biegungen) oder Linie einer anderen Skizze anklicken – sie leuchtet blau; mehrere wählen, dann «OK» (Enter) projiziert (Umschalt + Klick: ganze Skizze). Kreise und Bögen parallel liegender Skizzen bleiben Kreise/Bögen. Projizierte Linien sind fixiert (violett)." },
   // Abhängigkeiten und Bemassung: Auswahlmuster P = Punkt, L = Linie (Kante, Achse), K = Kreis/Bogen/Langloch
   abhHV: { knopf: "tAbh", muster: ["L", "PP"], text: "Horizontal/Vertikal: Linie anklicken – oder zwei Punkte. Die Richtung ergibt sich aus der Lage." },
   abhKoinzident: { knopf: "tAbh", muster: ["PP", "PL", "PK"], text: "Koinzident: Punkt anklicken, dann zweiten Punkt – oder Linie/Kreis/Bogen (Punkt liegt darauf)." },
@@ -5960,7 +5965,7 @@ function teileAnEcken(pts, zu) {
   for (let i = 1; i < ordnung.length; i++) { akt.push(ordnung[i]); if (eOrd[i] && i < ordnung.length - 1 || i === ordnung.length - 1) { out.push({ pts: kurz(akt), zu: false }); akt = [ordnung[i]]; } }
   return out.filter((o) => o.pts.length >= 2);
 }
-// ---- Projizieren: Kanten, Flächen und Skizzenlinien wählen (leuchten orange); erst «OK» (Enter) projiziert ----
+// ---- Projizieren: Kanten, Flächen und Skizzenlinien wählen (leuchten blau); erst «OK» (Enter) projiziert ----
 const projGruppe = new THREE.Group(); szene.add(projGruppe);
 const projLinienSchluessel = (pts) => pts.map((q) => q.map((v) => Math.round(v * 10)).join(",")).join(">");
 function projKandidat(sm) {
@@ -5991,8 +5996,8 @@ function projZeichnen() {
   leeren(projGruppe); if (!skizze) return;
   const dist = kamera.position.distanceTo(steuerung.target), hoehe = 2 * dist * Math.tan(kamera.fov * Math.PI / 360), r = Math.max(0.2, hoehe / 380);
   const zeige = (item, farbe, dick) => { for (const pts of item.vis) if (pts.length > 1) projGruppe.add(dickeLinie(pts.map((p) => V(p)), farbe, dick, 15)); };
-  if (skizze.projHover && !(skizze.projWahl || []).some((x) => x.key === skizze.projHover.key)) zeige(skizze.projHover, 0xffa733, 5); // Linie unter Stift/Zeiger leuchtet kräftig
-  for (const it of skizze.projWahl || []) zeige(it, 0xe0782b, 3);
+  if (skizze.projHover && !(skizze.projWahl || []).some((x) => x.key === skizze.projHover.key)) zeige(skizze.projHover, 0x4da3ff, 5); // Linie unter Stift/Zeiger leuchtet kräftig
+  for (const it of skizze.projWahl || []) zeige(it, 0x1d8fff, 3);
 }
 let projHoverWartet = false, leinwandTouch = false;
 leinwand.addEventListener("pointerdown", (e) => { leinwandTouch = e.pointerType === "touch"; }, true);
@@ -6002,7 +6007,7 @@ function projHover(e) {
 }
 function projBarZeigen() {
   const an = !!skizze && skizze.werkzeug === "projizieren", n = skizze?.projWahl?.length || 0; $("projBar").hidden = !an; if (!an) return;
-  $("pbText").textContent = n ? `${n} gewählt – «OK» (Enter) projiziert, nochmals anklicken hebt die Wahl auf. Umschalt + Klick: ganze Skizze.` : "Kanten, Flächen oder Skizzenlinien anklicken (sie leuchten orange).";
+  $("pbText").textContent = n ? `${n} gewählt – «OK» (Enter) projiziert, nochmals anklicken hebt die Wahl auf. Umschalt + Klick: ganze Skizze.` : "Kanten, Flächen oder Skizzenlinien anklicken (sie leuchten blau).";
   $("pbOk").disabled = !n; $("pbOk").textContent = n ? `OK (${n})` : "OK";
 }
 function projWahlLeeren() { if (skizze) { skizze.projWahl = []; skizze.projHover = null; } leeren(projGruppe); projBarZeigen(); }
@@ -6384,7 +6389,7 @@ function zeichneLive() {
     }
   } else if (P.length > 1) vor({ art: "linie", pts: P });
   if (s.werkzeug === "versatz" && s.quelle) vor(versatzVorschau(m));
-  live.add(skizzenObjekt(temp, 0xe0782b));
+  live.add(skizzenObjekt(temp, 0x1d8fff));
   // Punkte
   const pts = fangPunkte().map((q) => q.uv).concat(m ? [m] : []);
   const pg = new THREE.BufferGeometry().setFromPoints(pts.map((p) => zu3D(f.ebene, p)));
@@ -6396,8 +6401,8 @@ function zeichneLive() {
     else if (pk.art === "K") hl.push(B.els.get(pk.ref.e));
     else { const l = B.L(pk.ref); if (l) hl.push({ art: "linie", pts: pk.ref.e === "X" || pk.ref.e === "Y" ? [l[0].map((z, i) => z - (l[1][i] - l[0][i]) * 1000), l[1].map((z, i) => l[0][i] + (z - l[0][i]) * 1000)] : l }); }
   }
-  if (hl.length) live.add(skizzenObjekt({ ebene: f.ebene, elemente: hl.filter(Boolean) }, 0xe0782b));
-  if (hp.length) { const o = new THREE.Points(new THREE.BufferGeometry().setFromPoints(hp.map((p) => zu3D(f.ebene, p))), new THREE.PointsMaterial({ color: 0xe0782b, size: 11, sizeAttenuation: false, depthTest: false })); o.renderOrder = 12; live.add(o); }
+  if (hl.length) live.add(skizzenObjekt({ ebene: f.ebene, elemente: hl.filter(Boolean) }, 0x1d8fff));
+  if (hp.length) { const o = new THREE.Points(new THREE.BufferGeometry().setFromPoints(hp.map((p) => zu3D(f.ebene, p))), new THREE.PointsMaterial({ color: 0x1d8fff, size: 11, sizeAttenuation: false, depthTest: false })); o.renderOrder = 12; live.add(o); }
   // Masse: treibende Masse ersetzen die Referenzmasse an derselben Stelle
   const getrieben = new Set();
   for (const b of f.bedingungen || []) {

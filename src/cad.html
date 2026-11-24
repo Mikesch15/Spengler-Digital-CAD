@@ -23,7 +23,7 @@
   --fs-s: 12px; --fs-m: 13px; --fs-l: 14px; --fs-xl: 16px;
   --sh-panel: 0 1px 2px rgba(20, 35, 50, .05); --sh-overlay: 0 6px 24px rgb(0 0 0 / .15); --sh-modal: 0 18px 50px rgb(0 0 0 / .35);
   --focus: 2px solid var(--accent); --warn: #b26a00;
-  --on-accent: #ffffff; --hl: #e0782b;
+  --on-accent: #ffffff; --hl: #1d8fff;
   --leiste-bg: linear-gradient(#ffffff, #f4f6f9); --glas: rgba(255, 255, 255, .85); --meldung-bg: #eef2f6;
   --ansicht-bg: radial-gradient(120% 100% at 50% 0%, #f5f8fb 0%, #dde4eb 60%, #cdd6df 100%);
 }
@@ -87,10 +87,10 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 .typ.koerper { background: var(--muted); }
 .typ.bild { background: linear-gradient(135deg, #cfd8de 50%, #9fb3c0 50%); border: 1px solid var(--line); }
 .typ.blech { background: var(--accent); }
-.typ.achse { height: 2px !important; margin-top: 5px; background: #c77d16; border-radius: 0; }
-.typ.konpunkt { width: 7px !important; height: 7px !important; border-radius: 50%; background: #c77d16; }
+.typ.achse { height: 2px !important; margin-top: 5px; background: #2b7fd0; border-radius: 0; }
+.typ.konpunkt { width: 7px !important; height: 7px !important; border-radius: 50%; background: #2b7fd0; }
 .menue hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
-.typ.ebene { border: 1.5px solid #c77d16; background: color-mix(in srgb, #e8a33d 35%, transparent); transform: skewX(-20deg); }
+.typ.ebene { border: 1.5px solid #2b7fd0; background: color-mix(in srgb, #8ec2f0 35%, transparent); transform: skewX(-20deg); }
 /* Wahlfelder im Dialog: das aktive Feld nimmt den Klick in der Ansicht auf */
 .feld[data-wahl] label { cursor: pointer; }
 .feld.waehlt { outline: none; }
@@ -106,7 +106,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 #labels div { position: absolute; transform: translate(-50%, -50%); font: 600 11px var(--font-num); color: var(--sketch); background: color-mix(in srgb, var(--view) 80%, transparent); padding: 0 3px; border-radius: var(--r-s); white-space: nowrap; }
 #labels div.mass { touch-action: none; pointer-events: auto; cursor: pointer; border: 1px solid transparent; }
 #labels div.mass:hover { border-color: var(--sketch); }
-#labels div.winkel { color: #c25e14; transform: translate(8px, -130%); }
+#labels div.winkel { color: #3a6ea5; transform: translate(8px, -130%); }
 #labels div.treibend { color: var(--fg); font-weight: 700; border: 1px solid color-mix(in srgb, var(--sketch) 55%, transparent); }
 #labels div.glyph { font: 700 10px var(--font-num); color: #fff; background: #2f8a4c; border-radius: var(--r-s); padding: 0 3px; min-width: 10px; text-align: center; line-height: 14px; }
 #labels div.glyph.klickbar { pointer-events: auto; cursor: pointer; }
@@ -679,6 +679,12 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .dialog .inhalt { max-height: 60vh; }
 .modalbox h4 { margin: 8px 0 4px; font-size: 11px; }
 @media (max-width: 1000px) { .dialog { width: auto; } }
+/* Einheitliche Menüs und Paneele (wie die Fenster): flache Kanten, gleiche Rahmen- und Schattenwerte */
+.menue, .klappmenue, .zeitTip + .x { border-color: var(--fx-rand); border-radius: 2px; box-shadow: 0 6px 22px rgb(0 0 0 / .26); }
+.menue, .klappmenue { background: var(--fx-bg); }
+.menue button:hover, .klappmenue .wz:hover { background: var(--fx-blau-hell); }
+.panel { border-color: var(--fx-rand); border-radius: 2px; }
+.knopf { border-radius: 2px; }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 16px var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 </style>
@@ -1000,9 +1006,9 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     </ul>
     <h4>Flansch, Umschlag und Bausteine am Blechprofil</h4>
     <ul>
-      <li>Blechprofil anklicken, dann <b>Flansch</b>, <b>Umschlag</b> oder <b>Kantenbaustein</b> wählen und die Kante <b>direkt am Modell</b> anklicken: die Längsseiten (A/B) oder jede Stirnkante einzeln. Die Kante unter dem Zeiger leuchtet orange auf.</li>
+      <li>Blechprofil anklicken, dann <b>Flansch</b>, <b>Umschlag</b> oder <b>Kantenbaustein</b> wählen und die Kante <b>direkt am Modell</b> anklicken: die Längsseiten (A/B) oder jede Stirnkante einzeln. Die Kante unter dem Zeiger leuchtet blau auf.</li>
       <li>Die Stirnkante gilt je gerader Schenkel – jeden Schenkel wählt man durch Anklicken seiner Kante. Die Abwicklung (DXF) zeigt die Laschen mit Biegelinien.</li>
-      <li><b>Quetschfalte</b> (Kanten-Menü): Flächenblech mit Flanschen an zwei benachbarten Kanten wählen, dann die <b>Ecke</b> anklicken (orange Punkte). Der Überschuss der Ecke wird an seiner Winkelhalbierenden 180° gefaltet und liegt auf einer Aufkantung (Dialog: hinten links/rechts). Winkel und Höhe der beiden Flansche dürfen verschieden sein (bis zur niedrigeren Ecklinie läuft die Falte, der höhere Flansch behält seine freie Kante). Die Ecke ist in der <b>Abwicklung</b> und im DXF enthalten (Falt- und Ecklinien); im 3D besteht die Falte aus zwei Blechlagen mit gerundeter Faltkante, der Gegenflansch ist um die halbe Blechstärke zurückgesetzt. Einzel-DXF der Ecke: Teil-Panel → «DXF Quetschfalte».</li>
+      <li><b>Quetschfalte</b> (Kanten-Menü): Flächenblech mit Flanschen an zwei benachbarten Kanten wählen, dann die <b>Ecke</b> anklicken (blaue Punkte). Der Überschuss der Ecke wird an seiner Winkelhalbierenden 180° gefaltet und liegt auf einer Aufkantung (Dialog: hinten links/rechts). Winkel und Höhe der beiden Flansche dürfen verschieden sein (bis zur niedrigeren Ecklinie läuft die Falte, der höhere Flansch behält seine freie Kante). Die Ecke ist in der <b>Abwicklung</b> und im DXF enthalten (Falt- und Ecklinien); im 3D besteht die Falte aus zwei Blechlagen mit gerundeter Faltkante, der Gegenflansch ist um die halbe Blechstärke zurückgesetzt. Einzel-DXF der Ecke: Teil-Panel → «DXF Quetschfalte».</li>
     </ul>
     <h4>Flächenblech mit Kantenbausteinen</h4>
     <ul>
@@ -1012,7 +1018,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <li>Das Programm rechnet Zugabe je Kante, Zuschnitt mit Eckausklinkungen, Biegelinien, Abkantliste (Anschlag ab Schnittkante), m² für die Stückliste, DXF und Werkstattblatt.</li>
       <li><b>Blech ▾</b>: Flächenblech aus Skizze, <b>auf Körperfläche</b> (Fläche anklicken – Umriss wird übernommen, Blech liegt aussen auf) oder <b>Kehle / Grat</b> (zwei Flächen anklicken – gekantetes Blech entlang der Kehl- bzw. Gratlinie, Länge automatisch, an den Enden Kantenbausteine wie Saum; mit Zuschnitt und Abkantliste).</li>
       <li><b>Kante antippen</b>: Flächenblech wählen (oder öffnen) – jede Kante trägt ein Schild (K1, K2 …; grün = belegt). Kante oder Schild antippen öffnet die Bausteinliste direkt an der Stelle; Gegenstück (Ober-/Unterfalz) kommt automatisch. Auf dem Handy klappt ▾ den Dialog ein, damit die Ansicht frei ist.</li>
-      <li><b>Auswahl im Raum</b>: Wenn eine Ebene, Fläche, Kante oder ein Punkt gewählt werden soll (z. B. Skizze erstellen), leuchtet das, was angeklickt würde, orange auf und trägt eine Beschriftung.</li>
+      <li><b>Auswahl im Raum</b>: Wenn eine Ebene, Fläche, Kante oder ein Punkt gewählt werden soll (z. B. Skizze erstellen), leuchtet das, was angeklickt würde, blau auf und trägt eine Beschriftung.</li>
       <li><b>Bemassung (D)</b>: Linie → Länge. Danach <b>gleich ein zweites Objekt anklicken</b>: Linie → Abstand (parallel) oder Winkel bzw. Abstand eines Endpunkts (nicht parallel); Punkt → Abstand; Kreis/Bogen → Mittelpunktabstand zu Linie, Kreis oder Punkt. Wert eintippen, Enter.</li>
       <li><b>Flansch und Umschlag wie in Fusion</b>: in der Kantenliste oder im Menü an der Kante «Flansch …» bzw. «Umschlag …» wählen und Winkel, Länge, Radius, Richtung (zur Sichtseite / nach hinten) eingeben, bei Flansch auch «Mass bis» Mittellinie, Aussenkante oder Innenkante. Das Blech endet immer am Biegebeginn; der Versatz der Kante (Aussen-/Innenmass) kürzt oder verlängert die Platte automatisch. Funktioniert auch an runden Kanten (Bogen, Kreis) – dort als Näherung aus kurzen Geraden, die Abwicklung ist rein theoretisch (der Rand muss gestaucht bzw. gestreckt werden).</li>
       <li><b>Bausteine erstellen</b>: im Flächenblech-Dialog «+ Neuer Baustein …» (wird gleich an die gewählte Kante gesetzt) oder «✎ Baustein der gewählten Kante»; ebenso unter Einstellungen → Bausteine. Der Editor zeigt den Querschnitt live mit Zugabe und Anschlagmassen; Biegungen als Tabelle (Abkanten oder Umschlag, Winkel, Radius, Schenkel) oder als Kurzschrift. Verwendete Bausteine werden im Projekt mitgespeichert.</li>
@@ -1051,11 +1057,11 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <li><b>Dach</b> (Register «Dach» › «Dach automatisch»): Gebäude (Rechteck mit Breite, Tiefe, Wandhöhe, Wandstärke) und Dach in einem Schritt – Satteldach, Pultdach, Walmdach, Zeltdach mit Neigung je Seite, Überstand Traufe/Ortgang, Deckung (Schiebeziegel, Biber einfach/doppelt) und Dachaufbau. First, Grate, Dachfläche und Firsthöhe rechnet das Programm; zu flache Neigung für die Deckung wird gemeldet. Deckungs- und Aufbauwerte (Richtwerte!) stellst du unter Einstellungen › Dach ein. Alles bleibt parametrisch: Gebäude oder Dach anklicken, Werte ändern, das Dach rechnet sofort neu.</li>
       <li><b>Cloud-Ablage</b> (Datei › Cloud-Ablage): Modelle, Exporte und Pläne liegen wie in Fusion in der Cloud: <b>Projekte › Jahr › Projekt › Modelle · Exporte · Pläne</b>. Sobald dem Modell ein Projekt zugeordnet wird (Datei › Projekte), werden die Ordner automatisch angelegt – nur wenn es sie noch nicht gibt. Speichern legt das Modell in «Modelle» ab (neue Version bei gleichem Namen), DXF/STEP/STL/SVG-Exporte in «Exporte», Pläne in «Pläne». Voraussetzung: angemeldet; einmalig <code>docs/cad/cad_ablage.sql</code> in Supabase ausführen.</li>
       <li><b>Plan: Sichtbarkeit</b>: rechts im Planblatt steht ein Browser mit Körpern und Komponenten – Augen blenden sie nur auf diesem Plan aus, das Modell bleibt. <b>Teil-Funktionen …</b> (Register «Ändern») öffnet für das gewählte Teil alle Funktionen (Komponente, Duplizieren, Darstellung, Unterdrücken, Zurückrollen …); <b>Abwickeln / Falten</b> steht im Register «Blech».</li>
-      <li><b>Skizze im Plan</b>: Planblatt (Formate A4–A0; Abwicklung als Ansicht; beim Bemassen rastet eine orange Marke an Punkten ein; Mausrad zoomt, Mausrad gedrückt/leere Fläche ziehen/zwei Finger verschieben, «Blatt» = Gesamtansicht) › «+ Ansicht» › «Skizze: …» (oder «Alle Skizzen») setzt die Zeichnung mit Layern (Farben, Linienarten) massstäblich aufs Blatt; «Auto-Masse» bemasst Gesamt-, Ketten- und Kreismasse, «Bemassen» einzelne Punkte. «Drucken / PDF» speichert das Blatt als PDF.</li>
+      <li><b>Skizze im Plan</b>: Planblatt (Formate A4–A0; Abwicklung als Ansicht; beim Bemassen rastet eine blaue Marke an Punkten ein; Mausrad zoomt, Mausrad gedrückt/leere Fläche ziehen/zwei Finger verschieben, «Blatt» = Gesamtansicht) › «+ Ansicht» › «Skizze: …» (oder «Alle Skizzen») setzt die Zeichnung mit Layern (Farben, Linienarten) massstäblich aufs Blatt; «Auto-Masse» bemasst Gesamt-, Ketten- und Kreismasse, «Bemassen» einzelne Punkte. «Drucken / PDF» speichert das Blatt als PDF.</li>
       <li><b>Kanten</b> (Feld «Kanten» oben): Flansch, Umschlag oder Kantenbaustein wählen, dann <b>zuerst das Flächenblech, danach die Kante</b> anklicken. Liegt an der Kante schon ein Baustein oder Flansch, wird der neue <b>angehängt</b> (Flansch an Flansch). In der Leiste oben: Winkel, Länge und «Richtung» (Sichtseite ⇄ hinten); bestehende Kanten kehrt «⇅ Richtung» im Blech-Dialog um. Esc oder «Fertig» beendet. <b>Jede Kante ist ein Schritt in der Zeitleiste</b> («Flansch K1» …): anklicken oder bearbeiten ändert Winkel, Länge, Radius und Richtung sofort am Blech; Rechtsklick › «Richtung umkehren». Die Kante unter dem Zeiger leuchtet auf.</li>
       <li><b>Abwickeln / Falten</b> (wie Unfold/Refold in Fusion): Flächenblech im Browser rechtsklicken › «Abwickeln» – das Blech liegt flach (Zeitleiste: «Abwickeln»). Skizze auf dem flachen Blech zeichnen, dann <b>«Extrudieren › Ausschneiden»</b> (Richtung symmetrisch oder Abstand grösser als die Blechdicke) – erst diese Extrusion schneidet die Abwicklung. Zum Schluss Rechtsklick auf das Blech › «Falten»: die Ausschnitte erscheinen im gekanteten Blech, auch in Flanschen. Grenzen: gerade Kanten mit Baustein, nicht über Ecken hinweg; «Teilen» geht an der Abwicklung noch nicht.</li>
       <li><b>Ziehpfeil</b>: im Dialog erscheint bei Extrusion (Abstand), Blechlänge, Schale (Wanddicke), Abrunden/Fasen, Verschieben (X/Y/Z), Muster (Abstand), versetzter Ebene und Rundblech (Höhe) ein Pfeil in der Ansicht – anfassen und ziehen ändert das Mass (Umschalt = fein). Das Zahlenfeld bleibt gültig.</li>
-      <li><b>Flächen wählen</b>: bei Extrudieren und Flächenblech die Skizze anklicken – jede Teilfläche (auch Überlappungen, Inseln, durchzogene Rechtecke) einzeln, mehrere nacheinander, nochmals anklicken = abwählen; gewählte Flächen sind blau, die Fläche unter dem Zeiger orange.</li>
+      <li><b>Flächen wählen</b>: bei Extrudieren und Flächenblech die Skizze anklicken – jede Teilfläche (auch Überlappungen, Inseln, durchzogene Rechtecke) einzeln, mehrere nacheinander, nochmals anklicken = abwählen; gewählte Flächen sind blau, die Fläche unter dem Zeiger blau.</li>
       <li><b>Ändern ▾</b>: Abrunden/Fasen von Extrusionen, Schale (aushöhlen mit Wanddicke, Seite offen), Muster rechteckig/kreisförmig und Spiegeln (auch Blechteile – zählen in der Stückliste mehrfach), Verschieben/Kopieren.</li>
       <li><b>Text</b> (Skizze): Stelle anklicken, Text und Höhe eingeben (Umlaute, °, € gehen). Extrudieren mit «Ausschneiden» = Gravur, mit «Vereinigen» = Prägung. Doppelklick (Auswahl) ändert Text, Höhe und Winkel.</li>
       <li><b>Bild / PDF-Plan</b> (Datei ▾): Foto oder Plan auf eine Ebene legen, mit «Kalibrieren» (zwei Punkte + wirkliches Mass) auf Mass bringen und darüber skizzieren. Bei PDF genügt der Plan-Massstab.</li>
@@ -1069,7 +1075,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
     <h4>Konstruieren und Skizzieren</h4>
     <ul>
       <li><b>Skizze</b>: Grundebene, Konstruktionsebene oder ebene Körperfläche in der Ansicht anklicken – die Skizze startet sofort darauf (oder in der Liste wählen).</li>
-      <li><b>Ebene ▾</b>: versetzt, unter Winkel (um Kante/Achse), Mittelebene, durch zwei Kanten, durch drei Punkte, tangential an Zylinder, entlang Pfad. Bezüge mit ⊕ in der Ansicht anklicken – das orange umrandete Feld nimmt den Klick auf, danach geht es zum nächsten Feld.</li>
+      <li><b>Ebene ▾</b>: versetzt, unter Winkel (um Kante/Achse), Mittelebene, durch zwei Kanten, durch drei Punkte, tangential an Zylinder, entlang Pfad. Bezüge mit ⊕ in der Ansicht anklicken – das blau hervorgehobene Feld nimmt den Klick auf, danach geht es zum nächsten Feld.</li>
       <li>Ebenen sind parametrisch: ändert man eine Ebene, wandern Skizzen, Vorlagen und Körper darauf mit. Eine Ebene anklicken → «Skizze auf dieser Ebene».</li>
     </ul>
     <h4>Skizzenwerkzeuge</h4>

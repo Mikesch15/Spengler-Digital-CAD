@@ -53,7 +53,7 @@ export function simModul(ctx) {
     const s = st(), M = S.M, L = S.Lref || 500, cen = (r) => { const a = [0, 0, 0]; let n = 0; for (const i of r.knoten.keys()) { a[0] += M.nodes[i][0]; a[1] += M.nodes[i][1]; a[2] += M.nodes[i][2]; n++; } return n ? a.map((x) => x / n) : null; };
     const knoten = (r) => [...r.knoten.keys()].slice(0, 600).map((i) => M.nodes[i]);
     const lager = [...s.lager.map((l) => ({ l, o: false }))], lasten = s.lasten.filter((l) => l.aktiv !== false);
-    for (const { l } of lager) { const r = loes(l.sel); if (!r) continue; marken.add(punkte(knoten(r), l.art === "eingespannt" ? 0x1f6fb2 : l.art === "vorgabe" ? 0xe0782b : l.art.startsWith("gleit") ? 0x8e6bbf : 0x2a9d8f, 7)); }
+    for (const { l } of lager) { const r = loes(l.sel); if (!r) continue; marken.add(punkte(knoten(r), l.art === "eingespannt" ? 0x1f6fb2 : l.art === "vorgabe" ? 0x1d8fff : l.art.startsWith("gleit") ? 0x8e6bbf : 0x2a9d8f, 7)); }
     for (const l of lasten) {
       const r = l.sel ? loes(l.sel) : null;
       if (l.art === "kraft" && r) { const c = cen(r); if (c) marken.add(dirPfeil(c.map((x, i) => x - (l.F[i] / (Math.hypot(...l.F) || 1)) * L * 0.15), l.F, L * 0.15, 0xd62828)); }
@@ -165,7 +165,7 @@ export function simModul(ctx) {
   const zahl = (id, w) => `<input id="${id}" type="text" class="zahlfeld" inputmode="decimal" autocomplete="off" value="${esc(w)}">`;
   function formHtml() {
     const f = S.form, w = f.w, lf = st().lastfaelle.map((l) => [l.id, l.name]), r = (f.sel && loes(f.sel)) || null;
-    const wahl = w.auswahl ? feld("Stelle wählen", sel("sf_auswahl", AUSWAHLEN, w.auswahl)) + `<p class="hinweis">${f.sel ? `✓ ${r?.knoten.size || 0} Knoten gewählt – erneut klicken ändert die Auswahl.` : "Im Modell anklicken – die Auswahl erscheint orange."}</p>` + (w.auswahl === "punkt" ? feld("Radius (mm)", zahl("sf_r", w.r)) : "") : "";
+    const wahl = w.auswahl ? feld("Stelle wählen", sel("sf_auswahl", AUSWAHLEN, w.auswahl)) + `<p class="hinweis">${f.sel ? `✓ ${r?.knoten.size || 0} Knoten gewählt – erneut klicken ändert die Auswahl.` : "Im Modell anklicken – die Auswahl erscheint blau."}</p>` + (w.auswahl === "punkt" ? feld("Radius (mm)", zahl("sf_r", w.r)) : "") : "";
     const lfSel = feld("Lastfall", sel("sf_lastfall", lf, w.lastfall));
     let inner = "";
     if (f.typ === "lager") inner = feld("Art", sel("sf_art", LAGERARTEN, w.art)) + wahl + (w.art === "vorgabe" ? feld("Weg X (mm)", zahl("sf_dx", w.dx)) + feld("Weg Y (mm)", zahl("sf_dy", w.dy)) + feld("Weg Z (mm)", zahl("sf_dz", w.dz)) : "");

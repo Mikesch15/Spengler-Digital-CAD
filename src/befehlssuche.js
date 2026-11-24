@@ -29,7 +29,7 @@ function befehle() {
 // Zusätzliche Befehle ohne eigenen Knopf (z. B. Arbeitsbereich zurücksetzen): { name, tipp, gruppe, run }
 export const zusatzBefehle = [];
 // zuletzt benutzte Befehle (nur Namen, nur in diesem Browser) stehen bei leerer Suche oben
-const ZUL = "sdcad-zuletzt";
+const ZUL = "sdcad-befehle-zuletzt"; // nicht «sdcad-zuletzt»: dort liegt die Liste der zuletzt geöffneten Projekte
 const lesZuletzt = () => { try { return JSON.parse(localStorage.getItem(ZUL)) || []; } catch { return []; } };
 const merkeZuletzt = (name) => { try { localStorage.setItem(ZUL, JSON.stringify([name, ...lesZuletzt().filter((n) => n !== name)].slice(0, 6))); } catch { /* Speicher gesperrt */ } };
 let offen = null;

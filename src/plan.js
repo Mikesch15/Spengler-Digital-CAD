@@ -209,8 +209,8 @@ export function planModul(ctx) {
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${F.b} ${F.h}" class="planblatt-svg">
 <defs><pattern id="schraffur" patternUnits="userSpaceOnUse" width="1.6" height="1.6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="1.6" stroke="#000" stroke-width=".2"/></pattern><marker id="pp" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="3.2" markerHeight="3.2" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 3L10 5L0 7z" fill="#000"/></marker></defs>
 <style>.rahmen{fill:none;stroke:#000;stroke-width:.5}.duenn{stroke:#000;stroke-width:.25}.sichtbar{fill:none;stroke:#000;stroke-width:.35;stroke-linecap:round}.verdeckt{fill:none;stroke:#000;stroke-width:.18;stroke-dasharray:1.5 1}
-.hilfs{stroke:#000;stroke-width:.18;fill:none}.ballon{fill:#fff;stroke:#000;stroke-width:.35}.tabkopf{fill:#e8edf2;stroke:none}.tabtext{text-anchor:start;fill:#000}.form.sel path,.form.sel line,.form.sel rect,.form.sel circle{stroke:#e0782b}.tabelle.sel .rahmen{stroke:#e0782b}.schnittflaeche{fill:url(#schraffur);fill-rule:evenodd;stroke:#000;stroke-width:.5}.lupenrand{fill:none;stroke:#000;stroke-width:.35}.lupenkreis{fill:none;stroke:#000;stroke-width:.25;stroke-dasharray:3 1 .5 1}.schnittspur{stroke:#000;stroke-width:.5;stroke-dasharray:6 1.5 1 1.5}.masslinie{stroke:#000;stroke-width:.25}text{font-family:Arial,Helvetica,sans-serif;fill:#000}.t25{font-size:2.5px}.t3{font-size:3px}.t35{font-size:3.5px;text-anchor:middle}.t5{font-size:5px}.fett{font-weight:700}.grau{fill:#555}
-.schriftfeld .t35{text-anchor:start}.frei{text-anchor:middle;dominant-baseline:middle}.treffer{fill:transparent;stroke:#1f5fbf33;stroke-width:.3;stroke-dasharray:2 2}.treffer.sel{stroke:#e0782b;stroke-width:.6}.sel text,.sel line,.sel path{stroke:#e0782b;fill:#e0782b}</style>
+.hilfs{stroke:#000;stroke-width:.18;fill:none}.ballon{fill:#fff;stroke:#000;stroke-width:.35}.tabkopf{fill:#e8edf2;stroke:none}.tabtext{text-anchor:start;fill:#000}.form.sel path,.form.sel line,.form.sel rect,.form.sel circle{stroke:#1d8fff}.tabelle.sel .rahmen{stroke:#1d8fff}.schnittflaeche{fill:url(#schraffur);fill-rule:evenodd;stroke:#000;stroke-width:.5}.lupenrand{fill:none;stroke:#000;stroke-width:.35}.lupenkreis{fill:none;stroke:#000;stroke-width:.25;stroke-dasharray:3 1 .5 1}.schnittspur{stroke:#000;stroke-width:.5;stroke-dasharray:6 1.5 1 1.5}.masslinie{stroke:#000;stroke-width:.25}text{font-family:Arial,Helvetica,sans-serif;fill:#000}.t25{font-size:2.5px}.t3{font-size:3px}.t35{font-size:3.5px;text-anchor:middle}.t5{font-size:5px}.fett{font-weight:700}.grau{fill:#555}
+.schriftfeld .t35{text-anchor:start}.frei{text-anchor:middle;dominant-baseline:middle}.treffer{fill:transparent;stroke:#1f5fbf33;stroke-width:.3;stroke-dasharray:2 2}.treffer.sel{stroke:#1d8fff;stroke-width:.6}.sel text,.sel line,.sel path{stroke:#1d8fff;fill:#1d8fff}</style>
 <rect width="${F.b}" height="${F.h}" fill="#fff"/>
 ${out.join("\n")}
 </svg>`;
@@ -391,8 +391,8 @@ ${out.join("\n")}
       if (modus === "text") { const text = prompt("Text (z. B. Detailbuchstabe)", "A"); if (!text) return; const t = { id: neuId(), x: q[0], y: q[1], text, groesse: 5 }; plan.texte.push(t); sel = t.id; zug = { e: t, pfeil: true }; zeige(); return; }
       if (modus === "mass") {
         const px = ev.pointerType === "touch" ? 26 : ev.pointerType === "pen" ? 20 : 12;
-        if (!mass) { const f = fang(q, px); if (!f) return ctx.status("Zeiger auf einen Punkt der Ansicht (orange Marke) – dort anklicken."); mass = { a: f }; ctx.status("Zweiten Punkt anklicken."); return; }
-        if (!mass.b) { const f = fang(q, px); if (!f || f.a !== mass.a.a) return ctx.status("Zweiten Punkt in derselben Ansicht anklicken (orange Marke)."); mass.b = f; ctx.status("Lage des Masses anklicken."); return; }
+        if (!mass) { const f = fang(q, px); if (!f) return ctx.status("Zeiger auf einen Punkt der Ansicht (blaue Marke) – dort anklicken."); mass = { a: f }; ctx.status("Zweiten Punkt anklicken."); return; }
+        if (!mass.b) { const f = fang(q, px); if (!f || f.a !== mass.a.a) return ctx.status("Zweiten Punkt in derselben Ansicht anklicken (blaue Marke)."); mass.b = f; ctx.status("Lage des Masses anklicken."); return; }
         const A = mass.a.q, B = mass.b.q, mx = (A[0] + B[0]) / 2, my = (A[1] + B[1]) / 2;
         const art = Math.abs(q[1] - my) >= Math.abs(q[0] - mx) ? "h" : "v";
         const m = { id: neuId(), ansicht: mass.a.a.id, a: mass.a.w, b: mass.b.w, art, lage: q };
@@ -402,7 +402,7 @@ ${out.join("\n")}
     const fangZeichen = (f) => { // Fangmarke (Kreis + Text) im Blatt
       const svg = $("plFlaeche").querySelector("svg"); if (!svg) return; svg.querySelector("#plFangZ")?.remove(); if (!f) return;
       const k = svg.getScreenCTM().a, r = 6 / k;
-      svg.insertAdjacentHTML("beforeend", `<g id="plFangZ" pointer-events="none"><circle cx="${z(f.q[0])}" cy="${z(f.q[1])}" r="${z(r)}" fill="none" stroke="#e0782b" stroke-width="${z(2 / k)}"/><circle cx="${z(f.q[0])}" cy="${z(f.q[1])}" r="${z(r / 4)}" fill="#e0782b"/><text x="${z(f.q[0] + r * 1.4)}" y="${z(f.q[1] - r * 1.2)}" font-size="${z(11 / k)}" fill="#e0782b" style="paint-order:stroke;stroke:#fff;stroke-width:${z(3 / k)}px">Punkt</text></g>`);
+      svg.insertAdjacentHTML("beforeend", `<g id="plFangZ" pointer-events="none"><circle cx="${z(f.q[0])}" cy="${z(f.q[1])}" r="${z(r)}" fill="none" stroke="#1d8fff" stroke-width="${z(2 / k)}"/><circle cx="${z(f.q[0])}" cy="${z(f.q[1])}" r="${z(r / 4)}" fill="#1d8fff"/><text x="${z(f.q[0] + r * 1.4)}" y="${z(f.q[1] - r * 1.2)}" font-size="${z(11 / k)}" fill="#1d8fff" style="paint-order:stroke;stroke:#fff;stroke-width:${z(3 / k)}px">Punkt</text></g>`);
     };
     $("plFlaeche").addEventListener("pointermove", (ev) => {
       if (plan) statusZeile(blattPunkt(ev));
