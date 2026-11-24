@@ -639,6 +639,34 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 #skizzenMenue, #ebenenMenue { z-index: 55; } /* Variantenmenü vor dem Sammelmenü, aus dem es geöffnet wird */
 .dialog > h3, .modalbox > h3, .layerbox > .ltitel { touch-action: none; cursor: grab; } .dialog > h3:active, .modalbox > h3:active { cursor: grabbing; }
 .browser > .ptitel { touch-action: none; }
+
+/* Fusion-Stil für alle Fenster (Befehlsdialoge, Einstellungen, Hilfe, Ablage …, Browser, Layer): helles Paneel, schlanke Titelzeile mit «−» und «»», Beschriftung links, Felder und Auswahllisten als flache Kästchen mit ▾ */
+:root { --fx-bg: #f0f1f2; --fx-kopf: #e4e6e8; --fx-feld: #ffffff; --fx-rand: #b3b8bd; --fx-text: #2b2f33; --fx-blau: #0b78bd; --fx-blau-hell: #d6ebf8; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fx-bg: #2c3135; --fx-kopf: #373d42; --fx-feld: #1e2225; --fx-rand: #4d555c; --fx-text: #e3e6e8; --fx-blau: #4aa8e0; --fx-blau-hell: #254457; } }
+:root[data-theme="dark"] { --fx-bg: #2c3135; --fx-kopf: #373d42; --fx-feld: #1e2225; --fx-rand: #4d555c; --fx-text: #e3e6e8; --fx-blau: #4aa8e0; --fx-blau-hell: #254457; }
+.dialog, .modalbox, .layerbox, .browser { background: var(--fx-bg); color: var(--fx-text); border: 1px solid var(--fx-rand); border-radius: 2px; box-shadow: 0 6px 22px rgb(0 0 0 / .28); }
+.dialog > h3, .modalbox > h3, .layerbox > .ltitel, .browser > .ptitel { display: flex; align-items: center; gap: 8px; margin: 0; padding: 7px 36px 7px 10px; background: var(--fx-kopf); border-bottom: 1px solid var(--fx-rand); font: 500 13px var(--font-label); letter-spacing: .05em; text-transform: uppercase; color: var(--fx-text); }
+.dialog > h3::before, .modalbox > h3::before { content: "−"; display: inline-block; width: 14px; text-align: center; font: 600 15px/1 var(--font-body); color: var(--muted); }
+.dialog.klein > h3::before { content: "+"; }
+.dialog .dklein { top: 4px; right: 4px; width: 26px; height: 24px; padding: 0; font-size: 0; color: var(--muted); }
+.dialog .dklein::after { content: "»"; font-size: 16px; line-height: 22px; display: block; transform: rotate(90deg); } .dialog.klein .dklein { transform: none; } .dialog.klein .dklein::after { transform: none; }
+.dialog .inhalt, .modalbox .inhalt { padding: 12px 14px; gap: 9px; }
+.feld { grid-template-columns: minmax(96px, 42%) minmax(0, 1fr); gap: 10px; }
+.feld > span, .feld > label, .feld > :first-child:not(input):not(select) { color: var(--fx-text); font-size: 13px; }
+.dialog input, .dialog select, .dialog textarea, .modalbox input:not([type=checkbox]):not([type=radio]):not([type=range]), .modalbox select, .modalbox textarea, .feld input, .feld select { background-color: var(--fx-feld); color: var(--fx-text); border: 1px solid var(--fx-rand); border-radius: 2px; padding: 5px 8px; min-height: 28px; font-size: 13px; box-sizing: border-box; }
+.dialog input:focus, .dialog select:focus, .modalbox input:focus, .modalbox select:focus, .feld input:focus, .feld select:focus { outline: none; border-color: var(--fx-blau); box-shadow: 0 0 0 1px var(--fx-blau); }
+.dialog select, .modalbox select, .feld select { appearance: none; -webkit-appearance: none; padding-right: 26px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23707880'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 9px center; }
+.dialog .fuss, .modalbox .fuss { border-top: 0; padding: 4px 14px 12px; gap: 8px; background: transparent; }
+.dialog .knopf, .modalbox .knopf, .modalbox button.knopf { background: var(--fx-feld); color: var(--fx-text); border: 1px solid var(--fx-rand); border-radius: 2px; padding: 5px 16px; min-width: 76px; font: 500 13px var(--font-body); }
+.dialog .knopf:hover, .modalbox .knopf:hover { border-color: var(--fx-blau); }
+.dialog .knopf.haupt, .modalbox .knopf.haupt { background: var(--fx-feld); color: var(--fx-blau); border-color: var(--fx-blau); font-weight: 600; }
+.dialog .knopf.haupt:hover, .modalbox .knopf.haupt:hover { background: var(--fx-blau-hell); }
+.dialog .knopf:disabled, .modalbox .knopf:disabled { opacity: .45; border-color: var(--fx-rand); color: var(--muted); }
+.dialog .knopf.weg, .modalbox .knopf.weg { color: var(--bend); min-width: 0; }
+#dInfo { flex: 1 1 100%; display: flex; gap: 6px; align-items: flex-start; font: 400 12px var(--font-body); color: var(--muted); } #dInfo:not(:empty)::before { content: "i"; flex: none; width: 15px; height: 15px; border-radius: 50%; background: var(--muted); color: var(--fx-bg); font: 700 11px/15px var(--font-body); text-align: center; }
+#dInfo.fehler { color: var(--bend); }
+.modalbox h4 { color: var(--fx-text); border-bottom: 1px solid var(--fx-rand); padding-bottom: 3px; }
+.browser .ptitel::after { margin-left: auto; }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 16px var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 </style>
