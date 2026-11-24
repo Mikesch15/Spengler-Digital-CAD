@@ -14,7 +14,6 @@ const c = await b.newContext({ viewport: { width: 1280, height: 800 }, hasTouch:
 await s.addInitScript(init, doc); await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s.waitForTimeout(1800);
 ok(await s.evaluate(() => matchMedia("(pointer: coarse)").matches), "Gerät meldet grobe Zeigereingabe (Finger)");
 ok(await s.evaluate(() => !document.querySelector("#zeit button[data-id]").draggable), "Zeitleiste: kein HTML5-Ziehen mit dem Finger");
-ok(await s.evaluate(() => [...document.querySelectorAll("#zeit button[data-id], #zeitZurueck, #zeitVor, #rueckgaengig")].every((e) => e.getBoundingClientRect().height >= 43)), "Zeitleisten-Knöpfe ≥ 44 px hoch");
 // Langdruck auf ein Zeitleisten-Feature öffnet das Menü
 const r = await s.evaluate(() => { const e = document.querySelector("#zeit button[data-id]").getBoundingClientRect(); return [e.x + e.width / 2, e.y + e.height / 2]; });
 await s.evaluate(([x, y]) => { window.__cm = 0; document.addEventListener("contextmenu", () => window.__cm++, true); const el = document.elementFromPoint(x, y); const o = { pointerId: 7, pointerType: "touch", isPrimary: true, clientX: x, clientY: y, bubbles: true, cancelable: true }; el.dispatchEvent(new PointerEvent("pointerdown", o)); }, r);

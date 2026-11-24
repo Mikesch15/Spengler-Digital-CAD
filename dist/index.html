@@ -635,16 +635,9 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr::before { position: absolute; left: 0; right: 0; bottom: 1px; padding: 0; text-align: center; }
 }
 
-/* Tablet / Finger: grosse Trefferflächen, Wertblase beim Ziehen */
+/* Tablet / Finger: Wertblase beim Ziehen */
 #skizzenMenue, #ebenenMenue { z-index: 55; } /* Variantenmenü vor dem Sammelmenü, aus dem es geöffnet wird */
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 16px var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
-@media (pointer: coarse) {
-  .wz, .klappknopf, .menue button, .klappmenue button, .dialog button, .dialog select, .dialog input:not([type=checkbox]):not([type=radio]):not([type=range]), .modal button, .modal select, .modal input:not([type=checkbox]):not([type=radio]):not([type=range]), .zeitleiste button, .eregister button, .kontextbar button, .kantenbar button, .plband button { min-height: 44px; }
-  .zeitleiste button { min-width: 44px; } .zeitleiste { min-height: 60px; gap: 8px; }
-  .baum li { min-height: 42px; } .baum .auge { min-width: 40px; min-height: 40px; }
-  input[type=checkbox], input[type=radio] { width: 24px; height: 24px; }
-  .massfeld { min-height: 40px; font-size: 15px; }
-  .zeitleiste .marke { min-width: 18px; }
 }
 </style>
 
