@@ -554,9 +554,9 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-soft); }
   [data-klapp="datei"] > .klappknopf { order: 1; } [data-klapp="koerper"] > .klappknopf { order: 2; } [data-klapp="blech"] > .klappknopf { order: 3; } [data-klapp="dach"] > .klappknopf { order: 4; }
   [data-klapp="aendern"] > .klappknopf { order: 5; } [data-klapp="simulation"] > .klappknopf { order: 6; } [data-klapp="pruefen"] > .klappknopf { order: 7; } [data-klapp="werkstatt"] > .klappknopf { order: 8; }
-  .leiste:not(.imSkizze):not(.imDialog) .marke { order: 21; border-right: 0; margin: 0 0 0 8px; padding: 6px 0 0; }
-  .leiste:not(.imSkizze):not(.imDialog) #wSuche { order: 20; margin-left: auto; flex-direction: row; min-width: 0; padding: 6px 12px; }
-  .leiste:not(.imSkizze):not(.imDialog) #wSuche svg { width: 16px; height: 16px; }
+  .leiste:not(.imSkizze):not(.imDialog) .marke { order: 19; border-right: 0; margin: 0 8px 0 auto; padding: 6px 0 0; }
+  .leiste:not(.imSkizze):not(.imDialog) #wSuche, .leiste:not(.imSkizze):not(.imDialog) #wEinst, .leiste:not(.imSkizze):not(.imDialog) #wHilfe { order: 20; flex-direction: row; min-width: 0; padding: 6px 10px; gap: 6px; }
+  .leiste:not(.imSkizze):not(.imDialog) #wSuche svg, .leiste:not(.imSkizze):not(.imDialog) #wEinst svg, .leiste:not(.imSkizze):not(.imDialog) #wHilfe svg { width: 16px; height: 16px; }
   .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > #wSkizze { order: 31; } .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > #w2D { order: 32; } .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > .trenner { order: 35; } .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > #wEbene { order: 33; } .leiste:not(.imSkizze):not(.imDialog) #gHaupt > .knoepfe > #wPlan { order: 34; }
   .leiste:not(.imSkizze):not(.imDialog) .klappmenue { order: 40; z-index: auto; position: static; display: flex; flex-wrap: wrap; align-items: center; gap: 1px; min-width: 0; max-height: none; overflow: visible; padding: 0; background: none; border: 0; box-shadow: none; }
   .leiste:not(.imSkizze):not(.imDialog) .klappmenue .wz { flex-direction: column; justify-content: center; width: auto; min-width: 62px; padding: 4px 8px; text-align: center; gap: 2px; font-size: var(--fs-s); }
