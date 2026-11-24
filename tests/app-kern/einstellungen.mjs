@@ -38,6 +38,18 @@ const p2 = await s.evaluate(() => { const r = document.getElementById("stiftleis
 ok(Math.abs(p2.x - p1.x) < 4 && Math.abs(p2.y - p1.y) < 4, "Lage der Palette bleibt nach dem Neuladen erhalten");
 await s.dblclick(".stiftgriff"); await s.waitForTimeout(200);
 ok(Math.abs(await s.evaluate(() => document.getElementById("stiftleiste").getBoundingClientRect().x) - p0.x) < 4, "Doppelklick auf den Griff stellt die Ausgangslage her");
+// Firmenlogo hochladen, Vorname, Startseite/Druck
+await s.click("#wEinst"); await s.waitForTimeout(300);
+const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNkYPhfz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC", "base64");
+await s.setInputFiles("#eLogoDatei", { name: "logo.png", mimeType: "image/png", buffer: png }); await s.waitForTimeout(600);
+ok(await s.evaluate(() => !!document.querySelector(".logovorschau img")), "Logo hochgeladen: Vorschau in den Einstellungen");
+await s.fill("#e_firma_vorname", "Mike"); await s.click("#eOk"); await s.waitForTimeout(500);
+ok(await s.evaluate(() => JSON.parse(localStorage.getItem("sdcad-einstellungen")).firma.logo.startsWith("data:image/") && JSON.parse(localStorage.getItem("sdcad-einstellungen")).firma.vorname === "Mike"), "Logo und Vorname sind gespeichert");
+await s.evaluate(() => window.sdcadTest.startseite()); await s.waitForTimeout(600);
+ok(await s.evaluate(() => !!document.querySelector("#startseite .sblogo img[src^='data:']") && /^Guten (Morgen|Tag|Abend)|^Gute Nacht/.test(document.querySelector(".sbgruss").textContent) && document.querySelector(".sbgruss").textContent.includes("Mike")), "Startseite zeigt Logo und Begrüssung mit Vornamen");
+await s.evaluate(() => document.getElementById("startseite").remove());
+await s.evaluate(() => document.getElementById("wDrucken").click()); await s.waitForTimeout(500);
+ok(await s.evaluate(() => document.getElementById("druck").innerHTML.includes('class="firmenlogo"')), "Werkstattblatt und Stückliste tragen das Logo");
 await c.close();
 // Tablet: automatisch an
 c = await b.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: true }); s = await c.newPage(); s.on("pageerror", (e) => pr.push(e.message));

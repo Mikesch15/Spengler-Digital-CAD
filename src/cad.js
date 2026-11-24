@@ -155,10 +155,11 @@ const standardEinst = () => JSON.parse(JSON.stringify({
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
   druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
   etiketten: { spalten: 3, zeilen: 8, breite: 70, hoehe: 37, oben: 0, links: 0, abstandX: 0, abstandY: 0 }, // mm
+  firma: { logo: "", vorname: "" },                                                  // Firmenlogo (Bild als Daten-URL) und Vorname für die Begrüssung
   allgemein: { startseite: true, stiftpalette: "auto", langdruck: true, masse: true, abh: true, speichern: "zuletzt", startAnsicht: "iso", stift: ["tAuswahl", "tLinie", "tRechteck", "tKreis", "tMass", "tEntf", "tFertig", "zurueck", "vor", "wSkizze", "wExtrusion"] }, // Voreinstellungen für das ganze Programm
   programm: { darstellung: "auto", updates: true, zuletzt: 8, kern: "netz" },      // kern: "netz" (wie 0.2) | "occt" (exakter CAD-Kern, Beta)
 }));
-const GRUPPEN = ["neu", "skizze", "anzeige", "druck", "etiketten", "programm", "allgemein"];
+const GRUPPEN = ["neu", "skizze", "anzeige", "druck", "etiketten", "programm", "allgemein", "firma"];
 // Gespeicherte oder geladene Einstellungen über die Standardwerte legen (neue Werte bekommen ihren Standard)
 function mitStandard(e) {
   const s = standardEinst();
@@ -1995,12 +1996,20 @@ function dupliziere(f) {
 }
 
 // ------------------------------------------------------------ Druck: Werkstattblatt je Blechteil (A4)
+const logoImg = () => (einst.firma?.logo ? `<img class="firmenlogo" src="${einst.firma.logo}" alt="">` : "");
+// Logo einlesen: Bilder auf höchstens 800×400 verkleinern (bleibt klein genug für den lokalen Speicher), SVG unverändert
+async function logoLesen(datei) {
+  if (/svg/.test(datei.type) || /\.svg$/i.test(datei.name)) return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(await datei.text());
+  const url = URL.createObjectURL(datei), img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Bild nicht lesbar")); i.src = url; });
+  const k = Math.min(1, 800 / img.width, 400 / img.height), c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k)); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+  return c.toDataURL(/png|webp|gif/.test(datei.type) ? "image/png" : "image/jpeg", 0.9);
+}
 const kopf = (art) => `<small>${art}${einst.druck.betrieb ? " · " + esc(einst.druck.betrieb) : ""}</small>`;
 function werkstattblatt(f) {
   if (f._blech) return flaechenblatt(f);
   const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst), d = einst.druck, abB = einst.anzeige.abB;
   return `<section class="blatt">
-    <header><div>${kopf("Werkstattblatt")}<h1>${esc(f.name)}</h1></div>
+    <header>${logoImg()}<div>${kopf("Werkstattblatt")}<h1>${esc(f.name)}</h1></div>
       <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
     <div class="eckdaten">
       <div><small>Zuschnitt</small><b>${f1(r.zuschnitt)} × ${laengeVon(f)} mm</b></div>
@@ -2023,7 +2032,7 @@ function werkstattblatt(f) {
 function stuecklisteBlatt() {
   const a = auftrag();
   return `<section class="blatt">
-    <header><div>${kopf("Stückliste")}<h1>${esc(doc.objekt)}</h1></div>
+    <header>${logoImg()}<div>${kopf("Stückliste")}<h1>${esc(doc.objekt)}</h1></div>
       <dl><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
     <table class="liste"><thead><tr><th>Teil</th><th>Material</th><th class="num">Zuschnitt × Länge mm</th><th class="num">Stück</th><th class="num">m²</th><th class="num">kg</th></tr></thead><tbody>
     ${a.zeilen.map((z) => `<tr><td>${esc(z.name)}${z.notiz ? `<br><small>${esc(z.notiz)}</small>` : ""}</td><td>${esc(z.material)}</td><td class="num">${f1(z.zuschnitt)} × ${z.laenge}</td><td class="num">${z.stueck}</td><td class="num">${f2(z.flaeche)}</td><td class="num">${z.gewicht.toFixed(1)}</td></tr>`).join("")}
@@ -3723,7 +3732,7 @@ function zeigeFlaechenteil(w, f) {
 function flaechenblatt(f) {
   const bl = f._blech, a = bl.abw, m = material(f.material), q = quelle(a.breite, einst);
   return `<section class="blatt">
-    <header><div>${kopf("Werkstattblatt")}<h1>${esc(f.name)}</h1></div>
+    <header>${logoImg()}<div>${kopf("Werkstattblatt")}<h1>${esc(f.name)}</h1></div>
       <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd></dl></header>
     <div class="eckdaten">
       <div><small>Zuschnitt</small><b>${f1(a.breite)} × ${f1(a.laenge)} mm</b></div>
@@ -4969,6 +4978,13 @@ function zeigeEinst() {
   const reiter = `<div class="register eregister" role="tablist">${EINST_REGISTER.map(([id, t]) => `<button role="tab" data-ereg="${id}" aria-selected="${id === einstRegister}">${t}</button>`).join("")}</div>`;
   const inhalt = {
     allgemein: `
+    <h4>Firma</h4>
+    <div class="firmaeinst">
+      <div class="logovorschau">${entwurf.firma.logo ? `<img src="${entwurf.firma.logo}" alt="Firmenlogo">` : '<span class="hinweis">Kein Logo</span>'}</div>
+      <div><div class="reihe ohnerand"><label class="knopf" for="eLogoDatei">Logo hochladen …</label><input type="file" id="eLogoDatei" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>${entwurf.firma.logo ? '<button class="knopf weg" id="eLogoWeg" type="button">Entfernen</button>' : ""}</div>
+      <p class="hinweis">Erscheint auf der Startseite, auf Werkstattblättern, Stückliste und im Schriftfeld der Pläne. PNG mit transparentem Hintergrund oder SVG sieht am besten aus.</p></div>
+    </div>
+    <div class="egitter">${einstFeld("firma.vorname", "Vorname für die Begrüssung", "text", null, "leer = Name aus der Cloud-Anmeldung")}</div>
     <h4>Start</h4>
     <div class="egitter">${einstFeld("allgemein.startseite", "Startseite beim Programmstart zeigen", "janein")}</div>
     <h4>Darstellung</h4>
@@ -5161,7 +5177,8 @@ function einstWert(t) {
   entwurf[g][k] = typ === "janein" ? t.checked : typ === "zahl" ? parseFloat(t.value) : t.value;
   if (g === "etiketten" && $("eEtikPruef")) etikettenPruefen();
 }
-$("eInhalt").addEventListener("change", (ev) => {
+$("eInhalt").addEventListener("change", async (ev) => {
+  if (ev.target.id === "eLogoDatei") { const d = ev.target.files[0]; if (!d) return; try { entwurf.firma.logo = await logoLesen(d); zeigeEinst(); meldung("Logo geladen – mit «Übernehmen» speichern."); } catch (err) { meldung("Logo konnte nicht gelesen werden: " + (err?.message ?? err)); } return; }
   if (ev.target.id === "pMat") probe();
   else if (ev.target.dataset.stift) { const t = ev.target, l = new Set(entwurf.allgemein.stift); t.checked ? l.add(t.dataset.stift) : l.delete(t.dataset.stift); entwurf.allgemein.stift = STIFT_ALLE.map((x) => x[0]).filter((x) => l.has(x)); }
   else if (ev.target.dataset.e && (ev.target.dataset.typ === "janein" || ev.target.dataset.typ === "wahl")) einstWert(ev.target);
@@ -5178,6 +5195,7 @@ function einstLaden(text) {
     zeigeEinst(); meldung(`Geladen: ${e.materialien.length} Materialien, ${(e.vorlagen || []).length} Vorlagen – mit «Übernehmen» speichern.`);
   } catch { meldung("Diese Datei enthält keine Spengler-Digital-CAD-Einstellungen."); }
 }
+$("eInhalt").addEventListener("click", (ev) => { if (ev.target.id === "eLogoWeg") { entwurf.firma.logo = ""; zeigeEinst(); } });
 $("eInhalt").addEventListener("click", async (ev) => {
   if (ev.target.id === "eExport") {
     const inhalt = JSON.stringify({ art: "sdcad-einstellungen", version: VERSION, ...entwurf }, null, 1);
@@ -7432,7 +7450,9 @@ function startseite(erzwingen = false) {
   const el = document.createElement("div"); el.className = "modal"; el.id = "startseite"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Startseite");
   const liste = pc ? zuletzt() : [], zu = () => el.remove();
   const aktion = (id) => { zu(); $(id).click(); };
-  el.innerHTML = `<div class="modalbox startbox"><h3>Willkommen</h3><div class="inhalt"><div class="startgitter">
+  const h = new Date().getHours(), gruss = h >= 5 && h < 11 ? "Guten Morgen" : h < 17 && h >= 11 ? "Guten Tag" : h >= 17 && h < 22 ? "Guten Abend" : "Gute Nacht";
+  const voll = cloud.angemeldet ? cloud.client.sitzung?.name || "" : "", vorname = (einst.firma.vorname || voll.split(" ")[0] || "").trim(), datum = new Date().toLocaleDateString("de-CH", { weekday: "long", day: "numeric", month: "long" }), logo = einst.firma.logo;
+  el.innerHTML = `<div class="modalbox startbox"><h3>Willkommen</h3><div class="inhalt"><div class="startbanner"><div class="sbkopf"><b>Heute</b><span>${esc(datum)}${voll || vorname ? " · " + esc(voll || vorname) : ""}</span></div><div class="sblogo">${logo ? `<img src="${logo}" alt="Firmenlogo">` : '<img src="logo.png" alt="Spengler Digital CAD"><b>Spengler Digital <i>CAD</i></b>'}</div><div class="sbgruss">${gruss}${vorname ? ", " + esc(vorname) : ""}</div></div><div class="startgitter">
     <div class="startspalte"><h4>Beginnen</h4>
       <button class="startknopf haupt" data-a="wNeu"><b>Neues Modell</b><small>Leeres Projekt anlegen</small></button>
       <button class="startknopf" data-a="wOeffnen"><b>Öffnen</b><small>Aus der Cloud oder vom ${pc ? "PC" : "Gerät"}</small></button>
