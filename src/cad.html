@@ -467,19 +467,18 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 #simInhalt .simtab { width: 100%; border-collapse: collapse; font-size: 12px; } #simInhalt .simtab td, #simInhalt .simtab th { border-bottom: 1px solid var(--line); padding: 3px 4px; text-align: left; cursor: pointer; } #simInhalt .simtab tr.jetzt { background: var(--accent-soft); } #simInhalt .simtab .bad { color: #c0392b; font-weight: 700; }
 #simInhalt .simwarn { font-size: 11px; color: var(--muted); }
 
-/* Dialoge angedockt (Desktop): eigene Spalte rechts statt Überdeckung der 3D-Ansicht; Teil/Auftrag weicht solange */
+/* Dialoge schweben über der 3D-Ansicht (frei verschiebbar), die Modellierfläche behält die ganze Breite; Teil/Auftrag weicht solange (bei Blechwerkzeugen bleibt der Live-Zuschnitt unten rechts sichtbar) */
 @media (min-width: 1001px) {
-  .mitte > .dialog { position: static; grid-column: 2; grid-row: 1; width: auto; max-width: none; top: auto; right: auto; align-self: stretch; display: flex; flex-direction: column; min-height: 0; border-radius: var(--r-m); box-shadow: var(--sh-panel); }
+  .mitte > .dialog { position: absolute; grid-area: auto; top: 10px; right: 10px; width: 300px; max-width: calc(100% - 20px); max-height: calc(100% - 20px); display: flex; flex-direction: column; min-height: 0; border-radius: var(--r-s); z-index: 9; }
   .mitte > .dialog .inhalt { max-height: none; overflow: auto; flex: 1 1 auto; min-height: 0; }
+  .mitte:has(> .dialog:not([hidden])) { grid-template-columns: minmax(0, 1fr) 0 !important; column-gap: 0 !important; }
+  .mitte:has(> .dialog:not([hidden])) > .ansicht { grid-column: 1; }
   .mitte:has(> .dialog:not([hidden])):not(.dialogMitWerk) > .werkstatt, .mitte:has(> .dialog:not([hidden])) > #werkAuf { display: none; }
-  /* Blechwerkzeuge: Live-Zuschnitt/Abwicklung (Teil-Panel) bleibt unter dem Dialog sichtbar */
-  .mitte.dialogMitWerk:has(> .dialog:not([hidden])) { grid-template-rows: minmax(0, 58fr) minmax(0, 42fr); }
-  .mitte.dialogMitWerk:has(> .dialog:not([hidden])) > .ansicht { grid-row: 1 / 3; }
-  .mitte.dialogMitWerk:has(> .dialog:not([hidden])) > .werkstatt { display: block; grid-column: 2; grid-row: 2; }
-  .mitte.dialogMitWerk:has(> .dialog:not([hidden])) > .teiler { display: none; }
-  .mitte:has(> .dialog:not([hidden])) { grid-template-columns: minmax(0, 1fr) max(var(--werk-w, 300px), 340px) !important; column-gap: 8px !important; }
-  .mitte > .dialog.klein { align-self: start; }
+  .mitte.dialogMitWerk:has(> .dialog:not([hidden])) > .dialog { max-height: 58%; }
+  .mitte.dialogMitWerk:has(> .dialog:not([hidden])) > .werkstatt { display: block; position: absolute; right: 10px; bottom: 10px; width: 300px; max-height: 38%; z-index: 8; overflow: auto; box-shadow: 0 6px 22px rgb(0 0 0 / .22); }
+  .mitte:has(> .dialog:not([hidden])) > .teiler { display: none; }
 }
+@media (max-width: 1000px) { .mitte:has(> .dialog:not([hidden])) { grid-template-rows: calc(100vh - 150px) !important; } .mitte:has(> .dialog:not([hidden])) > .browser, .mitte:has(> .dialog:not([hidden])) > .werkstatt { display: none; } }
 
 /* Befehlssuche (Strg + K) */
 .bs-hinter { position: fixed; inset: 0; z-index: 60; background: rgb(10 20 30 / .35); display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
