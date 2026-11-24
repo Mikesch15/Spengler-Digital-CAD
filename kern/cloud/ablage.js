@@ -31,4 +31,4 @@ export function baum(ordner, dateien = []) {
   const schluessel = (p) => p.split("/").map((s, i) => (i === 1 && /^\d{4}$/.test(s) ? String(9999 - +s) : UNTER.includes(s) ? String(UNTER.indexOf(s)) : s.toLowerCase()));
   return liste.sort((a, b) => { const x = schluessel(a.pfad), y = schluessel(b.pfad); for (let i = 0; i < Math.max(x.length, y.length); i++) { if (x[i] === undefined) return -1; if (y[i] === undefined) return 1; if (x[i] !== y[i]) return x[i] < y[i] ? -1 : 1; } return 0; });
 }
-export const modellDateiName = (doc) => `${dateiName([doc.nr, doc.objekt].filter(Boolean).join(" ") || "Modell")}.sdcad`;
+export const modellDateiName = (doc) => `${dateiName(String(doc.modellName ?? "").trim() || [doc.nr, doc.objekt].filter(Boolean).join(" ") || "Modell")}.sdcad`; // frei wählbarer Modellname, sonst «Nr. Objekt»

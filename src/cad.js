@@ -65,6 +65,7 @@ import { rechne, parameterWerte, istZahl, namenIn, NAME as PARAMNAME } from "../
 import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
 import { langdruck, tastaturSichtbar, wertBlase, maus } from "./touch.js";
 import { fensterVerschieben } from "./fenster.js";
+import { dateiName as sicherName, modellDateiName } from "../kern/cloud/ablage.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
 import { BASIS, ACHSEN, versetzt, unterWinkel, mittelebene, zweiKanten, dreiPunkte, tangential, entlangPfad, aufFlaeche, zuWelt, zuLokal } from "../kern/ebenen.js";
 const zuWeltK = zuWelt;
@@ -1598,7 +1599,7 @@ function springe(d) {
   if (dlg || skizze || i < 0 || i >= verlauf.stapel.length) return;
   verlauf.pos = i; doc = JSON.parse(verlauf.stapel[i]);
   if (!finde(auswahl) && !hauptVon(auswahl)) auswahl = null;
-  $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr;
+  $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; $("aModell").value = doc.modellName || "";
   regen(); status(d < 0 ? "Rückgängig gemacht." : "Wiederhergestellt.");
 }
 function zeigeVerlauf() {
@@ -2050,7 +2051,7 @@ async function druckeAusgabe(titel = "Spengler Digital CAD") {
   } catch (e) { if (!/cancel/i.test(String(e?.message ?? e))) status("Drucken fehlgeschlagen: " + (e?.message ?? e)); }
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-for (const [id, k] of [["aObjekt", "objekt"], ["aNr", "nr"]]) { $(id).value = doc[k]; $(id).addEventListener("input", (e) => { doc[k] = e.target.value; speichern(); zeigeWerkstatt(); }); }
+for (const [id, k] of [["aObjekt", "objekt"], ["aNr", "nr"], ["aModell", "modellName"]]) { $(id).value = doc[k] ?? ""; $(id).addEventListener("input", (e) => { doc[k] = e.target.value; speichern(); zeigeWerkstatt(); }); }
 
 let hinweisZeit = 0; // Hinweise bleiben kurz stehen, bevor die Mauskoordinaten sie ersetzen
 function status(t, koordinaten = false) {
@@ -6769,7 +6770,7 @@ function titel() {
 }
 async function projektSpeichern(unter = false) {
   const inhalt = JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v), 1);
-  const ziel = await herunterladen(`${doc.nr || "projekt"}.sdcad`, inhalt, "application/json", unter ? null : projektPfad);
+  const ziel = await herunterladen(modellDateiName(doc), inhalt, "application/json", unter ? null : projektPfad);
   if (ziel) { projektPfad = ziel; titel(); merkeDatei(ziel); }
   if (ziel || !pc) ablage?.nachSpeichern(); // Cloud-Ablage: Modelle/<Projekt>.sdcad
 }
@@ -6777,7 +6778,7 @@ function ladeProjekt(text, pfad = null) {
   try {
     const d = JSON.parse(text); if (!d.features) throw 0;
     doc = d; auswahl = null; projektPfad = pfad; titel(); merkeDatei(pfad); verlauf.stapel = []; verlauf.pos = -1;
-    $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; auftragAnzeige(); regen();
+    $("aObjekt").value = doc.objekt; $("aNr").value = doc.nr; $("aModell").value = doc.modellName || ""; auftragAnzeige(); regen();
     waehle(doc.features.find((f) => f._res)?.id || null); ansicht("iso"); status("Projekt geöffnet.");
   } catch { status("Diese Datei ist kein Spengler-Digital-CAD-Projekt."); }
 }
@@ -6799,15 +6800,42 @@ dateiMenue.onclick = (e) => { const k = e.target.closest("button")?.dataset.k; i
 document.addEventListener("click", (e) => { if (!e.target.closest?.("#dateiMenue, #wOeffnen, #wSpeichern")) dateiMenue.hidden = true; });
 const ZIEL = "sdcad-speichern-ziel";
 const cloudBereit = () => cloud.angemeldet && !!doc.appProjekt;
-async function cloudSpeichern() {
+// Speichern fragt nach dem Namen des Modells und – wenn es die Datei schon gibt – ob sie überschrieben werden soll
+const bestaetigt = new Set(); // in dieser Sitzung schon zum Überschreiben freigegebene Ziele: Strg+S speichert dann ohne Rückfrage
+function modellNameDialog(titel, hinweis, weiter) {
+  if (dlg) $("dAbbrechen").click();
+  dialog({ titel, sofort: true, felder: [{ id: "name", label: "Name des Modells", text: true, wert: doc.modellName || [doc.nr, doc.objekt].filter(Boolean).join(" ") || "Modell" }], hinweis,
+    ok: (w) => { const n = String(w.name ?? "").trim(); if (!n) return status("Bitte einen Namen eingeben."); doc.modellName = n; $("aModell").value = n; speichern(); weiter(); } });
+}
+async function cloudSpeichern(schnell = false) {
   if (!cloud.angemeldet) return status("Zuerst anmelden (Einstellungen › Konto & Cloud), dann lässt sich in der Cloud speichern.");
   if (!doc.appProjekt) { status("Zuerst dem Modell ein App-Projekt zuordnen (Datei › Projekte)."); return projekte.oeffnen(); }
-  const r = await ablage.modellSpeichern(); if (r) try { localStorage.setItem(ZIEL, "cloud"); } catch {}
+  const fertig = async () => {
+    if (!bestaetigt.has("cloud:" + modellDateiName(doc))) {
+      const v = await ablage.modellVorhanden();
+      if (v && !confirm(`«${modellDateiName(doc)}» gibt es in der Cloud schon.\n\nOK = überschreiben (die alte Fassung bleibt als frühere Version erhalten)\nAbbrechen = anderen Namen wählen`)) return cloudSpeichern();
+      bestaetigt.add("cloud:" + modellDateiName(doc));
+    }
+    const r = await ablage.modellSpeichern(); if (r) try { localStorage.setItem(ZIEL, "cloud"); } catch {}
+  };
+  if (schnell && doc.modellName) return fertig();
+  modellNameDialog("In der Cloud speichern", `Ablage: Projekt «${doc.appProjekt.name}» › Modelle. Gibt es den Namen schon, wirst du gefragt, ob die Datei überschrieben werden soll.`, fertig);
 }
-async function pcSpeichern(unter = false) { try { localStorage.setItem(ZIEL, "pc"); } catch {} return projektSpeichern(unter); }
+async function pcSpeichern(unter = false, schnell = false) {
+  try { localStorage.setItem(ZIEL, "pc"); } catch {}
+  if (schnell && projektPfad && bestaetigt.has("pc:" + projektPfad)) return projektSpeichern(false);
+  modellNameDialog(pc ? "Auf dem PC speichern" : "Auf dem Gerät speichern", pc ? "Wenn es die Datei schon gibt, wirst du gefragt, ob sie überschrieben werden soll." : "Die Datei wird heruntergeladen bzw. über das Teilen-Menü gespeichert.", async () => {
+    const datei = modellDateiName(doc); let neu = unter || !projektPfad;
+    if (pc && !neu) {
+      if (dateiname(projektPfad).toLowerCase() === datei.toLowerCase()) { if (bestaetigt.has("pc:" + projektPfad) || confirm(`«${datei}» überschreiben?\n\nOK = überschreiben\nAbbrechen = unter neuem Namen bzw. an neuem Ort speichern`)) bestaetigt.add("pc:" + projektPfad); else neu = true; }
+      else neu = true; // anderer Name: eigene Datei (der Systemdialog fragt bei einer vorhandenen Datei selbst)
+    }
+    await projektSpeichern(neu); if (pc && projektPfad) bestaetigt.add("pc:" + projektPfad);
+  });
+}
 function speichernSchnell() { // Strg+S: wie zuletzt gewählt (Cloud, sobald angemeldet und ein Projekt zugeordnet ist)
   let z = null; try { z = localStorage.getItem(ZIEL); } catch {}
-  return z === "cloud" && cloudBereit() ? cloudSpeichern() : pcSpeichern();
+  return z === "cloud" && cloudBereit() ? cloudSpeichern(true) : pcSpeichern(false, true);
 }
 $("wSpeichern").onclick = () => dateiWahl($("wSpeichern"), [
   ["cloud", "In der Cloud speichern", cloudBereit() ? `Projekt «${esc(doc.appProjekt.name)}» › Modelle` : cloud.angemeldet ? "Zuerst ein App-Projekt zuordnen" : "Zuerst anmelden (Einstellungen)", cloudSpeichern],

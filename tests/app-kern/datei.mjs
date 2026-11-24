@@ -20,6 +20,12 @@ await s.click("#dateiMenue button[data-k=pc]", { trial: true }).catch(() => {});
 await s.evaluate(() => document.body.click()); m = await menue(); ok(m === null, "Menü schliesst bei Klick daneben");
 await s.click("#wSpeichern"); await s.waitForTimeout(200);
 m = await menue(); ok(m?.length === 2 && /Cloud/.test(m[0]) && /speichern/.test(m[1]), `Speichern bietet Cloud und Gerät (${m})`);
+// Speichern fragt nach dem Namen (Gerät) und schreibt den Namen ins Modell
+await s.click("#dateiMenue button[data-k=pc]"); await s.waitForTimeout(400);
+ok(await s.evaluate(() => document.getElementById("dTitel").textContent.includes("speichern") && !!document.getElementById("d_name")), "Speichern fragt nach dem Namen des Modells");
+await s.fill("#d_name", "Mein Modell"); await s.click("#dOk"); await s.waitForTimeout(600);
+ok(await s.evaluate(() => window.sdcadTest.dok().modellName === "Mein Modell" && document.getElementById("aModell").value === "Mein Modell"), "Modellname gespeichert und im Auftragsfeld sichtbar");
+await s.click("#wSpeichern"); await s.waitForTimeout(200);
 await s.click("#dateiMenue button[data-k=cloud]"); await s.waitForTimeout(300);
 ok(/anmelden/i.test(await s.evaluate(() => document.getElementById("status").textContent)), "Cloud-Speichern ohne Anmeldung: Hinweis zum Anmelden");
 // DXF-Import

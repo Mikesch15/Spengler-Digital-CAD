@@ -44,6 +44,11 @@ export function ablageModul(ctx) {
     if (!z.auto || !bereit() || typeof inhalt !== "string") return; const e = String(name).split(".").pop().toLowerCase();
     speichern(art, name, inhalt, { mime: MIME[e] || "text/plain", still: true });
   }
+  // Gibt es im Modelle-Ordner des Projekts schon eine Datei mit dem Namen des Modells? (null = nicht prüfbar)
+  async function modellVorhanden() {
+    const p = await sicherstellen(true); if (!p) return null;
+    try { const n = modellDateiName(ctx.getDoc()); return (await client().dateiListe(p.modelle)).some((d) => !d.geloescht && d.ordner === p.modelle && d.name === n); } catch { return null; }
+  }
   // Modell nach dem lokalen Speichern auch in der Cloud ablegen
   function nachSpeichern() { if (z.auto && bereit()) modellSpeichern(true); }
 
@@ -87,5 +92,5 @@ export function ablageModul(ctx) {
     });
   }
   function oeffnen() { $("ablage").hidden = false; zeige(); laden(); }
-  return { oeffnen, binden, sicherstellen, modellSpeichern, kopie, nachSpeichern, get auto() { return z.auto; } };
+  return { oeffnen, binden, sicherstellen, modellSpeichern, modellVorhanden, kopie, nachSpeichern, get auto() { return z.auto; } };
 }
