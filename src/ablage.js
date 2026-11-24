@@ -62,8 +62,7 @@ export function ablageModul(ctx) {
     const doc = ctx.getDoc();
     const kopf = `<p class="hinweis">${ctx.angemeldet() ? "" : "Nicht angemeldet. "}Modelle, Exporte und Pläne liegen in der Cloud: <b>Projekte › Jahr › Projekt › Modelle · Exporte · Pläne</b>. Die Ordner entstehen automatisch, wenn dem Modell ein Projekt zugeordnet wird.</p>
       <div class="reihe ohnerand"><button class="knopf" data-ab="aktualisieren" ${st.laeuft ? "disabled" : ""}>Aktualisieren</button>
-      <button class="knopf haupt" data-ab="modell" ${bereit() && !st.laeuft ? "" : "disabled"} title="${bereit() ? "" : "Erst anmelden und ein App-Projekt zuordnen (Datei › Projekte)"}">Modell in die Cloud speichern</button>
-      <label class="auto"><input type="checkbox" data-ab="auto" ${z.auto ? "checked" : ""}> Beim Speichern und Exportieren automatisch in die Cloud</label></div>
+      <label class="auto"><input type="checkbox" data-ab="auto" ${z.auto ? "checked" : ""}> Exporte und Pläne automatisch in die Cloud kopieren</label></div>
       <p class="hinweis">Aktuelles Projekt: <b>${doc.appProjekt ? esc(doc.appProjekt.name) : "keines zugeordnet"}</b>${doc.ablage?.projekt ? ` · Ordner <b>${esc(doc.ablage.projekt)}</b>` : ""}</p>`;
     const b = baum(st.ordner, st.dateien), sichtbar = (o) => { const teile = o.pfad.split("/"); return teile.slice(0, -1).every((_, i) => st.offen.has(teile.slice(0, i + 1).join("/"))); };
     const zeilen = b.filter(sichtbar).map((o) => {

@@ -6772,7 +6772,6 @@ async function projektSpeichern(unter = false) {
   const inhalt = JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v), 1);
   const ziel = await herunterladen(modellDateiName(doc), inhalt, "application/json", unter ? null : projektPfad);
   if (ziel) { projektPfad = ziel; titel(); merkeDatei(ziel); }
-  if (ziel || !pc) ablage?.nachSpeichern(); // Cloud-Ablage: Modelle/<Projekt>.sdcad
 }
 function ladeProjekt(text, pfad = null) {
   try {
@@ -6800,47 +6799,39 @@ dateiMenue.onclick = (e) => { const k = e.target.closest("button")?.dataset.k; i
 document.addEventListener("click", (e) => { if (!e.target.closest?.("#dateiMenue, #wOeffnen, #wSpeichern")) dateiMenue.hidden = true; });
 const ZIEL = "sdcad-speichern-ziel";
 const cloudBereit = () => cloud.angemeldet && !!doc.appProjekt;
-// Speichern fragt nach dem Namen des Modells und – wenn es die Datei schon gibt – ob sie überschrieben werden soll
+// Speichern: eine einzige Möglichkeit – Name und Ort (Cloud oder PC/Gerät) wählen; gibt es die Datei schon, wird vor dem Überschreiben gefragt
 const bestaetigt = new Set(); // in dieser Sitzung schon zum Überschreiben freigegebene Ziele: Strg+S speichert dann ohne Rückfrage
-function modellNameDialog(titel, hinweis, weiter) {
-  if (dlg) $("dAbbrechen").click();
-  dialog({ titel, sofort: true, felder: [{ id: "name", label: "Name des Modells", text: true, wert: doc.modellName || [doc.nr, doc.objekt].filter(Boolean).join(" ") || "Modell" }], hinweis,
-    ok: (w) => { const n = String(w.name ?? "").trim(); if (!n) return status("Bitte einen Namen eingeben."); doc.modellName = n; $("aModell").value = n; speichern(); weiter(); } });
-}
-async function cloudSpeichern(schnell = false) {
+async function cloudAusfuehren() {
   if (!cloud.angemeldet) return status("Zuerst anmelden (Einstellungen › Konto & Cloud), dann lässt sich in der Cloud speichern.");
   if (!doc.appProjekt) { status("Zuerst dem Modell ein App-Projekt zuordnen (Datei › Projekte)."); return projekte.oeffnen(); }
-  const fertig = async () => {
-    if (!bestaetigt.has("cloud:" + modellDateiName(doc))) {
-      const v = await ablage.modellVorhanden();
-      if (v && !confirm(`«${modellDateiName(doc)}» gibt es in der Cloud schon.\n\nOK = überschreiben (die alte Fassung bleibt als frühere Version erhalten)\nAbbrechen = anderen Namen wählen`)) return cloudSpeichern();
-      bestaetigt.add("cloud:" + modellDateiName(doc));
-    }
-    const r = await ablage.modellSpeichern(); if (r) try { localStorage.setItem(ZIEL, "cloud"); } catch {}
-  };
-  if (schnell && doc.modellName) return fertig();
-  modellNameDialog("In der Cloud speichern", `Ablage: Projekt «${doc.appProjekt.name}» › Modelle. Gibt es den Namen schon, wirst du gefragt, ob die Datei überschrieben werden soll.`, fertig);
+  if (!bestaetigt.has("cloud:" + modellDateiName(doc))) {
+    const v = await ablage.modellVorhanden();
+    if (v && !confirm(`«${modellDateiName(doc)}» gibt es in der Cloud schon.\n\nOK = überschreiben (die alte Fassung bleibt als frühere Version erhalten)\nAbbrechen = anderen Namen wählen`)) return speichernStart();
+    bestaetigt.add("cloud:" + modellDateiName(doc));
+  }
+  await ablage.modellSpeichern();
 }
-async function pcSpeichern(unter = false, schnell = false) {
-  try { localStorage.setItem(ZIEL, "pc"); } catch {}
-  if (schnell && projektPfad && bestaetigt.has("pc:" + projektPfad)) return projektSpeichern(false);
-  modellNameDialog(pc ? "Auf dem PC speichern" : "Auf dem Gerät speichern", pc ? "Wenn es die Datei schon gibt, wirst du gefragt, ob sie überschrieben werden soll." : "Die Datei wird heruntergeladen bzw. über das Teilen-Menü gespeichert.", async () => {
-    const datei = modellDateiName(doc); let neu = unter || !projektPfad;
-    if (pc && !neu) {
-      if (dateiname(projektPfad).toLowerCase() === datei.toLowerCase()) { if (bestaetigt.has("pc:" + projektPfad) || confirm(`«${datei}» überschreiben?\n\nOK = überschreiben\nAbbrechen = unter neuem Namen bzw. an neuem Ort speichern`)) bestaetigt.add("pc:" + projektPfad); else neu = true; }
-      else neu = true; // anderer Name: eigene Datei (der Systemdialog fragt bei einer vorhandenen Datei selbst)
-    }
-    await projektSpeichern(neu); if (pc && projektPfad) bestaetigt.add("pc:" + projektPfad);
-  });
+async function pcAusfuehren() {
+  const datei = modellDateiName(doc); let neu = !projektPfad;
+  if (pc && !neu) {
+    if (dateiname(projektPfad).toLowerCase() === datei.toLowerCase()) { if (bestaetigt.has("pc:" + projektPfad) || confirm(`«${datei}» überschreiben?\n\nOK = überschreiben\nAbbrechen = unter neuem Namen bzw. an neuem Ort speichern`)) bestaetigt.add("pc:" + projektPfad); else neu = true; }
+    else neu = true; // anderer Name: eigene Datei (der Systemdialog fragt bei einer vorhandenen Datei selbst)
+  }
+  await projektSpeichern(neu); if (pc && projektPfad) bestaetigt.add("pc:" + projektPfad);
 }
-function speichernSchnell() { // Strg+S: wie zuletzt gewählt (Cloud, sobald angemeldet und ein Projekt zugeordnet ist)
+function speichernStart(schnell = false) {
   let z = null; try { z = localStorage.getItem(ZIEL); } catch {}
-  return z === "cloud" && cloudBereit() ? cloudSpeichern(true) : pcSpeichern(false, true);
+  const ort0 = z === "cloud" || (z == null && cloudBereit()) ? "cloud" : "pc";
+  const tun = (ort) => { try { localStorage.setItem(ZIEL, ort); } catch {} return ort === "cloud" ? cloudAusfuehren() : pcAusfuehren(); };
+  if (schnell && doc.modellName && ((ort0 === "cloud" && cloudBereit() && bestaetigt.has("cloud:" + modellDateiName(doc))) || (ort0 === "pc" && projektPfad && bestaetigt.has("pc:" + projektPfad)))) return tun(ort0); // Strg+S: dieselbe Datei wie zuvor
+  if (dlg) $("dAbbrechen").click();
+  dialog({ titel: "Speichern", sofort: true,
+    felder: [{ id: "name", label: "Name des Modells", text: true, wert: doc.modellName || [doc.nr, doc.objekt].filter(Boolean).join(" ") || "Modell" },
+      { id: "ort", label: "Speichern in", optionen: [["cloud", cloudBereit() ? `Cloud · ${doc.appProjekt.name}` : "Cloud (Anmeldung + Projekt nötig)"], ["pc", pc ? "Auf dem PC" : "Auf dem Gerät"]], wert: ort0 }],
+    hinweis: "Gibt es die Datei am gewählten Ort schon, wirst du gefragt, ob sie überschrieben werden soll.",
+    ok: (w) => { const n = String(w.name ?? "").trim(); if (!n) return status("Bitte einen Namen eingeben."); doc.modellName = n; $("aModell").value = n; speichern(); tun(w.ort === "pc" ? "pc" : "cloud"); } });
 }
-$("wSpeichern").onclick = () => dateiWahl($("wSpeichern"), [
-  ["cloud", "In der Cloud speichern", cloudBereit() ? `Projekt «${esc(doc.appProjekt.name)}» › Modelle` : cloud.angemeldet ? "Zuerst ein App-Projekt zuordnen" : "Zuerst anmelden (Einstellungen)", cloudSpeichern],
-  ["pc", pc ? "Auf dem PC speichern" : "Auf dem Gerät speichern", pc ? (projektPfad ? dateiname(projektPfad) : "Datei wählen") : "Datei herunterladen bzw. teilen", () => pcSpeichern()],
-  ...(pc ? [["unter", "Speichern unter …", "Neuer Ort oder Name auf dem PC", () => pcSpeichern(true)]] : [])]);
+$("wSpeichern").onclick = () => speichernStart();
 $("wOeffnen").onclick = () => dateiWahl($("wOeffnen"), [
   ["cloud", "Aus der Cloud öffnen", cloud.angemeldet ? "Modelle der Cloud-Ablage durchsuchen" : "Zuerst anmelden (Einstellungen)", () => ablage.oeffnen()],
   ["pc", pc ? "Vom PC öffnen" : "Vom Gerät öffnen", "Projektdatei (.sdcad) wählen", projektOeffnen]]);
@@ -7252,7 +7243,7 @@ $("datei").onchange = async (e) => { ladeProjekt(await e.target.files[0].text())
 document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
-  if (k === "s") { e.preventDefault(); e.shiftKey ? pcSpeichern(true) : speichernSchnell(); }
+  if (k === "s") { e.preventDefault(); speichernStart(!e.shiftKey); }
   else if (k === "p") { e.preventDefault(); drucke(blechteile(), true); }
   else if (k === "d" && !e.target.closest?.("input,select,textarea")) { e.preventDefault(); dupliziere(hauptVon(auswahl)); }
   else if (k === "o") { e.preventDefault(); $("wOeffnen").click(); }

@@ -18,15 +18,11 @@ await s.click("#wOeffnen"); await s.waitForTimeout(200);
 let m = await menue(); ok(m?.length === 2 && /Cloud/.test(m[0]) && /öffnen/.test(m[1]), `Öffnen bietet Cloud und Gerät (${m})`);
 await s.click("#dateiMenue button[data-k=pc]", { trial: true }).catch(() => {}); await s.keyboard.press("Escape");
 await s.evaluate(() => document.body.click()); m = await menue(); ok(m === null, "Menü schliesst bei Klick daneben");
-await s.click("#wSpeichern"); await s.waitForTimeout(200);
-m = await menue(); ok(m?.length === 2 && /Cloud/.test(m[0]) && /speichern/.test(m[1]), `Speichern bietet Cloud und Gerät (${m})`);
-// Speichern fragt nach dem Namen (Gerät) und schreibt den Namen ins Modell
-await s.click("#dateiMenue button[data-k=pc]"); await s.waitForTimeout(400);
-ok(await s.evaluate(() => document.getElementById("dTitel").textContent.includes("speichern") && !!document.getElementById("d_name")), "Speichern fragt nach dem Namen des Modells");
-await s.fill("#d_name", "Mein Modell"); await s.click("#dOk"); await s.waitForTimeout(600);
+await s.click("#wSpeichern"); await s.waitForTimeout(400);
+ok(await s.evaluate(() => document.getElementById("dTitel").textContent === "Speichern" && !!document.getElementById("d_name") && !!document.getElementById("d_ort") && document.getElementById("dateiMenue").hidden), "Speichern: ein einziger Dialog mit Name und Ort (kein Menü)");
+ok(await s.evaluate(() => [...document.querySelectorAll("#d_ort option")].map((o) => o.value).join() === "cloud,pc"), "Ort: Cloud oder Gerät");
+await s.fill("#d_name", "Mein Modell"); await s.selectOption("#d_ort", "cloud"); await s.click("#dOk"); await s.waitForTimeout(500);
 ok(await s.evaluate(() => window.sdcadTest.dok().modellName === "Mein Modell" && document.getElementById("aModell").value === "Mein Modell"), "Modellname gespeichert und im Auftragsfeld sichtbar");
-await s.click("#wSpeichern"); await s.waitForTimeout(200);
-await s.click("#dateiMenue button[data-k=cloud]"); await s.waitForTimeout(300);
 ok(/anmelden/i.test(await s.evaluate(() => document.getElementById("status").textContent)), "Cloud-Speichern ohne Anmeldung: Hinweis zum Anmelden");
 // DXF-Import
 const dxf = "0\nSECTION\n2\nENTITIES\n0\nLINE\n8\n0\n10\n0\n20\n0\n11\n100\n21\n0\n0\nLINE\n8\n0\n10\n100\n20\n0\n11\n100\n21\n50\n0\nCIRCLE\n8\n0\n10\n50\n20\n25\n40\n10\n0\nENDSEC\n0\nEOF\n";
