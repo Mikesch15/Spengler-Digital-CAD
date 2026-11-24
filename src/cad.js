@@ -6474,11 +6474,15 @@ function zeichneLive() {
   const mv = f.massV || {};
   const pxA = bildschirm([0, 0]), pxB = bildschirm([1, 0]), mmProPx = 1 / (Math.hypot(pxB[0] - pxA[0], pxB[1] - pxA[1]) || 1);
   // Längenmasse haben eine Masslinie von Punkt zu Punkt (parallel zur Strecke, Abstand = Versatz des Masses, Standard 14 px); frei verschobene Masse: Versatz je Mass in der Skizze
-  const setzeLabel = (uv, l, seg = null) => {
+  const setzeLabel = (uv, l, seg = null, form = null) => {
     const key = massKey(l.edit); let o = key && mv[key];
     if (!o && seg) { const dx = seg[1][0] - seg[0][0], dy = seg[1][1] - seg[0][1], L = Math.hypot(dx, dy); if (L > 1e-9) o = [(-dy / L) * 14 * mmProPx, (dx / L) * 14 * mmProPx]; }
-    labels.push({ ...l, p: zu3D(f.ebene, o ? [uv[0] + o[0], uv[1] + o[1]] : uv), key, uv0: uv, verb: !seg && mv[key] ? uv : null, seg, off: o });
+    if (!o && form?.def) o = form.def;
+    labels.push({ ...l, p: zu3D(f.ebene, o ? [uv[0] + o[0], uv[1] + o[1]] : uv), key, uv0: uv, verb: !seg && !form && mv[key] ? uv : null, seg, form, off: o });
   };
+  const einh = (v) => { const L = Math.hypot(v[0], v[1]); return L > 1e-12 ? [v[0] / L, v[1] / L] : null; }, px = mmProPx;
+  const radiusForm = (c, pnt) => { const d = einh([pnt[0] - c[0], pnt[1] - c[1]]) || [1, 0]; return { typ: "radius", c, p: pnt, def: [-d[1] * 12 * px, d[0] * 12 * px] }; };
+  const durchmForm = (c, r) => { const d = [Math.SQRT1_2, Math.SQRT1_2]; return { typ: "durchm", c, r, dir: d, def: [d[0] * (r + 18 * px), d[1] * (r + 18 * px)] }; };
   const lab = (a, b, txt, edit, winkel, seg = false) => { if (skAnz.masse) setzeLabel([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { t: txt, edit, winkel }, seg ? [a, b] : null); };
   const fest = new Set(f.elemente);
   for (const el of [...f.elemente, ...temp.elemente]) {
@@ -6488,19 +6492,22 @@ function zeichneLive() {
       const n = el.pts.length;
       for (let i = el.geschlossen ? 0 : 1; i < (el.geschlossen ? n : n - 1); i++) {
         const w = drehung(el.pts, i);
-        if (Math.abs(w) > 0.05 && n > 2 && frei("W:" + el.id + ":p" + i)) lab(el.pts[i], el.pts[i], Math.abs(w).toFixed(1).replace(/\.0$/, "") + "°", ed && { el, art: "winkel", i }, true);
+        if (Math.abs(w) > 0.05 && n > 2 && frei("W:" + el.id + ":p" + i) && skAnz.masse) { // Knickwinkel mit Winkelbogen (verlängerte Eingangsrichtung → Ausgangsrichtung)
+          const a = el.pts[(i - 1 + n) % n], b = el.pts[i], c = el.pts[(i + 1) % n], din = einh([b[0] - a[0], b[1] - a[1]]), dout = einh([c[0] - b[0], c[1] - b[1]]), bis = din && dout ? einh([din[0] + dout[0], din[1] + dout[1]]) || [-din[1], din[0]] : [1, 0], rA = 28 * px;
+          setzeLabel([b[0] + bis[0] * rA * 1.5, b[1] + bis[1] * rA * 1.5], { t: Math.abs(w).toFixed(1).replace(/\.0$/, "") + "°", edit: ed && { el, art: "winkel", i }, winkel: true }, null, din && dout ? { typ: "winkel", v: b, d0: din, d1: dout, r: rA, dash: true } : null);
+        }
       }
-      for (const [i, R] of Object.entries(el.radien || {})) { const a = abrundung(el.pts, +i, R, el.geschlossen); if (a) lab(a.m, a.m, "R " + f1(a.r), ed && { el, art: "radius", i: +i }, true); }
+      for (const [i, R] of Object.entries(el.radien || {})) { const a = abrundung(el.pts, +i, R, el.geschlossen); if (a && skAnz.masse) setzeLabel([(a.c[0] + a.m[0]) / 2, (a.c[1] + a.m[1]) / 2], { t: "R " + f1(a.r), edit: ed && { el, art: "radius", i: +i }, winkel: true }, null, radiusForm(a.c, a.m)); }
     } else if (el.art === "rechteck") {
       lab(el.a, [el.b[0], el.a[1]], f1(Math.abs(el.b[0] - el.a[0])), ed && { el, art: "breite" }, false, true);
       lab(el.a, [el.a[0], el.b[1]], f1(Math.abs(el.b[1] - el.a[1])), ed && { el, art: "hoehe" }, false, true);
-    } else if (el.art === "kreis") { if (frei("K:" + el.id)) lab(el.c, [el.c[0] + el.r * 2, el.c[1]], "Ø " + f1(el.r * 2), ed && { el, art: "durchmesser" }); }
-    else if (el.art === "bogen") { const d = bogenDaten(el); if (d && frei("K:" + el.id)) lab(el.m, el.m, "R " + f1(d.r), ed && { el, art: "bogenR" }, true); }
+    } else if (el.art === "kreis") { if (frei("K:" + el.id)) { if (skAnz.masse) setzeLabel(el.c, { t: "Ø " + f1(el.r * 2), edit: ed && { el, art: "durchmesser" } }, null, durchmForm(el.c, el.r)); } }
+    else if (el.art === "bogen") { const d = bogenDaten(el); if (d && frei("K:" + el.id) && skAnz.masse) setzeLabel([(d.c[0] + el.m[0]) / 2, (d.c[1] + el.m[1]) / 2], { t: "R " + f1(d.r), edit: ed && { el, art: "bogenR" }, winkel: true }, null, radiusForm(d.c, el.m)); }
     else if (el.art === "ellipse") { lab(el.c, el.a, "a " + f1(abst(el.c, el.a)), false); lab(el.c, el.c, "b " + f1(el.r2), false, true); }
     else if (el.art === "langloch") { if (frei("L:" + el.id + ":a:b")) lab(el.a, el.b, f1(abst(el.a, el.b)), ed && { el, art: "langL" }, false, true); if (frei("K:" + el.id)) lab(el.b, el.b, "B " + f1(el.r * 2), ed && { el, art: "langB" }, true); }
   }
   // Treibende Masse (fett, umrandet) und Symbole der Abhängigkeiten (anklicken → Entf löscht)
-  const dim = (uv, t, b, w, seg = null) => uv && skAnz.masse && setzeLabel(uv, { t: b.ausdruck ? `fx ${t}` : t, edit: { bed: b }, bed: b, treibend: true, winkel: w }, seg);
+  const dim = (uv, t, b, w, seg = null, form = null) => uv && skAnz.masse && setzeLabel(uv, { t: b.ausdruck ? `fx ${t}` : t, edit: { bed: b }, bed: b, treibend: true, winkel: w }, seg, form);
   const zaehler = new Map(), lm = (r) => { const l = B.L(r); return l && mitte(l[0], l[1]); };
   const glyph = (uv, b) => {
     if (!uv || !skAnz.abh) return;
@@ -6510,12 +6517,16 @@ function zeichneLive() {
   const nahMaus = (uv) => { if (!uv || !m) return false; const a = bildschirm(uv), c = bildschirm(m); return Math.hypot(a[0] - c[0], a[1] - c[1]) < 30; };
   for (const b of f.bedingungen || []) switch (b.typ) {
     case "abstand": { const a = B.P(b.a), q = B.P(b.b); if (a && q) dim(mitte(a, q), f1(b.w), b, false, [a, q]); break; }
-    case "abstandH": case "abstandV": { const a = B.P(b.a), q = B.P(b.b); if (a && q) dim(mitte(a, q), (b.typ === "abstandH" ? "↔ " : "↕ ") + f1(b.w), b, false, b.typ === "abstandH" ? [a, [q[0], a[1]]] : [a, [a[0], q[1]]]); break; }
+    case "abstandH": case "abstandV": { const a = B.P(b.a), q = B.P(b.b); if (a && q) dim(mitte(a, q), (b.typ === "abstandH" ? "↔ " : "↕ ") + f1(b.w), b, false, b.typ === "abstandH" ? [a, [q[0], a[1]], [a, q]] : [a, [a[0], q[1]], [a, q]]); break; }
     case "punktLinie": { const p = B.P(b.p), l = B.L(b.l); if (p && l) dim(mitte(p, projektion(p, l)), f1(b.w), b, false, [p, projektion(p, l)]); break; }
-    case "winkel": { const l = B.L(b.l2); if (l) dim(lm(b.l2), grad(b.w), b, true); break; }
+    case "winkel": { const l = B.L(b.l2), l1 = B.L(b.l1); if (l) { let form = null; if (l1) { // Winkelbogen im Schnittpunkt der beiden Linien
+      const d1 = [l1[1][0] - l1[0][0], l1[1][1] - l1[0][1]], d2 = [l[1][0] - l[0][0], l[1][1] - l[0][1]], det = d1[0] * d2[1] - d1[1] * d2[0];
+      if (Math.abs(det) > 1e-9) { const t = ((l[0][0] - l1[0][0]) * d2[1] - (l[0][1] - l1[0][1]) * d2[0]) / det, c = [l1[0][0] + d1[0] * t, l1[0][1] + d1[1] * t], m1 = mitte(l1[0], l1[1]), m2 = mitte(l[0], l[1]), e1 = einh([m1[0] - c[0], m1[1] - c[1]]), e2 = einh([m2[0] - c[0], m2[1] - c[1]]);
+        if (e1 && e2) { const bs = einh([e1[0] + e2[0], e1[1] + e2[1]]) || [-e1[1], e1[0]], rA = 34 * px; dim([c[0] + bs[0] * rA * 1.5, c[1] + bs[1] * rA * 1.5], grad(b.w), b, true, null, { typ: "winkel", v: c, d0: e1, d1: e2, r: rA }); break; } } }
+      dim(lm(b.l2), grad(b.w), b, true); } break; }
     case "knick": dim(B.P(b.p), grad(b.w), b, true); break;
-    case "radius": { const k = B.K(b.k); if (k) dim(k.anker, "R " + f1(b.w), b, true); break; }
-    case "durchmesser": { const k = B.K(b.k); if (k) dim(k.el.art === "langloch" ? k.el.b : [k.c[0] + k.r, k.c[1]], (k.el.art === "langloch" ? "B " : "Ø ") + f1(b.w), b, k.el.art === "langloch"); break; }
+    case "radius": { const k = B.K(b.k); if (k) dim(mitte(k.c, k.anker), "R " + f1(b.w), b, true, null, radiusForm(k.c, k.anker)); break; }
+    case "durchmesser": { const k = B.K(b.k); if (k) { const lg = k.el.art === "langloch"; if (lg) dim(k.el.b, "B " + f1(b.w), b, true); else dim(k.c, "Ø " + f1(b.w), b, false, null, durchmForm(k.c, k.r)); } break; }
     case "horizontal": case "vertikal": if (b.l) glyph(lm(b.l), b); else { glyph(B.P(b.a), b); glyph(B.P(b.b), b); } break;
     case "parallel": case "senkrecht": case "kollinear": glyph(lm(b.l1), b); glyph(lm(b.l2), b); break;
     case "gleich": if (b.l1) { glyph(lm(b.l1), b); glyph(lm(b.l2), b); } else { glyph(B.K(b.k1)?.anker, b); glyph(B.K(b.k2)?.anker, b); } break;
@@ -6537,6 +6548,7 @@ function zeichneLive() {
 }
 // Masslinien (Hilfslinien, Masslinie mit Pfeilen) wie im Plan; Pfeil- und Überstandsgrösse folgen dem Zoom
 const massGruppe = new THREE.Group(); szene.add(massGruppe); let massStand = 0, massLinienKey = "";
+const einh2 = (v) => { const L = Math.hypot(v[0], v[1]); return L > 1e-12 ? [v[0] / L, v[1] / L] : null; };
 function baueMassLinien() {
   const key = skizze ? [massStand, skizze.f.id, ...kamera.position.toArray().map((v) => Math.round(v * 2)), kamera.zoom].join("|") : "";
   if (key === massLinienKey) return; massLinienKey = key; leeren(massGruppe);
@@ -6547,10 +6559,23 @@ function baueMassLinien() {
     const [a, b] = l.seg, L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
     const d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], n = [-d[1], d[0]], h = l.off[0] * n[0] + l.off[1] * n[1]; if (Math.abs(h) < 1e-6) continue;
     const pa = [a[0] + n[0] * h, a[1] + n[1] * h], pb = [b[0] + n[0] * h, b[1] + n[1] * h], px = bildschirm([a[0] + 1, a[1]]), p0 = bildschirm(a), mm = 1 / (Math.hypot(px[0] - p0[0], px[1] - p0[1]) || 1);
-    const ue = 4 * mm * Math.sign(h), sz = Math.min(9 * mm, L / 3);
-    seg(a, [pa[0] + n[0] * ue, pa[1] + n[1] * ue]); seg(b, [pb[0] + n[0] * ue, pb[1] + n[1] * ue]); // Hilfslinien
+    const ue = 4 * mm * Math.sign(h), sz = Math.min(9 * mm, L / 3), an = l.seg[2] || [a, b];
+    seg(an[0], [pa[0] + n[0] * ue, pa[1] + n[1] * ue]); seg(an[1], [pb[0] + n[0] * ue, pb[1] + n[1] * ue]); // Hilfslinien (bei H/V-Abständen von den wirklichen Punkten)
     seg(pa, pb); // Masslinie
     for (const [t, r] of [[pa, 1], [pb, -1]]) for (const w of [1, -1]) seg(t, [t[0] + r * d[0] * sz + w * n[0] * sz * 0.28, t[1] + r * d[1] * sz + w * n[1] * sz * 0.28]); // Pfeile
+  }
+  const mmAn = (uv) => { const q = bildschirm(uv), r = bildschirm([uv[0] + 1, uv[1]]); return 1 / (Math.hypot(q[0] - r[0], q[1] - r[1]) || 1); };
+  const pfeil = (tip, d, sz) => { const n = [-d[1], d[0]]; for (const w of [1, -1]) seg(tip, [tip[0] - d[0] * sz + w * n[0] * sz * 0.28, tip[1] - d[1] * sz + w * n[1] * sz * 0.28]); }; // Pfeilspitze bei tip, zeigt in Richtung d
+  for (const l of labels) if (l.form) {
+    const F = l.form, mm = mmAn(F.c || F.v), sz = 9 * mm;
+    if (F.typ === "radius") { const d = einh2([F.p[0] - F.c[0], F.p[1] - F.c[1]]); if (!d) continue; seg(F.c, F.p); pfeil(F.p, d, Math.min(sz, Math.hypot(F.p[0] - F.c[0], F.p[1] - F.c[1]) / 2)); }
+    else if (F.typ === "durchm") { const p0 = [F.c[0] - F.dir[0] * F.r, F.c[1] - F.dir[1] * F.r], p1 = [F.c[0] + F.dir[0] * F.r, F.c[1] + F.dir[1] * F.r]; seg(p0, p1); const s2 = Math.min(sz, F.r / 2); pfeil(p1, F.dir, s2); pfeil(p0, [-F.dir[0], -F.dir[1]], s2); seg(p1, [F.c[0] + F.dir[0] * (F.r + 14 * mm), F.c[1] + F.dir[1] * (F.r + 14 * mm)]); }
+    else if (F.typ === "winkel") { // Bogen von Richtung d0 nach d1 (kleiner Winkel), Pfeile an beiden Enden
+      const a0 = Math.atan2(F.d0[1], F.d0[0]); let da = Math.atan2(F.d1[1], F.d1[0]) - a0; while (da > Math.PI) da -= 2 * Math.PI; while (da <= -Math.PI) da += 2 * Math.PI; const r = F.r, N = Math.max(6, Math.ceil(Math.abs(da) / 0.15)), pt = (t) => [F.v[0] + Math.cos(a0 + da * t) * r, F.v[1] + Math.sin(a0 + da * t) * r];
+      if (F.dash) seg(F.v, [F.v[0] + F.d0[0] * r * 1.3, F.v[1] + F.d0[1] * r * 1.3]); else { seg(F.v, [F.v[0] + F.d0[0] * r * 1.3, F.v[1] + F.d0[1] * r * 1.3]); seg(F.v, [F.v[0] + F.d1[0] * r * 1.3, F.v[1] + F.d1[1] * r * 1.3]); }
+      for (let i = 0; i < N; i++) seg(pt(i / N), pt((i + 1) / N));
+      const sg = Math.sign(da) || 1, t1 = [-Math.sin(a0 + da) * sg, Math.cos(a0 + da) * sg], t0 = [Math.sin(a0) * sg, -Math.cos(a0) * sg], s3 = Math.min(sz, r * Math.abs(da) / 3);
+      pfeil(pt(1), t1, s3); pfeil(pt(0), t0, s3); }
   }
   if (!pos.length) return;
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
