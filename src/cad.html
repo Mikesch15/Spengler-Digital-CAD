@@ -688,6 +688,7 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 /* Stiftpalette (Einstellungen › Allgemein): grosse Knöpfe am rechten Rand, mit dem Stift schnell erreichbar */
 .stiftleiste { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); z-index: 6; display: none; flex-direction: column; gap: 6px; padding: 6px; background: var(--fx-bg); border: 1px solid var(--fx-rand); border-radius: 8px; box-shadow: 0 6px 22px rgb(0 0 0 / .26); }
 body.stiftpalette .stiftleiste { display: flex; }
+.stiftgriff { text-align: center; letter-spacing: 2px; font-size: 13px; line-height: 14px; color: var(--muted); cursor: grab; touch-action: none; user-select: none; padding: 2px 0 4px; }
 .stiftleiste button { width: 46px; height: 46px; display: grid; place-items: center; border: 1px solid var(--fx-rand); border-radius: 6px; background: var(--fx-feld); color: var(--fx-text); cursor: pointer; padding: 0; }
 .stiftleiste button svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .stiftleiste button[aria-pressed="true"] { background: var(--fx-blau-hell); border-color: var(--fx-blau); color: var(--fx-blau); }

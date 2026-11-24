@@ -23,6 +23,21 @@ ok(await s.evaluate(() => document.getElementById("dTitel").textContent === "Ski
 await s.click("#dAbbrechen"); await s.waitForTimeout(200);
 await s.click("#wEinst"); await s.waitForTimeout(300); await s.selectOption("#e_allgemein_stiftpalette", "aus"); await s.click("#eOk"); await s.waitForTimeout(400);
 ok(!(await sichtbar(s)), "Stiftpalette «Nie anzeigen» ist weg");
+// Palette anpassen und verschieben
+await s.click("#wEinst"); await s.waitForTimeout(300); await s.selectOption("#e_allgemein_stiftpalette", "ein");
+await s.evaluate(() => { const c = document.getElementById("e_stift_wDrehung"); c.checked = true; c.dispatchEvent(new Event("change", { bubbles: true })); const d = document.getElementById("e_stift_wExtrusion"); d.checked = false; d.dispatchEvent(new Event("change", { bubbles: true })); });
+await s.click("#eOk"); await s.waitForTimeout(500);
+const ids = await s.evaluate(() => [...document.querySelectorAll("#stiftleiste button[data-for]")].map((x) => x.dataset.for));
+ok(ids.includes("wDrehung") && !ids.includes("wExtrusion"), `Knöpfe der Palette sind einstellbar (${ids.join(",")})`);
+const p0 = await s.evaluate(() => { const r = document.getElementById("stiftleiste").getBoundingClientRect(), g = document.querySelector(".stiftgriff").getBoundingClientRect(); return { x: r.x, y: r.y, gx: g.x + g.width / 2, gy: g.y + g.height / 2 }; });
+await s.mouse.move(p0.gx, p0.gy); await s.mouse.down(); await s.mouse.move(p0.gx - 200, p0.gy + 40, { steps: 6 }); await s.mouse.up(); await s.waitForTimeout(200);
+const p1 = await s.evaluate(() => { const r = document.getElementById("stiftleiste").getBoundingClientRect(); return { x: r.x, y: r.y }; });
+ok(Math.abs((p0.x - p1.x) - 200) < 4 && Math.abs((p1.y - p0.y) - 40) < 4, `Palette lässt sich am Griff verschieben (${p0.x | 0},${p0.y | 0} → ${p1.x | 0},${p1.y | 0})`);
+await s.reload(); await s.waitForTimeout(1500);
+const p2 = await s.evaluate(() => { const r = document.getElementById("stiftleiste").getBoundingClientRect(); return { x: r.x, y: r.y }; });
+ok(Math.abs(p2.x - p1.x) < 4 && Math.abs(p2.y - p1.y) < 4, "Lage der Palette bleibt nach dem Neuladen erhalten");
+await s.dblclick(".stiftgriff"); await s.waitForTimeout(200);
+ok(Math.abs(await s.evaluate(() => document.getElementById("stiftleiste").getBoundingClientRect().x) - p0.x) < 4, "Doppelklick auf den Griff stellt die Ausgangslage her");
 await c.close();
 // Tablet: automatisch an
 c = await b.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: true }); s = await c.newPage(); s.on("pageerror", (e) => pr.push(e.message));

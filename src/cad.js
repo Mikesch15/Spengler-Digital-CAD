@@ -155,7 +155,7 @@ const standardEinst = () => JSON.parse(JSON.stringify({
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
   druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
   etiketten: { spalten: 3, zeilen: 8, breite: 70, hoehe: 37, oben: 0, links: 0, abstandX: 0, abstandY: 0 }, // mm
-  allgemein: { stiftpalette: "auto", langdruck: true, masse: true, abh: true, speichern: "zuletzt", startAnsicht: "iso" }, // Voreinstellungen für das ganze Programm
+  allgemein: { stiftpalette: "auto", langdruck: true, masse: true, abh: true, speichern: "zuletzt", startAnsicht: "iso", stift: ["tAuswahl", "tLinie", "tRechteck", "tKreis", "tMass", "tEntf", "tFertig", "zurueck", "vor", "wSkizze", "wExtrusion"] }, // Voreinstellungen für das ganze Programm
   programm: { darstellung: "auto", updates: true, zuletzt: 8, kern: "netz" },      // kern: "netz" (wie 0.2) | "occt" (exakter CAD-Kern, Beta)
 }));
 const GRUPPEN = ["neu", "skizze", "anzeige", "druck", "etiketten", "programm", "allgemein"];
@@ -4960,6 +4960,9 @@ function zeigeEinst() {
       ${einstFeld("allgemein.stiftpalette", "Stiftpalette", "wahl", [["auto", "Automatisch (nur auf Tablets)"], ["ein", "Immer anzeigen"], ["aus", "Nie anzeigen"]], "Knöpfe am rechten Bildrand: Auswahl, Linie, Rechteck, Kreis, Löschen, Bemassung, Rückgängig …")}
       ${einstFeld("allgemein.langdruck", "Langer Fingerdruck öffnet das Kontextmenü", "janein")}
     </div>
+    <h4>Stiftpalette: sichtbare Knöpfe</h4>
+    <div class="egitter">${STIFT_ALLE.map(([id, t, g]) => `<div class="efeld janein"><label for="e_stift_${id}">${t}${g === "skizze" ? ' <small class="hinweis">(Skizze)</small>' : g === "modell" ? ' <small class="hinweis">(Modell)</small>' : ""}</label><input type="checkbox" id="e_stift_${id}" data-stift="${id}" ${entwurf.allgemein.stift.includes(id) ? "checked" : ""}></div>`).join("")}</div>
+    <p class="hinweis">Die Palette lässt sich am Griff oben verschieben (Doppelklick auf den Griff stellt die Ausgangslage wieder her).</p>
     <h4>Skizze: beim Öffnen anzeigen</h4>
     <div class="egitter">
       ${einstFeld("allgemein.masse", "Masse", "janein")}
@@ -5131,6 +5134,7 @@ $("eInhalt").addEventListener("input", (ev) => {
   else if (t.id === "lBand") entwurf.spaltbaender = zahlen(t.value);
   else if (t.id === "lCoil") entwurf.coil = parseFloat(t.value) || 0;
   else if (t.id === "lTafeln") entwurf.tafeln = t.value.split(/[,;]+/).map((x) => zahlen(x.replace(/[x×*]/gi, " "))).filter((x) => x.length === 2);
+  else if (t.dataset.stift) { const l = new Set(entwurf.allgemein.stift); t.checked ? l.add(t.dataset.stift) : l.delete(t.dataset.stift); entwurf.allgemein.stift = STIFT_ALLE.map((x) => x[0]).filter((x) => l.has(x)); }
   else if (t.dataset.e) einstWert(t);
   if (["pMat", "pZ", "pA", "pB"].includes(t.id)) probe();
 });
@@ -5141,6 +5145,7 @@ function einstWert(t) {
 }
 $("eInhalt").addEventListener("change", (ev) => {
   if (ev.target.id === "pMat") probe();
+  else if (ev.target.dataset.stift) { const t = ev.target, l = new Set(entwurf.allgemein.stift); t.checked ? l.add(t.dataset.stift) : l.delete(t.dataset.stift); entwurf.allgemein.stift = STIFT_ALLE.map((x) => x[0]).filter((x) => l.has(x)); }
   else if (ev.target.dataset.e && (ev.target.dataset.typ === "janein" || ev.target.dataset.typ === "wahl")) einstWert(ev.target);
   else if (ev.target.dataset.bk === "partner") entwurf.bausteine[+ev.target.closest("tr").dataset.bi].partner = ev.target.value || undefined;
 });
@@ -5364,12 +5369,32 @@ function bedienungAnwenden(neuSetzen = false) {
   if (neuSetzen) { skAnz.masse = a.masse !== false; skAnz.abh = a.abh !== false; try { localStorage.setItem("sdcad-skizze-anzeige", JSON.stringify(skAnz)); } catch {} for (const [id, k] of [["anzMasse", "masse"], ["anzAbh", "abh"]]) $(id).setAttribute("aria-pressed", String(skAnz[k])); if (skizze) zeichneLive(); }
 }
 // Stiftpalette: Kopien der wichtigsten Knöpfe (Symbol + Aktion), die Zustände folgen den Originalen
-const STIFT = [["tAuswahl", "skizze"], ["tLinie", "skizze"], ["tRechteck", "skizze"], ["tKreis", "skizze"], ["tMass", "skizze"], ["tEntf", "skizze"], ["-", "skizze"], ["tFertig", "skizze"], ["zurueck", null], ["vor", null], ["-", "modell"], ["wSkizze", "modell"], ["wExtrusion", "modell"]];
+const STIFT_ALLE = [["tAuswahl", "Auswahl", "skizze"], ["tLinie", "Linie", "skizze"], ["tRechteck", "Rechteck", "skizze"], ["tKreis", "Kreis", "skizze"], ["tBogen", "Bogen", "skizze"], ["tProjizieren", "Projizieren", "skizze"], ["tHilfs", "Hilfslinie", "skizze"], ["tAbh", "Abhängigkeit", "skizze"], ["tMass", "Bemassung", "skizze"], ["tEntf", "Löschen", "skizze"], ["tFertig", "Skizze beenden", "skizze"], ["zurueck", "Rückgängig", ""], ["vor", "Wiederholen", ""], ["wSkizze", "Skizze erstellen", "modell"], ["wExtrusion", "Extrudieren", "modell"], ["wDrehung", "Drehen", "modell"], ["wFlaeche", "Flächenblech", "modell"]];
+const STIFTPOS = "sdcad-stiftpalette";
+function stiftLage() { // gemerkte Lage anwenden (innerhalb der Ansicht halten)
+  const box = $("stiftleiste"), r = box.parentElement.getBoundingClientRect(); let p = null; try { p = JSON.parse(localStorage.getItem(STIFTPOS)); } catch {}
+  if (!p) { Object.assign(box.style, { left: "", top: "", right: "", transform: "" }); return; }
+  const b = box.getBoundingClientRect(), x = Math.max(0, Math.min(p.x, r.width - Math.max(60, b.width))), y = Math.max(0, Math.min(p.y, r.height - Math.max(60, b.height)));
+  Object.assign(box.style, { left: x + "px", top: y + "px", right: "auto", transform: "none" });
+}
 function stiftBauen() {
-  const box = $("stiftleiste"); if (box.dataset.fertig) return stiftSync(); box.dataset.fertig = "1"; box.hidden = false;
-  box.innerHTML = STIFT.map(([id, nur]) => { if (id === "-") return `<hr data-nur="${nur}">`; const q = $(id); if (!q) return ""; const sv = q.querySelector("svg")?.outerHTML || `<svg viewBox="0 0 24 24">${id === "zurueck" ? '<path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10"/>' : '<path d="M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10"/>'}</svg>`; return `<button data-for="${id}" ${nur ? `data-nur="${nur}"` : ""} title="${esc((q.title || q.textContent).replace(/\s+/g, " ").trim())}" aria-label="${esc(q.textContent.replace(/\s+/g, " ").trim() || q.title)}">${sv}</button>`; }).join("");
-  box.addEventListener("click", (e) => { const b = e.target.closest("button[data-for]"); if (b) { $(b.dataset.for).click(); setTimeout(stiftSync, 50); } });
-  stiftSync();
+  const box = $("stiftleiste"), sel = new Set(einst.allgemein.stift || []); box.hidden = false;
+  let letzte = null, html = '<div class="stiftgriff" title="Palette verschieben (Doppelklick: zurücksetzen)" aria-label="Palette verschieben">⋮⋮</div>';
+  for (const [id, t, g] of STIFT_ALLE) { if (!sel.has(id)) continue; const q = $(id); if (!q) continue;
+    if (letzte !== null && letzte !== g) html += `<hr data-nur="${g || (letzte === "skizze" ? "skizze" : "modell")}">`; letzte = g;
+    const sv = q.querySelector("svg")?.outerHTML || `<svg viewBox="0 0 24 24">${id === "zurueck" ? '<path d="M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10"/>' : '<path d="M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10"/>'}</svg>`;
+    html += `<button data-for="${id}" ${g ? `data-nur="${g}"` : ""} title="${esc(t)}" aria-label="${esc(t)}">${sv}</button>`; }
+  box.innerHTML = html;
+  if (!box.dataset.fertig) { box.dataset.fertig = "1";
+    box.addEventListener("click", (e) => { const b = e.target.closest("button[data-for]"); if (b) { $(b.dataset.for).click(); setTimeout(stiftSync, 50); } });
+    let zug = null; // Palette am Griff frei verschieben
+    box.addEventListener("pointerdown", (e) => { const gr = e.target.closest(".stiftgriff"); if (!gr || e.button > 0) return; const r = box.getBoundingClientRect(), pr = box.parentElement.getBoundingClientRect(); zug = { dx: e.clientX - r.left, dy: e.clientY - r.top, pr, id: e.pointerId }; try { gr.setPointerCapture(e.pointerId); } catch {} e.preventDefault(); });
+    box.addEventListener("pointermove", (e) => { if (!zug || e.pointerId !== zug.id) return; const b = box.getBoundingClientRect(), x = Math.max(0, Math.min(e.clientX - zug.dx - zug.pr.left, zug.pr.width - b.width)), y = Math.max(0, Math.min(e.clientY - zug.dy - zug.pr.top, zug.pr.height - b.height)); Object.assign(box.style, { left: x + "px", top: y + "px", right: "auto", transform: "none" }); zug.x = x; zug.y = y; });
+    const ende = () => { if (zug?.x != null) try { localStorage.setItem(STIFTPOS, JSON.stringify({ x: zug.x, y: zug.y })); } catch {} zug = null; };
+    box.addEventListener("pointerup", ende); box.addEventListener("pointercancel", ende);
+    box.addEventListener("dblclick", (e) => { if (e.target.closest(".stiftgriff")) { try { localStorage.removeItem(STIFTPOS); } catch {} stiftLage(); } });
+    addEventListener("resize", stiftLage); }
+  stiftLage(); stiftSync();
 }
 function stiftSync() { for (const b of $("stiftleiste").querySelectorAll("button[data-for]")) { const q = $(b.dataset.for); b.disabled = q.disabled; b.setAttribute("aria-pressed", q.getAttribute("aria-pressed") === "true" ? "true" : "false"); } }
 new MutationObserver(() => stiftSync()).observe(document.getElementById("leiste"), { subtree: true, attributes: true, attributeFilter: ["aria-pressed", "disabled"] });
