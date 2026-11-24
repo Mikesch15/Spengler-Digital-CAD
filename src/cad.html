@@ -122,7 +122,7 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.4 var(--
 #kantenMenue button small { display: block; font: 11px var(--font-num); color: var(--muted); }
 #kantenMenue button.an { background: var(--accent-soft); font-weight: 600; }
 #kantenMenue button.an::before { content: "✓ "; }
-.fg { align-self: center; font: 600 11px var(--font-num); padding: 3px 8px; border-radius: var(--r-s); background: color-mix(in srgb, var(--sketch) 15%, transparent); color: var(--sketch); white-space: nowrap; }
+.fg { cursor: help; align-self: center; font: 600 11px var(--font-num); padding: 3px 8px; border-radius: var(--r-s); background: color-mix(in srgb, var(--sketch) 15%, transparent); color: var(--sketch); white-space: nowrap; }
 .fg.voll { background: color-mix(in srgb, #2f8a4c 18%, transparent); color: #2f8a4c; }
 .fg:empty { display: none; }
 .massbox { position: absolute; transform: translate(-50%, -50%); display: flex; gap: 4px; z-index: 5; }
@@ -633,6 +633,8 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 
 /* Tablet / Finger: Wertblase beim Ziehen */
 #skizzenMenue, #ebenenMenue { z-index: 55; } /* Variantenmenü vor dem Sammelmenü, aus dem es geöffnet wird */
+.dialog > h3, .modalbox > h3, .layerbox > .ltitel { touch-action: none; cursor: grab; } .dialog > h3:active, .modalbox > h3:active { cursor: grabbing; }
+.browser > .ptitel { touch-action: none; }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 16px var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 </style>
@@ -811,7 +813,9 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
       <span class="trenner" aria-hidden="true"></span>
       <button class="wz" id="tAbh" title="Abhängigkeiten wie in Fusion"><svg viewBox="0 0 24 24"><path d="M4 20L14 6"/><path d="M15 15h6M18 12v6"/><circle cx="14" cy="6" r="1.8"/></svg><span>Abhängigkeit <span class="pfeil" title="Alle Abhängigkeiten">▾</span></span></button>
       <button class="wz" id="tMass" title="Bemassung (D)"><svg viewBox="0 0 24 24"><path d="M4 8v12M20 8v12M4 14h16"/><path d="M7 11l-3 3 3 3M17 11l3 3-3 3"/></svg>Bemassung</button>
-      <span class="fg" id="fgAnzeige" aria-live="polite"></span>
+      <button class="wz" id="anzMasse" aria-pressed="true" title="Masse in der Skizze ein-/ausblenden"><svg viewBox="0 0 24 24"><path d="M4 9v10M20 9v10M4 14h16"/><path d="M12 3v3M10 4.5h4"/></svg>Masse</button>
+      <button class="wz" id="anzAbh" aria-pressed="true" title="Abhängigkeitssymbole (H, V, ⊥ …) ein-/ausblenden"><svg viewBox="0 0 24 24"><path d="M5 19L19 5"/><path d="M4 8h5M6.5 5.5v5"/><circle cx="17" cy="17" r="2.2"/></svg>Abh.</button>
+      <span class="fg" id="fgAnzeige" aria-live="polite" tabindex="0" role="button"></span>
       <span class="trenner" aria-hidden="true"></span>
       <button class="wz" id="tFertig"><svg viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Skizze beenden</button>
     </div></div>

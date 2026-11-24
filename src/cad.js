@@ -64,6 +64,7 @@ import { abstandGerade, winkelZwischen } from "../kern/bedingungen.js";
 import { rechne, parameterWerte, istZahl, namenIn, NAME as PARAMNAME } from "../kern/ausdruck.js";
 import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
 import { langdruck, tastaturSichtbar, wertBlase, maus } from "./touch.js";
+import { fensterVerschieben } from "./fenster.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
 import { BASIS, ACHSEN, versetzt, unterWinkel, mittelebene, zweiKanten, dreiPunkte, tangential, entlangPfad, aufFlaeche, zuWelt, zuLokal } from "../kern/ebenen.js";
 const zuWeltK = zuWelt;
@@ -1706,7 +1707,7 @@ $("zeit").addEventListener("pointerover", (e) => { const b = e.target.closest("b
 let zeitTipZeit = 0;
 $("zeit").addEventListener("pointerover", (e) => { if (e.pointerType === "touch") { clearTimeout(zeitTipZeit); zeitTipZeit = setTimeout(() => (zeitTip.hidden = true), 1800); } });
 $("zeit").addEventListener("pointerout", (e) => { if (e.pointerType !== "touch" && e.target.closest("button[data-name]")) zeitTip.hidden = true; }); // Finger: Name bleibt kurz stehen
-langdruck($("zeit"), "button[data-id]"); langdruck($("baum"), "li[data-id]"); tastaturSichtbar();
+fensterVerschieben(); langdruck($("zeit"), "button[data-id]"); langdruck($("baum"), "li[data-id]"); tastaturSichtbar();
 $("zeit").addEventListener("click", (e) => { const id = e.target.closest("button")?.dataset.id; const f = finde(id); if (!f) return; if (f._aus) return status(`«${f.name}» ist ${f._aus === "zurueck" ? "zurückgerollt – Marke dahinter ziehen" : "unterdrückt – Rechtsklick → Aktivieren"}.`); bearbeite(f); });
 // Ziehen: Feature verschieben (nur wenn Bezüge davor bleiben) oder Rückrollmarke setzen
 let gezogen = null;
@@ -5243,6 +5244,7 @@ $("zoomAlles").onclick = () => fitte(alleBox());
 let skizze = null; // { f, werkzeug, pkt: [] Klickpunkte des laufenden Elements, maus: [u,v], sel, quelle, ecken, radius }
 // Skizzenwerkzeuge wie in Fusion: Knopf, Eingabefelder je Schritt (Anzahl gesetzter Punkte), Hinweis
 const WERKZEUGE = {
+  loeschen: { knopf: "tEntf", text: "Löschen: Linien, Kreise usw. oder Abhängigkeiten anklicken – jeder Klick löscht. Esc oder ein anderes Werkzeug beendet." },
   auswahl: { knopf: "tAuswahl", text: "Auswahl: Punkte ziehen, Mass anklicken zum Ändern. Element anklicken: Entf löscht, X macht es zur Hilfslinie." },
   linie: { knopf: "tLinie", ein: () => ["L", "∠"], text: "Linie: Punkte anklicken. Länge eintippen und Enter für genaue Masse. Doppelklick oder Esc beendet, Klick auf Startpunkt schliesst." },
   rechteck: { knopf: "tRechteck", ein: () => ["B", "H"], text: "Rechteck (2 Punkte): zwei Ecken anklicken oder Breite/Höhe eintippen." },
@@ -5328,7 +5330,17 @@ function loescheSkizzenAuswahl() {
   if (skizze.sel) { const i = skizze.f.elemente.indexOf(skizze.sel); if (i >= 0) skizze.f.elemente.splice(i, 1); skizze.sel = null; bereinige(skizze.f); zeichneLive(); }
   else status("Zuerst ein Element anklicken (Werkzeug Auswahl).");
 }
-$("tEntf").onclick = () => { if (skizze && !skizze.sel && !skizze.bsel && skizze.werkzeug !== "auswahl") setzeWerkzeug("auswahl"); loescheSkizzenAuswahl(); };
+// Anzeige in der Skizze: Masse und Abhängigkeitssymbole lassen sich ausblenden
+const skAnz = (() => { try { return { masse: true, abh: true, ...JSON.parse(localStorage.getItem("sdcad-skizze-anzeige") || "{}") }; } catch { return { masse: true, abh: true }; } })();
+// Erklärung zu «n FG» (auch mit Stift/Finger: beim Überfahren bzw. Antippen)
+{ const tip = document.body.appendChild(Object.assign(document.createElement("div"), { className: "zeitTip", hidden: true })); let zeit = 0;
+  Object.assign(tip.style, { whiteSpace: "normal", maxWidth: "320px", lineHeight: "1.4" });
+  const an = () => { const fg = $("fgAnzeige"); tip.textContent = fg.title; if (!fg.title) return; tip.hidden = false; const r = fg.getBoundingClientRect(), t = tip.getBoundingClientRect(); tip.style.left = Math.max(6, Math.min(r.left + r.width / 2 - t.width / 2, innerWidth - t.width - 6)) + "px"; tip.style.top = r.bottom + 8 + "px"; clearTimeout(zeit); zeit = setTimeout(() => (tip.hidden = true), 6000); };
+  $("fgAnzeige").addEventListener("pointerenter", an); $("fgAnzeige").addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") tip.hidden = true; }); $("fgAnzeige").addEventListener("click", an);
+  // Masse / Abhängigkeiten ein- und ausblenden
+  for (const [id, k] of [["anzMasse", "masse"], ["anzAbh", "abh"]]) { const b = $(id); b.setAttribute("aria-pressed", String(skAnz[k]));
+    b.onclick = () => { skAnz[k] = !skAnz[k]; b.setAttribute("aria-pressed", String(skAnz[k])); try { localStorage.setItem("sdcad-skizze-anzeige", JSON.stringify(anz)); } catch {} status(`${k === "masse" ? "Masse" : "Abhängigkeitssymbole"} ${skAnz[k] ? "eingeblendet" : "ausgeblendet"}.`); zeichneLive(); }; } }
+$("tEntf").onclick = () => { if (!skizze) return; if (skizze.werkzeug === "loeschen") return setzeWerkzeug("auswahl"); setzeWerkzeug("loeschen"); skizze.sel = null; skizze.bsel = null; zeichneLive(); }; // erst «Löschen» wählen, dann die Elemente anklicken
 function hilfslinieUmschalten() { // gewähltes Element, sonst das zuletzt Projizierte
   const ziele = skizze.sel ? [skizze.sel] : (skizze.projNeu || []).filter((el) => skizze.f.elemente.includes(el)); if (!ziele.length) return;
   const an = !ziele[0].hilfs; for (const el of ziele) el.hilfs = an; status(an ? "Hilfslinie." : "Normale Linie."); zeichneLive();
@@ -5978,7 +5990,7 @@ function projZeichnen() {
   leeren(projGruppe); if (!skizze) return;
   const dist = kamera.position.distanceTo(steuerung.target), hoehe = 2 * dist * Math.tan(kamera.fov * Math.PI / 360), r = Math.max(0.2, hoehe / 380);
   const zeige = (item, farbe, dick) => { for (const pts of item.vis) if (pts.length > 1) projGruppe.add(dickeLinie(pts.map((p) => V(p)), farbe, dick, 15)); };
-  if (skizze.projHover && !(skizze.projWahl || []).some((x) => x.key === skizze.projHover.key)) zeige(skizze.projHover, 0xf5b97a, 3);
+  if (skizze.projHover && !(skizze.projWahl || []).some((x) => x.key === skizze.projHover.key)) zeige(skizze.projHover, 0xffa733, 5); // Linie unter Stift/Zeiger leuchtet kräftig
   for (const it of skizze.projWahl || []) zeige(it, 0xe0782b, 3);
 }
 let projHoverWartet = false, leinwandTouch = false;
@@ -6081,6 +6093,7 @@ const drehung = (pts, i) => { // vorzeichenbehafteter Knickwinkel am Punkt i (Gr
 };
 const RAD = Math.PI / 180;
 const grad = (w) => (Math.abs(w) / RAD).toFixed(1).replace(/\.0$/, "") + "°";
+const FG_ERKLAERUNG = "FG = Freiheitsgrade: so viele Masse bzw. Abhängigkeiten fehlen noch, bis die Skizze vollständig bestimmt ist (dann steht «bestimmt», grün). Blaue Linien sind noch beweglich.";
 const fgText = (dof) => (dof ? `${dof} Freiheitsgrad${dof === 1 ? "" : "e"} offen` : "Skizze vollständig bestimmt");
 // Abhängigkeit oder Mass übernehmen (der Löser prüft: lösbar und nicht überzählig)
 function uebernimm(b) {
@@ -6292,19 +6305,37 @@ function trefferPunkt(sm) { // ziehbare Punkte (nicht der Ursprung)
   return null;
 }
 // Mass anklicken: Eingabefeld über dem Mass (leer + Enter löscht ein treibendes Mass); Symbol anklicken wählt die Abhängigkeit
+// Masse frei verschieben: am Mass ziehen (Doppelklick setzt es zurück)
+let massZug = null, massZugEnde = 0;
+$("labels").addEventListener("pointerdown", (e) => {
+  const d = e.target.closest(".mass"); if (!d || !skizze || e.button > 0) return; const l = labels[+d.dataset.i]; if (!l?.key) return;
+  massZug = { key: l.key, uv0: l.uv0, x: e.clientX, y: e.clientY, id: e.pointerId, bewegt: false, d };
+});
+document.addEventListener("pointermove", (e) => {
+  if (!massZug || e.pointerId !== massZug.id || !skizze) return;
+  if (!massZug.bewegt) { if (Math.hypot(e.clientX - massZug.x, e.clientY - massZug.y) < 8) return; massZug.bewegt = true; try { massZug.d.setPointerCapture(e.pointerId); } catch {} }
+  const uv = planUV(e); if (!uv) return;
+  (skizze.f.massV ||= {})[massZug.key] = [uv[0] - massZug.uv0[0], uv[1] - massZug.uv0[1]]; zeichneLive(); zeigeLabels(); e.preventDefault();
+}, true);
+const massZugAus = () => { if (massZug?.bewegt) { massZugEnde = performance.now(); merke?.(); } massZug = null; };
+document.addEventListener("pointerup", massZugAus, true); document.addEventListener("pointercancel", massZugAus, true);
+$("labels").addEventListener("dblclick", (e) => { const d = e.target.closest(".mass"); const l = d && labels[+d.dataset.i]; if (l?.key && skizze?.f.massV?.[l.key]) { delete skizze.f.massV[l.key]; zeichneLive(); zeigeLabels(); } });
 $("labels").addEventListener("click", (e) => {
+  if (performance.now() - massZugEnde < 400) { e.stopPropagation(); return; }
   const kd = e.target.closest(".kante");
   if (kd && !skizze) { const f = finde(kd.dataset.fid); if (!f) return; const r = kd.getBoundingClientRect();
     if (dlg?.feature === f && dlg.kanteGewaehlt) return dlg.kanteGewaehlt(kd.dataset.kante, r.right, r.top);
     if (!dlg && kantenWz?.schritt === "kante" && kantenWz.f === f) waehleKante(kd.dataset.kante); return; }
   const d = e.target.closest(".mass, .klickbar"); if (!d || !skizze) return;
   const l = labels[+d.dataset.i]; if (!l) return;
+  if (skizze.werkzeug === "loeschen") { if (l.bed) entferneBed(l.bed); return; }
   if (l.glyph) { skizze.bsel = l.bed; skizze.sel = null; status(`${ABH_NAME[l.bed.typ]} gewählt – Entf löscht die Abhängigkeit.`); return zeichneLive(); }
   if (!l.edit) return;
   massEingabe(d.style.left, d.style.top, l.edit.bed?.ausdruck ?? parseFloat(l.t.replace(/[^\d.\-]/g, "")), (w, _, ausdruck) => (w == null && l.edit.bed ? entferneBed(l.edit.bed) : massAendern(l.edit, w, ausdruck)));
 });
 
 let labels = [];
+const massKey = (ed) => ed?.bed ? "b:" + (ed.bed.mid ||= Math.random().toString(36).slice(2, 8)) : ed?.el ? `e:${ed.el.id}:${ed.art}:${ed.i ?? ""}` : null;
 let fgCache = { key: null, a: null };
 function analyseGecacht(f) {
   const key = JSON.stringify([f.elemente, f.bedingungen]);
@@ -6322,7 +6353,7 @@ function zeichneLive() {
   const f = skizze.f, s = skizze, A = analyseGecacht(f), B = bezuege(f);
   live.add(skizzenObjekt(f, 0x1f5fbf, A?.bestimmt));
   const fg = $("fgAnzeige"); fg.textContent = A ? (A.dof ? A.dof + " FG" : "bestimmt") : ""; fg.classList.toggle("voll", A?.dof === 0);
-  fg.title = A ? fgText(A.dof) + " (Freiheitsgrade: so viele Masse/Abhängigkeiten fehlen noch)" : "";
+  fg.title = A ? `${fgText(A.dof)}. ${FG_ERKLAERUNG}` : "";
 
   const temp = { ebene: f.ebene, elemente: [] };
   const m = s.maus;
@@ -6367,7 +6398,9 @@ function zeichneLive() {
     if (b.typ === "radius" || b.typ === "durchmesser") getrieben.add("K:" + b.k.e);
   }
   const frei = (k) => !getrieben.has(k);
-  const lab = (a, b, txt, edit, winkel) => labels.push({ p: zu3D(f.ebene, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]), t: txt, edit, winkel });
+  const mv = f.massV || {};
+  const setzeLabel = (uv, l) => { const key = massKey(l.edit), o = key && mv[key]; labels.push({ ...l, p: zu3D(f.ebene, o ? [uv[0] + o[0], uv[1] + o[1]] : uv), key, uv0: uv, verb: o ? uv : null }); }; // frei verschobene Masse: Versatz je Mass in der Skizze
+  const lab = (a, b, txt, edit, winkel) => { if (skAnz.masse) setzeLabel([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], { t: txt, edit, winkel }); };
   const fest = new Set(f.elemente);
   for (const el of [...f.elemente, ...temp.elemente]) {
     const ed = fest.has(el);
@@ -6388,10 +6421,10 @@ function zeichneLive() {
     else if (el.art === "langloch") { if (frei("L:" + el.id + ":a:b")) lab(el.a, el.b, f1(abst(el.a, el.b)), ed && { el, art: "langL" }); if (frei("K:" + el.id)) lab(el.b, el.b, "B " + f1(el.r * 2), ed && { el, art: "langB" }, true); }
   }
   // Treibende Masse (fett, umrandet) und Symbole der Abhängigkeiten (anklicken → Entf löscht)
-  const dim = (uv, t, b, w) => uv && labels.push({ p: zu3D(f.ebene, uv), t: b.ausdruck ? `fx ${t}` : t, edit: { bed: b }, bed: b, treibend: true, winkel: w });
+  const dim = (uv, t, b, w) => uv && skAnz.masse && setzeLabel(uv, { t: b.ausdruck ? `fx ${t}` : t, edit: { bed: b }, bed: b, treibend: true, winkel: w });
   const zaehler = new Map(), lm = (r) => { const l = B.L(r); return l && mitte(l[0], l[1]); };
   const glyph = (uv, b) => {
-    if (!uv) return;
+    if (!uv || !skAnz.abh) return;
     const k = uv.map((z) => Math.round(z * 10)).join(","), n = zaehler.get(k) || 0; zaehler.set(k, n + 1);
     labels.push({ p: zu3D(f.ebene, uv), t: GLYPHE[b.typ], bed: b, glyph: true, versatz: [12 + 15 * n, 12] });
   };
@@ -6419,6 +6452,7 @@ function zeichneLive() {
     case "symmetrisch": if (b.a) { glyph(B.P(b.a), b); glyph(B.P(b.b), b); } else { glyph(B.K(b.k1)?.c, b); glyph(B.K(b.k2)?.c, b); } break;
     case "fix": glyph(b.p ? B.P(b.p) : b.l ? lm(b.l) : skizzenPunkte({ elemente: [B.els.get(b.e)].filter(Boolean) })[1]?.uv, b); break;
   }
+  for (const l of labels) if (l.verb) { const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints([zu3D(f.ebene, l.verb), l.p]), new THREE.LineBasicMaterial({ color: 0x7a8794, depthTest: false })); ln.renderOrder = 10; live.add(ln); } // Hilfslinie zum verschobenen Mass
   if (m) status(`u ${f1(m[0])}  v ${f1(m[1])} mm · ${f.name} auf ${ebenenName(f.ebene)}`, true);
 }
 function zeigeLabels() {
@@ -6433,8 +6467,8 @@ function zeigeLabels() {
     const v = l.p.clone().project(kamera);
     d.hidden = false; d.textContent = l.t; d.dataset.i = i;
     // Masse ändern nur im Werkzeug «Auswahl» (Esc); beim Zeichnen und Ändern gehen Klicks an die Skizze
-    const aw = skizze?.werkzeug === "auswahl";
-    d.className = [l.edit && aw && "mass", l.winkel && "winkel", l.treibend && "treibend", l.glyph && "glyph", l.glyph && aw && "klickbar", l.bed && l.bed === skizze?.bsel && "gewaehlt"].filter(Boolean).join(" ");
+    const aw = skizze?.werkzeug === "auswahl", lw = skizze?.werkzeug === "loeschen";
+    d.className = [l.edit && aw && "mass", l.winkel && "winkel", l.treibend && "treibend", l.glyph && "glyph", l.glyph && (aw || lw) && "klickbar", l.bed && lw && "klickbar", l.bed && l.bed === skizze?.bsel && "gewaehlt"].filter(Boolean).join(" ");
     d.style.transform = l.versatz ? `translate(-50%, -50%) translate(${l.versatz[0]}px, ${l.versatz[1]}px)` : "";
     d.style.left = ((v.x + 1) / 2) * 100 + "%"; d.style.top = ((1 - v.y) / 2) * 100 + "%";
   });
@@ -6456,6 +6490,13 @@ leinwand.addEventListener("pointerdown", (e) => {
   }
 });
 leinwand.addEventListener("pointerleave", () => hoverLoeschen());
+// Stift-Hover auch auf Geräten, die nur pointerrawupdate bzw. die Kompatibilitäts-Mausereignisse liefern (z. B. Windows-Tablets mit Stift): als pointermove weiterreichen
+{ let letztes = 0;
+  leinwand.addEventListener("pointermove", () => (letztes = performance.now()), true);
+  for (const art of ["pointerrawupdate", "mousemove"]) leinwand.addEventListener(art, (e) => {
+    if (e.buttons || performance.now() - letztes < 60) return; letztes = performance.now();
+    leinwand.dispatchEvent(new PointerEvent("pointermove", { clientX: e.clientX, clientY: e.clientY, pointerType: e.pointerType || "pen", pointerId: e.pointerId ?? 1, isPrimary: true, buttons: 0, bubbles: true, cancelable: true }));
+  }, true); }
 leinwand.addEventListener("pointermove", (e) => {
   if (!skizze) { if (messen) { const q = messPunkt(e); fangZeigen(q ? { art: q.fa, s: q.s } : null); } else if (aktiveWahl()) hoverWahl(e); else hoverLoeschen(); return; }
   if (skizze.zug) {
@@ -6471,6 +6512,7 @@ leinwand.addEventListener("pointermove", (e) => {
     return;
   }
   if (skizze.werkzeug === "projizieren") projHover(e);
+  if (skizze.werkzeug === "loeschen") { const t = trefferElement(smPos(e)); if (t !== skizze.sel) { skizze.sel = t; zeichneLive(); } return; } // Vorschau: was der Klick löschen würde, leuchtet
   const r = ebenenPunkt(e); if (!r) return fangZeigen(null);
   fangZeigen(r.art ? r : null); skizze.maus = r.uv; zeichneLive();
   if (braucheEingabe(skizze)) {
@@ -6484,6 +6526,7 @@ leinwand.addEventListener("pointerup", (e) => {
   if (!runter || Math.hypot(e.clientX - runter.x, e.clientY - runter.y) > 5 || runter.b !== 0) { runter = null; return; }
   runter = null;
   if (skizze?.werkzeug === "auswahl") { skizze.sel = trefferElement(smPos(e)); skizze.bsel = null; zeichneLive(); return; }
+  if (skizze?.werkzeug === "loeschen") { skizze.sel = trefferElement(smPos(e)); skizze.bsel = null; if (skizze.sel) loescheSkizzenAuswahl(); else zeichneLive(); return; }
   if (skizze) { const r = ebenenPunkt(e); if (r) klick(r.uv, r.fang, smPos(e), r.ref); return; }
   if (messen && !skizze) { messKlick(e); return; }
   if (simulation?.klick(e)) return;
@@ -6665,7 +6708,7 @@ for (const [knopf, varianten] of Object.entries(KNOPF_MENUE)) $(knopf).onclick =
   e.stopPropagation();
   const m = $("skizzenMenue"), aktiv = WERKZEUGE[skizze?.werkzeug]?.knopf === knopf;
   if (!m.hidden && m.dataset.knopf === knopf) { m.hidden = true; return; }
-  if (!e.target.closest(".pfeil") && !aktiv) { m.hidden = true; abschliessenLinie(); setzeWerkzeug(letzteVariante[knopf] || varianten[0][0]); return; }
+  if (!e.target.closest(".pfeil") && !aktiv && knopf !== "tAbh") { m.hidden = true; abschliessenLinie(); setzeWerkzeug(letzteVariante[knopf] || varianten[0][0]); return; } // Abhängigkeit: ein Klick öffnet gleich die Liste
   m.dataset.knopf = knopf;
   m.innerHTML = varianten.map(([w, t]) => `<button data-wz="${w}"${skizze?.werkzeug === w ? ' aria-pressed="true"' : ""}><b>${t}</b></button>`).join("");
   const r = $(knopf).getBoundingClientRect();
