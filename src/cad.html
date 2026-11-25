@@ -805,6 +805,25 @@ body.stiftpalette .stiftleiste { display: flex; }
 #zeit .marke { width: 4px; min-height: 28px; border-radius: 3px; background: #1869aa; box-shadow: 0 0 0 3px rgb(24 105 170 / .18); }
 .zeitleiste .rechts { gap: 8px; } #rueckgaengig { color: #b3261e; border-color: color-mix(in srgb, #b3261e 35%, var(--line)); } #rueckgaengig:hover:not(:disabled) { border-color: #b3261e; background: color-mix(in srgb, #b3261e 8%, var(--panel)); }
 .zeitTip { border-radius: 8px; padding: 5px 10px; box-shadow: 0 6px 18px rgb(0 0 0 / .3); }
+/* Werkzeugleiste und Reiter im einheitlichen Stil */
+.leiste { border: 0; border-radius: 14px; background: var(--panel); box-shadow: 0 1px 3px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .06); }
+.leiste .wz { border-radius: 10px; border: 1px solid transparent; transition: background .12s, border-color .12s; }
+.leiste .wz:hover:not(:disabled) { background: color-mix(in srgb, #1869aa 9%, transparent); border-color: color-mix(in srgb, #1869aa 22%, transparent); }
+.leiste .wz[aria-pressed="true"], .leiste .wz.aktiv { background: color-mix(in srgb, #1869aa 15%, transparent); border-color: #1869aa; }
+.leiste .wz svg { stroke: #1869aa; } .leiste .wz svg .f { fill: color-mix(in srgb, #1869aa 15%, transparent); }
+.leiste .wz:disabled { opacity: .4; } .leiste .wz:disabled svg { stroke: var(--muted); }
+@media (min-width: 1001px) {
+  .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf { border-radius: 10px 10px 0 0; font-weight: 500; transition: color .12s, background .12s; }
+  .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf:hover { background: color-mix(in srgb, #1869aa 8%, transparent); }
+  .leiste:not(.imSkizze):not(.imDialog) #gHaupt .klapp > .klappknopf[aria-selected="true"] { color: #1869aa; font-weight: 700; border-bottom: 3px solid #1869aa; background: color-mix(in srgb, #1869aa 8%, transparent); }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr { border-right-color: color-mix(in srgb, var(--line) 70%, transparent); }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr::before { color: var(--muted); letter-spacing: .12em; }
+}
+.leiste .klappknopf .kpfeil, .leiste .pfeil { color: #1869aa; }
+/* In der Skizze und im Dialog braucht die Leiste den Platz für die Werkzeuge: rechts nur Symbole */
+.leiste.imSkizze .rechtsgruppe .marke, .leiste.imDialog .rechtsgruppe .marke { font-size: 0; gap: 0; padding: 0 4px; margin: 0; border: 0; } .leiste.imSkizze .rechtsgruppe .marke span, .leiste.imDialog .rechtsgruppe .marke span { display: none; }
+.leiste.imSkizze .rechtsgruppe .wz, .leiste.imDialog .rechtsgruppe .wz { font-size: 0 !important; min-width: 40px; padding: 6px 8px; gap: 0; } .leiste.imSkizze .rechtsgruppe .wz svg, .leiste.imDialog .rechtsgruppe .wz svg { width: 20px; height: 20px; }
+#gSkizze .trenner, .leiste .trenner { background: var(--line); }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 var(--fs-xl) var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 
