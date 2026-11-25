@@ -7478,10 +7478,10 @@ async function startseite(erzwingen = false) {
   window.__startZeile = zeileHtml; // von der Cloud-Liste nachgeladen
   const initialen = (voll || vorname).split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("");
   el.innerHTML = `<div class="startkarte">
-    <div class="skopf"><div><b>Heute</b><span>${esc(datum)}${voll || vorname ? " · " + esc(voll || vorname) : ""}</span></div>
+    <div class="skopf"><div class="stitel"><b>Heute</b><span>${esc(datum)}${voll || vorname ? " · " + esc(voll || vorname) : ""}</span></div>
       <button class="sinfo" data-a="wHilfe" title="Hilfe und Kurzanleitung (F1)" aria-label="Hilfe">i</button>${initialen ? `<span class="savatar" aria-hidden="true">${esc(initialen)}</span>` : ""}
       <button class="startzu" data-a="weiter" aria-label="Schliessen" title="Schliessen (Esc)">×</button></div>
-    <div class="sbanner"><div class="sbbild"><div class="sblogo${logoB?.platte ? " platte" : ""}">${logoB ? `<img src="${logoB.src}" alt="Firmenlogo">` : '<img src="logo.png" alt="Spengler Digital CAD"><b>Spengler Digital <i>CAD</i></b>'}</div>${logoB ? '<img class="sbemblem" src="logo.png" alt="">' : ""}</div>
+    <div class="sbanner"><div class="sbbild"><div class="sbemblem" aria-hidden="true"></div><div class="sblogo${logoB?.platte ? " platte" : ""}">${logoB ? `<img src="${logoB.src}" alt="Firmenlogo">` : '<img src="logo.png" alt="Spengler Digital CAD"><b>Spengler Digital <i>CAD</i></b>'}</div></div>
       <div class="sbgruss">${gruss}${vorname ? ", " + esc(vorname) : ""}</div></div>
     <section class="startmain">
       <h4>Beginnen</h4>

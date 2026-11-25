@@ -698,22 +698,29 @@ body.stiftpalette .stiftleiste { display: flex; }
 .stiftleiste [data-nur="modell"] { display: grid; } body.skizzeAktiv .stiftleiste [data-nur="modell"] { display: none; }
 .stiftleiste hr[data-nur] { display: none; } body.skizzeAktiv .stiftleiste hr[data-nur="skizze"] { display: block; }
 /* Verlaufsliste */
-/* Startseite wie die App: blaue Kopfzeile «Heute», Bannerkarte mit schrägen Streifen, Logo und Markenzeichen, Gruss unten */
+/* Startseite 1:1 wie die App: blaue Kopfzeile «Heute», Bannerkarte (schräge Streifen, Logo links, Spengler-Digital-Zeichen auf hellem Grund rechts), Gruss auf dunkelblauer Leiste.
+   Masse in cqw (Breite der Karte) mit den Verhältnissen der App, damit es bei jeder Breite gleich aussieht. */
 .startmodal { z-index: 120; background: rgb(8 20 36 / .58); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-.startkarte { position: relative; display: block; width: min(780px, 100%); max-height: calc(100vh - 32px); overflow: auto; border-radius: 18px; background: var(--panel); color: var(--fg); box-shadow: 0 30px 80px rgb(0 0 0 / .45), 0 0 0 1px rgb(255 255 255 / .06); }
-.skopf { display: flex; align-items: center; gap: 10px; padding: 18px 22px; background: #1a68b0; color: #fff; } .skopf > div { flex: 1; min-width: 0; display: grid; gap: 2px; } .skopf b { font: 700 24px/1.1 var(--font-body); } .skopf span { font-size: var(--fs-l); color: rgb(255 255 255 / .78); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sinfo, .savatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgb(255 255 255 / .2); color: #fff; font: 600 var(--fs-l) var(--font-body); } .sinfo { cursor: pointer; font-family: Georgia, serif; font-style: italic; font-size: 20px; } .sinfo:hover { background: rgb(255 255 255 / .32); } .savatar { width: 46px; height: 46px; background: rgb(255 255 255 / .26); font-size: 17px; font-weight: 700; letter-spacing: .02em; }
-.startzu { width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: rgb(255 255 255 / .8); font-size: 24px; line-height: 1; cursor: pointer; margin-left: 2px; } .startzu:hover { background: rgb(255 255 255 / .2); color: #fff; }
-.sbanner { margin: 16px 22px 0; border-radius: 18px; overflow: hidden; background: #0f4c8e; box-shadow: 0 6px 20px rgb(15 60 120 / .25); }
-.sbbild { position: relative; display: flex; align-items: center; min-height: 190px; padding: 22px 28px; overflow: hidden;
+.startkarte { --startbg: #f6f7f9; position: relative; container-type: inline-size; display: block; width: min(720px, 100%); max-height: calc(100vh - 32px); overflow: auto; border-radius: 18px; background: var(--startbg); color: var(--fg); box-shadow: 0 30px 80px rgb(0 0 0 / .45), 0 0 0 1px rgb(255 255 255 / .06); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .startkarte { --startbg: var(--panel); } } :root[data-theme="dark"] .startkarte { --startbg: var(--panel); }
+.skopf { display: flex; align-items: center; gap: 1.6cqw; padding: 2.9cqw 3.7cqw 2.9cqw 3.7cqw; background: #1869aa; color: #fff; }
+.stitel { flex: 1; min-width: 0; display: grid; gap: .5cqw; } .stitel b { font: 700 clamp(19px, 3.7cqw, 40px)/1.05 var(--font-body); } .stitel span { font-size: clamp(13px, 2.6cqw, 28px); line-height: 1.2; color: rgb(255 255 255 / .74); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sinfo, .savatar { flex: none; display: grid; place-items: center; border: 0; border-radius: 50%; color: #fff; background: rgb(255 255 255 / .2); }
+.sinfo { width: clamp(34px, 5.4cqw, 58px); height: clamp(34px, 5.4cqw, 58px); cursor: pointer; font: italic 400 clamp(18px, 3cqw, 32px) Georgia, serif; } .sinfo:hover { background: rgb(255 255 255 / .32); }
+.savatar { width: clamp(44px, 8.9cqw, 96px); height: clamp(44px, 8.9cqw, 96px); background: #4183b7; font: 700 clamp(16px, 3.3cqw, 36px) var(--font-body); letter-spacing: .01em; }
+.startzu { flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: rgb(255 255 255 / .75); font-size: 22px; line-height: 1; cursor: pointer; } .startzu:hover { background: rgb(255 255 255 / .2); color: #fff; }
+.sbanner { position: relative; margin: 3.7cqw 3.7cqw 0; aspect-ratio: 1000 / 469; border-radius: 4cqw; overflow: hidden; background: #0c4a85; box-shadow: 0 .8cqw 2.6cqw rgb(15 60 120 / .22); }
+.sbbild { position: absolute; inset: 0 0 25.6% 0; overflow: hidden;
   background:
-    linear-gradient(114deg, rgb(255 255 255 / 0) 0 7%, rgb(255 255 255 / .07) 7% 19%, rgb(255 255 255 / 0) 19% 25%, rgb(255 255 255 / .05) 25% 36%, rgb(255 255 255 / 0) 36% 100%),
-    linear-gradient(90deg, #0a4a98 0%, #0f58a6 38%, #3f84c9 58%, #b9d6f0 78%, #eaf3fc 100%); }
-.sblogo { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 52%; } .sblogo img { max-width: 100%; max-height: 112px; object-fit: contain; display: block; } .sblogo b { font: 700 22px var(--font-label); color: #fff; } .sblogo i { font-style: normal; opacity: .75; }
-.sblogo.platte { padding: 10px 14px; border-radius: 12px; background: #fff; box-shadow: 0 4px 14px rgb(0 0 0 / .25); }
-.sbemblem { position: absolute; right: -4px; top: 50%; height: 124%; transform: translateY(-50%); object-fit: contain; opacity: .95; filter: drop-shadow(0 6px 18px rgb(10 40 90 / .35)); pointer-events: none; }
-.sbgruss { padding: 14px 24px 16px; background: #0f4c8e; color: #fff; font: 700 26px/1.1 var(--font-body); letter-spacing: -.005em; }
-.startmain { display: grid; align-content: start; gap: 12px; padding: 20px 22px 18px; }
+    linear-gradient(126deg, rgb(255 255 255 / 0) 0 6%, rgb(255 255 255 / .075) 6% 21%, rgb(255 255 255 / 0) 21% 27%, rgb(255 255 255 / .055) 27% 40%, rgb(255 255 255 / 0) 40% 47%, rgb(255 255 255 / .04) 47% 58%, rgb(255 255 255 / 0) 58%),
+    linear-gradient(180deg, rgb(255 255 255 / .05) 0%, rgb(0 0 0 / .1) 100%),
+    linear-gradient(90deg, #013a6c 0%, #004680 30%, #00509a 52%, #00539a 100%); }
+.sbemblem { position: absolute; top: 0; bottom: 0; right: 0; width: 56%; background: #f0f3f8 url("startbanner.jpg") right center / cover no-repeat; -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 30%); mask-image: linear-gradient(90deg, transparent 0%, #000 30%); }
+.sblogo { position: absolute; z-index: 1; left: 6%; top: 0; bottom: 0; width: 40%; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 1.2cqw; }
+.sblogo img { display: block; max-width: 100%; max-height: 50%; object-fit: contain; object-position: left center; filter: drop-shadow(0 .3cqw .8cqw rgb(0 30 70 / .3)); } .sblogo b { font: 700 clamp(15px, 2.9cqw, 30px) var(--font-label); color: #fff; letter-spacing: .01em; } .sblogo i { font-style: normal; opacity: .75; }
+.sblogo.platte { left: 5%; width: auto; max-width: 42%; top: 24%; bottom: 24%; padding: 1.2cqw 1.8cqw; border-radius: 1.6cqw; background: #fff; box-shadow: 0 .6cqw 1.8cqw rgb(0 0 0 / .25); justify-content: center; } .sblogo.platte img { max-height: 100%; }
+.sbgruss { position: absolute; inset: 74.4% 0 0 0; display: flex; align-items: center; padding: 0 4cqw; background: #0c4a85; color: #fff; font: 700 clamp(19px, 4.8cqw, 44px)/1.1 var(--font-body); }
+.startmain { display: grid; align-content: start; gap: 12px; padding: 20px 3.7cqw 18px; }
 .startmain h4 { margin: 4px 0 0; font: 600 var(--fs-xs) var(--font-label); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .startkarten { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .startknopf { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--fg); cursor: pointer; font: 500 var(--fs-m) var(--font-body); transition: border-color .15s, box-shadow .15s, transform .15s, background .15s; }
@@ -725,7 +732,7 @@ body.stiftpalette .stiftleiste { display: flex; }
 .startzuletzt { display: grid; gap: 2px; margin-top: -2px; } .startknopf.zeile { padding: 7px 10px; border: 0; border-radius: 10px; background: transparent; box-shadow: none; transform: none; } .startknopf.zeile:hover { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .zeile .szeichen { width: 34px; height: 34px; border-radius: 9px; } .zeile .stext b { font-size: var(--fs-m); } .startzuletzt .hinweis { margin: 4px 10px; }
 .startfuss { display: flex; align-items: center; gap: 12px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-s); } .startfuss label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
-@media (max-width: 760px) { .startkarten { grid-template-columns: 1fr; } .sbbild { min-height: 150px; padding: 16px 18px; } .sblogo img { max-height: 80px; } .sbgruss { font-size: 22px; } .skopf b { font-size: 20px; } }
+@media (max-width: 760px) { .startkarten { grid-template-columns: 1fr; } }
 #verlaufMenue { position: fixed; z-index: 70; } #verlaufMenue button.jetzt { background: var(--fx-blau-hell); }
 /* Firmenlogo: Einstellungen, Startseite, Druckblätter */
 .firmaeinst { display: grid; grid-template-columns: 290px 1fr; gap: 12px; align-items: center; } .logovorschauen { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .logovorschauen small { grid-column: 1 / -1; } .logovorschau.blau { background: linear-gradient(90deg, #0a4a98, #1f6fb8); border-style: solid; border-color: transparent; }
