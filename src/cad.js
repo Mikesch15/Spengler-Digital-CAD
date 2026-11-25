@@ -4993,7 +4993,7 @@ function zeigeEinst() {
     <div class="firmaeinst">
       <div class="logovorschauen"><div class="logovorschau blau">${entwurf.firma.logo ? `<img src="${(logoBanner(entwurf.firma) || {}).src}" alt="Logo auf Blau">` : '<span class="hinweis">Kein Logo</span>'}</div><div class="logovorschau">${entwurf.firma.logo ? `<img src="${logoPapier(entwurf.firma)}" alt="Logo auf Papier">` : ""}</div><small class="hinweis">auf Blau · auf Papier</small></div>
       <div><div class="reihe ohnerand"><label class="knopf" for="eLogoDatei">Logo hochladen …</label><input type="file" id="eLogoDatei" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>${entwurf.firma.logo ? '<button class="knopf weg" id="eLogoWeg" type="button">Entfernen</button>' : ""}</div>
-      <p class="hinweis">Erscheint auf der Startseite, auf Werkstattblättern, Stückliste und im Schriftfeld der Pläne. PNG mit transparentem Hintergrund oder SVG sieht am besten aus.</p></div>
+      <p class="hinweis">Erscheint auf Startseite, Blättern und Plänen. Am besten PNG (transparent) oder SVG.</p></div>
     </div>
     <div class="egitter">${einstFeld("firma.vorname", "Vorname für die Begrüssung", "text", null, "leer = Name aus der Cloud-Anmeldung")}
       ${einstFeld("firma.logoModus", "Logo auf blauen Flächen", "wahl", [["auto", "Automatisch (dunkle Logos werden weiss)"], ["original", "Original"], ["weiss", "Immer weiss"]], "Auf Papier wird ein weisses Logo automatisch dunkelblau")}</div>
@@ -5008,7 +5008,7 @@ function zeigeEinst() {
     </div>
     <h4>Stiftpalette: sichtbare Knöpfe</h4>
     <div class="egitter">${STIFT_ALLE.map(([id, t, g]) => `<div class="efeld janein"><label for="e_stift_${id}">${t}${g === "skizze" ? ' <small class="hinweis">(Skizze)</small>' : g === "modell" ? ' <small class="hinweis">(Modell)</small>' : ""}</label><input type="checkbox" id="e_stift_${id}" data-stift="${id}" ${entwurf.allgemein.stift.includes(id) ? "checked" : ""}></div>`).join("")}</div>
-    <p class="hinweis">Die Palette lässt sich am Griff oben verschieben (Doppelklick auf den Griff stellt die Ausgangslage wieder her).</p>
+    <p class="hinweis">Verschieben am Griff ⋮⋮; Doppelklick setzt zurück.</p>
     <h4>Skizze: beim Öffnen anzeigen</h4>
     <div class="egitter">
       ${einstFeld("allgemein.masse", "Masse", "janein")}
@@ -5019,7 +5019,7 @@ function zeigeEinst() {
       ${einstFeld("allgemein.speichern", "Speichern in (Vorauswahl)", "wahl", [["zuletzt", "Wie zuletzt gewählt"], ["cloud", "Cloud"], ["pc", pc ? "Auf dem PC" : "Auf dem Gerät"]])}
       ${einstFeld("allgemein.startAnsicht", "Ansicht nach dem Öffnen", "wahl", [["iso", "Isometrisch"], ["vorne", "Vorne"], ["oben", "Oben"], ["rechts", "Rechts"]])}
     </div>
-    <p class="hinweis">Weitere Voreinstellungen: Fangraster und Vorgaben für neue Teile unter «Neue Teile», Druck und Etiketten unter «Druck» und «Etiketten», Konto unter «Konto & Cloud».</p>`,
+    <p class="hinweis">Weitere Voreinstellungen: Seiten «Firma & Ausgabe», «Konstruktion» und «Konto & Daten».</p>`,
     material: `
     <h4>Materialien</h4>
     <div class="tabwrap"><table class="zeilen mat"><thead><tr><th>Name</th><th>Dicke mm</th><th>Innenradius mm</th><th>K-Faktor</th><th>Dichte kg/dm³</th><th title="Simulation: Elastizitätsmodul in N/mm² – leer = Richtwert nach Werkstoff">E-Modul N/mm²</th><th title="Simulation: Streckgrenze Rp0,2 in N/mm² – leer = Richtwert nach Werkstoff">Rp0,2 N/mm²</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand stauchen">Stauchen max %</th><th title="Eigener Erfahrungswert: um wie viel % lässt sich der Rand strecken">Strecken max %</th><th></th></tr></thead><tbody>
@@ -5039,7 +5039,7 @@ function zeigeEinst() {
         <li><b>a und b eintragen</b>, K-Faktor mit «Übernehmen» in die Tabelle setzen, dann unten «Übernehmen» zum Speichern.</li>
       </ol>
     </div>
-    <p class="hinweis">Je Material und Dicke einmal machen. Zur Kontrolle danach ein Profil mit mehreren Biegungen abkanten und mit der Abkantliste vergleichen.</p></details>
+    <p class="hinweis">Je Material und Dicke einmal machen.</p></details>
     <div class="probe">
       <label>Material <select id="pMat">${e.materialien.map((m, i) => `<option value="${i}" ${i === probeWerte.mat ? "selected" : ""}>${esc(m.name)}</option>`).join("")}</select></label>
       <label>Zuschnitt mm <input id="pZ" type="number" step="any" inputmode="decimal" value="${probeWerte.z}"></label>
@@ -5049,7 +5049,7 @@ function zeigeEinst() {
     <p id="pErgebnis" class="hinweis">a und b eingeben.</p>`,
     lager: `
     <h4>Lagerformate</h4>
-    <p class="hinweis">Für den Vorschlag «Aus …» in der Werkstatt und den Materialbedarf: zuerst das kleinste passende Spaltband, sonst Coil, sonst Tafel.</p>
+    <p class="hinweis">Vorschlag «Aus …»: kleinstes passendes Spaltband, sonst Coil, sonst Tafel.</p>
     <div class="probe">
       <label>Spaltbänder mm <input id="lBand" type="text" value="${e.spaltbaender.join(", ")}"><small class="hinweis">mit Komma getrennt</small></label>
       <label>Coil-Breite mm <input id="lCoil" type="number" step="any" value="${e.coil}"><small class="hinweis">0 = kein Coil</small></label>
@@ -5066,8 +5066,8 @@ function zeigeEinst() {
     </div>
     <h4>Skizze und 3D-Ansicht</h4>
     <div class="egitter">
-      ${einstFeld("skizze.raster", "Fangraster mm", "zahl", null, "0 = aus (Standard): es wird nur an Punkten, Mitten und Linien gefangen. Mit einem Wert rasten Punkte zusätzlich auf dieses Mass ein (Umschalt hält das Raster aus)")}
-      ${einstFeld("skizze.abstand", "Abstand der Teile mm", "zahl", null, "Vorlagen und freie Profile stehen in 3D nebeneinander")}
+      ${einstFeld("skizze.raster", "Fangraster mm", "zahl", null, "0 = aus. Sonst rasten Punkte auf dieses Mass (Umschalt = ohne)")}
+      ${einstFeld("skizze.abstand", "Abstand der Teile mm", "zahl", null, "Abstand in 3D")}
     </div>
     <h4>Abkantliste</h4>
     <div class="egitter">${einstFeld("anzeige.abB", "Anschlag auch ab Kante B zeigen (Blech gewendet)", "janein")}</div>`,
@@ -5081,7 +5081,7 @@ function zeigeEinst() {
     </div>`,
     etiketten: `
     <h4>Etikettenbogen (A4)</h4>
-    <p class="hinweis">Masse vom Etikettenbogen ablesen (Packung des Herstellers). Standard: 3 × 8 Etiketten à 70 × 37 mm ohne Rand.</p>
+    <p class="hinweis">Masse von der Packung ablesen. Standard: 3 × 8 à 70 × 37 mm.</p>
     <div class="egitter">
       ${einstFeld("etiketten.spalten", "Spalten")}${einstFeld("etiketten.zeilen", "Zeilen")}
       ${einstFeld("etiketten.breite", "Etikett breit mm")}${einstFeld("etiketten.hoehe", "Etikett hoch mm")}
@@ -5092,25 +5092,24 @@ function zeigeEinst() {
     programm: `
     <h4>Exakter CAD-Kern (Beta)</h4>
     <div class="egitter">${einstFeld("programm.kern", "CAD-Kern", "wahl", [["netz", "Aus – wie Version 0.2"], ["occt", "Ein – OpenCascade 8.0 (Beta)"]])}</div>
-    <p class="hinweis">Ein: exakter STEP-Export (B-Rep, AP242) für Blechteile und 3D-Prüfung des Zuschnitts in der Werkstatt. Lädt beim ersten Gebrauch einmalig ~7 MB; braucht die Web-Version oder das PC-Programm (nicht als Datei per Doppelklick). Lizenz: OpenCascade LGPL 2.1, Hinweise im Ordner «cad/LIZENZEN».</p>
+    <p class="hinweis">Ein: exakter STEP-Export und 3D-Prüfung des Zuschnitts. Lädt einmalig ~7 MB. Lizenz OpenCascade (LGPL 2.1).</p>
     <h4>PC-Programm</h4>
     ${pc ? `<div class="egitter">
       ${einstFeld("programm.updates", "Beim Start nach Updates suchen", "janein")}
       ${einstFeld("programm.zuletzt", "Anzahl «Zuletzt»-Projekte")}
     </div>
     <div class="reihe ohnerand"><button class="knopf" id="eUpdate">Jetzt nach Updates suchen</button></div>`
-      : '<p class="hinweis">Updates und «Zuletzt» gibt es nur im Windows-Programm. Die Web-Version ist immer aktuell.</p>'}
+      : '<p class="hinweis">Updates gibt es nur im Windows-Programm.</p>'}
     <p class="hinweis">Version ${VERSION}</p>
     <h4>Eingabe-Diagnose (Stift, Finger, Maus)</h4>
-    <p class="hinweis">Zum Prüfen, was das Gerät an die App meldet: Mit dem Stift über das Feld schweben (nicht berühren), dann mit Stift und Finger kurz antippen und ziehen. Die Zähler zeigen, welche Ereignisse ankommen. Beim Schweben müssen «pointermove» (Typ pen, Tasten 0) und der Schwebezähler steigen.</p>
+    <p class="hinweis">Mit dem Stift über dem Feld schweben, dann antippen und ziehen: die Zähler zeigen, was das Gerät meldet. Klick ins Feld setzt zurück.</p>
     <div class="diagfeld" tabindex="0" role="group" aria-label="Diagnosefeld für Stift, Finger und Maus">Hier schweben, tippen oder ziehen</div>
     <pre class="diagaus" id="diagAus" aria-live="off">noch keine Ereignisse</pre>
-    <h4>Selbsttest</h4><p class="hinweis">Prüft die Rechenkerne (Biegung, Kurzschrift, Parameter, Kantenbausteine, Rundblech, Umformung) gegen bekannte Werte.</p>
+    <h4>Selbsttest</h4><p class="hinweis">Prüft die Rechenkerne gegen bekannte Werte.</p>
     <div class="reihe ohnerand"><button class="knopf" id="eSelbstTest">Selbsttest ausführen</button></div><div id="eSelbst"></div>`,
     bausteine: `
     <h4>Kantenbausteine für Flächenbleche</h4>
-    <p class="hinweis">Abkantfolge ab der gezeichneten Kante nach aussen: Winkel Schenkel Winkel Schenkel … – + biegt zur Sichtseite, − nach hinten, U+ / U− = Umschlag, «90r5» = Radius 5, «U-r1.4» = Umschlag um eine Lage.
-      Versatz: die Kante liegt so viel weiter aussen (z. B. Oberfalz neben dem Unterfalz = Blechdicke). Partner: Gegenstück, das eine gemeinsame Kante automatisch bekommt.</p>
+    <p class="hinweis">Abkantfolge: Winkel Schenkel Winkel Schenkel … (+ Sichtseite, − hinten, U± Umschlag, «90r5» = Radius 5). Versatz: Kante weiter aussen. Partner: Gegenstück.</p>
     <div class="tabwrap"><table class="zeilen bausteine"><thead><tr><th></th><th>Name</th><th>Gruppe</th><th>Abkantfolge</th><th>Versatz</th><th>Partner</th><th></th></tr></thead><tbody>
     ${e.bausteine.map((b, i) => `<tr data-bi="${i}"><td><button class="knopf klein" data-bedit="${i}" aria-label="${esc(b.name)} bearbeiten">✎</button></td><td><input data-bk="name" value="${esc(b.name)}" aria-label="Name"></td><td><input data-bk="gruppe" value="${esc(b.gruppe || "")}" aria-label="Gruppe"></td>
       <td><input data-bk="folge" class="folge" value="${esc(b.folge)}" aria-label="Abkantfolge"></td><td><input data-bk="versatz" type="number" step="any" value="${b.versatz || 0}" aria-label="Versatz"></td>
@@ -5119,7 +5118,7 @@ function zeigeEinst() {
     </tbody></table></div>
     <div class="reihe ohnerand"><button class="knopf" id="eNeuBaustein">+ Baustein</button><button class="knopf" id="eBausteineStandard">Standard-Bausteine ergänzen</button></div>`,
     dach: `<h4>Dachdeckung</h4>
-    <p class="hinweis">Richtwerte – vor dem Einsatz am gewählten Produkt prüfen und hier anpassen. Beim Erstellen eines Dachs wählst du die Deckung; die Werte werden ins Projekt übernommen.</p>
+    <p class="hinweis">Richtwerte – am gewählten Produkt prüfen und anpassen.</p>
     <div class="tabwrap"><table class="zeilen"><thead><tr><th>Name</th><th>Lattweite</th><th>Deckbreite</th><th>Schichtdicke</th><th>Ziegellänge</th><th>Ziegeldicke</th><th>Stück/m²</th><th>kg/m²</th><th>Min.-Neigung °</th><th>Latte b</th><th>Latte h</th><th></th></tr></thead><tbody>
     ${(e.dach ||= dachGrund()).deckungen.map((d, i) => `<tr>${[["name", "text"], ["lattweite"], ["deckbreite"], ["ziegelDicke"], ["ziegelLaenge"], ["ziegelT"], ["stueckProM2"], ["gewichtProM2"], ["mindestNeigung"], ["lattenB"], ["lattenH"]].map(([k, t]) => `<td><input data-dach="d:${i}:${k}" type="${t || "number"}" step="any" value="${esc(d[k] ?? "")}" aria-label="${k}"></td>`).join("")}<td>${e.dach.deckungen.length > 1 ? `<button class="weg" data-dweg="d:${i}" aria-label="entfernen">×</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
     <button class="knopf" data-dneu="d">+ Deckung (Kopie der letzten)</button>
@@ -5132,7 +5131,7 @@ function zeigeEinst() {
     <label>Aufbau <select data-dach="s:0:standardAufbau">${e.dach.aufbauten.map((a) => `<option value="${esc(a.id)}" ${e.dach.standardAufbau === a.id ? "selected" : ""}>${esc(a.name)}</option>`).join("")}</select></label></div>`,
     detail3d: `
     <h4>3D-Detailvorlagen (STEP)</h4>
-    <p class="hinweis">Körper für wiederkehrende Details (Kehle, Stutzen, Halter …) als STEP-Datei. Konvention: <b>Ursprung = Anfang der Ankerkante, +X = Richtung der Kante, +Z = Sichtseite</b>, Masse in mm. Eingesetzt wird mit «3D-Detail» (Blech ▾) an einer Kante. Die Vorlagen werden mit der Firma abgeglichen (bis 1.5 MB je Vorlage).</p>
+    <p class="hinweis">Wiederkehrende Teile als STEP-Datei. Ursprung = Anfang der Ankerkante, +X = Kante, +Z = Sichtseite.</p>
     ${(e.detailvorlagen || []).length ? `<div class="tabwrap"><table class="zeilen"><thead><tr><th>Name</th><th>Gruppe</th><th>Länge mm</th><th>Blechdicke mm</th><th>Kante min mm</th><th>Kante max mm</th><th></th></tr></thead><tbody>
     ${e.detailvorlagen.map((v, i) => `<tr><td><input data-dv="name" data-i="${i}" value="${esc(v.name)}" aria-label="Name"></td><td><input data-dv="category" data-i="${i}" value="${esc(v.category || "")}" aria-label="Gruppe"></td>
       <td>${esc(v.anchor?.edgeLength ?? "")}</td><td><input data-dv="thickness" data-i="${i}" type="number" step="any" value="${v.compatibility?.thickness ?? ""}" aria-label="Blechdicke"></td>
@@ -5149,8 +5148,7 @@ function zeigeEinst() {
     <h4>Papierkorb</h4>
     ${(() => { const s = sichLesen(); return s.korb.length ? `<ul class="eigene">${s.korb.map((x, i) => `<li>${esc(x.daten.name)} <small class="hinweis">${{ baustein: "Baustein", material: "Material", detail: "3D-Detail" }[x.art]} · gelöscht ${esc(new Date(x.zeit).toLocaleString("de-CH"))}</small><button class="knopf klein" data-korb="${i}">Zurückholen</button></li>`).join("")}</ul>` : '<p class="hinweis">Leer. Gelöschte Bausteine und Materialien landen hier.</p>'; })()}
     <h4>Sichern und übertragen</h4>
-    <p class="hinweis">Einstellungen gelten pro Gerät. Zum Übertragen (z. B. PC → Handy) hier als Datei sichern und auf dem anderen Gerät laden.
-      Laden übernimmt alle Einstellungen und ergänzt eigene Vorlagen.</p>
+    <p class="hinweis">Einstellungen gelten pro Gerät. Zum Übertragen als Datei sichern und auf dem anderen Gerät laden.</p>
     <div class="reihe ohnerand"><button class="knopf" id="eExport">Als Datei sichern</button><button class="knopf" id="eImport">Aus Datei laden</button></div>`,
   };
   { const al = inhalt.allgemein, i = al.indexOf("<h4>Start</h4>"); inhalt.firma = al.slice(0, i); inhalt.allgemein = al.slice(i); } // Firma gehört zu «Firma & Ausgabe»
@@ -5304,7 +5302,30 @@ $("eOk").onclick = () => {
 };
 
 // ------------------------------------------------------------ Hilfe
-const hilfe = (auf) => { $("hilfe").hidden = !auf; };
+// Hilfe: Kapitel aus den Überschriften der Vorlage (<h4>), Suche, Sprung zu einem Kapitel
+const HILFE_KURZ = { "Kontextleiste": "Kontextleiste", "Blechteil erstellen": "Blechteil erstellen", "Flansch, Umschlag": "Flansch, Umschlag, Bausteine", "Flächenblech mit": "Flächenblech & Bausteine", "Konto, Cloud": "Konto, Cloud, Vorlagen", "Pläne": "Pläne (Zeichnung)", "Modellieren wie": "Modellieren", "Konstruieren und": "Konstruieren & Skizzieren", "Skizzenwerkzeuge": "Skizzenwerkzeuge", "Werkstatt": "Werkstatt", "Simulation": "Simulation", "Start, Speichern": "Start, Speichern, Bedienung", "Tastenkürzel": "Tastenkürzel", "Konventionen": "Konventionen" };
+let hilfeKapitel = null;
+function hilfeBauen() {
+  if (hilfeKapitel) return; const q = document.createElement("div"); q.append($("hilfeQuelle").content.cloneNode(true)); hilfeKapitel = [];
+  for (const n of [...q.childNodes]) { if (n.nodeType === 1 && n.tagName === "H4") hilfeKapitel.push({ titel: n.textContent.trim(), knoten: [n] }); else if (hilfeKapitel.length) hilfeKapitel.at(-1).knoten.push(n); }
+  hilfeKapitel.forEach((k, i) => { k.kurz = Object.entries(HILFE_KURZ).find(([a]) => k.titel.startsWith(a))?.[1] || k.titel; k.text = k.knoten.map((x) => x.textContent || "").join(" ").toLowerCase(); k.i = i; });
+  $("hListe").innerHTML = hilfeKapitel.map((k, i) => `<button role="tab" data-kap="${i}" aria-selected="false"><span class="hnr">${i + 1}</span><span>${esc(k.kurz)}</span></button>`).join("");
+}
+let hilfeAktiv = 0;
+function hilfeZeige(i, suchwort = "") {
+  hilfeBauen(); hilfeAktiv = Math.max(0, Math.min(hilfeKapitel.length - 1, i)); const k = hilfeKapitel[hilfeAktiv], box = $("hInhalt"); box.replaceChildren(...k.knoten.map((n) => n.cloneNode(true)));
+  $("hUnter").textContent = `Kapitel ${hilfeAktiv + 1} von ${hilfeKapitel.length} · ${k.kurz}`; box.scrollTop = 0;
+  document.querySelectorAll("#hListe [data-kap]").forEach((b) => b.setAttribute("aria-selected", String(+b.dataset.kap === hilfeAktiv)));
+  if (suchwort) { const w = document.createTreeWalker(box, NodeFilter.SHOW_TEXT), liste = []; while (w.nextNode()) liste.push(w.currentNode); let erster = null;
+    for (const tn of liste) { const idx = tn.nodeValue.toLowerCase().indexOf(suchwort); if (idx < 0 || !tn.parentElement) continue; const r = tn.splitText(idx); r.splitText(suchwort.length); const m = document.createElement("mark"); r.parentNode.replaceChild(m, r); m.append(r); erster ||= m; }
+    erster?.scrollIntoView({ block: "center" }); }
+}
+const hilfe = (auf, kapitel = null) => { $("hilfe").hidden = !auf; if (!auf) return; hilfeBauen(); const i = typeof kapitel === "string" ? hilfeKapitel.findIndex((k) => k.titel.toLowerCase().startsWith(kapitel.toLowerCase())) : (kapitel ?? hilfeAktiv); hilfeZeige(i < 0 ? 0 : i); setTimeout(() => $("hSuche").focus(), 50); };
+$("hListe").addEventListener("click", (e) => { const b = e.target.closest("[data-kap]"); if (b) hilfeZeige(+b.dataset.kap); });
+$("hSuche").addEventListener("input", (e) => { const w = e.target.value.trim().toLowerCase(); hilfeBauen(); let erster = -1;
+  document.querySelectorAll("#hListe [data-kap]").forEach((b) => { const k = hilfeKapitel[+b.dataset.kap], treffer = !w || k.text.includes(w) || k.kurz.toLowerCase().includes(w); b.hidden = !treffer; if (treffer && erster < 0) erster = +b.dataset.kap; });
+  if (w.length >= 2 && erster >= 0) hilfeZeige(hilfeKapitel[hilfeAktiv].text.includes(w) ? hilfeAktiv : erster, w); else if (!w) hilfeZeige(hilfeAktiv); });
+$("hZu2").onclick = () => hilfe(false);
 $("wHilfe").onclick = () => hilfe(true);
 $("hZu").onclick = () => hilfe(false);
 $("hVersion").textContent = `Version ${VERSION}` + (pc ? " · PC-Programm" : " · Web-Version");

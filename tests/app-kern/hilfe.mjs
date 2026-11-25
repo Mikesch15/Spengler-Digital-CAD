@@ -1,0 +1,24 @@
+// App-Test Hilfe: Kapitel mit Navigation und Suche, Simulationskapitel mit Beispielbildern (alle Bilder laden)
+import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
+const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
+const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json", ".jpg": "image/jpeg", ".png": "image/png" };
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] || "application/octet-stream" }); a.end(d); }).listen(+(process.env.PORT || 8797));
+let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
+const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), pr = []; s.on("pageerror", (e) => pr.push(e.message));
+await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s.waitForTimeout(1500);
+await s.evaluate(() => document.getElementById("wHilfe").click()); await s.waitForTimeout(400);
+const kap = await s.evaluate(() => [...document.querySelectorAll("#hListe button")].map((x) => x.textContent));
+ok(kap.length >= 12 && kap.some((k) => /Simulation/.test(k)) && kap.some((k) => /Tastenk/.test(k)), `Hilfe hat Kapitel (${kap.length})`);
+ok(await s.evaluate(() => document.querySelectorAll("#hInhalt h4").length === 1), "Es wird immer genau ein Kapitel gezeigt");
+await s.evaluate(() => [...document.querySelectorAll("#hListe button")].find((x) => /Simulation/.test(x.textContent)).click()); await s.waitForTimeout(300);
+const sim = await s.evaluate(async () => { const imgs = [...document.querySelectorAll("#hInhalt img")]; await Promise.all(imgs.map((i) => i.complete ? 0 : new Promise((r) => { i.onload = i.onerror = r; }))); return { n: imgs.length, geladen: imgs.filter((i) => i.naturalWidth > 100).length, h5: document.querySelectorAll("#hInhalt h5").length }; });
+ok(sim.n >= 10 && sim.geladen === sim.n, `Simulationskapitel: ${sim.n} Beispielbilder, alle geladen`);
+ok(sim.h5 >= 8, `Simulationskapitel gegliedert (${sim.h5} Abschnitte)`);
+await s.fill("#hSuche", "Gleitlager"); await s.waitForTimeout(500);
+ok(await s.evaluate(() => !!document.querySelector("#hInhalt mark") && [...document.querySelectorAll("#hListe button")].filter((x) => !x.hidden).length === 1), "Suche filtert Kapitel und markiert den Treffer");
+await s.fill("#hSuche", ""); await s.waitForTimeout(300);
+ok(await s.evaluate(() => [...document.querySelectorAll("#hListe button")].every((x) => !x.hidden)), "Leere Suche zeigt alle Kapitel");
+await s.keyboard.press("Escape"); await s.waitForTimeout(200); ok(await s.evaluate(() => document.getElementById("hilfe").hidden), "Esc schliesst die Hilfe");
+ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
+await b.close(); srv.close();
+console.log(fehler ? `${fehler} Fehler` : "Hilfe (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

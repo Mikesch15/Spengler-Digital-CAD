@@ -906,6 +906,18 @@ body.stiftpalette .stiftleiste { display: flex; }
 .esekinhalt { padding: 14px 16px 18px; } .esekinhalt > h4:first-child { display: none; } .esekinhalt h4 { margin-top: 18px; font-size: var(--fs-m); }
 .esekinhalt .egitter, .esekinhalt .firmaeinst, .esekinhalt .anleitung, .esekinhalt .probe, .esekinhalt .tabwrap { border: 0; padding: 0; background: none; }
 .ehilfe { margin: 6px 0 10px; } .ehilfe > summary { cursor: pointer; color: #1869aa; font-size: var(--fs-s); font-weight: 600; padding: 2px 0; } .ehilfe[open] > summary { margin-bottom: 8px; }
+/* Hilfe: Kapitel links, Text rechts */
+.hnav input[type=search] { width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); color: var(--fg); font: var(--fs-m) var(--font-body); } .hnav input:focus { outline: none; border-color: #1869aa; box-shadow: 0 0 0 3px rgb(24 105 170 / .22); }
+.hnav button { align-items: flex-start; padding: 8px 12px; line-height: 1.3; } .hnav button .hnr { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--fg) 9%, transparent); color: var(--muted); font: 700 var(--fs-xs) var(--font-num); } .hnav button[aria-selected="true"] .hnr { background: #1869aa; color: #fff; }
+.hilfekarte .ekoerper { grid-template-columns: 268px minmax(0, 1fr); }
+.hilfetext { padding: 24px 34px 40px; max-width: none; line-height: 1.55; font-size: var(--fs-m); } .hilfetext h4 { margin: 0 0 14px; font: 700 22px/1.2 var(--font-body); letter-spacing: -.01em; text-transform: none; color: var(--fg); padding: 0; border: 0; }
+.hilfetext h5 { margin: 26px 0 8px; padding-top: 14px; border-top: 1px solid var(--line); font: 700 var(--fs-xl) var(--font-body); color: var(--fg); }
+.hilfetext ul, .hilfetext ol { margin: 8px 0; padding-left: 22px; display: grid; gap: 6px; } .hilfetext p { margin: 8px 0; }
+.hilfelead { font-size: var(--fs-l); color: var(--fg); } .hilfewarn { padding: 10px 14px; border-radius: 10px; border-left: 4px solid #c47f00; background: color-mix(in srgb, #c47f00 12%, transparent); }
+.hilfebild { margin: 14px 0 18px; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: 0 2px 10px rgb(15 40 80 / .08); } .hilfebild img { display: block; max-width: 100%; height: auto; margin: 0 auto; border-radius: 6px; } .hilfebild figcaption { margin: 8px 4px 2px; font-size: var(--fs-s); color: var(--muted); line-height: 1.45; }
+.hilfetab { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: var(--fs-s); } .hilfetab th { text-align: left; padding: 7px 10px; border-bottom: 2px solid #1869aa; color: var(--muted); font-weight: 600; } .hilfetab td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.hilfetext mark { background: #ffe58a; color: #111; border-radius: 3px; padding: 0 2px; }
+@media (max-width: 760px) { .hilfekarte .ekoerper { grid-template-columns: 1fr; } .hnav { display: grid !important; grid-template-columns: 1fr 1fr; max-height: 30vh; } .hnav input { grid-column: 1 / -1; } .hilfetext { padding: 16px 16px 30px; } }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 var(--fs-xl) var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 
@@ -1215,8 +1227,13 @@ body.stiftpalette .stiftleiste { display: flex; }
   </div>
   <div class="plinhalt"><aside id="plBrowser" aria-label="Zeichnungsbrowser"></aside><div class="plmitte"><div id="plFlaeche"></div><div id="plStatus" aria-live="off"></div></div><aside id="plEigen"></aside></div>
 </div></div>
-<div class="modal" id="hilfe" hidden><div class="modalbox" role="dialog" aria-labelledby="hTitel">
-  <h3 id="hTitel">Kurzanleitung</h3><div class="inhalt hilfetext" tabindex="0" role="region" aria-label="Kurzanleitung">
+<div class="modal einstmodal" id="hilfe" hidden><div class="einstkarte hilfekarte" role="dialog" aria-labelledby="hTitel">
+  <div class="ekopf"><div><b id="hTitel">Hilfe</b><span id="hUnter">Kapitel wählen oder suchen</span></div><button class="startzu" id="hZu2" type="button" aria-label="Schliessen" title="Schliessen (Esc)">×</button></div>
+  <div class="ekoerper"><nav class="enav hnav" aria-label="Kapitel"><input type="search" id="hSuche" placeholder="In der Hilfe suchen …" aria-label="In der Hilfe suchen" autocomplete="off"><div id="hListe" role="tablist" style="display: contents"></div></nav>
+    <div class="inhalt eseite hilfetext" id="hInhalt" tabindex="0" role="region" aria-label="Hilfetext"></div></div>
+  <div class="fuss efuss"><span class="hinweis" id="hVersion"></span><span style="flex:1"></span><button class="knopf haupt" id="hZu">Schliessen</button></div>
+</div></div>
+<template id="hilfeQuelle">
     <h4>Kontextleiste – das Programm schlägt vor, was als Nächstes passt</h4>
     <ul>
       <li><b>Skizze anklicken</b> (Fläche oder Linie): geschlossen → Extrudieren, Flächenblech, Drehen, Dach darauf; offener Linienzug → Blechprofil, Sweep.</li>
@@ -1271,7 +1288,7 @@ body.stiftpalette .stiftleiste { display: flex; }
       <li><b>Extrudieren</b> und <b>Drehen</b> (Profil um Skizzenachse oder gerade Hilfslinie) mit Vorgang: neuer Körper, vereinigen, ausschneiden, schneiden.</li>
       <li><b>Parameter</b> (Ändern): benannte Werte und Formeln – in jedem Zahlenfeld und Skizzenmass nutzbar, z. B. «breite / 3». Ändert man einen Parameter, rechnet das ganze Modell nach (Masse mit «fx»).</li>
       <li><b>Prüfen</b>: Messen (Abstand und ΔX/ΔY/ΔZ zwischen Ecken, Kantenmitten, Flächen) und Schnittanalyse an einer Ebene.</li>
-      <li><b>Simulation</b> (Reiter Simulation): wie viel Last hält ein Blech? <b>Fenster «Simulation»</b> öffnen, <b>Lager</b> setzen (Einspannung, gelenkig, Gleitlager, vorgegebene Verschiebung – Fläche, Kante oder Punkt im Modell anklicken), <b>Lasten</b> setzen (Kraft, Flächenlast mit Richtung, Linienlast, Eigengewicht, Normlasten Schnee/Wind/Person), <b>Berechnen</b>. Ergebnis: Spannung und Verschiebung farbig, Sicherheit, <b>Höchstlast</b> (Vielfaches der angesetzten Last), optional Beulen. Mehrere <b>Lastfälle</b> werden einzeln gerechnet und nach GZT/GZG kombiniert; <b>Bericht</b> druckt alles samt Bildern. Gerechnet wird mit einer Schalen-FEM auf der Blechmitte – ein <b>Richtwert, kein statischer Nachweis</b>.</li>
+      <li><b>Simulation</b>: Lager und Lasten setzen, berechnen, Spannung und Höchstlast lesen – ausführlich mit Bildern im Kapitel «Simulation».</li>
       <li><b>Blechfunktionen wie in Fusion</b>: Flansch (Winkel, Länge, Radius, Mass bis Mittellinie/Aussen/Innen), Umschlag mit Saumart <i>geschlossen, offen, Tropfen</i>, Kantenbausteine inkl. Säume und Kröpfungen (Z-Abkantung 45°/90°), <b>Eckenschluss</b> beim Flächenblech (Gehrung, Stoss/Überlappung, offene Ecke mit Spalt, Quetschfalte), Konturflansch (= Blechprofil aus Skizze), Abwickeln/Falten, Blech auf Körperfläche, Abwicklung als DXF. Zusätzlich: <b>Lofted Flange</b> (Blech zwischen zwei Profilen), <b>Biegung an Linie</b> (Flächenblech), <b>Rip</b> (Auftrennen). Körper: <b>Bohrung</b>, <b>Skalieren</b>, <b>Rohr</b>, <b>Spirale</b>, <b>Rippe</b>. <b>Naht</b> (Blech › Kanten): verbindet zwei Bleche. Erst die Kante an Blech A anklicken, dann die an Blech B (Flächenblech-Kanten auch gebogen, Kante A/B eines Blechprofils, Längsnaht Anfang/Ende eines Rohrs). Im Fenster: <b>Punktnaht</b> (Überlappung 15 mm, das abgesetzte Blech wird um eine Blechstärke gekröpft, beide Bleche danach bündig – in beide Richtungen, auch gerade ohne Absetzung), <b>Falznaht</b> (einfacher Falz 5 + 10 mm, abgesetzt, oder mittig 7,5 + 7,5 mm), <b>Schweissnaht</b> und <b>Ecknaht</b> (nur als Raupe dargestellt). Sitzt an der Kante schon ein Flansch, läuft die Naht zusätzlich darauf. Zugaben stehen in Abwicklung, DXF und Stückliste. <b>Quetschfalte am Blechprofil</b>: Profil wählen, «Quetschfalte» (Blech › Kanten), Ecke anklicken, wo die Stirnlasche (Flansch an der Stirnkante, eine Biegung) auf die Wand daneben trifft – der Überschuss wird gefaltet, in der Abwicklung (DXF) mit Faltlinie. <b>Flanschende</b> (Blech › Kanten): Ein einzelner Flansch endet an der Ecke standardmässig rechtwinklig zur Biegekante; mit dem Werkzeug lässt sich das Ende nachträglich bündig zur Nachbarkante schneiden oder mit freiem Winkel (± in beide Richtungen) und verlängern oder kürzen. Offene Punkte: docs/cad/FUSION_LUECKEN.md.</li>
       <li><b>Zeichnung</b> (Prüfen › Plan, aufgebaut wie der Fusion-Zeichnungsbereich: Reiter Ansichten / Beschriften / Tabellen / Ausgabe, Browser links, Eigenschaften rechts): Basisansicht, <b>Projizierte Ansichten</b> (bleiben ausgerichtet und folgen der Basis), Schnitte, Detailansicht, Bemassung, Mittellinien; zusätzlich Linie, Pfeil, Rechteck, Kreis, Positionsnummern, <b>Stückliste</b> und <b>Biegeliste</b> aus dem Modell, Schriftfeld mit Zeichner/Prüfer/Index/Datum, Fangraster (Blatt-Einstellungen rechts), Rückgängig/Wiederholen (Strg + Z / Y), Duplizieren (Strg + D) und Blatt kopieren.</li>
       <li><b>Konstruieren ▾</b>: Ebenen, Achsen (durch Kante, zwei Punkte, senkrecht zur Ebene, Schnitt zweier Ebenen) und Punkte (Koordinaten, Kantenmitte, zwischen zwei Punkten, Kante × Ebene).</li>
@@ -1327,6 +1344,93 @@ body.stiftpalette .stiftleiste { display: flex; }
       <li><b>Einstellungen</b> (Register): Materialien kalibrieren (K-Faktor aus Probebiegung) · Lagerformate · Vorgaben für neue Teile, Fangraster, Spalte «ab B» · Druck (Betrieb in der Kopfzeile, Abwicklung, Etikett, Materialbedarf) · Etikettenbogen · Programm (hell/dunkel, Updates) · eigene Vorlagen, alles als Datei sichern und auf einem anderen Gerät laden.</li>
       <li><b>Zuletzt</b> (PC-Programm): die letzten 8 Projekte direkt öffnen.</li>
     </ul>
+    <h4>Simulation: wie viel Last hält ein Blech?</h4>
+    <p class="hilfelead">Die Simulation rechnet, wie sich dein Blech unter Last verformt und wo es am stärksten beansprucht wird. Du setzt <b>Lager</b> (wo das Blech festgehalten ist) und <b>Lasten</b> (was darauf wirkt), das Programm zeigt <b>Spannung</b> und <b>Verschiebung</b> als Farben und sagt, ob das Blech hält und wie viel Reserve es hat.</p>
+    <p class="hilfewarn"><b>Wichtig:</b> Das Ergebnis ist ein <b>Richtwert für die Werkstatt</b> (Schalen-FEM auf der Blechmitte), <b>kein statischer Nachweis</b> nach Norm. Für tragende Konstruktionen immer eine Fachperson beiziehen.</p>
+
+    <h5>Der Ablauf in 6 Schritten</h5>
+    <figure class="hilfebild"><img src="hilfe/sim-01-reiter.jpg" alt="Reiter Simulation mit nummerierten Knöpfen" loading="lazy"><figcaption>Der Reiter «Simulation». Die Zahlen zeigen die Reihenfolge: <b>1</b> Fenster öffnen · <b>2</b> Lager · <b>3</b> Lasten · <b>4</b> Lastfälle · <b>5</b> Berechnen · <b>6</b> Ergebnis anzeigen · <b>7</b> Bericht.</figcaption></figure>
+    <ol>
+      <li><b>Fenster «Simulation» öffnen</b> (Reiter Simulation › Simulation). Rechts erscheint das Fenster mit den Bereichen Studie, Modell, Lager, Lasten, Lastfälle, Nachweis und Ergebnis. Alle Einstellungen einer Rechnung heissen <b>Studie</b>; du kannst mehrere Studien am selben Blech führen (zum Beispiel «Schnee» und «Montage») und sie mit «+ Studie» anlegen.</li>
+      <li><b>Modell prüfen</b>: Unter «Modell» stehen die Bleche, die mitgerechnet werden (Häkchen). Die <b>Elementgrösse</b> steht auf «auto»; kleiner = genauer, aber langsamer.</li>
+      <li><b>Lager setzen</b> – wo ist das Blech befestigt?</li>
+      <li><b>Lasten setzen</b> – was wirkt auf das Blech?</li>
+      <li><b>Berechnen</b> – ein Klick, meist 1–5 Sekunden.</li>
+      <li><b>Ergebnis lesen</b> – Farben, Zahlen, Höchstlast, optional Bericht.</li>
+    </ol>
+    <figure class="hilfebild"><img src="hilfe/sim-02-fenster-oben.jpg" alt="Simulationsfenster mit nummerierten Bereichen" loading="lazy"><figcaption>Das Fenster «Simulation»: <b>1</b> Studie · <b>2</b> Modell · <b>3</b> Lager · <b>4</b> Lasten · <b>5</b> Lastfälle · <b>6</b> Nachweis (Werkstoffwerte und Grenzen). Unten stehen «Schliessen», «Bericht» und «Berechnen».</figcaption></figure>
+
+    <h5>Schritt 3 – Lager setzen</h5>
+    <p>Ein Lager legt fest, welche Bewegungen an einer Stelle <b>gesperrt</b> sind. Ohne Lager würde das Blech einfach wegfliegen – die Rechnung bricht dann ab.</p>
+    <p>Klicke «+ Lager», wähle die <b>Art</b> und die <b>Stelle</b> (Fläche, Kante, Punkt oder Querschnitt/Stirn) und klicke sie im Modell an. Die gewählte Stelle leuchtet (orange), das Fenster sagt, wie viele Knoten erfasst sind. Mit «Übernehmen» ist das Lager gesetzt (blaue Marken am Blech).</p>
+    <figure class="hilfebild"><img src="hilfe/sim-03-lager-formular.jpg" alt="Lager wählen: Kante unten angeklickt" loading="lazy"><figcaption>Formular «Lager hinzufügen»: Art «Gelenkig», Stelle «Kante». Die angeklickte untere Kante leuchtet, das Fenster meldet «72 Knoten gewählt». Mit «Übernehmen» wird das Lager gesetzt.</figcaption></figure>
+    <table class="liste hilfetab"><thead><tr><th>Lagerart</th><th>Was gesperrt ist</th><th>Typisch für</th></tr></thead><tbody>
+      <tr><td><b>Einspannung (fest)</b></td><td>alle 6 Freiheitsgrade: keine Verschiebung, keine Drehung</td><td>Blech fest eingeklemmt, verschraubt oder verschweisst; Kragarm</td></tr>
+      <tr><td><b>Gelenkig</b></td><td>Verschiebungen gesperrt, Drehen frei</td><td>aufliegende, genagelte oder genietete Kante</td></tr>
+      <tr><td><b>Gleitlager – frei in X / Y / Z</b></td><td>die beiden anderen Richtungen gesperrt</td><td>Blech, das sich in einer Richtung dehnen darf (Dehnungsfuge)</td></tr>
+      <tr><td><b>Nur X / Y / Z gesperrt</b></td><td>genau eine Richtung gesperrt (Z = Auflager)</td><td>einfaches Aufliegen auf der Unterkonstruktion</td></tr>
+      <tr><td><b>Vorgegebene Verschiebung</b></td><td>Stelle wird um einen Betrag verschoben</td><td>Setzung, Zwang, Montagetoleranz</td></tr>
+    </tbody></table>
+    <p class="hinweis">Tipp: Lagere lieber <b>Kanten oder Flächen</b> als einzelne Punkte. An Punktlagern entstehen rechnerisch unendlich hohe Spannungen (Singularität) – das ist keine echte Schwachstelle.</p>
+    <figure class="hilfebild"><img src="hilfe/sim-04-lager-gesetzt.jpg" alt="Zwei Lager gesetzt" loading="lazy"><figcaption>Beispiel: Ein Dachblech 400 × 200 mm, 1 mm stark, an beiden langen Kanten gelenkig gelagert (blaugrüne Marken). Im Fenster stehen unter «Lager» die beiden Einträge; das × entfernt ein Lager, ein Klick auf den Namen bearbeitet es.</figcaption></figure>
+
+    <h5>Schritt 4 – Lasten setzen</h5>
+    <p>Jede Last gehört zu einem <b>Lastfall</b> (siehe unten). Die Last-Knöpfe im Fenster und im Reiter «Lasten»:</p>
+    <table class="liste hilfetab"><thead><tr><th>Last</th><th>Eingabe</th><th>Beispiel</th></tr></thead><tbody>
+      <tr><td><b>Kraft</b></td><td>Stelle (Punkt/Fläche), Radius der Lasteinleitung, Kraft in N, Richtung</td><td>Person kniet aufs Blech: 1000 N, Radius 50 mm</td></tr>
+      <tr><td><b>Druck (Flächenlast)</b></td><td>Fläche, Last in kN/m², Richtung; Häkchen «auf Grundriss bezogen» für Schnee</td><td>Nutzlast 0.5 kN/m² nach unten</td></tr>
+      <tr><td><b>Linienlast</b></td><td>Kante, Last in N/mm, Richtung</td><td>Rinnenlast am Rand, Gewicht einer Abdeckung</td></tr>
+      <tr><td><b>Eigengewicht</b></td><td>nur Erdbeschleunigung (9.81 m/s²) – aus Dicke, Fläche und Dichte des Materials, Richtung −Z</td><td>immer sinnvoll bei grossen Blechen</td></tr>
+      <tr><td><b>Normlast</b></td><td>Schnee, Wind, Person/Montage (1 kN), freie Nutzlast – mit Höhe ü. M., Dachneigung usw.</td><td>Schnee in Bern: automatisch nach SIA 261 (vereinfacht)</td></tr>
+    </tbody></table>
+    <p><b>Richtung</b>: «nach unten (−Z)» ist die Schwerkraft. «auf die angeklickte Fläche» drückt senkrecht auf das Blech, «von der angeklickten Fläche weg» zieht daran (Windsog). Die roten Pfeile am Blech zeigen jede Last.</p>
+    <figure class="hilfebild"><img src="hilfe/sim-05-last-formular.jpg" alt="Formular Flächenlast" loading="lazy"><figcaption>Formular «Flächenlast»: Fläche angeklickt (leuchtet), Last 0.5 kN/m², Richtung nach unten. Nach «Übernehmen» erscheinen rote Pfeile auf dem Blech.</figcaption></figure>
+    <figure class="hilfebild"><img src="hilfe/sim-06-last-gesetzt.jpg" alt="Last gesetzt, rote Pfeile" loading="lazy"><figcaption>Lager (blaugrüne Marken an den Kanten) und Last (rote Pfeile) sind gesetzt – das Blech ist bereit zum Berechnen.</figcaption></figure>
+    <p><b>Normlast Schnee</b>: Das Programm rechnet aus Höhe ü. M. und Dachneigung die Schneelast (z. B. s<sub>k</sub> = 1.22 kN/m², μ = 0.8 → q = 0.97 kN/m²) und legt sie als eigenen Lastfall an. <b>Prüfe die Normwerte immer an der gültigen Norm</b> – die Formeln sind vereinfacht.</p>
+    <figure class="hilfebild"><img src="hilfe/sim-10-normlast-formular.jpg" alt="Formular Normlast Schnee" loading="lazy"><figcaption>Formular «Normlast» mit Schnee: Das Programm zeigt die berechnete Last und weist darauf hin, dass ein eigener Lastfall und die Normkombinationen angelegt werden.</figcaption></figure>
+
+    <h5>Lastfälle und Kombinationen</h5>
+    <p>Ein <b>Lastfall</b> ist eine Gruppe von Lasten, die zusammen wirken (zum Beispiel «Eigengewicht», «Schnee», «Wind»). Jeder hat eine <b>Art</b>: <b>ständig (G)</b> für Eigengewicht und Aufbauten, <b>veränderlich (Q)</b> für Schnee, Wind, Nutzlast. Jeder Lastfall wird einzeln gerechnet; die Ergebnisse werden dann überlagert.</p>
+    <ul>
+      <li><b>einzeln</b>: jeder Lastfall für sich, ohne Faktoren.</li>
+      <li><b>Norm GZT/GZG</b>: Kombinationen nach Norm. <b>GZT</b> (Grenzzustand der Tragfähigkeit) rechnet mit Sicherheitsbeiwerten (ständig × 1.35, veränderlich × 1.5) und prüft die <b>Festigkeit</b>. <b>GZG</b> (Gebrauchstauglichkeit) rechnet ohne Faktoren und prüft die <b>Durchbiegung</b>. Jeder veränderliche Lastfall ist einmal «führend» (voller Faktor), die anderen begleiten mit reduziertem Faktor.</li>
+    </ul>
+
+    <h5>Der Nachweis: Werkstoff und Grenzen</h5>
+    <p>Im Bereich «Nachweis» stehen die Werte, gegen die verglichen wird. Sie kommen aus dem Material (Einstellungen › Material & Lager; dort lassen sich E-Modul und Rp0,2 pro Material überschreiben):</p>
+    <ul>
+      <li><b>R<sub>p0,2</sub></b>: Streckgrenze in N/mm² – ab hier verformt sich das Blech bleibend. Richtwerte: Stahl 250, Edelstahl 230, Zink 110, Kupfer 160, Alu 120.</li>
+      <li><b>E-Modul</b>: Steifigkeit in N/mm² (Stahl 210000, Zink 100000 …).</li>
+      <li><b>Teilsicherheit γ<sub>M</sub></b>: Faktor, durch den Rp0,2 geteilt wird (1 = keiner).</li>
+      <li><b>Durchbiegung L / …</b>: zulässige Durchbiegung als Bruchteil der Spannweite (L/200 = 5 mm je Meter).</li>
+      <li><b>Spannung glätten</b>: Mittelwert an den Knoten – beruhigt das Farbbild.</li>
+      <li><b>Beulen mitrechnen</b>: prüft zusätzlich, ob dünne Blechfelder unter Druck ausbeulen (dauert länger).</li>
+    </ul>
+
+    <h5>Schritt 5 und 6 – Berechnen und Ergebnis lesen</h5>
+    <p>Mit «Berechnen» (Reiter oder Fenster) wird das Blech in Dreiecke zerlegt, die Last verteilt und die Verformung gelöst. Danach siehst du das Ergebnis direkt am Blech:</p>
+    <figure class="hilfebild"><img src="hilfe/sim-07-spannung.jpg" alt="Spannungsbild" loading="lazy"><figcaption><b>Vergleichsspannung</b> (von Mises) in N/mm². Blau = wenig, Rot = viel. Die Legende links unten nennt den Höchstwert (hier 15.9 N/mm²) und die zulässige Spannung (250 N/mm²). Die Verformung ist <b>überhöht</b> dargestellt (hier ×38), damit man sie sieht. Die rote Zone liegt in der Mitte der Spannweite – dort biegt sich das Blech am stärksten.</figcaption></figure>
+    <figure class="hilfebild"><img src="hilfe/sim-08-verschiebung.jpg" alt="Verschiebungsbild" loading="lazy"><figcaption><b>Verschiebung</b> in mm. Hier biegt sich die Mitte des Blechs am stärksten durch. Unter «Anzeige» wechselst du zwischen Spannung, Verschiebung und (bei Beulen) der Beulform; die «Überhöhung» ist einstellbar.</figcaption></figure>
+    <p><b>Ein Klick aufs Blech</b> zeigt an dieser Stelle Spannung, Verschiebung und Sicherheit in der Statuszeile.</p>
+    <figure class="hilfebild"><img src="hilfe/sim-09-ergebnisfenster.jpg" alt="Ergebnisbereich im Fenster" loading="lazy"><figcaption>Der Bereich «Ergebnis»: <b>6</b> Nachweiswerte · <b>7</b> das Urteil · <b>8</b> Anzeige. Im grünen Kasten steht «Hält – Höchstlast 3.17× der angesetzten Last». Rot heisst «Überlastet».</figcaption></figure>
+    <p>Die wichtigste Zahl ist die <b>Höchstlast</b>: Um den Faktor × könnte man die angesetzte Last steigern, bis die Festigkeit (Rp0,2/γ<sub>M</sub>), die Durchbiegungsgrenze oder das Beulen massgebend wird. <b>Höchstlast 3.17×</b> heisst: Das Blech hält gut das Dreifache der angesetzten Last. <b>0.59×</b> heisst: Es hält nur 59 % – es ist überlastet. Der Faktor gilt nur im elastischen Bereich (linear gerechnet).</p>
+    <figure class="hilfebild"><img src="hilfe/sim-11-kombinationen.jpg" alt="Kombinationstabelle" loading="lazy"><figcaption>Mit Normlasten: <b>1</b> das Urteil (hier «Überlastet», Höchstlast 0.59×) · <b>2</b> die Tabelle aller Kombinationen mit σ (N/mm²), u (mm) und dem Faktor × · <b>3</b> die Anzeige. Rote Faktoren (unter 1) sind überlastet. Ein Klick auf eine Zeile zeigt diese Kombination am Blech; massgebend ist die Zeile mit dem kleinsten Faktor.</figcaption></figure>
+
+    <h5>Bericht</h5>
+    <p>«Bericht» druckt eine Seite mit Hinweis, Ergebnis, Tabelle, beiden Bildern (Spannung und Verschiebung), Modell, Werkstoff, Lagern, Lasten, Normlasten und Kombinationen. Er gehört zum Auftrag und zeigt dein Firmenlogo.</p>
+    <figure class="hilfebild"><img src="hilfe/sim-12-bericht.jpg" alt="Simulationsbericht" loading="lazy"><figcaption>Der Simulationsbericht auf A4: oben der Hinweis «Richtwert, kein statischer Nachweis», darunter das massgebende Ergebnis, die Kombinationstabelle, die Bilder und die Eingabedaten.</figcaption></figure>
+
+    <h5>Genauigkeit, Grenzen und typische Fehler</h5>
+    <ul>
+      <li><b>Wie genau?</b> Das Programm prüft sich gegen bekannte Formeln: Zugstab, Kragarm (P·L³/3EI), Platte unter Druck, Plattenbeulen und das Gleichgewicht am gefalteten Blech. Die Rechenmethode ist eine lineare Schalen-FEM (Dreieckselemente mit Scheibe und Platte).</li>
+      <li><b>Nicht erfasst</b>: Kontakt zwischen Teilen, Plastizieren (bleibende Verformung), Quetschfalten und Ecklaschen im Modell, genaue Eckverbindungen von Flanschen. Nur ebene und zylindrische Mittelflächen.</li>
+      <li><b>Spannungsspitzen</b> an Punktlagern und Einzelkräften sind Rechenartefakte. Wähle Fläche oder Kante, oder vergrössere den Radius der Kraft.</li>
+      <li><b>«Kein Lager definiert»</b>: Die Rechnung braucht mindestens eine Einspannung oder Auflagerung. Ist das Blech nicht in allen Richtungen gehalten, kann es sich starr bewegen und die Rechnung liefert unsinnige Werte – setze genug Lager.</li>
+      <li><b>Wenn die Höchstlast sehr klein ist</b> (0.01×): Prüfe die Einheiten – Flächenlast in kN/m², Kraft in N, Linienlast in N/mm.</li>
+      <li><b>Ergebnis wirkt falsch?</b> Lager an der richtigen Stelle? Richtung der Last? Blechdicke im Material stimmt? Werkstoff richtig erkannt (Material «Stahl verzinkt» zählt als Stahl)?</li>
+    </ul>
+    <h5>Kleines Rechenbeispiel zum Überprüfen</h5>
+    <p>Ein Blech 400 × 200 mm, 1 mm Stahl, an den beiden langen Kanten gelenkig, 0.5 kN/m² Last nach unten. Zum Vergleich mit einer Handrechnung: Der Balken zwischen den Lagern (200 mm Spannweite, 400 mm Breite) trägt die Last 0.5 kN/m² × 0.4 m = 0.2 N/mm; M = q·L²/8 = 1000 Nmm, W = b·t²/6 = 66.7 mm³ → σ ≈ 15 N/mm². Das Programm zeigt <b>16 N/mm²</b> – gleiche Grössenordnung, der kleine Unterschied kommt aus der Plattenwirkung und der Ecke. Passen die Zahlen nicht annähernd, stimmt Lager oder Last nicht.</p>
     <h4>Start, Speichern, Einstellungen und Bedienung</h4>
     <ul>
       <li><b>Startseite</b>: beim Programmstart mit Begrüssung, «Neues Modell», «Öffnen», «Weiterarbeiten» und den zuletzt verwendeten Modellen (Cloud, am PC auch lokale Dateien). Abschalten: Häkchen auf der Startseite oder Einstellungen › Allgemein › Start.</li>
@@ -1355,9 +1459,7 @@ body.stiftpalette .stiftleiste { display: flex; }
     <h4>Konventionen</h4>
     <p>Alle Masse in mm auf der Blechmitte. Anschlag ab Kante A. Richtung «oben/unten» mit Kante A links. K-Faktor und Innenradius sind Startwerte – pro Material an der eigenen Abkantbank kalibrieren.</p>
     <p class="hinweis" id="hVersion"></p>
-  </div>
-  <div class="fuss"><button class="knopf haupt" id="hZu">Schliessen</button></div>
-</div></div>
+  </template>
 <div class="menue" id="zuletztMenue" hidden></div>
 <div class="menue" id="dateiMenue" hidden></div>
 <div class="menue" id="verlaufMenue" hidden style="max-height:60vh;overflow:auto;width:300px"></div>

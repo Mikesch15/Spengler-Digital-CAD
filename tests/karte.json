@@ -4,6 +4,7 @@
   "regeln": [
     { "muster": "src/kontext.js", "tests": ["kontext"] },
     { "muster": "src/touch.js", "tests": ["touch", "ideen"] },
+    { "muster": "web/hilfe", "tests": ["hilfe"] },
     { "muster": "src/ablage.js", "tests": ["ablage", "datei"] },
     { "muster": "src/fenster.js", "tests": ["skizzebedienung"] },
     { "muster": "android-app/", "tests": ["datei"] },
