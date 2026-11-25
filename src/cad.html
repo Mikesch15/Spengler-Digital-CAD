@@ -746,6 +746,34 @@ body.stiftpalette .stiftleiste { display: flex; }
 /* Datei steht auch auf schmalen Geräten ganz links */
 #gHaupt .klapp[data-klapp="datei"] { order: -1; }
 /* Reihenfolge in der Leiste: Datei ganz links, Marke, Suchen, Einstellungen und Hilfe ganz rechts (auch auf schmalen Geräten) */
+/* Einstellungsseite: blaue Kopfzeile, Bereiche links mit Symbolen, Inhalt rechts in Karten, Schalter statt Häkchen */
+.einstmodal { background: rgb(8 20 36 / .55); -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+.einstkarte { --seitebg: #f6f7f9; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(1020px, 100%); height: min(740px, calc(100vh - 24px)); border-radius: 18px; overflow: hidden; background: var(--panel); color: var(--fg); box-shadow: 0 30px 80px rgb(0 0 0 / .45), 0 0 0 1px rgb(255 255 255 / .06); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .einstkarte { --seitebg: var(--panel-2); } } :root[data-theme="dark"] .einstkarte { --seitebg: var(--panel-2); }
+.ekopf { display: flex; align-items: center; gap: 12px; padding: 16px 20px 16px 26px; background: #1869aa; color: #fff; } .ekopf > div { flex: 1; display: grid; gap: 2px; } .ekopf b { font: 700 22px/1.1 var(--font-body); } .ekopf span { font-size: var(--fs-l); color: rgb(255 255 255 / .75); }
+.ekoerper { display: grid; grid-template-columns: 236px minmax(0, 1fr); min-height: 0; }
+.enav { display: grid; align-content: start; gap: 2px; padding: 12px 10px; overflow: auto; background: var(--panel); border-right: 1px solid var(--line); }
+.enav button { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--fg); font: 500 var(--fs-m) var(--font-body); text-align: left; cursor: pointer; }
+.enav button svg { flex: none; width: 19px; height: 19px; fill: none; stroke: var(--muted); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.enav button:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.enav button[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); font-weight: 600; } .enav button[aria-selected="true"] svg { stroke: var(--accent); }
+.eseite { overflow: auto; padding: 20px 28px 26px; background: var(--seitebg); display: block; max-height: none; }
+.eseite h4 { margin: 24px 0 8px; padding: 0; border: 0; font: 700 var(--fs-l) var(--font-body); letter-spacing: 0; text-transform: none; color: var(--fg); } .eseite h4:first-child { margin-top: 0; }
+.eseite .egitter, .eseite .firmaeinst, .eseite .anleitung, .eseite .probe, .eseite .tabwrap { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.eseite .tabwrap { padding: 6px; }
+.eseite .hinweis { color: var(--muted); font-size: var(--fs-s); line-height: 1.45; }
+.eseite .efeld label { color: var(--fg); font-size: var(--fs-m); }
+.eseite .efeld input:not([type=checkbox]), .eseite .efeld select, .eseite .probe input, .eseite .probe select, .eseite table.zeilen input, .eseite table.zeilen select { min-height: 32px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); font-size: var(--fs-m); }
+.eseite .efeld input:focus, .eseite .efeld select:focus, .eseite .probe input:focus, .eseite table.zeilen input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.eseite .efeld select { appearance: none; -webkit-appearance: none; padding-right: 28px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23707880'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 11px center; }
+.eseite .efeld.janein { grid-template-columns: 1fr auto; padding: 4px 0; } .eseite .efeld.janein input { order: 0; } .eseite .efeld.janein small { grid-column: 1; } .eseite .efeld.janein input[type=checkbox] { appearance: none; -webkit-appearance: none; position: relative; width: 42px; height: 24px; margin: 0; border-radius: 999px; background: #b8c2cd; cursor: pointer; transition: background .15s; }
+.eseite .efeld.janein input[type=checkbox]::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / .3); transition: transform .15s; } .eseite .efeld.janein input[type=checkbox]:checked { background: var(--accent); } .eseite .efeld.janein input[type=checkbox]:checked::after { transform: translateX(18px); } .eseite .efeld.janein input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eseite .knopf { min-height: 32px; border-radius: 8px; }
+.eseite .firmaeinst + .egitter, .eseite .egitter + .egitter { margin-top: 10px; } .eseite .logovorschau.blau .hinweis { color: #fff; opacity: .8; }
+.eseite table.zeilen input, .eseite table.zeilen select { padding: 5px 7px; } .eseite table.zeilen.mat { min-width: 820px; } .eseite table.zeilen.mat input[type=number] { min-width: 64px; }
+.efuss { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--panel); } .efuss #eMeldung { flex: 1; }
+.efuss .knopf { padding: 7px 18px; border-radius: 8px; min-width: 96px; } .efuss .knopf.haupt { background: #1869aa; border-color: #1869aa; color: #fff; } .efuss .knopf.weg { min-width: 0; margin-right: 0; }
+@media (max-width: 760px) { .firmaeinst { grid-template-columns: 1fr; } .einstmodal { padding: 0; } .einstkarte { height: 100vh; border-radius: 0; } .ekoerper { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); } .enav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px; } .enav button { width: auto; white-space: nowrap; } .eseite { padding: 16px 14px 20px; } }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 var(--fs-xl) var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 
@@ -991,9 +1019,10 @@ body.stiftpalette .stiftleiste { display: flex; }
     <span class="rechts"><button id="verlaufBtn" title="Verlauf der Änderungen: zu einem früheren Stand springen">Verlauf ▴</button><button id="zeitZurueck" title="Zeitleiste: einen Schritt zurück" aria-label="Zeitleiste einen Schritt zurück">◀</button><button id="zeitVor" title="Zeitleiste: einen Schritt vor" aria-label="Zeitleiste einen Schritt vor">▶</button><button id="zurueck" title="Rückgängig (Strg+Z)">↶ Rückgängig</button><button id="vor" title="Wiederholen (Strg+Y)">↷ Wiederholen</button>
       <button id="rueckgaengig">Letzten Schritt löschen</button></span></footer>
 </div>
-<div class="modal" id="einst" hidden><div class="modalbox" role="dialog" aria-labelledby="eTitel">
-  <h3 id="eTitel">Einstellungen</h3><div class="inhalt" id="eInhalt"></div>
-  <div class="fuss"><button class="knopf weg" id="eStandard">Standardwerte</button><span id="eMeldung" class="hinweis" role="status"></span><button class="knopf" id="eAbbrechen">Abbrechen</button><button class="knopf haupt" id="eOk">Übernehmen</button></div>
+<div class="modal einstmodal" id="einst" hidden><div class="einstkarte" role="dialog" aria-labelledby="eTitel">
+  <div class="ekopf"><div><b id="eTitel">Einstellungen</b><span>Für das ganze Programm</span></div><button class="startzu" id="eZu" type="button" aria-label="Schliessen" title="Schliessen (Esc)">×</button></div>
+  <div class="ekoerper"><nav class="enav" id="eNav" role="tablist" aria-label="Bereiche"></nav><div class="inhalt eseite" id="eInhalt"></div></div>
+  <div class="fuss efuss"><button class="knopf weg" id="eStandard">Standardwerte</button><span id="eMeldung" class="hinweis" role="status"></span><button class="knopf" id="eAbbrechen">Abbrechen</button><button class="knopf haupt" id="eOk">Übernehmen</button></div>
 </div></div>
 <div class="modal" id="projekte" hidden><div class="modalbox projbox" role="dialog" aria-labelledby="pjTitel">
   <h3 id="pjTitel">Projekte der App</h3><div class="inhalt" id="pjInhalt"></div>

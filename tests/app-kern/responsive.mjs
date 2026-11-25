@@ -36,7 +36,7 @@ for (const th of ["light", "dark"]) for (const [name, w, h, touch] of FENSTER) {
   // Modale Fenster: Einstellungen und Hilfe passen ins Fenster
   for (const id of ["wEinst", "wHilfe"]) {
     await s.evaluate((i) => document.getElementById(i).click(), id); await s.waitForTimeout(300);
-    ok(await s.evaluate(() => { const m = [...document.querySelectorAll(".modalbox")].find((e) => e.offsetParent); if (!m) return false; const r = m.getBoundingClientRect(); return r.left >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1; }), `${tag}: Fenster ${id} liegt im Bildschirm`);
+    ok(await s.evaluate(() => { const m = [...document.querySelectorAll(".modalbox, .einstkarte")].find((e) => e.offsetParent); if (!m) return false; const r = m.getBoundingClientRect(); return r.left >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1; }), `${tag}: Fenster ${id} liegt im Bildschirm`);
     await s.keyboard.press("Escape"); await s.waitForTimeout(200);
   }
   await ctx.close();

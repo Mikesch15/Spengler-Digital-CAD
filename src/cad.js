@@ -4964,7 +4964,7 @@ const PROBE_SKIZZE = `<svg class="probeskizze" viewBox="0 0 250 150" role="img" 
 const probeWerte = { mat: 0, z: 130, a: "", b: "" };
 const meldung = (t) => { $("eMeldung").textContent = t; };
 const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
-let einstRegister = "allgemein";
+let einstRegister = "allgemein", einstLetzte = null;
 const EINST_REGISTER = [["allgemein", "Allgemein"], ["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["detail3d", "Details 3D"], ["vorlagen", "Vorlagen & Sichern"], ["dach", "Dach"], ["konto", "Konto & Cloud"]];
 // Feld an einen Wert der Einstellungen binden: data-e="gruppe.schluessel", data-typ zahl|text|janein|wahl
 function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
@@ -4976,7 +4976,8 @@ function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
 }
 function zeigeEinst() {
   const e = entwurf, feld = (i, k, wert, schritt = "any") => `<input data-i="${i}" data-k="${k}" type="${k === "name" ? "text" : "number"}" step="${schritt}" inputmode="decimal" value="${esc(wert)}">`;
-  const reiter = `<div class="register eregister" role="tablist">${EINST_REGISTER.map(([id, t]) => `<button role="tab" data-ereg="${id}" aria-selected="${id === einstRegister}">${t}</button>`).join("")}</div>`;
+  const ICO = { allgemein: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>', material: '<path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5M3 16.5L12 21l9-4.5"/>', lager: '<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>', neu: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M12 11v6M9 14h6"/>', druck: '<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>', etiketten: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/>', programm: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>', bausteine: '<path d="M4 9h4V5h4v4h4v4h-4v4H8v-4H4z"/><path d="M16 13h4v6h-6v-2"/>', detail3d: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9"/>', vorlagen: '<path d="M5 3h12l3 3v15H5z"/><path d="M8 3v5h8V3M8 21v-7h8v7"/>', dach: '<path d="M2 12L12 4l10 8"/><path d="M5 10v10h14V10"/>', konto: '<path d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.1 8.6 4.7 4.7 0 0 0 7 18z"/>' };
+  $("eNav").innerHTML = EINST_REGISTER.map(([id, t]) => `<button role="tab" data-ereg="${id}" aria-selected="${id === einstRegister}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICO[id] || '<circle cx="12" cy="12" r="8"/>'}</svg>${t}</button>`).join("");
   const inhalt = {
     allgemein: `
     <h4>Firma</h4>
@@ -5138,7 +5139,8 @@ function zeigeEinst() {
       Laden übernimmt alle Einstellungen und ergänzt eigene Vorlagen.</p>
     <div class="reihe ohnerand"><button class="knopf" id="eExport">Als Datei sichern</button><button class="knopf" id="eImport">Aus Datei laden</button></div>`,
   };
-  $("eInhalt").innerHTML = reiter + inhalt[einstRegister];
+  const st = $("eInhalt").scrollTop, gleich = einstLetzte === einstRegister; einstLetzte = einstRegister;
+  $("eInhalt").innerHTML = inhalt[einstRegister]; $("eInhalt").scrollTop = gleich ? st : 0;
   if (einstRegister === "material") probe();
   if (einstRegister === "etiketten") etikettenPruefen();
 }
@@ -5250,6 +5252,8 @@ $("eInhalt").addEventListener("click", (ev) => {
 });
 $("wEinst").onclick = () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); meldung(""); zeigeEinst(); $("einst").hidden = false; };
 $("eAbbrechen").onclick = () => { $("einst").hidden = true; entwurf = null; };
+$("eZu").onclick = () => $("eAbbrechen").click();
+$("eNav").addEventListener("click", (ev) => { const b = ev.target.closest("[data-ereg]"); if (b) { einstRegister = b.dataset.ereg; zeigeEinst(); } });
 $("eStandard").onclick = () => { entwurf = { ...standardEinst(), vorlagen: entwurf.vorlagen, eigeneDetails: entwurf.eigeneDetails, bausteine: entwurf.bausteine }; zeigeEinst(); meldung("Alle Standardwerte geladen (eigene Vorlagen, Details und Bausteine bleiben) – mit «Übernehmen» speichern."); };
 $("eOk").onclick = () => {
   const falsch = entwurf.materialien.find((m) => !m.name.trim() || !(m.t > 0) || !(m.ri >= 0) || !(m.k > 0 && m.k < 1));
