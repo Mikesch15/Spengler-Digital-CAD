@@ -1,6 +1,7 @@
 // Spengler Digital CAD – Kern: Berichtsseite (HTML) für eine Simulationsstudie
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-const z = (v, n = 2) => (Number.isFinite(v) ? (+v).toFixed(n).replace(/\.?0+$/, "") || "0" : "∞");
+const z = (v, n = 2) => { // Zahl mit höchstens n Nachkommastellen; Nullen werden nur NACH dem Komma entfernt (210000 bleibt 210000)
+  if (!Number.isFinite(v)) return "∞"; let t = (+v).toFixed(n); if (t.includes(".")) t = t.replace(/0+$/, "").replace(/\.$/, ""); return t === "-0" || t === "" ? "0" : t; };
 
 export const HINWEIS = "Richtwert, kein statischer Nachweis: Die Berechnung (lineare Schalen-FEM, Mittelfläche des Blechs, vereinfachte Ecken und Biegezonen) ersetzt keinen Tragsicherheitsnachweis nach Norm. Spannungsspitzen an Punktlagern und Einzelkräften sind rechnerische Singularitäten.";
 

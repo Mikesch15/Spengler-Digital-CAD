@@ -124,3 +124,11 @@ test("Auswahl Querschnitt: Stirn eines Profils fest, Kraft am anderen Ende – R
   const r = rechneStudie(M, { lager: [{ sel: { art: "ebene", p: [0, 0, 0], n: [0, 0, 1] }, fest: LAGER_ARTEN.eingespannt }], lasten: [{ art: "kraft", sel: { art: "ebene", p: [0, 0, 600], n: [0, 0, 1] }, F: [0, -100, 0] }] }, { E: 210000, nu: 0.3, rp: 250, dichte: 7.85e-9 }).ergebnisse[0];
   near(r.summeReaktion[1], 100, 0.01, "Ry"); assert.ok(r.umax > 0 && r.smax > 0);
 });
+
+test("Werkstoff-Erkennung: «Stahl verzinkt» ist Stahl, nicht Zink", () => {
+  assert.equal(werkstoff({ name: "Stahl verzinkt 0.60" }).E, 210000);
+  assert.equal(werkstoff({ name: "Titanzink 0.70" }).E, 100000);
+  assert.equal(werkstoff({ name: "Chromstahl 0.50" }).E, 200000);
+  assert.equal(werkstoff({ name: "Aluminium 0.80" }).E, 70000);
+  assert.equal(werkstoff({ name: "Kupfer 0.60" }).E, 120000);
+});

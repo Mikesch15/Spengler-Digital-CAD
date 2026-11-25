@@ -47,6 +47,7 @@ await p.evaluate(() => document.getElementById("simFAbbr").click());
 // Bericht
 await p.evaluate(() => window.sdcadTest.sim.bericht());
 const html = await p.evaluate(() => window.__druck || "");
+ok(/E = 210000 N\/mm²/.test(html) && !/E = 21 N/.test(html), "Bericht: Werkstoffwerte ohne abgeschnittene Nullen (E = 210000 N/mm²)");
 ok(/kein statischer Nachweis/.test(html) && /Einspannung/.test(html) && /Schnee/.test(html), "Bericht mit Hinweis, Lagern, Lasten und Normlast");
 ok(await p.evaluate(() => window.sdcadTest.sim.sim().studien[0].lager.length === 1), "Studie im Dokument gespeichert");
 // Profil (Traufblech): Stirn fest, Kraft am anderen Ende
