@@ -66,6 +66,7 @@ import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
 import { langdruck, tastaturSichtbar, wertBlase, maus, schalter as touchSchalter } from "./touch.js";
 import { fensterVerschieben } from "./fenster.js";
 import { logoVarianten, logoBanner, logoPapier } from "./logo.js";
+document.documentElement.lang = "de"; // Sprache der Seite (Vorlesen, Silbentrennung, Prüfwerkzeuge)
 import { dateiName as sicherName, modellDateiName } from "../kern/cloud/ablage.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
 import { BASIS, ACHSEN, versetzt, unterWinkel, mittelebene, zweiKanten, dreiPunkte, tangential, entlangPfad, aufFlaeche, zuWelt, zuLokal } from "../kern/ebenen.js";
@@ -2005,6 +2006,7 @@ async function logoLesen(datei) {
   const k = Math.min(1, 800 / img.width, 400 / img.height), c = document.createElement("canvas"); c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k)); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
   return c.toDataURL(/png|webp|gif/.test(datei.type) ? "image/png" : "image/jpeg", 0.9);
 }
+const blattFuss = () => `<footer class="blattfuss"><span>${esc(einst.druck.betrieb || "Spengler Digital CAD")}</span><span>${esc(doc.objekt)}${doc.nr ? " · Nr. " + esc(doc.nr) : ""}</span><span>${new Date().toLocaleDateString("de-CH")}</span></footer>`;
 const kopf = (art) => `<small>${art}${einst.druck.betrieb ? " · " + esc(einst.druck.betrieb) : ""}</small>`;
 function werkstattblatt(f) {
   if (f._blech) return flaechenblatt(f);
@@ -2028,6 +2030,7 @@ function werkstattblatt(f) {
       Innenradius ${m.ri} mm, K-Faktor ${m.k}.</p>
     ${d.etikett ? `<dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
       <dt>Blech</dt><dd>${esc(m.name)}</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${laengeVon(f)} mm${f._stirn?.length ? ` + ${f._stirn.length} Stirnlaschen` : ""} · ${f.stueck ?? 1} Stk.</dd></dl>` : ""}
+    ${blattFuss()}
   </section>`;
 }
 function stuecklisteBlatt() {
@@ -2043,6 +2046,7 @@ function stuecklisteBlatt() {
     <tr><td><b>Total</b></td><td class="num"><b>${a.summe.stueck}</b></td><td></td><td class="num"><b>${f2(a.summe.flaeche)}</b></td><td class="num"><b>${a.summe.gewicht.toFixed(1)}</b></td></tr>
     </tbody></table>
     ${einst.druck.bedarf ? bedarfHtml() : ""}
+    ${blattFuss()}
   </section>`;
 }
 // Etiketten: eins pro Stück, Bogenformat aus den Einstellungen (Standard A4, 3 × 8 à 70 × 37 mm)
@@ -3257,7 +3261,7 @@ function stirnErweiterungen(f, m) {
   return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && (x.ende === "S1" || x.ende === "S2")).map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende, schenkel: +x.schenkel || 0, zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean);
 }
 function profilErweiterungen(f, m) {
-  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && x.ende !== "S1" && x.ende !== "S2").map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende === "B" ? "B" : "A", zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean).concat(doc.features.filter((x) => x.typ === "naht" && !x._aus).flatMap((x) => ["a", "b"].filter((s) => x[s]?.ziel === f.id && (x[s].key === "A" || x[s].key === "B")).map((s) => { const fo = nahtFolgen(x, m)[s]; return fo && !/^0 /.test(fo.folge) ? { ende: x[s].key, zeilen: folge(`1 ${fo.folge}`) } : null; }).filter(Boolean)));
+  return doc.features.filter((x) => x.typ === "profilkante" && x.ziel === f.id && !x._aus && x.ende !== "S1" && x.ende !== "S2").map((x) => { const b = werkzeugAuf(bausteinFuer(x.wert), m); return b && String(b.folge ?? "").trim() ? { ende: x.ende === "B" ? "B" : "A", zeilen: folge(`1 ${bausteinFolge(b, m)}`) } : null; }).filter(Boolean).concat(doc.features.filter((x) => x.typ === "naht" && !x._aus).flatMap((x) => ["a", "b"].filter((s) => x[s]?.ziel === f.id && (x[s].key === "A" || x[s].key === "B")).map((s) => { const fo = nahtFolgen(x, m)[s]; if (!fo) return null; const hat = !/^0 /.test(fo.folge), flach = /^0 ([\d.]+)$/.exec(fo.folge.trim()), kuerzen = Math.max(0, -(fo.versatz || 0) - (flach ? +flach[1] : 0)); return hat || kuerzen ? { ende: x[s].key, zeilen: hat ? folge(`1 ${fo.folge}`) : [], kuerzen } : null; }).filter(Boolean))); // Rücksetzung des nicht abgesetzten Blechs auch an Blechprofilen (kuerzen)
 }
 const istProfil = (h) => h?.typ === "profil" || h?.typ === "vorlage" || h?.typ === "blech";
 function kantenWert(w, m) { // Baustein bzw. Werkzeug der Kantenleiste → Wert für einen Schritt
@@ -3748,6 +3752,7 @@ function flaechenblatt(f) {
       <td>${p.biegungen.map((b) => `${f1(b.anschlag)} · ${f1(Math.abs(b.winkel))}° ${b.winkel > 0 ? "Sichtseite" : "hinten"}`).join("<br>")}</td></tr>`).join("")}
     </tbody></table>
     <p class="hinweis">Masse in mm. Zuschnitt mit Eckausklinkungen; Biegelinien rot gestrichelt. Gezeichnete Grundfläche = Falzachse bzw. fertige Kante.</p>
+    ${blattFuss()}
   </section>`;
 }
 
@@ -4975,7 +4980,7 @@ function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
   return `<div class="efeld ${typ === "janein" ? "janein" : ""}"><label for="${id}">${label}</label>${inp}${hinweis ? `<small class="hinweis">${hinweis}</small>` : ""}</div>`;
 }
 function zeigeEinst() {
-  const e = entwurf, feld = (i, k, wert, schritt = "any") => `<input data-i="${i}" data-k="${k}" type="${k === "name" ? "text" : "number"}" step="${schritt}" inputmode="decimal" value="${esc(wert)}">`;
+  const MATLAB = { name: "Name", t: "Dicke", ri: "Innenradius", k: "K-Faktor", dichte: "Dichte", emod: "E-Modul", rp02: "Rp0,2", umSchr: "Stauchen max", umStr: "Strecken max" }, e = entwurf, feld = (i, k, wert, schritt = "any") => `<input aria-label="${esc((MATLAB[k] || k) + " " + (e.materialien?.[i]?.name ?? ""))}" data-i="${i}" data-k="${k}" type="${k === "name" ? "text" : "number"}" step="${schritt}" inputmode="decimal" value="${esc(wert)}">`;
   const ICO = { allgemein: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>', material: '<path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5M3 16.5L12 21l9-4.5"/>', lager: '<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>', neu: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M12 11v6M9 14h6"/>', druck: '<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>', etiketten: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.3"/>', programm: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>', bausteine: '<path d="M4 9h4V5h4v4h4v4h-4v4H8v-4H4z"/><path d="M16 13h4v6h-6v-2"/>', detail3d: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12L4 7.5M12 12v9"/>', vorlagen: '<path d="M5 3h12l3 3v15H5z"/><path d="M8 3v5h8V3M8 21v-7h8v7"/>', dach: '<path d="M2 12L12 4l10 8"/><path d="M5 10v10h14V10"/>', konto: '<path d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.1 8.6 4.7 4.7 0 0 0 7 18z"/>' };
   $("eNav").innerHTML = EINST_REGISTER.map(([id, t]) => `<button role="tab" data-ereg="${id}" aria-selected="${id === einstRegister}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICO[id] || '<circle cx="12" cy="12" r="8"/>'}</svg>${t}</button>`).join("");
   const inhalt = {
@@ -5111,7 +5116,7 @@ function zeigeEinst() {
     <button class="knopf" data-dneu="d">+ Deckung (Kopie der letzten)</button>
     <h4>Dachaufbau</h4>
     <div class="tabwrap"><table class="zeilen"><thead><tr><th>Name</th><th>Sparren b</th><th>Sparren h</th><th>Achsabstand</th><th>Dämmung</th><th>Dämmdicke</th><th>Unterdach</th><th>Konterlatte b</th><th>Konterlatte h</th><th></th></tr></thead><tbody>
-    ${e.dach.aufbauten.map((a, i) => `<tr>${[["name", "text"], ["sparrenB"], ["sparrenH"], ["achsabstand"], ["daemmung", "sel"], ["daemmDicke"], ["unterdachDicke"], ["konterB"], ["konterH"]].map(([k, t]) => t === "sel" ? `<td><select data-dach="a:${i}:${k}"><option value="zwischen" ${a[k] === "zwischen" ? "selected" : ""}>zwischen</option><option value="aufsparren" ${a[k] === "aufsparren" ? "selected" : ""}>auf Sparren</option></select></td>` : `<td><input data-dach="a:${i}:${k}" type="${t || "number"}" step="any" value="${esc(a[k] ?? "")}" aria-label="${k}"></td>`).join("")}<td>${e.dach.aufbauten.length > 1 ? `<button class="weg" data-dweg="a:${i}" aria-label="entfernen">×</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
+    ${e.dach.aufbauten.map((a, i) => `<tr>${[["name", "text"], ["sparrenB"], ["sparrenH"], ["achsabstand"], ["daemmung", "sel"], ["daemmDicke"], ["unterdachDicke"], ["konterB"], ["konterH"]].map(([k, t]) => t === "sel" ? `<td><select aria-label="Dämmung ${esc(a.name)}" data-dach="a:${i}:${k}"><option value="zwischen" ${a[k] === "zwischen" ? "selected" : ""}>zwischen</option><option value="aufsparren" ${a[k] === "aufsparren" ? "selected" : ""}>auf Sparren</option></select></td>` : `<td><input data-dach="a:${i}:${k}" type="${t || "number"}" step="any" value="${esc(a[k] ?? "")}" aria-label="${k}"></td>`).join("")}<td>${e.dach.aufbauten.length > 1 ? `<button class="weg" data-dweg="a:${i}" aria-label="entfernen">×</button>` : ""}</td></tr>`).join("")}</tbody></table></div>
     <button class="knopf" data-dneu="a">+ Aufbau (Kopie des letzten)</button>
     <h4>Voreinstellung</h4>
     <div class="reihe"><label>Deckung <select data-dach="s:0:standardDeckung">${e.dach.deckungen.map((d) => `<option value="${esc(d.id)}" ${e.dach.standardDeckung === d.id ? "selected" : ""}>${esc(d.name)}</option>`).join("")}</select></label>
@@ -6792,10 +6797,10 @@ const leiste = $("leiste");
 const bandAn = () => innerWidth > 1000 && !skizze && !dlg;
 let aktTab = (() => { try { const t = localStorage.getItem("sdcad-reiter") || "koerper"; return t === "kanten" ? "blech" : t; } catch { return "koerper"; } })();
 function klappZu() {
-  leiste.querySelectorAll(".klappmenue").forEach((m) => (m.hidden = true)); leiste.querySelectorAll(".klappknopf").forEach((k) => { k.setAttribute("aria-expanded", "false"); k.removeAttribute("aria-selected"); });
+  leiste.querySelectorAll(".klappmenue").forEach((m) => (m.hidden = true)); leiste.querySelectorAll(".klappknopf").forEach((k) => { k.setAttribute("aria-expanded", "false"); k.removeAttribute("aria-current"); });
   if (!bandAn()) return;
   const kp = leiste.querySelector(`#gHaupt .klapp[data-klapp="${aktTab}"]`) || leiste.querySelector("#gHaupt .klapp"); if (!kp) return;
-  kp.querySelector(".klappmenue").hidden = false; kp.querySelector(".klappknopf").setAttribute("aria-selected", "true");
+  kp.querySelector(".klappmenue").hidden = false; kp.querySelector(".klappknopf").setAttribute("aria-current", "true");
   leiste.dataset.tab = kp.dataset.klapp;
 }
 addEventListener("resize", klappZu);

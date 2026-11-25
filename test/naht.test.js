@@ -1,6 +1,7 @@
 // Test: Verbindungsnähte (kern/naht.js): Absetzung um genau eine Blechstärke, Folgen für Überlappung und Falz, Raupennetz
 import { nahtFolgen, nahtStandard, kroepfung, raupenNetz } from "../kern/naht.js";
 import { bausteinProfil } from "../kern/flaechenblech.js";
+import { freiesProfil, profilErweitern } from "../kern/profile.js";
 let f = 0; const ok = (b, t) => { if (!b) { f++; console.error("✗", t); } else console.log("✓", t); };
 for (const [t, ri] of [[0.5, 1], [0.7, 1], [1, 1.5], [1.5, 2], [2, 2]]) {
   const m = { t, ri, k: 0.4 }, kr = kroepfung(t, ri, 1), p = bausteinProfil({ name: "k", folge: `${kr.folge} 10`, versatz: 0 }, m), pf = p.res.pfad, ende = pf.at(-1).p2, start = pf[0].p1;
@@ -17,6 +18,12 @@ ok(Math.abs(zug.zugabe - 16.27) < 0.05, `Punktnaht: Zugabe am abgesetzten Blech 
 const fz = nahtFolgen(nahtStandard("falz"), m), za = bausteinProfil({ name: "a", folge: fz.a.folge, versatz: fz.a.versatz }, m), zb = bausteinProfil({ name: "b", folge: fz.b.folge, versatz: 0 }, m);
 ok(/^U\+r[\d.]+ 5$/.test(fz.a.folge) && /U-r[\d.]+ [\d.]+$/.test(fz.b.folge) && za.biegungen.length === 1 && zb.biegungen.length === 3, "Falz: Haken 5 mm, abgesetztes Blech gekröpft und um den Haken gelegt");
 const mi = nahtFolgen({ ...nahtStandard("falz"), mittig: true }, m); ok(/ 7\.5$/.test(mi.a.folge) && mi.b.folge.includes("U"), "Falz mittig: Haken 7.5 mm");
+// Blechprofil: Rücksetzung des nicht abgesetzten Blechs verkürzt den letzten bzw. ersten Schenkel
+{ const mm = { t: 0.7, ri: 1, k: 0.4 }, p = freiesProfil(0, [{ L: 50, winkel: 90 }, { L: 40 }], mm);
+  const b = profilErweitern(p, [{ ende: "B", zeilen: [], kuerzen: 6 }], mm), a = profilErweitern(p, [{ ende: "A", zeilen: [], kuerzen: 6 }], mm), z = profilErweitern(p, [{ ende: "B", zeilen: [], kuerzen: 500 }], mm);
+  ok(b.ops.at(-1).L === 34 && b.ops[0].L === 50, "Profil: Rücksetzung kürzt den letzten Schenkel (Kante B)");
+  ok(a.ops[0].L === 44 && a.ops.at(-1).L === 40, "Profil: Rücksetzung kürzt den ersten Schenkel (Kante A)");
+  ok(z.ops.at(-1).L === 1, "Profil: nie kürzer als 1 mm"); }
 ok(nahtFolgen(nahtStandard("schweiss"), m).a === null && nahtFolgen(nahtStandard("ecke"), m).b === null, "Raupennähte ändern die Bleche nicht");
 const netz = raupenNetz([[0, 0, 0], [10, 0, 0], [20, 5, 0]], [0, 0, 1], "schweiss", 2, 1); ok(netz.length > 100 && netz.every((v) => Number.isFinite(v)), "Raupennetz entlang der Polylinie");
 // Kollisionsprüfung im Querschnitt: beide Bleche (A links, B rechts, Kanten bei x = 100) dürfen sich nirgends durchdringen

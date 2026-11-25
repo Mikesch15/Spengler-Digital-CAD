@@ -192,6 +192,10 @@ export const erweiterungsOps = (z, m) => { const ops = [bend(z[0], m)]; for (let
 export function profilErweitern(profil, extras, m) {
   let start = profil.start, ops = profil.ops.slice();
   for (const x of extras || []) {
+    if (x.kuerzen > 0) { // Rücksetzung (Naht): das Blech endet um «kuerzen» mm früher – der letzte (bzw. erste) Schenkel wird verkürzt, aber nie unter 1 mm
+      const i = x.ende === "B" ? ops.map((o) => o.typ).lastIndexOf("schenkel") : ops.findIndex((o) => o.typ === "schenkel");
+      if (i >= 0) ops[i] = { ...ops[i], L: Math.max(1, ops[i].L - x.kuerzen) };
+    }
     const z = x.zeilen; if (!z || z.length < 2) continue;
     if (x.ende === "B") { ops.push(bend(z[0], m)); for (let i = 1; i < z.length; i++) { ops.push(L(z[i].L)); if (i < z.length - 1) ops.push(bend(z[i], m)); } }
     else { // Kante A: der Baustein läuft vom Profil weg; vorangestellt in umgekehrter Reihenfolge mit umgekehrten Winkeln

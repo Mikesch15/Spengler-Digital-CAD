@@ -39,7 +39,7 @@ export function oeffneBefehlssuche() {
   hinter.className = "bs-hinter"; hinter.setAttribute("role", "dialog"); hinter.setAttribute("aria-label", "Befehlssuche");
   hinter.innerHTML = '<div class="bs"><input type="text" placeholder="Werkzeug suchen … (z. B. Extrusion, Dachfenster, Flansch)" aria-label="Werkzeug suchen" autocomplete="off"><ul role="listbox"></ul><div class="bs-fuss">↑ ↓ wählen · Enter starten · Esc schliessen</div></div>';
   document.body.appendChild(hinter);
-  const eing = hinter.querySelector("input"), liste = hinter.querySelector("ul");
+  const eing = hinter.querySelector("input"), liste = hinter.querySelector("ul"); liste.setAttribute("aria-label", "Treffer");
   let treffer = [], nr = 0;
   const zeige = () => {
     const w = norm(eing.value).split(/\s+/).filter(Boolean);
