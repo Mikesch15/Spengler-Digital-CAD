@@ -66,7 +66,7 @@ import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
 import { langdruck, tastaturSichtbar, wertBlase, maus, schalter as touchSchalter } from "./touch.js";
 import { fensterVerschieben } from "./fenster.js";
 import { logoVarianten, logoBanner, logoPapier } from "./logo.js";
-import { biegenInit, biegenOeffnen, biegenOffen, biegenNeuZeichnen, maschinenVorschau } from "./biegen.js";
+import { biegenInit, biegenOeffnen, biegenOeffnenQuellen, biegenOffen, biegenNeuZeichnen, maschinenVorschau } from "./biegen.js";
 import { VORLAGE_SCHROEDER, VORLAGE_JORNS, VORLAGEN as MASCHINEN_VORLAGEN, maschineAusVorlage, werkzeugeAlsText, werkzeugeAusText, maschineFehlt } from "../kern/biegen/maschinen.js";
 document.documentElement.lang = "de"; // Sprache der Seite (Vorlesen, Silbentrennung, Prüfwerkzeuge)
 import { dateiName as sicherName, modellDateiName } from "../kern/cloud/ablage.js";
@@ -7096,13 +7096,28 @@ function detail3dDialog(f) {
     "Setzt den Körper der Detailvorlage an eine Kante: Vorlagen-Ursprung am Kantenanfang, Vorlagen-X entlang der Kante, Vorlagen-Z zur Sichtseite. Kante in der Ansicht anklicken (Körperkante oder Skizzenkante).", { wahlNr: -1, info: hinweise });
 }
 $("wDetail3d").onclick = () => { if (dlg) $("dAbbrechen").click(); detail3dDialog(); };
+// Kanten eines Flächenblechs mit Baustein (Flansch, Umschlag, Falz …) als Abkantfolgen für die Biegesimulation
+function flaechenKanten(f) {
+  const m = material(f.material), k = berechneKanten(f), out = [];
+  for (const [key, v] of Object.entries(k)) {
+    let b; try { b = werkzeugAuf(bausteinFuer(v), m); } catch { b = null; } if (!b || !String(b.folge ?? "").trim()) continue;
+    let z; try { z = folge("100 " + bausteinFolge(b, m)); } catch { continue; } if (z.length < 2) continue;
+    const [pi, ki] = key.split(":").map(Number);
+    out.push({ name: `Kante ${Number.isFinite(ki) ? ki + 1 : key}${Number.isFinite(pi) && pi > 0 ? " (Fläche " + (pi + 1) + ")" : ""} · ${b.name || "Eigene Abkantfolge"}`, mitPlatte: true,
+      schenkel: z.map((x, i) => ({ laenge: x.L, winkel: i === 0 ? 0 : -z[i - 1].winkel })), hinweise: z.some((x) => x.art === "umschlag") ? ["Umschlag/Falz: wird bis zum grössten Biegewinkel der Maschine gebogen und dann zugedrückt."] : [] });
+  }
+  return out;
+}
 // Biegesimulation: gewähltes Blechprofil auf der Schwenkbiegemaschine (Einstellungen › Biegemaschinen)
 biegenInit({ maschinen: () => einst.maschinen || [], status, einstellungen: () => { einstRegister = "maschinen"; $("wEinst").click(); } });
 $("wBiegesim").onclick = () => {
   if (dlg) $("dAbbrechen").click();
-  let f = hauptVon(auswahl); if (!f || !f._res || !istProfil(f)) f = doc.features.find((x) => !x._aus && !x.versteckt && istProfil(x) && x._res && x._res.schenkel?.length > 1) || null;
-  if (!f) return status("Zuerst ein Blechprofil (Profil, Vorlage oder freies Profil) erstellen oder im Browser wählen.");
-  waehle(f.id); biegenOeffnen(f._res, { staerke: material(f.material)?.t, laenge: laengeVon(f), titel: f.name });
+  const gewaehlt = hauptVon(auswahl), brauchbar = (x) => !x._aus && !x.versteckt && ((istProfil(x) && x._res?.schenkel?.length > 1) || (x.typ === "flaeche" && flaechenKanten(x).length));
+  const f = gewaehlt && brauchbar(gewaehlt) ? gewaehlt : doc.features.find(brauchbar) || null;
+  if (!f) return status("Zuerst ein Blechprofil oder ein Flächenblech mit Kantenbaustein (Flansch, Umschlag …) erstellen oder im Browser wählen.");
+  waehle(f.id);
+  if (f.typ === "flaeche") return biegenOeffnenQuellen(flaechenKanten(f), { staerke: material(f.material)?.t, titel: f.name, platte: 150 });
+  biegenOeffnen(f._res, { staerke: material(f.material)?.t, laenge: laengeVon(f), titel: f.name });
 };
 async function detailAusDatei(datei) {
   const name = datei.name.replace(/\.[^.]+$/, ""), puffer = await datei.arrayBuffer();

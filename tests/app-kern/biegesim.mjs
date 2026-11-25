@@ -34,6 +34,18 @@ await s.evaluate(() => { const t = document.querySelector("[data-mjson='1']"); t
 await s.waitForTimeout(300);
 ok(await s.evaluate(() => !/fehlt/.test(document.querySelector("[data-mkarte='1'] .mkopf").textContent)), "Jorns-Querschnitte eintragbar → Maschine vollständig");
 await s.click("#eAbbrechen");
+// Flächenblech mit Kantenbausteinen
+const q = await b.newPage({ viewport: { width: 1280, height: 800 } }); q.on("pageerror", (e) => pr.push(e.message));
+await q.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 20, features: [
+  { id: "sk", typ: "skizze", name: "Rechteck", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [400, 200] }], bedingungen: [] },
+  { id: "fl", typ: "flaeche", name: "Dachblech", skizze: "sk", material: "zink07", flaechen: [[10, 10]], kanten: { "0:0": "abk-o", "0:2": "abk-o" } }] })); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] })); });
+await q.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await q.waitForTimeout(1800);
+await q.click(".klappknopf:visible:has-text('Blech')"); await q.click("#wBiegesim"); await q.waitForTimeout(800);
+const fk = await q.evaluate(() => ({ opts: [...(document.getElementById("bgaQuelle")?.options || [])].map((x) => x.textContent), platte: !!document.getElementById("bgaPlatte"), bild: !!document.querySelector("#bgaBild svg"), ketten: document.querySelectorAll(".bga-chip").length }));
+ok(fk.opts.length === 2 && /Kante/.test(fk.opts[0]) && fk.platte && fk.bild && fk.ketten >= 1, `Flächenblech: ${fk.opts.length} Kanten mit Baustein wählbar, Blechlänge einstellbar, Bild und ${fk.ketten} Schritt(e)`);
+await q.selectOption("#bgaQuelle", "1"); await q.waitForTimeout(400); ok(await q.evaluate(() => !!document.querySelector("#bgaBild svg")), "Zweite Kante lässt sich wählen");
+await q.fill("#bgaPlatte", "6"); await q.dispatchEvent("#bgaPlatte", "change"); await q.waitForTimeout(400);
+ok(/Machbar|Problem|nicht machbar/.test(await q.evaluate(() => document.getElementById("bgFenster").textContent)) && await q.evaluate(() => document.getElementById("bgaPlatte").value === "6"), "Geänderte Blechlänge wird neu gerechnet");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Biegesimulation (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

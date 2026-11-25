@@ -10,6 +10,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 let maschinenListe = () => [];
 const bmListe = () => maschinenListe(), bmFinden = (id) => maschinenListe().find((m) => String(m.id) === String(id)) || null;
 const bgaS={
+ quellen:[],quelleNr:0,platte:150,
  offen:false,schenkel:[],profil:null,maschineId:"",t:0,laenge:0,titel:"",
  werkzeugWahl:"auto",werkzeugNr:0,   // v3.448: Oberwangen-Werkzeug (auto = das beste suchen)
  folge:[],auto:true,autoErgebnis:null,analyse:null,fehler:[],
@@ -214,10 +215,11 @@ function bgaEingabeHtml(){
  const l=bmListe();
  const opt=l.map(m=>`<option value="${esc(m.id)}"${String(m.id)===String(bgaS.maschineId)?" selected":""}>${esc(m.name||"(ohne Name)")}</option>`).join("");
  const wz=bgaWerkzeuge(bgaMaschineBasis());
+ const q=bgaS.quellen||[],quellFeld=q.length?`<div class="wide"><label>${q.length>1?"Kante mit Baustein":"Kante"}</label><select id="bgaQuelle">${q.map((x,i)=>`<option value="${i}"${i===bgaS.quelleNr?" selected":""}>${esc(x.name)}</option>`).join("")}</select></div>${q[bgaS.quelleNr]&&q[bgaS.quelleNr].mitPlatte?`<div class="wide"><label>Blech vor der Kante (mm) – geklemmter Teil</label><input id="bgaPlatte" type="number" step="10" min="1" value="${esc(bgaS.platte)}"></div>`:""}`:"";
  const wzFeld=wz.length?`<div><label>Oberwangen-Werkzeug</label><select id="bgaWerkzeug"><option value="auto"${bgaS.werkzeugWahl==="auto"?" selected":""}>Automatisch</option>${wz.map((w,i)=>`<option value="${i}"${String(bgaS.werkzeugWahl)===String(i)?" selected":""}>${esc(w.name||("Werkzeug "+(i+1)))}</option>`).join("")}</select></div>`:"";
  return `<div class="grid">
   <div><label>Maschine</label><select id="bgaMaschine">${opt||'<option value="">– keine Maschine eingetragen –</option>'}</select></div>${wzFeld}
-  <div><label>Blechstärke (mm)</label><input id="bgaStaerke" type="number" step="0.1" min="0" value="${esc(bgaS.t||"")}"></div>
+  ${quellFeld}<div><label>Blechstärke (mm)</label><input id="bgaStaerke" type="number" step="0.1" min="0" value="${esc(bgaS.t||"")}"></div>
   <div><label>Teillänge (mm, optional)</label><input id="bgaLaenge" type="number" step="10" min="0" value="${esc(bgaS.laenge||"")}"></div>
  </div>
  <div class="bga-klein" style="margin-top:6px"><button type="button" class="knopf klein" data-bga-einst>Maschinen bearbeiten …</button></div>`;
@@ -276,8 +278,12 @@ function bgaSpielen(){
 
 // ---- Öffnen / Schliessen --------------------------------------------------------------
 let status = () => {};
+function bgaQuelleAnwenden() {
+  const q = bgaS.quellen[bgaS.quelleNr]; if (!q) return;
+  bgaS.schenkel = JSON.parse(JSON.stringify(q.schenkel)); if (q.mitPlatte && bgaS.schenkel.length) bgaS.schenkel[0].laenge = Math.max(1, Number(bgaS.platte) || 150); bgaS.hinweise = q.hinweise || [];
+}
 function bgaOeffnen(schenkel, o) {
-  bgaS.schenkel = JSON.parse(JSON.stringify(schenkel || [])); bgaS.t = Number(o.staerke) > 0 ? Number(o.staerke) : 0; bgaS.laenge = Number(o.laenge) > 0 ? Number(o.laenge) : 0; bgaS.titel = o.titel || ""; bgaS.hinweise = o.hinweise || [];
+  bgaS.schenkel = JSON.parse(JSON.stringify(schenkel || [])); bgaS.t = Number(o.staerke) > 0 ? Number(o.staerke) : 0; bgaS.laenge = Number(o.laenge) > 0 ? Number(o.laenge) : 0; bgaS.titel = o.titel || ""; bgaS.hinweise = o.hinweise || []; bgaS.quellen = o.quellen || []; bgaS.quelleNr = 0; bgaS.platte = Number(o.platte) > 0 ? Number(o.platte) : 150; if (bgaS.quellen.length) bgaQuelleAnwenden();
   const l = bmListe(); if (!l.some((x) => String(x.id) === String(bgaS.maschineId))) bgaS.maschineId = (l.find((m) => !maschineFehlt(m).length) || l[0])?.id ?? "";
   bgaS.werkzeugWahl = "auto"; bgaS.auto = true; bgaS.schritt = 0; bgaS.fortschritt = 0; bgaStopp(); bgaS.offen = true; bgaNeuRechnen(true);
   $("bgFenster").hidden = false; $("bgFenster").classList.remove("klein"); document.querySelector(".mitte")?.classList.add("bgOffen"); bgaZeichnen(); $("bgInhalt").scrollTop = 0;
@@ -305,6 +311,8 @@ export function biegenInit(ctx) {
     const t = e.target;
     if (t.id === "bgaMaschine") { bgaS.maschineId = t.value; bgaS.werkzeugWahl = "auto"; return neu(); }
     if (t.id === "bgaWerkzeug") { bgaS.werkzeugWahl = t.value; return neu(); }
+    if (t.id === "bgaQuelle") { bgaS.quelleNr = Number(t.value) || 0; bgaQuelleAnwenden(); return neu(); }
+    if (t.id === "bgaPlatte") { bgaS.platte = Number(t.value) > 0 ? Number(t.value) : 150; bgaQuelleAnwenden(); return neu(); }
     if (t.id === "bgaStaerke") { const v = Number(String(t.value).replace(",", ".")); bgaS.t = v > 0 ? v : 0; return neu(); }
     if (t.id === "bgaLaenge") { bgaS.laenge = Number(t.value) > 0 ? Number(t.value) : 0; return bgaZeichnen(); }
     if (t.hasAttribute("data-bga-klemm")) { bgaS.folge[Number(t.getAttribute("data-bga-klemm"))].klemm = t.value; bgaS.auto = false; bgaNeuRechnen(false); return bgaZeichnen(); }
@@ -329,3 +337,6 @@ export function maschinenVorschau(m, breite) {
   const pg = polys.map((o) => `<polygon points="${o.p.map((q) => X(+q[0] || 0).toFixed(1) + "," + Y(+q[1] || 0).toFixed(1)).join(" ")}" fill="${o.farbe}" fill-opacity=".55" stroke="${o.farbe}" stroke-width="1"/>`).join("");
   return `<svg viewBox="0 0 ${w} ${h.toFixed(0)}" width="100%" style="max-width:${w}px;background:#fff;border:1px solid #cfd6dd;border-radius:8px" role="img" aria-label="Querschnitt der Maschine"><line x1="${X(x0)}" y1="${Y(0)}" x2="${X(x1)}" y2="${Y(0)}" stroke="#c4ccd4" stroke-dasharray="3 3"/><line x1="${X(0)}" y1="${Y(y0)}" x2="${X(0)}" y2="${Y(y1)}" stroke="#c4ccd4" stroke-dasharray="3 3"/>${pg}</svg><div class="hinweis">Grau: Unter- und Oberwange · Blau: Biegewange nach oben · gestrichelt: Biegekante (x 0) und Tischoberkante (y 0)</div>`;
 }
+
+// Kantenbausteine eines Flächenblechs: quellen = [{ name, schenkel: [{laenge, winkel}], mitPlatte: true, hinweise }] (erster Schenkel = Blechfläche vor der Kante)
+export function biegenOeffnenQuellen(quellen, o) { if (!quellen.length) return status("Das Flächenblech hat noch keine Kante mit Baustein (Flansch, Umschlag …)."); bgaOeffnen(quellen[0].schenkel, { ...o, quellen }); }
