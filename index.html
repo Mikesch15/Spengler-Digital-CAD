@@ -794,6 +794,21 @@ body.stiftpalette .stiftleiste { display: flex; }
 .modalbox h4 { color: var(--fg); border-bottom: 0; font: 700 var(--fs-l) var(--font-body); letter-spacing: 0; text-transform: none; }
 #dInfo:not(:empty)::before { background: #1869aa; color: #fff; }
 .register button[aria-selected="true"] { color: #1869aa; border-bottom-color: #1869aa; }
+/* Menüs, Aufklapplisten und Zeitleiste im einheitlichen Stil */
+.menue, .klappmenue, #featureMenue, #kantenMenue { border: 0; border-radius: 12px; background: var(--panel); box-shadow: 0 14px 38px rgb(0 0 0 / .26), 0 0 0 1px rgb(0 0 0 / .07); padding: 6px; }
+.menue button, .klappmenue .wz, #featureMenue button { border-radius: 8px; padding: 7px 10px; }
+.menue button:hover, .klappmenue .wz:hover, #featureMenue button:hover { background: color-mix(in srgb, #1869aa 11%, transparent); }
+.menue button[aria-pressed="true"], #featureMenue button.an { background: color-mix(in srgb, #1869aa 15%, transparent); color: #1869aa; }
+.menue hr { border-top-color: var(--line); margin: 5px 4px; } .menue small { color: var(--muted); }
+.zeitleiste { gap: 8px; padding: 8px 14px; border: 0; border-radius: 12px; background: var(--panel); box-shadow: 0 1px 3px rgb(0 0 0 / .08), 0 0 0 1px rgb(0 0 0 / .06); min-height: 54px; }
+.zeitleiste .ztitel { letter-spacing: .12em; margin-right: 8px; }
+.zeitleiste button { min-height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); padding: 4px 10px; transition: border-color .12s, background .12s, box-shadow .12s; }
+.zeitleiste button:hover:not(:disabled) { border-color: #1869aa; background: color-mix(in srgb, #1869aa 8%, var(--panel)); }
+#zeit button { min-width: 38px; justify-content: center; } #zeit button svg { stroke: #1869aa; }
+#zeit button.aktiv, #zeit button[aria-current="true"] { background: #1869aa; border-color: #1869aa; color: #fff; } #zeit button.aktiv svg { stroke: #fff; }
+#zeit .marke { width: 4px; min-height: 28px; border-radius: 3px; background: #1869aa; box-shadow: 0 0 0 3px rgb(24 105 170 / .18); }
+.zeitleiste .rechts { gap: 8px; } #rueckgaengig { color: #b3261e; border-color: color-mix(in srgb, #b3261e 35%, var(--line)); } #rueckgaengig:hover:not(:disabled) { border-color: #b3261e; background: color-mix(in srgb, #b3261e 8%, var(--panel)); }
+.zeitTip { border-radius: 8px; padding: 5px 10px; box-shadow: 0 6px 18px rgb(0 0 0 / .3); }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 var(--fs-xl) var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 
