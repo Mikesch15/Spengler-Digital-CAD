@@ -13,6 +13,14 @@ await s.check("#startNie"); await s.click('#startseite [data-a="weiter"] >> nth=
 ok(await s.evaluate(() => !document.getElementById("startseite")), "«Weiterarbeiten» schliesst die Startseite");
 await s.reload(); await s.waitForTimeout(2200); ok(await s.evaluate(() => !document.getElementById("startseite")), "«Nicht mehr zeigen» wird gemerkt");
 await c.close();
+// Blaues Logo wird auf der blauen Fläche automatisch weiss, auf Papier bleibt es blau
+{ const c2 = await b.newContext({ viewport: { width: 1000, height: 760 } }), s2 = await c2.newPage(); s2.on("pageerror", (e) => pr.push(e.message));
+  await s2.addInitScript(() => { const cv = document.createElement("canvas"); cv.width = 300; cv.height = 100; const g = cv.getContext("2d"); g.fillStyle = "#0f4c8e"; g.font = "bold 70px sans-serif"; g.fillText("KÜNZI", 10, 75); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "z", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }], firma: { logo: cv.toDataURL("image/png"), vorname: "Mike" } })); });
+  await s2.goto(basis); await s2.waitForTimeout(2500);
+  const r = await s2.evaluate(() => { const f = JSON.parse(localStorage.getItem("sdcad-einstellungen")).firma, img = document.querySelector("#startseite .sblogo img"); return { src: img?.src === f.logoWeiss, orig: img?.src === f.logo, hell: f.logoHell, transp: f.logoTransp, weiss: !!f.logoWeiss, emblem: !!document.querySelector("#startseite .sbemblem") }; });
+  ok(r.transp && r.hell < 0.5 && r.weiss && r.src && !r.orig, `Blaues Logo: Banner nutzt automatisch die weisse Fassung (${JSON.stringify(r)})`);
+  ok(r.emblem, "Spengler-Digital-Zeichen steht im Banner");
+  await c2.close(); }
 // Verlauf
 c = await b.newContext({ viewport: { width: 1280, height: 800 } }); s = await c.newPage(); s.on("pageerror", (e) => pr.push(e.message));
 await s.goto(basis + "?test"); await s.waitForTimeout(1500);

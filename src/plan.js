@@ -1,4 +1,5 @@
 // Spengler Digital CAD – Planblatt (wie Zeichnung in Fusion): Ansichten des Modells, Details, Bemassung, Text, Schriftfeld
+import { logoPapier } from "./logo.js";
 import * as THREE from "three";
 import { Brush, Evaluator, INTERSECTION } from "three-bvh-csg";
 import { rechneAnsicht, RICHTUNGEN } from "./ansicht.js";
@@ -204,7 +205,7 @@ export function planModul(ctx) {
       <text x="${x0 + 143}" y="${zeile(0)}" class="t25 grau">BLATT</text><text x="${x0 + 143}" y="${zeile(0) + 4.5}" class="t35">${nr} / ${von}</text>
       <text x="${x0 + 113}" y="${zeile(2) - 1.5}" class="t25 grau">MASSSTAB</text><text x="${x0 + 113}" y="${zeile(2) + 3}" class="t35">${M ? "1:" + M : "–"}</text>
       <text x="${x0 + 143}" y="${zeile(2) - 1.5}" class="t25 grau">DATUM</text><text x="${x0 + 143}" y="${zeile(2) + 3}" class="t35">${esc(plan.schrift?.datum || new Date().toLocaleDateString("de-CH"))}</text>
-      ${einst.firma?.logo ? `<image href="${einst.firma.logo}" x="${x0 + 76}" y="${y0 + 2}" width="32" height="27" preserveAspectRatio="xMaxYMid meet"/>` : ""}
+      ${einst.firma?.logo ? `<image href="${logoPapier(einst.firma)}" x="${x0 + 76}" y="${y0 + 2}" width="32" height="27" preserveAspectRatio="xMaxYMid meet"/>` : ""}
       <text x="${x0 + 113}" y="${zeile(3) + 3.5}" class="t25 grau">${esc(einst.druck?.betrieb || "Spengler Digital CAD")}</text>
       <line x1="${x0}" y1="${y0 + 31}" x2="${x0 + sfB}" y2="${y0 + 31}" class="duenn"/>${[["GEZEICHNET", "zeichner"], ["GEPRÜFT", "geprueft"], ["INDEX", "index"], ["BEMERKUNG", "bemerkung"]].map(([l, k], i) => `<text x="${x0 + 3 + i * 45}" y="${y0 + 34.5}" class="t25 grau">${l}</text><text x="${x0 + 3 + i * 45}" y="${y0 + 38.5}" class="t35">${esc(plan.schrift?.[k] || "")}</text>`).join("")}${[1, 2, 3].map((i) => `<line x1="${x0 + i * 45}" y1="${y0 + 31}" x2="${x0 + i * 45}" y2="${y0 + sfH}" class="duenn"/>`).join("")}</g>`);
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${F.b} ${F.h}" class="planblatt-svg">

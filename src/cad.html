@@ -698,19 +698,22 @@ body.stiftpalette .stiftleiste { display: flex; }
 .stiftleiste [data-nur="modell"] { display: grid; } body.skizzeAktiv .stiftleiste [data-nur="modell"] { display: none; }
 .stiftleiste hr[data-nur] { display: none; } body.skizzeAktiv .stiftleiste hr[data-nur="skizze"] { display: block; }
 /* Verlaufsliste */
-/* Startseite: grosse Karte mit Markenfläche links, Aktionen und zuletzt verwendete Modelle rechts */
+/* Startseite wie die App: blaue Kopfzeile «Heute», Bannerkarte mit schrägen Streifen, Logo und Markenzeichen, Gruss unten */
 .startmodal { z-index: 120; background: rgb(8 20 36 / .58); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-.startkarte { position: relative; display: grid; grid-template-columns: 330px minmax(0, 1fr); width: min(920px, 100%); max-height: calc(100vh - 32px); overflow: hidden; border-radius: 18px; background: var(--panel); color: var(--fg); box-shadow: 0 30px 80px rgb(0 0 0 / .45), 0 0 0 1px rgb(255 255 255 / .06); }
-.startheld { position: relative; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; padding: 24px 26px 26px; min-height: 420px; color: #fff; background: radial-gradient(120% 80% at 0% 0%, #3b92e0 0%, rgb(59 146 224 / 0) 58%), linear-gradient(165deg, #115aa8 0%, #0a2f63 100%); }
-.startheld::before, .startheld::after { content: ""; position: absolute; border-radius: 50%; pointer-events: none; }
-.startheld::before { width: 300px; height: 300px; right: -110px; bottom: -90px; border: 40px solid rgb(255 255 255 / .06); }
-.startheld::after { width: 160px; height: 160px; right: 20px; bottom: 120px; border: 22px solid rgb(255 255 255 / .05); }
-.sbkopf { position: relative; display: flex; align-items: center; gap: 10px; font-size: var(--fs-s); opacity: .92; }
-.schip { padding: 3px 11px; border-radius: 999px; background: rgb(255 255 255 / .18); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; font-size: var(--fs-xs); }
-.sblogo { position: relative; flex: 1; display: grid; place-items: center; align-content: center; gap: 10px; padding: 18px 0; text-align: center; }
-.sblogo img { max-width: 100%; max-height: 120px; object-fit: contain; filter: drop-shadow(0 6px 16px rgb(0 0 0 / .35)); } .sblogo b { font: 700 22px var(--font-label); letter-spacing: .01em; } .sblogo i { font-style: normal; opacity: .7; }
-.sbtext { position: relative; } .sbgruss { font: 700 30px/1.12 var(--font-body); letter-spacing: -.01em; } .sbsub { margin-top: 6px; font-size: var(--fs-m); opacity: .82; }
-.startmain { display: grid; align-content: start; gap: 12px; padding: 26px 30px 18px; overflow: auto; }
+.startkarte { position: relative; display: block; width: min(780px, 100%); max-height: calc(100vh - 32px); overflow: auto; border-radius: 18px; background: var(--panel); color: var(--fg); box-shadow: 0 30px 80px rgb(0 0 0 / .45), 0 0 0 1px rgb(255 255 255 / .06); }
+.skopf { display: flex; align-items: center; gap: 10px; padding: 18px 22px; background: #1a68b0; color: #fff; } .skopf > div { flex: 1; min-width: 0; display: grid; gap: 2px; } .skopf b { font: 700 24px/1.1 var(--font-body); } .skopf span { font-size: var(--fs-l); color: rgb(255 255 255 / .78); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sinfo, .savatar { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgb(255 255 255 / .2); color: #fff; font: 600 var(--fs-l) var(--font-body); } .sinfo { cursor: pointer; font-family: Georgia, serif; font-style: italic; font-size: 20px; } .sinfo:hover { background: rgb(255 255 255 / .32); } .savatar { width: 46px; height: 46px; background: rgb(255 255 255 / .26); font-size: 17px; font-weight: 700; letter-spacing: .02em; }
+.startzu { width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: rgb(255 255 255 / .8); font-size: 24px; line-height: 1; cursor: pointer; margin-left: 2px; } .startzu:hover { background: rgb(255 255 255 / .2); color: #fff; }
+.sbanner { margin: 16px 22px 0; border-radius: 18px; overflow: hidden; background: #0f4c8e; box-shadow: 0 6px 20px rgb(15 60 120 / .25); }
+.sbbild { position: relative; display: flex; align-items: center; min-height: 190px; padding: 22px 28px; overflow: hidden;
+  background:
+    linear-gradient(114deg, rgb(255 255 255 / 0) 0 7%, rgb(255 255 255 / .07) 7% 19%, rgb(255 255 255 / 0) 19% 25%, rgb(255 255 255 / .05) 25% 36%, rgb(255 255 255 / 0) 36% 100%),
+    linear-gradient(90deg, #0a4a98 0%, #0f58a6 38%, #3f84c9 58%, #b9d6f0 78%, #eaf3fc 100%); }
+.sblogo { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; max-width: 52%; } .sblogo img { max-width: 100%; max-height: 112px; object-fit: contain; display: block; } .sblogo b { font: 700 22px var(--font-label); color: #fff; } .sblogo i { font-style: normal; opacity: .75; }
+.sblogo.platte { padding: 10px 14px; border-radius: 12px; background: #fff; box-shadow: 0 4px 14px rgb(0 0 0 / .25); }
+.sbemblem { position: absolute; right: -4px; top: 50%; height: 124%; transform: translateY(-50%); object-fit: contain; opacity: .95; filter: drop-shadow(0 6px 18px rgb(10 40 90 / .35)); pointer-events: none; }
+.sbgruss { padding: 14px 24px 16px; background: #0f4c8e; color: #fff; font: 700 26px/1.1 var(--font-body); letter-spacing: -.005em; }
+.startmain { display: grid; align-content: start; gap: 12px; padding: 20px 22px 18px; }
 .startmain h4 { margin: 4px 0 0; font: 600 var(--fs-xs) var(--font-label); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .startkarten { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .startknopf { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; text-align: left; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--fg); cursor: pointer; font: 500 var(--fs-m) var(--font-body); transition: border-color .15s, box-shadow .15s, transform .15s, background .15s; }
@@ -722,11 +725,11 @@ body.stiftpalette .stiftleiste { display: flex; }
 .startzuletzt { display: grid; gap: 2px; margin-top: -2px; } .startknopf.zeile { padding: 7px 10px; border: 0; border-radius: 10px; background: transparent; box-shadow: none; transform: none; } .startknopf.zeile:hover { background: color-mix(in srgb, var(--accent) 9%, transparent); }
 .zeile .szeichen { width: 34px; height: 34px; border-radius: 9px; } .zeile .stext b { font-size: var(--fs-m); } .startzuletzt .hinweis { margin: 4px 10px; }
 .startfuss { display: flex; align-items: center; gap: 12px; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: var(--fs-s); } .startfuss label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
-.startzu { position: absolute; top: 10px; right: 12px; z-index: 2; width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 24px; line-height: 1; cursor: pointer; } .startzu:hover { background: color-mix(in srgb, var(--fg) 10%, transparent); color: var(--fg); }
-@media (max-width: 760px) { .startzu { color: #fff; } .startzu:hover { color: #fff; background: rgb(255 255 255 / .18); } .startkarte { grid-template-columns: 1fr; overflow: auto; } .startheld { min-height: 0; } .sblogo img { max-height: 80px; } .startkarten { grid-template-columns: 1fr; } .sbgruss { font-size: 24px; } }
+@media (max-width: 760px) { .startkarten { grid-template-columns: 1fr; } .sbbild { min-height: 150px; padding: 16px 18px; } .sblogo img { max-height: 80px; } .sbgruss { font-size: 22px; } .skopf b { font-size: 20px; } }
 #verlaufMenue { position: fixed; z-index: 70; } #verlaufMenue button.jetzt { background: var(--fx-blau-hell); }
 /* Firmenlogo: Einstellungen, Startseite, Druckblätter */
-.firmaeinst { display: grid; grid-template-columns: 190px 1fr; gap: 12px; align-items: center; } .logovorschau { height: 84px; display: grid; place-items: center; border: 1px dashed var(--fx-rand); background: #fff; border-radius: 2px; padding: 6px; } .logovorschau img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.firmaeinst { display: grid; grid-template-columns: 290px 1fr; gap: 12px; align-items: center; } .logovorschauen { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .logovorschauen small { grid-column: 1 / -1; } .logovorschau.blau { background: linear-gradient(90deg, #0a4a98, #1f6fb8); border-style: solid; border-color: transparent; }
+.logovorschau { height: 84px; display: grid; place-items: center; border: 1px dashed var(--fx-rand); background: #fff; border-radius: 2px; padding: 6px; } .logovorschau img { max-width: 100%; max-height: 100%; object-fit: contain; }
 @media print { .blatt header .firmenlogo { max-height: 14mm; max-width: 46mm; object-fit: contain; margin-right: 10px; } .blatt header > div { margin-right: auto; } }
 /* Marke, Suchen, Einstellungen, Hilfe: ganz rechts; auf schmalen Geräten bleiben sie beim Wischen der Leiste stehen (nur das Zeichen statt des Namens) */
 .rechtsgruppe { display: flex; align-items: center; gap: 2px; order: 29; margin-left: auto; position: sticky; right: 0; z-index: 3; padding-left: 8px; background: var(--panel); box-shadow: -10px 0 10px -8px rgb(0 0 0 / .25); }

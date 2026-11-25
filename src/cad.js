@@ -65,6 +65,7 @@ import { rechne, parameterWerte, istZahl, namenIn, NAME as PARAMNAME } from "../
 import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
 import { langdruck, tastaturSichtbar, wertBlase, maus, schalter as touchSchalter } from "./touch.js";
 import { fensterVerschieben } from "./fenster.js";
+import { logoVarianten, logoBanner, logoPapier } from "./logo.js";
 import { dateiName as sicherName, modellDateiName } from "../kern/cloud/ablage.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
 import { BASIS, ACHSEN, versetzt, unterWinkel, mittelebene, zweiKanten, dreiPunkte, tangential, entlangPfad, aufFlaeche, zuWelt, zuLokal } from "../kern/ebenen.js";
@@ -155,7 +156,7 @@ const standardEinst = () => JSON.parse(JSON.stringify({
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
   druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
   etiketten: { spalten: 3, zeilen: 8, breite: 70, hoehe: 37, oben: 0, links: 0, abstandX: 0, abstandY: 0 }, // mm
-  firma: { logo: "", vorname: "" },                                                  // Firmenlogo (Bild als Daten-URL) und Vorname für die Begrüssung
+  firma: { logo: "", vorname: "", logoModus: "auto" },                                                  // Firmenlogo (Bild als Daten-URL) und Vorname für die Begrüssung
   allgemein: { startseite: true, stiftpalette: "auto", langdruck: true, masse: true, abh: true, speichern: "zuletzt", startAnsicht: "iso", stift: ["tAuswahl", "tLinie", "tRechteck", "tKreis", "tMass", "tEntf", "tFertig", "zurueck", "vor", "wSkizze", "wExtrusion"] }, // Voreinstellungen für das ganze Programm
   programm: { darstellung: "auto", updates: true, zuletzt: 8, kern: "netz" },      // kern: "netz" (wie 0.2) | "occt" (exakter CAD-Kern, Beta)
 }));
@@ -1996,7 +1997,7 @@ function dupliziere(f) {
 }
 
 // ------------------------------------------------------------ Druck: Werkstattblatt je Blechteil (A4)
-const logoImg = () => (einst.firma?.logo ? `<img class="firmenlogo" src="${einst.firma.logo}" alt="">` : "");
+const logoImg = () => (einst.firma?.logo ? `<img class="firmenlogo" src="${logoPapier(einst.firma)}" alt="">` : "");
 // Logo einlesen: Bilder auf höchstens 800×400 verkleinern (bleibt klein genug für den lokalen Speicher), SVG unverändert
 async function logoLesen(datei) {
   if (/svg/.test(datei.type) || /\.svg$/i.test(datei.name)) return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(await datei.text());
@@ -4980,11 +4981,12 @@ function zeigeEinst() {
     allgemein: `
     <h4>Firma</h4>
     <div class="firmaeinst">
-      <div class="logovorschau">${entwurf.firma.logo ? `<img src="${entwurf.firma.logo}" alt="Firmenlogo">` : '<span class="hinweis">Kein Logo</span>'}</div>
+      <div class="logovorschauen"><div class="logovorschau blau">${entwurf.firma.logo ? `<img src="${(logoBanner(entwurf.firma) || {}).src}" alt="Logo auf Blau">` : '<span class="hinweis">Kein Logo</span>'}</div><div class="logovorschau">${entwurf.firma.logo ? `<img src="${logoPapier(entwurf.firma)}" alt="Logo auf Papier">` : ""}</div><small class="hinweis">auf Blau · auf Papier</small></div>
       <div><div class="reihe ohnerand"><label class="knopf" for="eLogoDatei">Logo hochladen …</label><input type="file" id="eLogoDatei" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden>${entwurf.firma.logo ? '<button class="knopf weg" id="eLogoWeg" type="button">Entfernen</button>' : ""}</div>
       <p class="hinweis">Erscheint auf der Startseite, auf Werkstattblättern, Stückliste und im Schriftfeld der Pläne. PNG mit transparentem Hintergrund oder SVG sieht am besten aus.</p></div>
     </div>
-    <div class="egitter">${einstFeld("firma.vorname", "Vorname für die Begrüssung", "text", null, "leer = Name aus der Cloud-Anmeldung")}</div>
+    <div class="egitter">${einstFeld("firma.vorname", "Vorname für die Begrüssung", "text", null, "leer = Name aus der Cloud-Anmeldung")}
+      ${einstFeld("firma.logoModus", "Logo auf blauen Flächen", "wahl", [["auto", "Automatisch (dunkle Logos werden weiss)"], ["original", "Original"], ["weiss", "Immer weiss"]], "Auf Papier wird ein weisses Logo automatisch dunkelblau")}</div>
     <h4>Start</h4>
     <div class="egitter">${einstFeld("allgemein.startseite", "Startseite beim Programmstart zeigen", "janein")}</div>
     <h4>Darstellung</h4>
@@ -5178,7 +5180,7 @@ function einstWert(t) {
   if (g === "etiketten" && $("eEtikPruef")) etikettenPruefen();
 }
 $("eInhalt").addEventListener("change", async (ev) => {
-  if (ev.target.id === "eLogoDatei") { const d = ev.target.files[0]; if (!d) return; try { entwurf.firma.logo = await logoLesen(d); zeigeEinst(); meldung("Logo geladen – mit «Übernehmen» speichern."); } catch (err) { meldung("Logo konnte nicht gelesen werden: " + (err?.message ?? err)); } return; }
+  if (ev.target.id === "eLogoDatei") { const d = ev.target.files[0]; if (!d) return; try { const url = await logoLesen(d); entwurf.firma = { ...entwurf.firma, logo: url, ...(await logoVarianten(url)) }; zeigeEinst(); meldung("Logo geladen – mit «Übernehmen» speichern."); } catch (err) { meldung("Logo konnte nicht gelesen werden: " + (err?.message ?? err)); } return; }
   if (ev.target.id === "pMat") probe();
   else if (ev.target.dataset.stift) { const t = ev.target, l = new Set(entwurf.allgemein.stift); t.checked ? l.add(t.dataset.stift) : l.delete(t.dataset.stift); entwurf.allgemein.stift = STIFT_ALLE.map((x) => x[0]).filter((x) => l.has(x)); }
   else if (ev.target.dataset.e && (ev.target.dataset.typ === "janein" || ev.target.dataset.typ === "wahl")) einstWert(ev.target);
@@ -5195,7 +5197,7 @@ function einstLaden(text) {
     zeigeEinst(); meldung(`Geladen: ${e.materialien.length} Materialien, ${(e.vorlagen || []).length} Vorlagen – mit «Übernehmen» speichern.`);
   } catch { meldung("Diese Datei enthält keine Spengler-Digital-CAD-Einstellungen."); }
 }
-$("eInhalt").addEventListener("click", (ev) => { if (ev.target.id === "eLogoWeg") { entwurf.firma.logo = ""; zeigeEinst(); } });
+$("eInhalt").addEventListener("click", (ev) => { if (ev.target.id === "eLogoWeg") { entwurf.firma = { ...entwurf.firma, logo: "", logoWeiss: "", logoDunkel: "", logoHell: undefined, logoTransp: undefined }; zeigeEinst(); } });
 $("eInhalt").addEventListener("click", async (ev) => {
   if (ev.target.id === "eExport") {
     const inhalt = JSON.stringify({ art: "sdcad-einstellungen", version: VERSION, ...entwurf }, null, 1);
@@ -5398,6 +5400,8 @@ function loescheSkizzenAuswahl() {
 // Anzeige in der Skizze: Masse und Abhängigkeitssymbole lassen sich ausblenden
 const skAnz = (() => { try { return { masse: einst.allgemein.masse !== false, abh: einst.allgemein.abh !== false, ...JSON.parse(localStorage.getItem("sdcad-skizze-anzeige") || "{}") }; } catch { return { masse: true, abh: true }; } })();
 // Programmweite Voreinstellungen (Einstellungen › Allgemein) anwenden: Stiftpalette, Langdruck, Skizzenanzeige
+// Ältere Logos ohne Analyse (Helligkeit/Varianten) einmalig nachrechnen
+if (einst.firma.logo && einst.firma.logoHell === undefined) logoVarianten(einst.firma.logo).then((v) => { Object.assign(einst.firma, v); einstSpeichern(); }).catch(() => {});
 function bedienungAnwenden(neuSetzen = false) {
   const a = einst.allgemein, p = a.stiftpalette, an = p === "ein" || (p !== "aus" && matchMedia("(pointer: coarse), (any-pointer: coarse)").matches);
   document.body.classList.toggle("stiftpalette", an); touchSchalter.langdruck = a.langdruck !== false;
@@ -7458,25 +7462,27 @@ async function pruefeNeueVersion() {
 }
 setTimeout(pruefeNeueVersion, 3000); setInterval(pruefeNeueVersion, 5 * 60 * 1000); document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") pruefeNeueVersion(); });
 // Startseite: neues Modell, Öffnen, zuletzt geöffnete Projekte, Hilfe – abschaltbar in Einstellungen › Allgemein
-function startseite(erzwingen = false) {
+async function startseite(erzwingen = false) {
   if (!erzwingen && (new URLSearchParams(location.search).has("test") || einst.allgemein.startseite === false) || document.getElementById("startseite") || document.querySelector(".modal:not([hidden])")) return;
+  if (einst.firma.logo && einst.firma.logoHell === undefined) { try { Object.assign(einst.firma, await logoVarianten(einst.firma.logo)); einstSpeichern(); } catch { /* Logo bleibt unverändert */ } }
+  if (document.getElementById("startseite")) return;
   const el = document.createElement("div"); el.className = "modal startmodal"; el.id = "startseite"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Startseite");
   const liste = pc ? zuletzt() : [], zu = () => el.remove();
   const aktion = (id) => { zu(); $(id).click(); };
   const h = new Date().getHours(), gruss = h >= 5 && h < 11 ? "Guten Morgen" : h < 17 && h >= 11 ? "Guten Tag" : h >= 17 && h < 22 ? "Guten Abend" : "Gute Nacht";
-  const voll = cloud.angemeldet ? cloud.client.sitzung?.name || "" : "", vorname = (einst.firma.vorname || voll.split(" ")[0] || "").trim(), datum = new Date().toLocaleDateString("de-CH", { weekday: "long", day: "numeric", month: "long" }), logo = einst.firma.logo;
+  const voll = cloud.angemeldet ? cloud.client.sitzung?.name || "" : "", vorname = (einst.firma.vorname || voll.split(" ")[0] || "").trim(), datum = new Date().toLocaleDateString("de-CH", { weekday: "long", day: "numeric", month: "long" }), logoB = logoBanner(einst.firma);
   const IC = { neu: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M12 11v6M9 14h6"/>', oeffnen: '<path d="M3 7.5h6l2 2.5h10V19H3z"/>', weiter: '<path d="M5 12h13M13 6l6 6-6 6"/>', hilfe: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.6a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.7M12 17v.2"/>', datei: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 16h6"/>', cloud: '<path d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.1 8.6 4.7 4.7 0 0 0 7 18z"/>' };
   const sv = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k]}</svg>`;
   const karte = (k, titel, text, attr, haupt = false) => `<button class="startknopf karte${haupt ? " haupt" : ""}" ${attr}><span class="szeichen">${sv(k)}</span><span class="stext"><b>${titel}</b><small>${text}</small></span></button>`;
   const zeileHtml = (k, name, meta, attr, tip) => `<button class="startknopf zeile" ${attr} title="${esc(tip)}"><span class="szeichen">${sv(k)}</span><span class="stext"><b>${name}</b><small>${meta}</small></span></button>`;
   window.__startZeile = zeileHtml; // von der Cloud-Liste nachgeladen
+  const initialen = (voll || vorname).split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join("");
   el.innerHTML = `<div class="startkarte">
-    <button class="startzu" data-a="weiter" aria-label="Schliessen" title="Schliessen (Esc)">×</button>
-    <aside class="startheld">
-      <div class="sbkopf"><span class="schip">Heute</span><span>${esc(datum)}</span></div>
-      <div class="sblogo">${logo ? `<img src="${logo}" alt="Firmenlogo">` : '<img src="logo.png" alt="Spengler Digital CAD"><b>Spengler Digital <i>CAD</i></b>'}</div>
-      <div class="sbtext"><div class="sbgruss">${gruss}${vorname ? ", " + esc(vorname) : ""}</div><div class="sbsub">${voll ? esc(voll) + " · " : ""}Was möchtest du heute tun?</div></div>
-    </aside>
+    <div class="skopf"><div><b>Heute</b><span>${esc(datum)}${voll || vorname ? " · " + esc(voll || vorname) : ""}</span></div>
+      <button class="sinfo" data-a="wHilfe" title="Hilfe und Kurzanleitung (F1)" aria-label="Hilfe">i</button>${initialen ? `<span class="savatar" aria-hidden="true">${esc(initialen)}</span>` : ""}
+      <button class="startzu" data-a="weiter" aria-label="Schliessen" title="Schliessen (Esc)">×</button></div>
+    <div class="sbanner"><div class="sbbild"><div class="sblogo${logoB?.platte ? " platte" : ""}">${logoB ? `<img src="${logoB.src}" alt="Firmenlogo">` : '<img src="logo.png" alt="Spengler Digital CAD"><b>Spengler Digital <i>CAD</i></b>'}</div>${logoB ? '<img class="sbemblem" src="logo.png" alt="">' : ""}</div>
+      <div class="sbgruss">${gruss}${vorname ? ", " + esc(vorname) : ""}</div></div>
     <section class="startmain">
       <h4>Beginnen</h4>
       <div class="startkarten">
