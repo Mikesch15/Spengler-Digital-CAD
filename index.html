@@ -861,6 +861,32 @@ body.stiftpalette .stiftleiste { display: flex; }
 .meldung-toast { border-radius: 14px; box-shadow: 0 14px 40px rgb(0 0 0 / .3), 0 0 0 1px rgb(0 0 0 / .06); }
 .meldung-toast .aktion { background: #1869aa; border-color: #1869aa; border-radius: 8px; }
 .layerbox { border: 0; border-radius: 14px; box-shadow: 0 10px 30px rgb(15 40 80 / .18), 0 0 0 1px rgb(0 0 0 / .06); }
+/* Zeichnungsbereich (Plan) im einheitlichen Stil: blaue Kopfzeile, Reiter, Werkzeugband als Karte, Karten rechts, ruhige Blattfläche */
+#planEditor .planbox { background: var(--bg); }
+.plkopf { background: #1869aa; border-bottom: 0; color: #fff; padding: 10px 16px; gap: 8px; } .plkopf h3 { color: #fff; font: 700 var(--fs-xl) var(--font-body); letter-spacing: 0; margin-right: 14px; }
+.plkopf .knopf, .plkopf select { background: rgb(255 255 255 / .14) !important; color: #fff !important; border: 1px solid rgb(255 255 255 / .3) !important; border-radius: 8px; text-transform: none; letter-spacing: 0; font: 500 var(--fs-m) var(--font-body); }
+.plkopf .knopf:hover:not(:disabled) { background: rgb(255 255 255 / .26) !important; } .plkopf .knopf:disabled { opacity: .45; } .plkopf .knopf.weg { color: #ffd2cf !important; }
+.plkopf h3 { text-transform: none; border: 0; padding: 0; }
+.plkopf select option { color: #111; background: #fff; }
+.plkopf .knopf.haupt, .plkopf #plZu { background: #fff !important; color: #1869aa !important; border-color: #fff !important; font-weight: 600; } .plkopf .knopf.haupt:hover { background: #eaf3fc !important; }
+.pltabs { background: var(--panel); border-bottom: 1px solid var(--line); padding: 6px 14px 0; gap: 4px; }
+.pltabs [data-pltab] { border-radius: 10px 10px 0 0; font: 600 var(--fs-m) var(--font-body); letter-spacing: 0; text-transform: none; padding: 8px 16px; }
+.pltabs [data-pltab]:hover { background: color-mix(in srgb, #1869aa 8%, transparent); }
+#planEditor[data-tab="ansichten"] .pltabs [data-pltab="ansichten"], #planEditor[data-tab="beschriften"] .pltabs [data-pltab="beschriften"], #planEditor[data-tab="tabellen"] .pltabs [data-pltab="tabellen"], #planEditor[data-tab="ausgabe"] .pltabs [data-pltab="ausgabe"] { color: #1869aa; border-bottom-color: #1869aa; background: color-mix(in srgb, #1869aa 8%, transparent); }
+.plband { background: var(--panel); border-bottom: 1px solid var(--line); box-shadow: 0 1px 3px rgb(0 0 0 / .05); }
+.plband .wz { border-radius: 10px; border: 1px solid transparent; } .plband .wz:hover:not(:disabled) { background: color-mix(in srgb, #1869aa 9%, transparent); border-color: color-mix(in srgb, #1869aa 22%, transparent); }
+.plband .wz[aria-pressed="true"], .plband .wz.haupt { background: color-mix(in srgb, #1869aa 15%, transparent); color: #1869aa; border-color: #1869aa; } .plband .wz svg { stroke: #1869aa; }
+.pltabs .wz { border-radius: 10px; border: 1px solid transparent; } .pltabs .wz[aria-pressed="true"] { background: color-mix(in srgb, #1869aa 15%, transparent); border-color: #1869aa; color: #1869aa; } .pltabs .wz svg { stroke: #1869aa; }
+.plgruppe { border-right-color: color-mix(in srgb, var(--line) 70%, transparent); }
+#plFlaeche { background-color: #e4e9ef; } @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) #plFlaeche { background-color: #1b2127; } } :root[data-theme="dark"] #plFlaeche { background-color: #1b2127; }
+#plFlaeche svg { border-radius: 3px; box-shadow: 0 10px 34px rgb(15 40 80 / .22), 0 0 0 1px rgb(0 0 0 / .06); }
+#plBrowser, #plEigen { background: var(--panel); border-color: color-mix(in srgb, var(--line) 80%, transparent); }
+#plEigen .plkt:first-child, #plEigen::before { background: transparent; color: var(--muted); letter-spacing: .12em; }
+#plBrowser .plkt { background: transparent; color: var(--fg); font: 700 var(--fs-m) var(--font-body); letter-spacing: 0; text-transform: none; padding: 10px 14px 4px; } #plBrowser .plkt small, #plBrowser .plkt span { color: var(--muted); font-weight: 400; }
+#plBrowser .pleintrag { border-radius: 8px; width: calc(100% - 12px); margin: 1px 6px; } #plBrowser .pleintrag:hover { background: color-mix(in srgb, #1869aa 9%, transparent); } #plBrowser .pleintrag[aria-current="true"] { background: color-mix(in srgb, #1869aa 15%, transparent); color: #1869aa; box-shadow: inset 3px 0 0 #1869aa; }
+.plkarte { border: 0; border-radius: 12px; background: var(--panel); box-shadow: 0 0 0 1px var(--line); } .plkt { border-bottom: 0; color: var(--fg); font: 700 var(--fs-m) var(--font-body); letter-spacing: 0; text-transform: none; }
+#plEigen input, #plEigen select { border-radius: 8px; border: 1px solid var(--line); min-height: 28px; padding: 3px 8px; background: var(--panel); color: var(--fg); } #plEigen input:focus, #plEigen select:focus { outline: none; border-color: #1869aa; box-shadow: 0 0 0 3px rgb(24 105 170 / .2); }
+#plStatus { background: var(--panel); }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 var(--fs-xl) var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 
