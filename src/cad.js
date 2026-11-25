@@ -5096,6 +5096,10 @@ function zeigeEinst() {
     <div class="reihe ohnerand"><button class="knopf" id="eUpdate">Jetzt nach Updates suchen</button></div>`
       : '<p class="hinweis">Updates und «Zuletzt» gibt es nur im Windows-Programm. Die Web-Version ist immer aktuell.</p>'}
     <p class="hinweis">Version ${VERSION}</p>
+    <h4>Eingabe-Diagnose (Stift, Finger, Maus)</h4>
+    <p class="hinweis">Zum Prüfen, was das Gerät an die App meldet: Mit dem Stift über das Feld schweben (nicht berühren), dann mit Stift und Finger kurz antippen und ziehen. Die Zähler zeigen, welche Ereignisse ankommen. Beim Schweben müssen «pointermove» (Typ pen, Tasten 0) und der Schwebezähler steigen.</p>
+    <div class="diagfeld" tabindex="0" role="group" aria-label="Diagnosefeld für Stift, Finger und Maus">Hier schweben, tippen oder ziehen</div>
+    <pre class="diagaus" id="diagAus" aria-live="off">noch keine Ereignisse</pre>
     <h4>Selbsttest</h4><p class="hinweis">Prüft die Rechenkerne (Biegung, Kurzschrift, Parameter, Kantenbausteine, Rundblech, Umformung) gegen bekannte Werte.</p>
     <div class="reihe ohnerand"><button class="knopf" id="eSelbstTest">Selbsttest ausführen</button></div><div id="eSelbst"></div>`,
     bausteine: `
@@ -5258,6 +5262,13 @@ $("eInhalt").addEventListener("click", (ev) => {
 $("wEinst").onclick = () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); meldung(""); zeigeEinst(); $("einst").hidden = false; };
 $("eAbbrechen").onclick = () => { $("einst").hidden = true; entwurf = null; };
 $("eZu").onclick = () => $("eAbbrechen").click();
+// Eingabe-Diagnose: zählt die Ereignisse im Diagnosefeld, damit sich zeigt, was Stift/Finger/Maus (z. B. am Android-Tablet) wirklich melden
+{ const Z = {}, ART = ["pointerover", "pointerenter", "pointermove", "pointerrawupdate", "pointerdown", "pointerup", "pointercancel", "pointerleave", "mousemove", "mousedown", "touchstart", "touchmove", "touchend", "contextmenu"]; let letzte = "";
+  const zeige = () => { const o = $("diagAus"); if (!o) return; o.textContent = `${letzte || "noch keine Ereignisse"}\n\n` + ART.map((a) => `${a.padEnd(17)} ${Z[a] || 0}`).join("\n") + `\n${"davon Schweben".padEnd(17)} ${Z.schweben || 0}  (pointermove ohne Taste/Berührung, Typ pen)`; };
+  for (const a of ART) $("eInhalt").addEventListener(a, (e) => { if (!e.target.closest?.(".diagfeld")) return; Z[a] = (Z[a] || 0) + 1; const t = e.touches?.[0] || e;
+    if (a === "pointermove" && e.pointerType === "pen" && !e.buttons && !e.pressure) Z.schweben = (Z.schweben || 0) + 1;
+    letzte = `letztes: ${a}` + (e.pointerType ? ` · Typ ${e.pointerType}` : "") + (e.buttons != null ? ` · Tasten ${e.buttons}` : "") + (e.pressure != null ? ` · Druck ${(+e.pressure).toFixed(2)}` : "") + (e.tiltX != null ? ` · Neigung ${e.tiltX | 0}/${e.tiltY | 0}` : "") + ` · x ${Math.round(t.clientX || 0)} y ${Math.round(t.clientY || 0)}`; zeige(); }, { capture: true, passive: true });
+  $("eInhalt").addEventListener("click", (e) => { if (e.target.closest?.(".diagfeld")) { for (const k of Object.keys(Z)) delete Z[k]; letzte = ""; zeige(); } }); } // Klick ins Feld setzt die Zähler zurück
 $("eNav").addEventListener("click", (ev) => { const b = ev.target.closest("[data-ereg]"); if (b) { einstRegister = b.dataset.ereg; zeigeEinst(); } });
 $("eStandard").onclick = () => { entwurf = { ...standardEinst(), vorlagen: entwurf.vorlagen, eigeneDetails: entwurf.eigeneDetails, bausteine: entwurf.bausteine }; zeigeEinst(); meldung("Alle Standardwerte geladen (eigene Vorlagen, Details und Bausteine bleiben) – mit «Übernehmen» speichern."); };
 $("eOk").onclick = () => {

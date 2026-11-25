@@ -895,6 +895,8 @@ body.stiftpalette .stiftleiste { display: flex; }
 /* Tastaturbedienung: überall sichtbarer Fokusring */
 :where(button, a, [tabindex], summary, select, input, textarea, [role="tab"], [role="button"]):focus-visible { outline: 2px solid var(--akz-text, #1869aa); outline-offset: 2px; border-radius: 6px; }
 .startmodal :focus-visible, .skopf :focus-visible, .ekopf :focus-visible, .plkopf :focus-visible, .dialog > h3 :focus-visible, .modalbox > h3 :focus-visible { outline-color: #fff; }
+.diagfeld { display: grid; place-items: center; min-height: 110px; border: 2px dashed var(--line); border-radius: 12px; background: var(--panel); color: var(--muted); text-align: center; touch-action: none; user-select: none; } .diagfeld:hover, .diagfeld:focus-visible { border-color: #1869aa; color: var(--fg); }
+.diagaus { margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font: var(--fs-s) var(--font-num); white-space: pre-wrap; color: var(--fg); }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 var(--fs-xl) var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 

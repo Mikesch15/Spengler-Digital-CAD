@@ -48,6 +48,12 @@ await s.click('.klappknopf:visible:has-text("Blech")'); await s.waitForTimeout(3
 await s.click("#wSkizzeBlech"); await s.waitForTimeout(500);
 ok(await s.evaluate(() => document.getElementById("dTitel").textContent === "Skizze erstellen"), "Blech-Reiter: Skizze lässt sich direkt erstellen");
 await s.click("#dAbbrechen"); await s.waitForTimeout(200);
+// Eingabe-Diagnose zählt Stift-Schweben
+await s.click("#wEinst"); await s.waitForTimeout(300); await s.click('[data-ereg="programm"]'); await s.waitForTimeout(200);
+await s.evaluate(() => { const f = document.querySelector(".diagfeld"), r = f.getBoundingClientRect(); for (let i = 0; i < 3; i++) f.dispatchEvent(new PointerEvent("pointermove", { pointerType: "pen", pointerId: 5, isPrimary: true, buttons: 0, pressure: 0, clientX: r.x + 20 + i, clientY: r.y + 20, bubbles: true })); });
+const dg = await s.evaluate(() => document.getElementById("diagAus").textContent);
+ok(/letztes: pointermove · Typ pen · Tasten 0/.test(dg) && /pointermove\s+3/.test(dg) && /davon Schweben\s+3/.test(dg), "Eingabe-Diagnose zählt das Schweben des Stifts");
+await s.click("#eAbbrechen"); await s.waitForTimeout(200);
 // Firmenlogo hochladen, Vorname, Startseite/Druck
 await s.click("#wEinst"); await s.waitForTimeout(300);
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mNkYPhfz0AEYBxVSF+FAP5FDvcfRYWgAAAAAElFTkSuQmCC", "base64");
