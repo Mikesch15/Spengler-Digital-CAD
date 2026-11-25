@@ -1295,6 +1295,9 @@ body.stiftpalette .stiftleiste { display: flex; }
       <li><b>Freiheitsgrade</b>: Die Anzeige neben «Skizze beenden» zählt, wie viele Masse oder Abhängigkeiten noch fehlen. Vollständig bestimmte Elemente werden dunkel (wie in Fusion schwarz). Widersprüchliche oder überzählige Masse lehnt das Programm ab.</li>
       <li>Ziehen in «Auswahl»: Punkte, Linien und Kreise (am Rand: Radius) – alle Abhängigkeiten bleiben erhalten. Graue Masse sind Referenzmasse: anklicken und Wert eintippen macht daraus ein treibendes Mass; ein treibendes Mass anklicken, Feld leeren und Enter löscht es.</li>
       <li>Masse eintippen, solange ein Werkzeug Punkte setzt (Felder neben dem Mauszeiger).</li>
+      <li><b>Masslinien</b>: Längen, Winkel, Radien und Durchmesser haben eine Masslinie mit Pfeilen; die Masszahl gehört dazu. Die Zahl ziehen verschiebt die Masslinie (Abstand, Bogenradius bzw. Richtung), Doppelklick setzt sie zurück. Das geht in jedem Werkzeug, auch mit Finger und Stift. Der Winkel ist der Innenwinkel zwischen den beiden Schenkeln. Die Knöpfe «Masse» und «Abh.» blenden Masse bzw. Abhängigkeitssymbole aus.</li>
+      <li><b>Löschen</b> ist ein Werkzeug: erst «Löschen» wählen, dann Linien oder Abhängigkeiten anklicken (das Element unter dem Zeiger leuchtet). Entf löscht weiterhin das gewählte Element.</li>
+      <li><b>Projizieren</b>: die Kante unter Stift oder Zeiger leuchtet blau, bevor sie angeklickt wird. <b>«n FG»</b> = Freiheitsgrade (so viele Masse oder Abhängigkeiten fehlen noch); beim Überfahren oder Antippen erscheint die Erklärung.</li>
       <li>Einzelne Linien und Bögen, die sich an den Enden berühren, gelten zusammen als ein Linienzug bzw. ein geschlossenes Profil.</li>
     </ul>
     <h4>Werkstatt</h4>
@@ -1305,11 +1308,22 @@ body.stiftpalette .stiftleiste { display: flex; }
       <li><b>Einstellungen</b> (Register): Materialien kalibrieren (K-Faktor aus Probebiegung) · Lagerformate · Vorgaben für neue Teile, Fangraster, Spalte «ab B» · Druck (Betrieb in der Kopfzeile, Abwicklung, Etikett, Materialbedarf) · Etikettenbogen · Programm (hell/dunkel, Updates) · eigene Vorlagen, alles als Datei sichern und auf einem anderen Gerät laden.</li>
       <li><b>Zuletzt</b> (PC-Programm): die letzten 8 Projekte direkt öffnen.</li>
     </ul>
+    <h4>Start, Speichern, Einstellungen und Bedienung</h4>
+    <ul>
+      <li><b>Startseite</b>: beim Programmstart mit Begrüssung, «Neues Modell», «Öffnen», «Weiterarbeiten» und den zuletzt verwendeten Modellen (Cloud, am PC auch lokale Dateien). Abschalten: Häkchen auf der Startseite oder Einstellungen › Allgemein › Start.</li>
+      <li><b>Speichern</b>: Datei › Speichern (Strg+S) öffnet einen Dialog mit Name und Ort (Cloud oder PC/Gerät). Gibt es die Datei schon, wird vor dem Überschreiben gefragt; in der Cloud bleibt die alte Fassung als frühere Version erhalten. Den Modellnamen kannst du auch im Auftrag-Panel ändern. <b>Öffnen</b> fragt, ob aus der Cloud oder vom PC/Gerät.</li>
+      <li><b>Einstellungen</b> (oben rechts neben Suchen und Hilfe): Seite «Allgemein» mit Firmenlogo, Vorname für die Begrüssung, Startseite, Farben, Stiftpalette, Fingerdruck, Skizzenanzeige, Speichern-Vorauswahl und Startansicht; daneben Materialien, Lager, Druck, Etiketten, Bausteine, Konto &amp; Cloud usw.</li>
+      <li><b>Firmenlogo</b>: unter Einstellungen › Allgemein › Firma hochladen. Auf der blauen Banner-Fläche wird ein dunkles Logo automatisch weiss, auf Papier wird ein weisses Logo automatisch dunkelblau (Einstellung «Logo auf blauen Flächen»). Das Logo erscheint auf Startseite, Werkstattblättern, Stückliste und im Schriftfeld der Pläne.</li>
+      <li><b>Stiftpalette</b>: Knöpfe am Bildrand für Auswahl, Linie, Löschen, Rückgängig usw. Ein-/Ausschalten, Auswahl der Knöpfe und Verschieben (am Griff ⋮⋮, Doppelklick = zurück) in Einstellungen › Allgemein.</li>
+      <li><b>Tablet</b>: langer Fingerdruck öffnet das Kontextmenü (Zeitleiste, Browser); beim Ziehen an Pfeilen zeigt eine Blase den Wert. <b>Fenster</b> lassen sich am Titel verschieben (Doppelklick = zurück). <b>Drucken</b> geht auch in der Android-App (neue App installieren; sonst über das Teilen-Menü im Browser).</li>
+      <li><b>Verlauf</b>: der Knopf «Verlauf» rechts in der Zeitleiste listet alle Schritte mit Beschriftung; ein Klick springt zu diesem Stand. ◀ ▶ rollen die Zeitleiste einen Schritt zurück bzw. vor.</li>
+      <li><b>Import</b>: Datei › Import nimmt STEP, STL und DXF (DXF wird als fixierte Skizze auf einer gewählten Ebene angelegt). DWG bitte vorher als DXF speichern.</li>
+    </ul>
     <h4>Tastenkürzel</h4>
     <table class="liste kuerzel"><tbody>
       <tr><td>Strg+K oder /</td><td>Befehlssuche: Werkzeug nach Name suchen und starten</td></tr>
-      <tr><td>Strg+S / Strg+Umschalt+S</td><td>Speichern / Speichern unter</td></tr>
-      <tr><td>Strg+O</td><td>Öffnen</td></tr>
+      <tr><td>Strg+S / Strg+Umschalt+S</td><td>Speichern (derselbe Ort wie zuletzt, nach bestätigtem Überschreiben ohne Rückfrage) / Speichern-Dialog immer zeigen</td></tr>
+      <tr><td>Strg+O</td><td>Öffnen (Cloud oder PC/Gerät)</td></tr>
       <tr><td>Strg+P</td><td>Stückliste und Werkstattblätter drucken</td></tr>
       <tr><td>Strg+Z / Strg+Y</td><td>Rückgängig / Wiederholen</td></tr>
       <tr><td>Strg+D</td><td>Gewähltes Teil duplizieren</td></tr>
