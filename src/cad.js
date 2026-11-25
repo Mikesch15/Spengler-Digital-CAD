@@ -66,6 +66,8 @@ import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
 import { langdruck, tastaturSichtbar, wertBlase, maus, schalter as touchSchalter } from "./touch.js";
 import { fensterVerschieben } from "./fenster.js";
 import { logoVarianten, logoBanner, logoPapier } from "./logo.js";
+import { biegenInit, biegenOeffnen, biegenOffen, biegenNeuZeichnen, maschinenVorschau } from "./biegen.js";
+import { VORLAGE_SCHROEDER, VORLAGE_JORNS, VORLAGEN as MASCHINEN_VORLAGEN, maschineAusVorlage, werkzeugeAlsText, werkzeugeAusText, maschineFehlt } from "../kern/biegen/maschinen.js";
 document.documentElement.lang = "de"; // Sprache der Seite (Vorlesen, Silbentrennung, Prüfwerkzeuge)
 import { dateiName as sicherName, modellDateiName } from "../kern/cloud/ablage.js";
 import { kreisDurch3, bogenDaten, bogenPunkte, bogenAusMitte, kreisPunkte, polygonPunkte, rechteck3, langlochPunkte, abrundung, rundePolylinie, versatzPolylinie, spiegelPunkt, schnittStrecken, schnittStreckeKreis, verbindeStuecke } from "../kern/skizze.js";
@@ -157,6 +159,7 @@ const standardEinst = () => JSON.parse(JSON.stringify({
   anzeige: { abB: true },                                                             // Spalte «ab Kante B»
   druck: { betrieb: "", abwicklung: true, etikett: true, bedarf: true },              // Werkstattblatt und Stückliste
   etiketten: { spalten: 3, zeilen: 8, breite: 70, hoehe: 37, oben: 0, links: 0, abstandX: 0, abstandY: 0 }, // mm
+  maschinen: [{ ...JSON.parse(JSON.stringify(VORLAGE_SCHROEDER)), id: "schroeder-spb3200" }, { ...JSON.parse(JSON.stringify(VORLAGE_JORNS)), id: "jorns-maxi150s" }], // Biegemaschinen (Biegesimulation)
   firma: { logo: "", vorname: "", logoModus: "auto" },                                                  // Firmenlogo (Bild als Daten-URL) und Vorname für die Begrüssung
   allgemein: { startseite: true, stiftpalette: "auto", langdruck: true, masse: true, abh: true, speichern: "zuletzt", startAnsicht: "iso", stift: ["tAuswahl", "tLinie", "tRechteck", "tKreis", "tMass", "tEntf", "tFertig", "zurueck", "vor", "wSkizze", "wExtrusion"] }, // Voreinstellungen für das ganze Programm
   programm: { darstellung: "auto", updates: true, zuletzt: 8, kern: "netz" },      // kern: "netz" (wie 0.2) | "occt" (exakter CAD-Kern, Beta)
@@ -170,6 +173,7 @@ function mitStandard(e) {
   if (!Array.isArray(r.materialien) || !r.materialien.length) r.materialien = s.materialien;
   if (!Array.isArray(r.bausteine)) r.bausteine = s.bausteine;
   if (!Array.isArray(r.eigeneDetails)) r.eigeneDetails = [];
+  if (!Array.isArray(r.maschinen)) r.maschinen = s.maschinen;
   return r;
 }
 let einst = standardEinst();
@@ -4971,8 +4975,8 @@ const meldung = (t) => { $("eMeldung").textContent = t; };
 const zahlen = (t) => String(t).split(/[\s,;]+/).map(parseFloat).filter((v) => v > 0);
 let einstRegister = "allgemein", einstLetzte = null, einstSeiteLetzte = null, einstOffen = new Set();
 // Einstellungen: sechs Seiten, darin klappbare Abschnitte (statt zwölf Register)
-const EINST_SEITEN = [["allgemein", "Allgemein", ["allgemein"]], ["ausgabe", "Firma & Ausgabe", ["firma", "druck", "etiketten"]], ["material", "Material & Lager", ["material", "lager"]], ["konstruktion", "Konstruktion", ["neu", "bausteine", "detail3d", "dach"]], ["daten", "Konto & Daten", ["konto", "vorlagen"]], ["programm", "Programm", ["programm"]]];
-const EINST_TITEL = { allgemein: "Darstellung, Bedienung und Speichern", firma: "Firmenlogo und Begrüssung", druck: "Werkstattblatt und Stückliste", etiketten: "Etiketten", material: "Materialien und K-Faktor", lager: "Lagerformate", neu: "Vorgaben für neue Teile", bausteine: "Kantenbausteine", detail3d: "3D-Details", dach: "Dach: Deckungen und Aufbauten", konto: "Konto und Cloud", vorlagen: "Vorlagen, Sicherungen und Übertragen", programm: "Programm, Kern und Diagnose" };
+const EINST_SEITEN = [["allgemein", "Allgemein", ["allgemein"]], ["ausgabe", "Firma & Ausgabe", ["firma", "druck", "etiketten"]], ["material", "Material & Lager", ["material", "lager", "maschinen"]], ["konstruktion", "Konstruktion", ["neu", "bausteine", "detail3d", "dach"]], ["daten", "Konto & Daten", ["konto", "vorlagen"]], ["programm", "Programm", ["programm"]]];
+const EINST_TITEL = { allgemein: "Darstellung, Bedienung und Speichern", firma: "Firmenlogo und Begrüssung", druck: "Werkstattblatt und Stückliste", etiketten: "Etiketten", material: "Materialien und K-Faktor", lager: "Lagerformate", maschinen: "Biegemaschinen (Biegesimulation)", neu: "Vorgaben für neue Teile", bausteine: "Kantenbausteine", detail3d: "3D-Details", dach: "Dach: Deckungen und Aufbauten", konto: "Konto und Cloud", vorlagen: "Vorlagen, Sicherungen und Übertragen", programm: "Programm, Kern und Diagnose" };
 const EINST_REGISTER = [["allgemein", "Allgemein"], ["material", "Materialien"], ["lager", "Lager"], ["neu", "Neue Teile"], ["druck", "Druck"], ["etiketten", "Etiketten"], ["programm", "Programm"], ["bausteine", "Bausteine"], ["detail3d", "Details 3D"], ["vorlagen", "Vorlagen & Sichern"], ["dach", "Dach"], ["konto", "Konto & Cloud"]];
 // Feld an einen Wert der Einstellungen binden: data-e="gruppe.schluessel", data-typ zahl|text|janein|wahl
 function einstFeld(pfad, label, typ = "zahl", optionen = null, hinweis = "") {
@@ -5055,6 +5059,16 @@ function zeigeEinst() {
       <label>Coil-Breite mm <input id="lCoil" type="number" step="any" value="${e.coil}"><small class="hinweis">0 = kein Coil</small></label>
       <label>Tafeln B×L mm <input id="lTafeln" type="text" value="${e.tafeln.map(([b, l]) => `${b}×${l}`).join(", ")}"><small class="hinweis">z. B. 1000×2000, 1250×2500</small></label>
     </div>`,
+    maschinen: `
+    <p class="hinweis">Für die Biegesimulation: Querschnitte von Unterwange, Oberwange und Biegewange eintragen (mm; Biegekante x = 0, Tischoberkante y = 0, y nach oben). Es gibt keine erfundenen Standardwerte – nur was geprüft ist, gilt als «geprüft».</p>
+    ${(e.maschinen || []).map((m, i) => { const fehlt = maschineFehlt(m), mf = (label, k, w, st = "any") => `<label class="mfeld"><span>${label}</span><input data-mk="${k}" data-mi="${i}" type="${k === "name" ? "text" : "number"}" step="${st}" value="${esc(w ?? "")}"></label>`;
+      return `<div class="mkarte" data-mkarte="${i}"><div class="mkopf"><b>${esc(m.name || "Maschine")}</b><span>${fehlt.length ? `<span class="mpille warn">unvollständig: ${esc(fehlt.join(", "))}</span>` : m.geprueft ? '<span class="mpille ok">geprüft</span>' : '<span class="mpille warn">ungeprüft</span>'}</span><button class="weg" data-mweg="${i}" aria-label="${esc(m.name)} entfernen" title="Maschine entfernen">×</button></div>
+      <div class="mgrid">${mf("Name", "name", m.name)}${mf("Arbeitslänge mm", "laenge_mm", m.laenge_mm)}${mf("Mindest-Klemmbreite mm", "min_klemm_mm", m.min_klemm_mm)}${mf("Max. Biegewinkel nach oben °", "max_winkel_auf", m.max_winkel_auf)}${mf("Toleranz mm", "toleranz_mm", m.toleranz_mm)}${mf("Max. Blechdicke mm", "max_blech_mm", m.max_blech_mm)}</div>
+      <label class="efeld janein"><label for="mg_${i}">Werkzeugwerte mit der Herstellerzeichnung geprüft</label><input id="mg_${i}" type="checkbox" data-mk="geprueft" data-mi="${i}" ${m.geprueft ? "checked" : ""}></label>
+      ${m.hinweis ? `<p class="hinweis">${esc(m.hinweis)}</p>` : ""}
+      ${maschinenVorschau(m, 340)}
+      <details class="ehilfe"><summary>Querschnitte bearbeiten (JSON)</summary><textarea class="mjson" data-mjson="${i}" rows="9" spellcheck="false" aria-label="Werkzeug-Querschnitte ${esc(m.name)}">${esc(werkzeugeAlsText(m))}</textarea><p class="hinweis" id="mjsonMeldung${i}">Polygone als [[x, y], …]. Änderungen werden beim Verlassen des Feldes übernommen.</p></details></div>`; }).join("") || '<p class="hinweis">Noch keine Maschine.</p>'}
+    <div class="reihe ohnerand">${MASCHINEN_VORLAGEN.filter((v) => !(e.maschinen || []).some((m) => m.typ === v.typ)).map((v) => `<button class="knopf" type="button" data-mvorlage="${esc(v.typ)}">+ ${esc(v.name.split(" (")[0])} (Vorlage)</button>`).join("")}<button class="knopf" type="button" data-mneu>+ Leere Maschine</button></div>`,
     neu: `
     <h4>Vorgaben für neue Teile</h4>
     <div class="egitter">
@@ -5188,6 +5202,7 @@ $("eInhalt").addEventListener("input", (ev) => {
   else if (t.id === "lBand") entwurf.spaltbaender = zahlen(t.value);
   else if (t.id === "lCoil") entwurf.coil = parseFloat(t.value) || 0;
   else if (t.id === "lTafeln") entwurf.tafeln = t.value.split(/[,;]+/).map((x) => zahlen(x.replace(/[x×*]/gi, " "))).filter((x) => x.length === 2);
+  else if (t.dataset.mk) { const m = entwurf.maschinen[+t.dataset.mi]; m[t.dataset.mk] = t.type === "checkbox" ? t.checked : t.dataset.mk === "name" ? t.value : (t.value === "" ? "" : parseFloat(t.value)); }
   else if (t.dataset.stift) { const l = new Set(entwurf.allgemein.stift); t.checked ? l.add(t.dataset.stift) : l.delete(t.dataset.stift); entwurf.allgemein.stift = STIFT_ALLE.map((x) => x[0]).filter((x) => l.has(x)); }
   else if (t.dataset.e) einstWert(t);
   if (["pMat", "pZ", "pA", "pB"].includes(t.id)) probe();
@@ -5200,6 +5215,8 @@ function einstWert(t) {
 $("eInhalt").addEventListener("change", async (ev) => {
   if (ev.target.id === "eLogoDatei") { const d = ev.target.files[0]; if (!d) return; try { const url = await logoLesen(d); entwurf.firma = { ...entwurf.firma, logo: url, ...(await logoVarianten(url)) }; zeigeEinst(); meldung("Logo geladen – mit «Übernehmen» speichern."); } catch (err) { meldung("Logo konnte nicht gelesen werden: " + (err?.message ?? err)); } return; }
   if (ev.target.id === "pMat") probe();
+  else if (ev.target.dataset.mjson != null) { const i = +ev.target.dataset.mjson, r = werkzeugeAusText(ev.target.value), me = document.getElementById("mjsonMeldung" + i); if (r.fehler) { if (me) { me.textContent = "⚠ " + r.fehler; me.style.color = "#c0261b"; } } else { Object.assign(entwurf.maschinen[i], r.werte); if (!r.werte.oberwange_werkzeuge) delete entwurf.maschinen[i].oberwange_werkzeuge; zeigeEinst(); } }
+  else if (ev.target.dataset.mk === "geprueft" || ev.target.dataset.mk === "name") { zeigeEinst(); }
   else if (ev.target.dataset.stift) { const t = ev.target, l = new Set(entwurf.allgemein.stift); t.checked ? l.add(t.dataset.stift) : l.delete(t.dataset.stift); entwurf.allgemein.stift = STIFT_ALLE.map((x) => x[0]).filter((x) => l.has(x)); }
   else if (ev.target.dataset.e && (ev.target.dataset.typ === "janein" || ev.target.dataset.typ === "wahl")) einstWert(ev.target);
   else if (ev.target.dataset.bk === "partner") entwurf.bausteine[+ev.target.closest("tr").dataset.bi].partner = ev.target.value || undefined;
@@ -5215,6 +5232,7 @@ function einstLaden(text) {
     zeigeEinst(); meldung(`Geladen: ${e.materialien.length} Materialien, ${(e.vorlagen || []).length} Vorlagen – mit «Übernehmen» speichern.`);
   } catch { meldung("Diese Datei enthält keine Spengler-Digital-CAD-Einstellungen."); }
 }
+$("eInhalt").addEventListener("click", (ev) => { const w = ev.target.closest("[data-mweg]"), v = ev.target.closest("[data-mvorlage]"), n = ev.target.closest("[data-mneu]"); if (w) { entwurf.maschinen.splice(+w.dataset.mweg, 1); zeigeEinst(); } else if (v) { const vo = MASCHINEN_VORLAGEN.find((x) => x.typ === v.dataset.mvorlage); if (vo) { entwurf.maschinen.push(maschineAusVorlage(vo)); zeigeEinst(); } } else if (n) { entwurf.maschinen.push({ id: "m" + Date.now().toString(36), name: "Neue Maschine", laenge_mm: 3000, min_klemm_mm: 10, max_winkel_auf: 120, toleranz_mm: 0.3, geprueft: false, unterwange: [], klemmwange: [], biegewange_auf: { teile: [], achse: [0, 0] } }); zeigeEinst(); } });
 $("eInhalt").addEventListener("click", (ev) => { if (ev.target.id === "eLogoWeg") { entwurf.firma = { ...entwurf.firma, logo: "", logoWeiss: "", logoDunkel: "", logoHell: undefined, logoTransp: undefined }; zeigeEinst(); } });
 $("eInhalt").addEventListener("click", async (ev) => {
   if (ev.target.id === "eExport") {
@@ -5303,7 +5321,7 @@ $("eOk").onclick = () => {
 
 // ------------------------------------------------------------ Hilfe
 // Hilfe: Kapitel aus den Überschriften der Vorlage (<h4>), Suche, Sprung zu einem Kapitel
-const HILFE_KURZ = { "Kontextleiste": "Kontextleiste", "Blechteil erstellen": "Blechteil erstellen", "Flansch, Umschlag": "Flansch, Umschlag, Bausteine", "Flächenblech mit": "Flächenblech & Bausteine", "Konto, Cloud": "Konto, Cloud, Vorlagen", "Pläne": "Pläne (Zeichnung)", "Modellieren wie": "Modellieren", "Konstruieren und": "Konstruieren & Skizzieren", "Skizzenwerkzeuge": "Skizzenwerkzeuge", "Werkstatt": "Werkstatt", "Simulation": "Simulation", "Start, Speichern": "Start, Speichern, Bedienung", "Tastenkürzel": "Tastenkürzel", "Konventionen": "Konventionen" };
+const HILFE_KURZ = { "Kontextleiste": "Kontextleiste", "Blechteil erstellen": "Blechteil erstellen", "Flansch, Umschlag": "Flansch, Umschlag, Bausteine", "Flächenblech mit": "Flächenblech & Bausteine", "Konto, Cloud": "Konto, Cloud, Vorlagen", "Pläne": "Pläne (Zeichnung)", "Modellieren wie": "Modellieren", "Konstruieren und": "Konstruieren & Skizzieren", "Skizzenwerkzeuge": "Skizzenwerkzeuge", "Werkstatt": "Werkstatt", "Simulation": "Simulation", "Biegesimulation": "Biegesimulation (Abkanten)", "Start, Speichern": "Start, Speichern, Bedienung", "Tastenkürzel": "Tastenkürzel", "Konventionen": "Konventionen" };
 let hilfeKapitel = null;
 function hilfeBauen() {
   if (hilfeKapitel) return; const q = document.createElement("div"); q.append($("hilfeQuelle").content.cloneNode(true)); hilfeKapitel = [];
@@ -7078,6 +7096,14 @@ function detail3dDialog(f) {
     "Setzt den Körper der Detailvorlage an eine Kante: Vorlagen-Ursprung am Kantenanfang, Vorlagen-X entlang der Kante, Vorlagen-Z zur Sichtseite. Kante in der Ansicht anklicken (Körperkante oder Skizzenkante).", { wahlNr: -1, info: hinweise });
 }
 $("wDetail3d").onclick = () => { if (dlg) $("dAbbrechen").click(); detail3dDialog(); };
+// Biegesimulation: gewähltes Blechprofil auf der Schwenkbiegemaschine (Einstellungen › Biegemaschinen)
+biegenInit({ maschinen: () => einst.maschinen || [], status, einstellungen: () => { einstRegister = "maschinen"; $("wEinst").click(); } });
+$("wBiegesim").onclick = () => {
+  if (dlg) $("dAbbrechen").click();
+  let f = hauptVon(auswahl); if (!f || !f._res || !istProfil(f)) f = doc.features.find((x) => !x._aus && !x.versteckt && istProfil(x) && x._res && x._res.schenkel?.length > 1) || null;
+  if (!f) return status("Zuerst ein Blechprofil (Profil, Vorlage oder freies Profil) erstellen oder im Browser wählen.");
+  waehle(f.id); biegenOeffnen(f._res, { staerke: material(f.material)?.t, laenge: laengeVon(f), titel: f.name });
+};
 async function detailAusDatei(datei) {
   const name = datei.name.replace(/\.[^.]+$/, ""), puffer = await datei.arrayBuffer();
   try {
