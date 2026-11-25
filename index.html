@@ -672,7 +672,8 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
 .dialog > h3, .modalbox > h3 { padding: 5px 32px 5px 8px; font-size: var(--fs-s); }
 .dialog .dklein { top: 2px; }
 .dialog .inhalt, .modalbox .inhalt { padding: 8px 10px; gap: 5px; align-content: start; }
-.feld { grid-template-columns: minmax(84px, 40%) minmax(0, 1fr); gap: 6px; min-height: 0; }
+.feld { grid-template-columns: minmax(84px, 40%) minmax(0, 1fr); gap: 6px; }
+.dialog .inhalt > * { min-height: auto; } /* sonst schrumpfen die Zeilen langer Dialoge (Simulation, Dach …) auf 0 und Felder überlappen */
 .feld > span, .feld > label, .feld > :first-child:not(input):not(select) { font-size: var(--fs-s); line-height: 1.25; }
 .dialog input, .dialog select, .dialog textarea, .modalbox input:not([type=checkbox]):not([type=radio]):not([type=range]), .modalbox select, .modalbox textarea, .feld input, .feld select { padding: 2px 6px; min-height: 24px; font-size: var(--fs-s); }
 .dialog select, .modalbox select, .feld select { padding-right: 22px; background-position: right 7px center; }
