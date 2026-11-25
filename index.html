@@ -778,6 +778,22 @@ body.stiftpalette .stiftleiste { display: flex; }
 .efuss { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--panel); } .efuss #eMeldung { flex: 1; }
 .efuss .knopf { padding: 7px 18px; border-radius: 8px; min-width: 96px; } .efuss .knopf.haupt { background: #1869aa; border-color: #1869aa; color: #fff; } .efuss .knopf.weg { min-width: 0; margin-right: 0; }
 @media (max-width: 760px) { .firmaeinst { grid-template-columns: 1fr; } .einstmodal { padding: 0; } .einstkarte { height: 100vh; border-radius: 0; } .ekoerper { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); } .enav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px; } .enav button { width: auto; white-space: nowrap; } .eseite { padding: 16px 14px 20px; } }
+/* Einheitlicher Stil für alle Fenster (wie Startseite und Einstellungen): blaue Titelleiste, runde Ecken, abgerundete Felder, blaue Hauptknöpfe */
+.dialog, .modalbox { border: 0; border-radius: 14px; overflow: hidden; background: var(--panel); color: var(--fg); box-shadow: 0 18px 50px rgb(0 0 0 / .32), 0 0 0 1px rgb(0 0 0 / .06); }
+.dialog > h3, .modalbox > h3 { background: #1869aa; color: #fff; border-bottom: 0; text-transform: none; letter-spacing: 0; font: 600 var(--fs-l) var(--font-body); padding: 9px 38px 9px 14px; }
+.dialog > h3::before, .modalbox > h3::before { content: none; }
+.dialog .dklein { color: rgb(255 255 255 / .8); top: 6px; right: 6px; } .dialog .dklein:hover { color: #fff; }
+.modal { -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.dialog .inhalt, .modalbox .inhalt { background: var(--panel); }
+.dialog input:not([type=checkbox]):not([type=radio]), .dialog select, .dialog textarea, .modalbox input:not([type=checkbox]):not([type=radio]):not([type=range]), .modalbox select, .modalbox textarea, .feld input, .feld select { border-radius: 8px; border-color: var(--line); background-color: var(--panel); }
+.dialog input:focus, .dialog select:focus, .modalbox input:focus, .modalbox select:focus, .feld input:focus, .feld select:focus { border-color: #1869aa; box-shadow: 0 0 0 3px rgb(24 105 170 / .22); }
+.dialog .knopf, .modalbox .knopf { border-radius: 8px; border-color: var(--line); background: var(--panel); color: var(--fg); }
+.dialog .knopf:hover, .modalbox .knopf:hover { border-color: #1869aa; }
+.dialog .knopf.haupt, .modalbox .knopf.haupt { background: #1869aa; border-color: #1869aa; color: #fff; } .dialog .knopf.haupt:hover, .modalbox .knopf.haupt:hover { background: #135a95; }
+.dialog .fuss, .modalbox .fuss { background: var(--panel); border-top: 1px solid var(--line); padding: 9px 12px; }
+.modalbox h4 { color: var(--fg); border-bottom: 0; font: 700 var(--fs-l) var(--font-body); letter-spacing: 0; text-transform: none; }
+#dInfo:not(:empty)::before { background: #1869aa; color: #fff; }
+.register button[aria-selected="true"] { color: #1869aa; border-bottom-color: #1869aa; }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 var(--fs-xl) var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 
