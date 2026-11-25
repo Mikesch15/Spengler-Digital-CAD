@@ -7460,20 +7460,35 @@ setTimeout(pruefeNeueVersion, 3000); setInterval(pruefeNeueVersion, 5 * 60 * 100
 // Startseite: neues Modell, Öffnen, zuletzt geöffnete Projekte, Hilfe – abschaltbar in Einstellungen › Allgemein
 function startseite(erzwingen = false) {
   if (!erzwingen && (new URLSearchParams(location.search).has("test") || einst.allgemein.startseite === false) || document.getElementById("startseite") || document.querySelector(".modal:not([hidden])")) return;
-  const el = document.createElement("div"); el.className = "modal"; el.id = "startseite"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Startseite");
+  const el = document.createElement("div"); el.className = "modal startmodal"; el.id = "startseite"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", "Startseite");
   const liste = pc ? zuletzt() : [], zu = () => el.remove();
   const aktion = (id) => { zu(); $(id).click(); };
   const h = new Date().getHours(), gruss = h >= 5 && h < 11 ? "Guten Morgen" : h < 17 && h >= 11 ? "Guten Tag" : h >= 17 && h < 22 ? "Guten Abend" : "Gute Nacht";
   const voll = cloud.angemeldet ? cloud.client.sitzung?.name || "" : "", vorname = (einst.firma.vorname || voll.split(" ")[0] || "").trim(), datum = new Date().toLocaleDateString("de-CH", { weekday: "long", day: "numeric", month: "long" }), logo = einst.firma.logo;
-  el.innerHTML = `<div class="modalbox startbox"><h3>Willkommen</h3><div class="inhalt"><div class="startbanner"><div class="sbkopf"><b>Heute</b><span>${esc(datum)}${voll || vorname ? " · " + esc(voll || vorname) : ""}</span></div><div class="sblogo">${logo ? `<img src="${logo}" alt="Firmenlogo">` : '<img src="logo.png" alt="Spengler Digital CAD"><b>Spengler Digital <i>CAD</i></b>'}</div><div class="sbgruss">${gruss}${vorname ? ", " + esc(vorname) : ""}</div></div><div class="startgitter">
-    <div class="startspalte"><h4>Beginnen</h4>
-      <button class="startknopf haupt" data-a="wNeu"><b>Neues Modell</b><small>Leeres Projekt anlegen</small></button>
-      <button class="startknopf" data-a="wOeffnen"><b>Öffnen</b><small>Aus der Cloud oder vom ${pc ? "PC" : "Gerät"}</small></button>
-      <button class="startknopf" data-a="weiter"><b>Weiterarbeiten</b><small>${esc(doc.modellName || doc.objekt || "Letzter Stand")} · ${doc.features.length} Schritte</small></button>
-      <button class="startknopf" data-a="wHilfe"><b>Hilfe</b><small>Kurzanleitung und Tastenkürzel (F1)</small></button></div>
-    <div class="startspalte">${pc ? `<h4>Zuletzt geöffnet</h4>${liste.length ? liste.slice(0, 4).map((pf, i) => `<button class="startknopf" data-z="${i}" title="${esc(pf)}"><b>${esc(dateiname(pf))}</b><small>${esc(pf.slice(0, -dateiname(pf).length))}</small></button>`).join("") : '<p class="hinweis">Noch keine Dateien geöffnet oder gespeichert.</p>'}` : ""}
-      <h4>Zuletzt in der Cloud</h4><div id="startCloud"><p class="hinweis">Lade …</p></div></div></div></div>
-    <div class="fuss"><label class="hinweis"><input type="checkbox" id="startNie"> Startseite nicht mehr zeigen</label><span style="flex:1"></span><button class="knopf" data-a="weiter">Schliessen</button></div></div>`;
+  const IC = { neu: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M12 11v6M9 14h6"/>', oeffnen: '<path d="M3 7.5h6l2 2.5h10V19H3z"/>', weiter: '<path d="M5 12h13M13 6l6 6-6 6"/>', hilfe: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.6a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1.9-1.1 1.7M12 17v.2"/>', datei: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 13h6M9 16h6"/>', cloud: '<path d="M7 18h10a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 7.1 8.6 4.7 4.7 0 0 0 7 18z"/>' };
+  const sv = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k]}</svg>`;
+  const karte = (k, titel, text, attr, haupt = false) => `<button class="startknopf karte${haupt ? " haupt" : ""}" ${attr}><span class="szeichen">${sv(k)}</span><span class="stext"><b>${titel}</b><small>${text}</small></span></button>`;
+  const zeileHtml = (k, name, meta, attr, tip) => `<button class="startknopf zeile" ${attr} title="${esc(tip)}"><span class="szeichen">${sv(k)}</span><span class="stext"><b>${name}</b><small>${meta}</small></span></button>`;
+  window.__startZeile = zeileHtml; // von der Cloud-Liste nachgeladen
+  el.innerHTML = `<div class="startkarte">
+    <button class="startzu" data-a="weiter" aria-label="Schliessen" title="Schliessen (Esc)">×</button>
+    <aside class="startheld">
+      <div class="sbkopf"><span class="schip">Heute</span><span>${esc(datum)}</span></div>
+      <div class="sblogo">${logo ? `<img src="${logo}" alt="Firmenlogo">` : '<img src="logo.png" alt="Spengler Digital CAD"><b>Spengler Digital <i>CAD</i></b>'}</div>
+      <div class="sbtext"><div class="sbgruss">${gruss}${vorname ? ", " + esc(vorname) : ""}</div><div class="sbsub">${voll ? esc(voll) + " · " : ""}Was möchtest du heute tun?</div></div>
+    </aside>
+    <section class="startmain">
+      <h4>Beginnen</h4>
+      <div class="startkarten">
+        ${karte("neu", "Neues Modell", "Leeres Projekt anlegen", 'data-a="wNeu"', true)}
+        ${karte("oeffnen", "Öffnen", `Aus der Cloud oder vom ${pc ? "PC" : "Gerät"}`, 'data-a="wOeffnen"')}
+        ${karte("weiter", "Weiterarbeiten", `${esc(doc.modellName || doc.objekt || "Letzter Stand")} · ${doc.features.length} ${doc.features.length === 1 ? "Schritt" : "Schritte"}`, 'data-a="weiter"')}
+        ${karte("hilfe", "Hilfe", "Anleitung und Kürzel (F1)", 'data-a="wHilfe"')}
+      </div>
+      <h4>Zuletzt verwendet</h4>
+      <div class="startzuletzt">${pc && liste.length ? liste.slice(0, 3).map((pf, i) => zeileHtml("datei", esc(dateiname(pf)), esc(pf.slice(0, -dateiname(pf).length)), `data-z="${i}"`, pf)).join("") : ""}<div id="startCloud"><p class="hinweis">Lade …</p></div></div>
+      <div class="startfuss"><label><input type="checkbox" id="startNie"> Startseite nicht mehr zeigen</label><span style="flex:1"></span><span>Version ${esc(VERSION)}</span></div>
+    </section></div>`;
   document.body.appendChild(el);
   // Zuletzt gespeicherte Modelle aus der Cloud (sobald angemeldet; die Anmeldung wird beim Start erst wiederhergestellt)
   const cloudListe = async (versuch = 0) => {
@@ -7481,7 +7496,7 @@ function startseite(erzwingen = false) {
     if (!cloud.angemeldet) { if (versuch < 4) { box.innerHTML = '<p class="hinweis">Lade …</p>'; return setTimeout(() => cloudListe(versuch + 1), 900); } box.innerHTML = '<p class="hinweis">Nicht angemeldet – Einstellungen › Konto &amp; Cloud.</p>'; return; }
     try {
       const l = (await cloud.client.dateiListe()).filter((d) => d.art === "modell").sort((a, b) => String(b.geaendert).localeCompare(String(a.geaendert))).slice(0, 5);
-      box.innerHTML = l.length ? l.map((d) => `<button class="startknopf" data-c="${esc(d.id)}" title="${esc(d.ordner)}"><b>${esc(d.name.replace(/\.sdcad$/i, ""))}</b><small>${esc(d.ordner.split("/").slice(-2, -1)[0] || "")} · ${d.geaendert ? new Date(d.geaendert).toLocaleDateString("de-CH") : ""} · v${d.version}</small></button>`).join("") : '<p class="hinweis">Noch keine Modelle in der Cloud gespeichert.</p>';
+      box.innerHTML = l.length ? l.map((d) => window.__startZeile("cloud", esc(d.name.replace(/\.sdcad$/i, "")), `${esc(d.ordner.split("/").slice(-2, -1)[0] || "")} · ${d.geaendert ? new Date(d.geaendert).toLocaleDateString("de-CH") : ""} · v${d.version}`, `data-c="${esc(d.id)}"`, d.ordner)).join("") : '<p class="hinweis">Noch keine Modelle in der Cloud gespeichert.</p>';
     } catch { box.innerHTML = '<p class="hinweis">Cloud gerade nicht erreichbar.</p>'; }
   };
   cloudListe();
