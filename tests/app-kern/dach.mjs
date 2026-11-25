@@ -39,7 +39,7 @@ ok(/Sparren/.test(wk) && /Dachlattung/.test(wk) && /Ziegel/.test(wk), "Werkstatt
 const d = await s.evaluate(() => window.sdcadTest.dok()); const dach = d.features.find((f) => f.typ === "dach");
 ok(dach.form === "walm" && dach.neigung === 40 && dach.deckung === "biber-doppel" && d.dachVorlagen.deckungen.some((x) => x.id === "biber-doppel"), "Gespeichert; Deckung ins Projekt übernommen (Dachvorlagen)");
 // Einstellungen › Dach
-await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="dach"]').click(); });
+await s.evaluate(() => { document.getElementById("wEinst").click(); window.sdcadTest.einstSeite("dach"); });
 await s.waitForSelector('[data-dach="d:0:lattweite"]', { timeout: 15000 });
 ok((await s.inputValue('[data-dach="d:0:lattweite"]')) === "340", "Einstellungen › Dach: Deckungen mit Lattweite (Richtwerte) sind einstellbar");
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));

@@ -27,7 +27,7 @@ await s.route("**/nfgryuzkpwjfmdlmevuy.supabase.co/**", async (r) => {
 await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Test", nr: "2026-114", appProjekt: { id: 7, name: "Dach Müller" }, zaehler: 5, features: [{ id: "f1", typ: "profil", name: "Ortbrett", start: 0, zeilen: [{ L: 100, winkel: 90, art: "abkanten" }, { L: 40, winkel: 0, art: "abkanten" }], material: "zink07", laenge: 2000, stueck: 2, richtung: "eine", ebene: "XY" }] }));
   const e = { materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }] }; localStorage.setItem("sdcad-einstellungen", JSON.stringify(e)); });
 await s.goto("http://localhost:" + (process.env.PORT || 8769) + "/index.html?test"); await s.waitForTimeout(600);
-await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="konto"]').click(); });
+await s.evaluate(() => { document.getElementById("wEinst").click(); window.sdcadTest.einstSeite("konto"); });
 ok(/Konto der Spengler-Digital-App/.test(await s.textContent("#eInhalt")), "Register «Konto & Cloud» ist da");
 await s.fill("#cName", "Max.Muster"); await s.fill("#cPass", "geheim"); await s.click('[data-cloud="anmelden"]');
 await s.waitForFunction(() => /Abgleich fertig/.test(document.getElementById("eInhalt").textContent), null, { timeout: 8000 });

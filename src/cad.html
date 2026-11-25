@@ -897,6 +897,14 @@ body.stiftpalette .stiftleiste { display: flex; }
 .startmodal :focus-visible, .skopf :focus-visible, .ekopf :focus-visible, .plkopf :focus-visible, .dialog > h3 :focus-visible, .modalbox > h3 :focus-visible { outline-color: #fff; }
 .diagfeld { display: grid; place-items: center; min-height: 110px; border: 2px dashed var(--line); border-radius: 12px; background: var(--panel); color: var(--muted); text-align: center; touch-action: none; user-select: none; } .diagfeld:hover, .diagfeld:focus-visible { border-color: #1869aa; color: var(--fg); }
 .diagaus { margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font: var(--fs-s) var(--font-num); white-space: pre-wrap; color: var(--fg); }
+/* Einstellungen: klappbare Abschnitte */
+.esek { margin: 0 0 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow: hidden; }
+.esek > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 13px 16px; font: 600 var(--fs-m) var(--font-body); user-select: none; } .esek > summary::-webkit-details-marker { display: none; }
+.esek > summary::before { content: "›"; display: inline-block; width: 12px; font-size: 20px; line-height: 1; color: var(--muted); transition: transform .15s; } .esek[open] > summary::before { transform: rotate(90deg); color: #1869aa; }
+.esek > summary:hover { background: color-mix(in srgb, #1869aa 6%, transparent); } .esek[open] > summary { border-bottom: 1px solid var(--line); }
+.esekinhalt { padding: 14px 16px 18px; } .esekinhalt > h4:first-child { display: none; } .esekinhalt h4 { margin-top: 18px; font-size: var(--fs-m); }
+.esekinhalt .egitter, .esekinhalt .firmaeinst, .esekinhalt .anleitung, .esekinhalt .probe, .esekinhalt .tabwrap { border: 0; padding: 0; background: none; }
+.ehilfe { margin: 6px 0 10px; } .ehilfe > summary { cursor: pointer; color: #1869aa; font-size: var(--fs-s); font-weight: 600; padding: 2px 0; } .ehilfe[open] > summary { margin-bottom: 8px; }
 .griffWert { position: fixed; z-index: 95; transform: translateX(-50%); pointer-events: none; padding: 6px 12px; border-radius: 999px; background: var(--accent, #1d5a8a); color: #fff; font: 600 var(--fs-xl) var(--font-num, monospace); box-shadow: 0 4px 14px rgb(0 0 0 / .3); }
 }
 

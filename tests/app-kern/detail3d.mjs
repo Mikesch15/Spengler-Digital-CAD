@@ -19,7 +19,7 @@ await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringi
   localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }], programm: { kern: "occt" } })); });
 await s.goto("http://localhost:" + (process.env.PORT || 8772) + "/index.html?test"); await s.waitForTimeout(800);
 // 1) Vorlage aus STEP anlegen
-await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="detail3d"]').click(); });
+await s.evaluate(() => { document.getElementById("wEinst").click(); window.sdcadTest.einstSeite("detail3d"); });
 await s.setInputFiles("#detailDatei", datei); await s.waitForSelector('[data-dv="name"]', { timeout: 20000 });
 ok(await s.inputValue('[data-dv="name"]') === "kehle40", "Vorlage aus der STEP-Datei angelegt: Name «kehle40»");
 await s.fill('[data-dv="category"]', "Kehlen"); await s.click("#eOk"); await s.waitForTimeout(400);

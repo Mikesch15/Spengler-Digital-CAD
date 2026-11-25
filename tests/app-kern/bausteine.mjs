@@ -15,7 +15,7 @@ await s.addInitScript(() => {
     bausteine: [{ id: "pf", name: "Falz mit Parametern", gruppe: "Eigene", folge: "90 H U+ u+4*t", versatz: 0, parameter: [{ name: "H", label: "Höhe", standard: 25, min: 10, max: 60 }, { name: "u", label: "u", standard: 5, min: null, max: null }], bedingungen: { dickeMin: 0.5, dickeMax: 1, kantenMin: null } }] }));
 });
 await s.goto("http://localhost:" + (process.env.PORT || 8770) + "/index.html?test"); await s.waitForTimeout(600);
-await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="bausteine"]').click(); });
+await s.evaluate(() => { document.getElementById("wEinst").click(); window.sdcadTest.einstSeite("bausteine"); });
 const folgeFeld = await s.inputValue('[data-bk="folge"]');
 ok(folgeFeld === "90 H U+ u+4*t", `Tabelle der Bausteine zeigt die Kurzschrift mit Parametern «${folgeFeld}»`);
 ok(!(await s.evaluate(() => document.querySelector('[data-bk="folge"]').classList.contains("ungueltig"))), "Kurzschrift mit Parametern gilt als gültig");
@@ -37,17 +37,17 @@ await s.click("#eOk"); await s.waitForTimeout(300);
 const gespeichert = await s.evaluate(() => JSON.parse(localStorage.getItem("sdcad-einstellungen")).bausteine.find((x) => x.id === "pf"));
 ok(gespeichert?.parameter?.length === 2 && gespeichert.folge === "90 H U+ u+4*t" && gespeichert.bedingungen.dickeMax === 1, "Gespeichert mit Parametern und Bedingungen");
 // Papierkorb und Sicherung
-await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="bausteine"]').click(); });
+await s.evaluate(() => { document.getElementById("wEinst").click(); window.sdcadTest.einstSeite("bausteine"); });
 const vorher = await s.evaluate(() => JSON.parse(localStorage.getItem("sdcad-einstellungen")).bausteine.length);
 await s.click('[data-bweg="0"]'); await s.click("#eOk"); await s.waitForTimeout(300);
 const sich = await s.evaluate(() => JSON.parse(localStorage.getItem("sdcad-sicherung")));
 ok(sich.korb.some((x) => x.daten.id === "pf") && sich.liste.length >= 1 && sich.liste[0].einst.bausteine.some((x) => x.id === "pf"), "Gelöschter Baustein im Papierkorb, alter Stand gesichert");
-await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="vorlagen"]').click(); });
+await s.evaluate(() => { document.getElementById("wEinst").click(); window.sdcadTest.einstSeite("vorlagen"); });
 ok(/Falz mit Parametern/.test(await s.textContent("#eInhalt")), "Register «Vorlagen & Sichern» zeigt den Papierkorb");
 await s.click("[data-korb]"); await s.click("#eOk"); await s.waitForTimeout(300);
 const nachher = await s.evaluate(() => JSON.parse(localStorage.getItem("sdcad-einstellungen")).bausteine.find((x) => x.id === "pf"));
 ok(nachher?.parameter?.length === 2, "Zurückgeholt mit Parametern");
-await s.evaluate(() => { document.getElementById("wEinst").click(); document.querySelector('[data-ereg="vorlagen"]').click(); });
+await s.evaluate(() => { document.getElementById("wEinst").click(); window.sdcadTest.einstSeite("vorlagen"); });
 await s.click("[data-sich]"); await s.waitForTimeout(100); ok(/Sicherung geladen/.test(await s.textContent("#eMeldung")), "Sicherung lässt sich laden (erst mit «Übernehmen» gültig)");
 await s.click("#eAbbrechen");
 // Parameterwerte je Kante im Flächenblech
