@@ -5286,13 +5286,21 @@ $("eInhalt").addEventListener("click", (ev) => {
 });
 $("wEinst").onclick = () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); meldung(""); zeigeEinst(); $("einst").hidden = false; };
 $("eAbbrechen").onclick = () => { $("einst").hidden = true; entwurf = null; };
+// Android-App: Stift-Schweben kommt vom Gerät (MainActivity) als window.sdcadHover(x, y, art) – daraus wird ein pointermove vom Typ «pen» ohne Taste für die Ansicht
+window.sdcadHover = (x, y, art) => {
+  const el = document.elementFromPoint(x, y); window.__nativHover = (window.__nativHover || 0) + 1; document.dispatchEvent(new CustomEvent("sdcad-nativ-hover", { detail: art }));
+  if (!el || art === "exit") return;
+  el.dispatchEvent(new PointerEvent("pointermove", { clientX: x, clientY: y, pointerType: "pen", pointerId: 91, isPrimary: true, buttons: 0, pressure: 0, bubbles: true, cancelable: true }));
+};
 $("eZu").onclick = () => $("eAbbrechen").click();
 // Eingabe-Diagnose: zählt die Ereignisse im Diagnosefeld, damit sich zeigt, was Stift/Finger/Maus (z. B. am Android-Tablet) wirklich melden
 { const Z = {}, ART = ["pointerover", "pointerenter", "pointermove", "pointerrawupdate", "pointerdown", "pointerup", "pointercancel", "pointerleave", "mousemove", "mousedown", "touchstart", "touchmove", "touchend", "contextmenu"]; let letzte = "";
-  const zeige = () => { const o = $("diagAus"); if (!o) return; o.textContent = `${letzte || "noch keine Ereignisse"}\n\n` + ART.map((a) => `${a.padEnd(17)} ${Z[a] || 0}`).join("\n") + `\n${"davon Schweben".padEnd(17)} ${Z.schweben || 0}  (pointermove ohne Taste/Berührung, Typ pen)`; };
+  const zeige = () => { const o = $("diagAus"); if (!o) return; o.textContent = `${letzte || "noch keine Ereignisse"}\n\n` + ART.map((a) => `${a.padEnd(17)} ${Z[a] || 0}`).join("\n") + `\n${"davon Schweben".padEnd(17)} ${Z.schweben || 0}  (pointermove ohne Taste/Berührung, Typ pen)` + `\n${"Pointer-Typen".padEnd(17)} ${["pen", "touch", "mouse"].map((k) => k + " " + (Z["typ_" + k] || 0)).join(" · ")}` + `\n${"Nativ-Schweben".padEnd(17)} ${Z.nativ || 0}  (Android-App: Stift über dem Bildschirm, direkt vom Gerät)`; };
   for (const a of ART) $("eInhalt").addEventListener(a, (e) => { if (!e.target.closest?.(".diagfeld")) return; Z[a] = (Z[a] || 0) + 1; const t = e.touches?.[0] || e;
     if (a === "pointermove" && e.pointerType === "pen" && !e.buttons && !e.pressure) Z.schweben = (Z.schweben || 0) + 1;
+    if (e.pointerType && a.startsWith("pointer")) Z["typ_" + e.pointerType] = (Z["typ_" + e.pointerType] || 0) + 1;
     letzte = `letztes: ${a}` + (e.pointerType ? ` · Typ ${e.pointerType}` : "") + (e.buttons != null ? ` · Tasten ${e.buttons}` : "") + (e.pressure != null ? ` · Druck ${(+e.pressure).toFixed(2)}` : "") + (e.tiltX != null ? ` · Neigung ${e.tiltX | 0}/${e.tiltY | 0}` : "") + ` · x ${Math.round(t.clientX || 0)} y ${Math.round(t.clientY || 0)}`; zeige(); }, { capture: true, passive: true });
+  document.addEventListener("sdcad-nativ-hover", () => { Z.nativ = (Z.nativ || 0) + 1; zeige(); });
   $("eInhalt").addEventListener("click", (e) => { if (e.target.closest?.(".diagfeld")) { for (const k of Object.keys(Z)) delete Z[k]; letzte = ""; zeige(); } }); } // Klick ins Feld setzt die Zähler zurück
 $("eNav").addEventListener("click", (ev) => { const b = ev.target.closest("[data-ereg]"), p = b && EINST_SEITEN.find((x) => x[0] === b.dataset.ereg); if (p) { einstRegister = p[2][0]; einstOffen = new Set([p[2][0]]); zeigeEinst(); } });
 $("eInhalt").addEventListener("toggle", (ev) => { const k = ev.target.dataset?.sek; if (k) ev.target.open ? einstOffen.add(k) : einstOffen.delete(k); }, true);

@@ -53,6 +53,8 @@ await s.click("#wEinst"); await s.waitForTimeout(300); await s.evaluate(() => wi
 await s.evaluate(() => { const f = document.querySelector(".diagfeld"), r = f.getBoundingClientRect(); for (let i = 0; i < 3; i++) f.dispatchEvent(new PointerEvent("pointermove", { pointerType: "pen", pointerId: 5, isPrimary: true, buttons: 0, pressure: 0, clientX: r.x + 20 + i, clientY: r.y + 20, bubbles: true })); });
 const dg = await s.evaluate(() => document.getElementById("diagAus").textContent);
 ok(/letztes: pointermove · Typ pen · Tasten 0/.test(dg) && /pointermove\s+3/.test(dg) && /davon Schweben\s+3/.test(dg), "Eingabe-Diagnose zählt das Schweben des Stifts");
+await s.evaluate(() => { const r = document.querySelector(".diagfeld").getBoundingClientRect(); window.sdcadHover(r.x + 30, r.y + 30, "move"); window.sdcadHover(r.x + 40, r.y + 30, "move"); });
+ok(/Nativ-Schweben\s+2/.test(await s.evaluate(() => document.getElementById("diagAus").textContent)), "Android-Hover (window.sdcadHover) wird gezählt und als Stiftbewegung weitergereicht");
 await s.click("#eAbbrechen"); await s.waitForTimeout(200);
 // Firmenlogo hochladen, Vorname, Startseite/Druck
 await s.click("#wEinst"); await s.waitForTimeout(300);
