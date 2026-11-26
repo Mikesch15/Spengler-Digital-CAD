@@ -1,4 +1,4 @@
-// App-Test: Werkzeuge ohne Voraussetzung (keine Skizze/kein Blech) melden nichts mehr, sondern starten deren Erstellung
+// App-Test: Werkzeuge ohne Voraussetzung (keine Skizze/kein Blech) öffnen trotzdem und nennen im Fenster, was fehlt
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
@@ -10,8 +10,8 @@ await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringi
 await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s.waitForTimeout(1500);
 for (const id of ["wExtrusion", "wSweep", "wDrehung"]) {
   await s.evaluate((i) => document.getElementById(i).click(), id); await s.waitForTimeout(500);
-  const z = await s.evaluate(() => ({ st: document.getElementById("status")?.textContent || "", dlg: !!document.querySelector(".dialog:not([hidden])"), skizze: !document.getElementById("gSkizze").hidden, ebene: !!document.querySelector("#kantenMenue:not([hidden]), .ebenenwahl, #ebenenMenue:not([hidden])") }));
-  ok(z.dlg || z.skizze, `${id}: ohne Skizze startet die Skizze statt nur einer Meldung`);
+  const z = await s.evaluate(() => ({ st: document.getElementById("status")?.textContent || "", dlg: !!document.querySelector(".dialog:not([hidden])"), txt: document.getElementById("dInhalt").textContent, ebene: !!document.querySelector("#kantenMenue:not([hidden]), .ebenenwahl, #ebenenMenue:not([hidden])") }));
+  ok(z.dlg && /Zuerst/.test(z.txt), `${id}: Fenster öffnet und nennt, was fehlt`);
   await s.keyboard.press("Escape"); await s.evaluate(() => window.sdcadTest.beendeSkizze()); await s.waitForTimeout(200);
 }
 ok(!pr.length, "keine Seitenfehler " + pr.join("|"));
