@@ -103,6 +103,18 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]);
   const plan = { reliefs: [], platte: { op: "extrusion", profil: { start: bl.pts[0], segmente: bl.pts.slice(1).map((p) => ({ bis: p })) }, ebene: kernEbene(ebene, -t / 2), hoehe: t }, schnitte: [], prismen: [] };
   const ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt);
+  // Gehrung im Biegebereich: an jeder Aussenecke zweier einfacher Flansche enden beide Biegezonen in derselben senkrechten Ebene durch die Ecke der Biegelinien
+  // (halbiert den Winkel der Kanten); darüber (gerade Wand) gilt weiter der Schnitt der Ecke. So ragt keine Ecke des Nachbarflanschs über den Biegebereich hinaus.
+  const nE = bl.gruppen.length, ecke = new Map();
+  if ((bl.opt?.ecken || "gehrung") === "gehrung") for (let kk = 0; kk < nE; kk++) {
+    const kv = (kk - 1 + nE) % nE, gk = bl.gruppen[kk], gv = bl.gruppen[kv], pk = bl.profile[kk], pv = bl.profile[kv];
+    if (kv === kk || !gk.gerade || !gv.gerade || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
+    const V0 = gk.punkte[0], dn = richt(V0, gk.punkte[1]), dp = richt(V0, gv.punkte.at(-2));
+    if (!(knick(dn, dp) > 0)) continue;
+    let Of; try { Of = eckSchnitt2(V0, dn, dp, pk.biegungen[0].abstand, pv.biegungen[0].abstand); } catch { continue; }
+    const mx = dn[0] - dp[0], my = dn[1] - dp[1], ml = Math.hypot(mx, my) || 1, rB = (q) => (q.biegungen[0].ri ?? q.ri ?? 1) + (q.t || t);
+    ecke.set(kk, { Of, mm: [mx / ml, my / ml], H: Math.max(rB(pk), rB(pv)) + 0.2 });
+  }
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p?.baustein) return;
     const bq = bausteinQuerschnitt(p.baustein, m); if (!bq) throw new Error(`Baustein «${p.baustein.name ?? p.baustein.folge}» lässt sich nicht rechnen`);
@@ -115,9 +127,13 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
       const lokal = [d[1], 0, d[0], a[0], -d[0], 0, d[1], a[1], 0, s, 0, 0], M = mal(B, lokal);
       const ky0 = i > 1 ? 0 : ek[k].ky0 || 0, ky1 = i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0, ecken = [[bq.xmin, bq.ymin], [bq.xmin, bq.ymax], [bq.xmax, bq.ymin], [bq.xmax, bq.ymax]];
       const z0 = Math.min(...ecken.map(([x, y]) => -x * k0 - y * ky0)) + e0 - 1, z1 = L + Math.max(...ecken.map(([x, y]) => x * k1 + y * ky1)) - e1 + 1;
+      const xr = [d[1], -d[0]], gehr = [], lokalEbene = (c, vorz) => ({ punkt: [(c.Of[0] - a[0]) * xr[0] + (c.Of[1] - a[1]) * xr[1], 0, (c.Of[0] - a[0]) * d[0] + (c.Of[1] - a[1]) * d[1]], normale: [vorz * (xr[0] * c.mm[0] + xr[1] * c.mm[1]), 0, vorz * (d[0] * c.mm[0] + d[1] * c.mm[1])], H: c.H });
+      if (i === 1 && ecke.has(k)) gehr.push(lokalEbene(ecke.get(k), -1)); // Anfang: bleibt die Seite von +d
+      if (i === g.punkte.length - 1 && ecke.has((k + 1) % nE)) gehr.push(lokalEbene(ecke.get((k + 1) % nE), 1)); // Ende: bleibt die Seite von −d
       plan.prismen.push({
         extrusion: { op: "extrusion", profil: bq.profil, ebene: { ursprung: [0, 0, z0], x: [1, 0, 0], n: [0, 0, 1] }, hoehe: z1 - z0 },
         halbraeume: [{ punkt: [0, 0, e0], normale: [-k0, -ky0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, -ky1, 1] }],
+        gehrung: gehr,
         m: M,
       });
       if (bq.xFlach < -1e-9) plan.schnitte.push({ quader: { min: [bq.xFlach, -t, 0], max: [1, t, L] }, m: M }); // Fläche bis zum Biegebeginn kürzen
@@ -146,6 +162,13 @@ export async function baueFlaechenblech(x, plan) {
   for (const p of plan.prismen) {
     let z = (await x(p.extrusion)).id;
     for (const h of p.halbraeume) z = (await x({ op: "halbraum", ziel: z, ...h })).id;
+    if (p.gehrung?.length) try { // nur der untere Teil (Biegebereich) wird auf Gehrung geschnitten, die Wand darüber bleibt
+      const H = Math.max(...p.gehrung.map((g) => g.H)), kasten = (a, b) => x({ op: "quader", min: [-1e5, a, -1e5], max: [1e5, b, 1e5] });
+      let tief = (await x({ op: "boolesch", art: "schneiden", a: z, b: (await kasten(-1e4, H)).id })).id;
+      const hoch = (await x({ op: "boolesch", art: "abziehen", a: z, b: (await kasten(-1e4, H)).id })).id;
+      for (const g of p.gehrung) tief = (await x({ op: "halbraum", ziel: tief, punkt: g.punkt, normale: g.normale })).id;
+      z = (await x({ op: "boolesch", art: "vereinigen", a: tief, b: hoch })).id;
+    } catch { /* Gehrung nicht möglich: Prisma bleibt wie berechnet */ }
     z = (await x({ op: "matrix", ziel: z, m: p.m })).id;
     k = (await x({ op: "boolesch", art: "vereinigen", a: k, b: z })).id;
   }
