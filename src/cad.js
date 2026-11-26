@@ -1454,7 +1454,7 @@ function regen() {
           _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
         for (const bl of f._bleche) bl.abw.loecher = [];
         if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, blechEbene(s.ebene, f, m), m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
-        if (f.eckEntl && f.eckEntl !== "keine") f._bleche.forEach((bl) => eckenEntlastung(f, bl, m, s));
+        if ((f.eckEntl && f.eckEntl !== "keine") || (f.freistellung !== "keine" && (f.ecken || "gehrung") === "gehrung")) f._bleche.forEach((bl) => eckenEntlastung(f, bl, m, s));
       } else if (f.typ === "loftflansch") { // Lofted Flange: Blech zwischen zwei Profilen
         f._teile = null; const lb = loftflanschBau(f);
         if (!f.versteckt) modell.add(koerperAusGeo(lb.geo, darstellungVon(f, lb.m), `${f.id}:0`));
@@ -3302,17 +3302,19 @@ function wendeProfilKante(key) { // Schritt «Profilkante» in der Zeitleiste an
 let quetschWz = null; // { f } – Werkzeug aktiv: Ecke eines Flächenblechs anklicken
 // Eckentlastung an Ecken mit zwei Flanschen: rund oder quadratisch um den Schnittpunkt der Biegelinien (Blech wird dort ausgeschnitten, auch in der Abwicklung)
 function eckenEntlastung(f, bl, m, s) {
-  const n = bl.gruppen.length, r = Math.max(0.2, +f.eckEntlMass || 2), cuts = [], B = basis(blechEbene(s.ebene, f, m));
+  const n = bl.gruppen.length, manuell = !!(f.eckEntl && f.eckEntl !== "keine"), form = manuell ? f.eckEntl : "rund", cuts = [], B = basis(blechEbene(s.ebene, f, m)); // ohne eigene Eckentlastung: runde Freistellung der Biegezone (Radius = Biegeradius + Blechstärke)
   for (let k = 0; k < n; k++) {
     const kv = (k - 1 + n) % n; if (bl.quetsch?.has(k) || !bl.gruppen[k].gerade || !bl.gruppen[kv].gerade) continue;
     const einfach = (p) => bl.profile[p]?.biegungen?.length === 1 && bl.profile[p]?.res; if (!einfach(k) || !einfach(kv)) continue;
     const V0 = bl.gruppen[k].punkte[0], dn = [bl.gruppen[k].punkte[1][0] - V0[0], bl.gruppen[k].punkte[1][1] - V0[1]], dl = Math.hypot(...dn), dnn = [dn[0] / dl, dn[1] / dl], pv = bl.gruppen[kv].punkte.at(-2), dpl = Math.hypot(pv[0] - V0[0], pv[1] - V0[1]), dp = [(pv[0] - V0[0]) / dpl, (pv[1] - V0[1]) / dpl];
     const beta = Math.atan2(dnn[0] * dp[1] - dnn[1] * dp[0], dnn[0] * dp[0] + dnn[1] * dp[1]); if (!(beta > 0)) continue; // nur Aussenecken
+    const rBieg = (p) => { const b0 = bl.profile[p].biegungen[0]; return (b0.ri ?? bl.profile[p].ri ?? 1) + (bl.profile[p].t || m.t); }, r = manuell ? Math.max(0.2, +f.eckEntlMass || 2) : Math.max(rBieg(k), rBieg(kv)), hoch = manuell ? 6 * m.t + 2 : 2 * (r - m.t / 2) + 0.2;
     const O3 = eckSchnitt2(V0, dnn, dp, quetschFlansch3D(bl, k).a, quetschFlansch3D(bl, kv).a), Of = eckSchnitt2(V0, dnn, dp, bl.profile[k].biegungen[0].abstand, bl.profile[kv].biegungen[0].abstand);
-    const geo = f.eckEntl === "quadrat" ? new THREE.BoxGeometry(2 * r, 2 * r, 6 * m.t + 2) : new THREE.CylinderGeometry(r, r, 6 * m.t + 2, 24); if (f.eckEntl !== "quadrat") geo.rotateX(Math.PI / 2);
-    geo.translate(O3[0], O3[1], 0); geo.applyMatrix4(B); cuts.push(geo);
-    const poly = f.eckEntl === "quadrat" ? [[-r, -r], [r, -r], [r, r], [-r, r]] : Array.from({ length: 24 }, (_, i) => [r * Math.cos((i / 24) * 2 * Math.PI), r * Math.sin((i / 24) * 2 * Math.PI)]);
-    bl.abw.loecher = [...(bl.abw.loecher || []), poly.map(([x, y]) => [Of[0] + x, Of[1] + y])];
+    const geo = form === "quadrat" ? new THREE.BoxGeometry(2 * r, 2 * r, hoch) : new THREE.CylinderGeometry(r, r, hoch, 24); if (form !== "quadrat") geo.rotateX(Math.PI / 2);
+    const Z3 = manuell ? O3 : Of; geo.translate(Z3[0], Z3[1], 0); geo.applyMatrix4(B); cuts.push(geo);
+    const poly = form === "quadrat" ? [[-r, -r], [r, -r], [r, r], [-r, r]] : Array.from({ length: 24 }, (_, i) => [r * Math.cos((i / 24) * 2 * Math.PI), r * Math.sin((i / 24) * 2 * Math.PI)]);
+    const loch = poly.map(([x, y]) => [Of[0] + x, Of[1] + y]); if (!manuell) loch._auto = true; // automatische Freistellung: der exakte Kern schneidet sie selbst
+    bl.abw.loecher = [...(bl.abw.loecher || []), loch];
   }
   for (const o of modell.children.filter((o) => o.isMesh && o.userData.fid === `${f.id}:${bl.pi}`)) for (const g of cuts) verknuepfe(o, g, "ausschneiden");
 }
@@ -3362,7 +3364,7 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
   const aussen = new THREE.Matrix4().makeBasis(u, y, n).setPosition(n.clone().multiplyScalar(t / 2));
   const koerper = new THREE.ExtrudeGeometry(new THREE.Shape([Oi, Pi, Ci]), { depth: 2 * t, bevelEnabled: false }), meshes = [mk(koerper, aussen)];
   // Anschluss an den anderen Flansch: Kante O–P (Ecklinie) ist eine Biegung (meist 90°), die das Blech aus dem Flansch B auf die Lage der Falte führt
-  let biegeStueck = null;
+  let biegeStueck = null, biegeTeile = [];
   try {
     const eB = v(q.wand === "wand1" ? g.e2 : g.e1), eA = v(q.wand === "wand1" ? g.e1 : g.e2), uV = v(g.eps).normalize();
     const ayV = eA.clone().addScaledVector(uV, -eA.dot(uV)).normalize(), wB = eB.clone().addScaledVector(uV, -eB.dot(uV)).normalize(), dBa = wB.dot(ayV), dBb = wB.dot(n);
@@ -3376,11 +3378,18 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
         const sh = new THREE.Shape(); sh.moveTo(K[0] + Ro * Math.cos(a0), K[1] + Ro * Math.sin(a0)); sh.absarc(K[0], K[1], Ro, a0, a1, cw);
         sh.lineTo(K[0] + Ri * Math.cos(a1), K[1] + Ri * Math.sin(a1)); sh.absarc(K[0], K[1], Ri, a1, a0, !cw); sh.closePath();
         const geoR = new THREE.ExtrudeGeometry(sh, { depth: P.length(), bevelEnabled: false, curveSegments: 16 });
-        const lageR = new THREE.Matrix4().makeBasis(ayV, n, uV); geoR.applyMatrix4(lageR); geoR.applyMatrix4(M); biegeStueck = koerperAusGeo(geoR, farbe, fid);
+        const lageR = new THREE.Matrix4().makeBasis(ayV, n, uV), dazu = (shape) => { const gq = new THREE.ExtrudeGeometry(shape, { depth: P.length(), bevelEnabled: false, curveSegments: 16 }); gq.applyMatrix4(lageR); gq.applyMatrix4(M); biegeTeile.push(koerperAusGeo(gq, farbe, fid)); };
+        geoR.applyMatrix4(lageR); geoR.applyMatrix4(M); biegeStueck = koerperAusGeo(geoR, farbe, fid);
+        // Ende von Flansch B: Gehrungsschnitt durch die Innenkante der Ecklinie – von dort läuft das Blech gerade bis zum Beginn der Biegung
+        let pB = [-dBb, dBa]; if (pB[0] < 0) pB = [-pB[0], -pB[1]];
+        const sE = (-t / 2 - (t / 2) * pB[1]) / dBb, lamE = -sE, lamP = sk - tl, aI = (t / 2) * pB[0] + sE * dBa;
+        if (lamP - lamE > 0.01) { const pt = (lam, sg) => [lam * u1[0] + sg * (t / 2) * pB[0], lam * u1[1] + sg * (t / 2) * pB[1]], sq = new THREE.Shape(); sq.moveTo(...pt(lamE, -1)); sq.lineTo(...pt(lamE, 1)); sq.lineTo(...pt(lamP, 1)); sq.lineTo(...pt(lamP, -1)); sq.closePath(); dazu(sq); }
+        // Flansch A, auf dem die Falte liegt: sein Ende wird um 180° (geschlossener Saum) auf die erste Lage der Falte zurückgebogen
+        const hs = new THREE.Shape(); hs.moveTo(aI, -t / 2); hs.absarc(aI, t / 2, t, -Math.PI / 2, -1.5 * Math.PI, true); hs.closePath(); dazu(hs);
       }
     }
   } catch (e) { biegeStueck = null; }
-  if (biegeStueck) meshes.push(biegeStueck);
+  if (biegeStueck) meshes.push(biegeStueck, ...biegeTeile);
   if (r > 1e-6) for (const [a0, b0] of (biegeStueck ? [[Oi, Ci]] : [[Oi, Ci], [Oi, Pi]])) { // Wulst der Faltkante (und der Anschlusskante, falls keine Biegung berechnet werden konnte)
     const L = b0.distanceTo(a0), mitte = a0.clone().add(b0).multiplyScalar(0.5), ax = new THREE.Vector3(b0.x - a0.x, b0.y - a0.y, 0).normalize();
     const cyl = new THREE.CylinderGeometry(r, r, L, 16, 1, false); cyl.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax)));
@@ -7368,7 +7377,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       } else if (f.typ === "flaeche") { // Flächenblech: Fläche bis Biegebeginn, Bausteinprofile exakt mit derselben Eckregel wie die Abwicklung
         if (f.versteckt || !f._bleche) continue;
         const m = material(f.material), ebene = blechEbene(finde(f.skizze).ebene, f, m);
-        if (f._mitAbwicklung || f._bleche.some((bl) => bl.abw.loecher?.length)) { f._bleche.forEach((_, i) => nicht.set(`${f.id}:${i}`, "Abwicklung/Ausschnitte noch nicht exakt")); continue; }
+        if (f._mitAbwicklung || f._bleche.some((bl) => bl.abw.loecher?.some((h) => !h._auto))) { f._bleche.forEach((_, i) => nicht.set(`${f.id}:${i}`, "Abwicklung/Ausschnitte noch nicht exakt")); continue; }
         for (const [i, bl] of f._bleche.entries()) {
           try { blech.set(`${f.id}:${i}`, await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1))); }
           catch (e) { nicht.set(`${f.id}:${i}`, e.message); }

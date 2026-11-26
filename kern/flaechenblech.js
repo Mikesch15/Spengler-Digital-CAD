@@ -174,7 +174,7 @@ export function innenWand(p) {
 // Freistellung an der Gehrungsecke (wie in Fusion): die Biegezone endet um Biegeradius + Blechstärke vor der Ecke, damit sie nicht über die Ecke hinaussteht.
 // fr0/fr1 = Rücksetzung der Biegezone am Anfang/Ende der Kante, bisU = Ende der Biegung (Abwicklungsmass ab der gezeichneten Kante)
 function freistellen(ek, profile, kv, k, opt) {
-  if (opt?.freistellung === "keine") return;
+  return; // Freistellung jetzt als runder Ausschnitt um die Ecke der Biegelinien (cad.js eckenEntlastung / kern/cad/featureBau.js), nicht mehr als Rücksetzung der Biegezone
   const rel = (p) => { const b = p?.biegungen?.[0]; return b && Math.abs(b.winkel) > 1e-6 ? { fr: (b.ri ?? p.ri ?? 1) + (p.t || 1), bis: b.ende } : null; };
   const a = rel(profile[kv]), b = rel(profile[k]);
   if (a) { ek[kv].fr1 = a.fr; ek[kv].bisU = a.bis; }

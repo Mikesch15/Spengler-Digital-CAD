@@ -8,6 +8,7 @@ import { berechne } from "../geometrie.js";
 import { freiesProfil } from "../profile.js";
 import { folge } from "../details.js";
 import { eckFaktoren } from "../flaechenblech.js";
+import { eckSchnitt2 } from "../quetschfalte.js";
 
 const kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -119,15 +120,20 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
         halbraeume: [{ punkt: [0, 0, e0], normale: [-k0, -ky0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, -ky1, 1] }],
         m: M,
       });
-      const frS = i > 1 ? 0 : ek[k].fr0 || 0, frE = i < g.punkte.length - 1 ? 0 : ek[k].fr1 || 0, bg = p.res?.pfad?.find((e) => e.typ === "bogen");
-      if ((frS > 0 || frE > 0) && bg) { // Freistellung: Biegezone endet vor der Gehrungsecke (Quader durch die Biegezone, nach dem Vereinigen abgezogen)
-        const xe = bg.p2[0] - 100 + (p.versatz || 0), ye = bg.p2[1], x0 = Math.min(bq.xFlach, xe) - 1, x1 = Math.max(xe, bq.xFlach) + 0.01, y0 = Math.min(ye, -t) - 0.01, y1 = Math.max(ye, t) + 0.01;
-        if (frS > 0) plan.reliefs.push({ quader: { min: [x0, y0, e0 - 5], max: [x1, y1, e0 + frS] }, m: M });
-        if (frE > 0) plan.reliefs.push({ quader: { min: [x0, y0, L - e1 - frE], max: [x1, y1, L - e1 + 5] }, m: M });
-      }
       if (bq.xFlach < -1e-9) plan.schnitte.push({ quader: { min: [bq.xFlach, -t, 0], max: [1, t, L] }, m: M }); // Fläche bis zum Biegebeginn kürzen
     }
   });
+  // Runde Freistellung der Biegezone: Zylinder (Achse senkrecht zur Platte, Radius = Biegeradius + Blechstärke) um die Ecke der beiden Biegelinien
+  const n = bl.gruppen.length;
+  if (bl.opt?.freistellung !== "keine" && (bl.opt?.ecken || "gehrung") === "gehrung") for (let k = 0; k < n; k++) {
+    const kv = (k - 1 + n) % n, gk = bl.gruppen[k], gv = bl.gruppen[kv], pk = bl.profile[k], pv = bl.profile[kv];
+    if (kv === k || !gk.gerade || !gv.gerade || bl.quetsch?.has?.(k) || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
+    const V0 = gk.punkte[0], dn = richt(V0, gk.punkte[1]), dp = richt(V0, gv.punkte.at(-2));
+    if (!(knick(dn, dp) > 0)) continue; // nur Aussenecken
+    const rB = (p) => (p.biegungen[0].ri ?? p.ri ?? 1) + (p.t || t), r = Math.max(rB(pk), rB(pv));
+    let O; try { O = eckSchnitt2(V0, dn, dp, pk.biegungen[0].abstand, pv.biegungen[0].abstand); } catch { continue; }
+    plan.reliefs.push({ zyl: { r, h: 2 * (r - t / 2) + 0.2, basis: [O[0], O[1], -(r - t / 2) - 0.1], achse: [0, 0, 1] }, m: B });
+  }
   return plan;
 }
 // Plan ausführen (x = Kommando-Funktion des Kerns): Fläche kürzen, Profile auf Länge/Gehrung schneiden, alles vereinigen
@@ -143,6 +149,6 @@ export async function baueFlaechenblech(x, plan) {
     z = (await x({ op: "matrix", ziel: z, m: p.m })).id;
     k = (await x({ op: "boolesch", art: "vereinigen", a: k, b: z })).id;
   }
-  for (const r of plan.reliefs || []) { const q = (await x({ op: "quader", ...r.quader })).id, w = (await x({ op: "matrix", ziel: q, m: r.m })).id; k = (await x({ op: "boolesch", art: "abziehen", a: k, b: w })).id; } // Freistellungen
+  for (const r of plan.reliefs || []) { const q = (await x(r.zyl ? { op: "zylinder", ...r.zyl } : { op: "quader", ...r.quader })).id, w = (await x({ op: "matrix", ziel: q, m: r.m })).id; k = (await x({ op: "boolesch", art: "abziehen", a: k, b: w })).id; } // Freistellungen
   return k;
 }
