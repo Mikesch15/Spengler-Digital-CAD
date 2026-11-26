@@ -3394,9 +3394,15 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
   } catch (e) { biegeStueck = null; }
   if (biegeStueck) meshes.push(biegeStueck, ...biegeTeile);
   if (r > 1e-6) for (const [a0, b0] of (biegeStueck ? [[Oi, Ci]] : [[Oi, Ci], [Oi, Pi]])) { // Wulst der Faltkante (und der Anschlusskante, falls keine Biegung berechnet werden konnte)
-    const L = b0.distanceTo(a0), mitte = a0.clone().add(b0).multiplyScalar(0.5), ax = new THREE.Vector3(b0.x - a0.x, b0.y - a0.y, 0).normalize();
+    const fold = a0 === Oi && b0 === Ci, ax = new THREE.Vector3(b0.x - a0.x, b0.y - a0.y, 0).normalize(), ext = fold ? 4 * t + a0.distanceTo(O2) : 0, a1 = a0.clone().addScaledVector(ax, -ext); // Wulst der Faltkante bis über die Ecke hinaus ziehen, dann an der Gehrung abschneiden
+    const L = b0.distanceTo(a1), mitte = a1.clone().add(b0).multiplyScalar(0.5);
     const cyl = new THREE.CylinderGeometry(r, r, L, 16, 1, false); cyl.applyMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), ax)));
     cyl.translate(mitte.x, mitte.y, t); // Mitte der beiden Lagen (Dicke 2 t)
+    if (fold) { // Gehrung an der Ecke O: gleiche Ebene wie bei der 90°-Biegung (halbiert den Winkel zwischen Ecklinie und Faltkante); der Überstand wird entlang der Faltkante auf die Ebene gezogen
+      cyl.applyMatrix4(aussen); const uR = P.clone().normalize(), dR = C.clone().normalize(), mR = uR.clone().sub(dR);
+      if (mR.length() > 1e-6) { mR.normalize(); const ps = cyl.attributes.position, w = new THREE.Vector3(), den = dR.dot(mR); if (Math.abs(den) > 1e-6) { for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.dot(mR); if (d > 0) { w.addScaledVector(dR, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; } }
+      cyl.applyMatrix4(M); meshes.push(koerperAusGeo(cyl, farbe, fid)); continue;
+    }
     meshes.push(mk(cyl, aussen));
   }
   return meshes;
