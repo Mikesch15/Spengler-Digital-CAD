@@ -184,7 +184,6 @@ function quadratEcken(gruppen, profile, ek, opt = null) {
   const n = gruppen.length;
   gruppen.forEach((g, k) => {
     const kv = (k - 1 + n) % n; if (kv === k || !profile[k]?.lage || !profile[kv]?.lage) return;
-    if (opt?.gehrungEcken?.includes(k)) return; // Ecke mit Quetschfalte: echte Gehrung (beide Enden in einer Ebene) statt Schnitt senkrecht zum Blech
     const dV = richtung(gruppen[kv].punkte.at(-2), gruppen[kv].punkte.at(-1)), d0 = richtung(g.punkte[0], g.punkte[1]), beta = knick(dV, d0), sb = Math.sin(beta);
     if (beta < 0.2 || sb < 0.2) return; // gerade Fortsetzung oder einspringende Ecke: wie bisher
     const nA = [dV[1], -dV[0]], nB = [d0[1], -d0[0]], WA = innenWand(profile[kv]), WB = innenWand(profile[k]);
@@ -346,7 +345,7 @@ export function flaechenblech(ptsRoh, kanten, m, quetschEcken = [], opt = null) 
   }
   let opt2 = opt ? { ...opt, t: m.t } : null;
   if (quetsch.size) { // Quetschfalte: Gehrung an der Ecke; der Flansch, auf dem die Falte liegt, endet um eine Blechstärke früher (dort beginnt der 180°-Saum)
-    const n = gruppen.length, kuerzen = {}; opt2 = { ...(opt2 || { t: m.t }), gehrungEcken: [...quetsch.keys()], kuerzen };
+    const n = gruppen.length, kuerzen = {}; opt2 = { ...(opt2 || { t: m.t }), kuerzen };
     for (const [k, q] of quetsch) {
       const kv = (k - 1 + n) % n, tausch = q.vz * (opt?.sichtseite === -1 ? -1 : 1) < 0, rechts = opt?.quetschRichtung?.[k] === "rechts", e1Flansch = !tausch ? k : kv, aKante = rechts ? (e1Flansch === k ? kv : k) : e1Flansch;
       try { const g = eckeGeometrie(q.beta, (tausch ? q.F2 : q.F1).phi, (tausch ? q.F1 : q.F2).phi), gam = (rechts ? g.gamma2 : g.gamma1) * Math.PI / 180; kuerzen[aKante === k ? `${k}:start` : `${kv}:ende`] = m.t / Math.max(0.2, Math.sin(gam)); } catch { /* ohne Kürzung */ }
