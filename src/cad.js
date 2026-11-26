@@ -3378,14 +3378,17 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
         const sh = new THREE.Shape(); sh.moveTo(K[0] + Ro * Math.cos(a0), K[1] + Ro * Math.sin(a0)); sh.absarc(K[0], K[1], Ro, a0, a1, cw);
         sh.lineTo(K[0] + Ri * Math.cos(a1), K[1] + Ri * Math.sin(a1)); sh.absarc(K[0], K[1], Ri, a1, a0, !cw); sh.closePath();
         const geoR = new THREE.ExtrudeGeometry(sh, { depth: P.length(), bevelEnabled: false, curveSegments: 16 });
-        const lageR = new THREE.Matrix4().makeBasis(ayV, n, uV), dazu = (shape) => { const gq = new THREE.ExtrudeGeometry(shape, { depth: P.length(), bevelEnabled: false, curveSegments: 16 }); gq.applyMatrix4(lageR); gq.applyMatrix4(M); biegeTeile.push(koerperAusGeo(gq, farbe, fid)); };
-        geoR.applyMatrix4(lageR); geoR.applyMatrix4(M); biegeStueck = koerperAusGeo(geoR, farbe, fid);
+        const lageR = new THREE.Matrix4().makeBasis(ayV, n, uV), dC = C.clone().normalize(), mV = uV.clone().sub(dC), mitre = (gq) => { // Gehrung an der Ecke O: Anfangsfläche liegt in der Ebene durch O, die den Winkel zwischen Ecklinie und Faltkante halbiert (kein Überstand über die Dreiecksspitze)
+          if (mV.length() < 1e-6) return; mV.normalize(); const ps = gq.attributes.position, w = new THREE.Vector3(), den = uV.dot(mV); if (Math.abs(den) < 1e-6) return;
+          for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.dot(mV); if (d < 0) { w.addScaledVector(uV, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; },
+        dazu = (shape) => { const gq = new THREE.ExtrudeGeometry(shape, { depth: P.length(), bevelEnabled: false, curveSegments: 16 }); gq.applyMatrix4(lageR); mitre(gq); gq.applyMatrix4(M); biegeTeile.push(koerperAusGeo(gq, farbe, fid)); };
+        geoR.applyMatrix4(lageR); mitre(geoR); geoR.applyMatrix4(M); biegeStueck = koerperAusGeo(geoR, farbe, fid);
         // Ende von Flansch B: Gehrungsschnitt durch die Innenkante der Ecklinie – von dort läuft das Blech gerade bis zum Beginn der Biegung
         let pB = [-dBb, dBa]; if (pB[0] < 0) pB = [-pB[0], -pB[1]];
         const sE = (-t / 2 - (t / 2) * pB[1]) / dBb, lamE = -sE, lamP = sk - tl, aI = (t / 2) * pB[0] + sE * dBa;
         if (lamP - lamE > 0.01) { const pt = (lam, sg) => [lam * u1[0] + sg * (t / 2) * pB[0], lam * u1[1] + sg * (t / 2) * pB[1]], sq = new THREE.Shape(); sq.moveTo(...pt(lamE, -1)); sq.lineTo(...pt(lamE, 1)); sq.lineTo(...pt(lamP, 1)); sq.lineTo(...pt(lamP, -1)); sq.closePath(); dazu(sq); }
         // Flansch A, auf dem die Falte liegt: sein Ende wird um 180° (geschlossener Saum) auf die erste Lage der Falte zurückgebogen
-        const hs = new THREE.Shape(); hs.moveTo(aI, -t / 2); hs.absarc(aI, t / 2, t, -Math.PI / 2, -1.5 * Math.PI, true); hs.closePath(); dazu(hs);
+        const aH = aI + t, hs = new THREE.Shape(); hs.moveTo(aH, -t / 2); hs.absarc(aH, t / 2, t, -Math.PI / 2, -1.5 * Math.PI, true); hs.closePath(); dazu(hs); // um eine Blechstärke nach innen: liegt im Hohlraum der 90°-Biegung
       }
     }
   } catch (e) { biegeStueck = null; }
