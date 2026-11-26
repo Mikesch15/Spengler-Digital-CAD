@@ -953,6 +953,10 @@ function waehleImRaum(art, e, f, feld) {
       const k = bezugKante(w); strecke(k.p, k.p.map((x, i) => x + k.d[i]), [w, l]);
     }
     for (const [a, b] of koerperKanten()) strecke(a, b, [`E:${fmt3(a)};${fmt3(b)}`, "Körperkante"]);
+  } else if (art === "drehachse") { // Drehachse der Profilskizze: Skizzenlinien (auch Hilfslinien) und die Skizzenachsen U/V anklicken
+    const sk = finde(f?.skizze); if (sk) {
+      for (const [w, l] of achsenOpt(sk)) { const [a, d] = drehAchse(sk, w); if (!a) continue; const ax = w === "U" || w === "V", p0 = zu3D(sk.ebene, ax ? [a[0] - d[0] * 5000, a[1] - d[1] * 5000] : a).toArray(), p1 = zu3D(sk.ebene, ax ? [a[0] + d[0] * 5000, a[1] + d[1] * 5000] : [a[0] + d[0], a[1] + d[1]]).toArray(); strecke(p0, p1, [w, l], ax ? 4 : 0); }
+    }
   } else if (art === "pfad") {
     for (const [w, l] of pfadListe(f)) { const pts = bezugPfad(w); for (let i = 0; i < pts.length - 1; i++) strecke(pts[i], pts[i + 1], [w, l]); }
     for (const [a, b] of koerperKanten()) strecke(a, b, [`E:${fmt3(a)};${fmt3(b)}`, "Körperkante"]);
@@ -969,7 +973,7 @@ function zeigeWahl() {
   const a = aktiveWahl();
   document.querySelectorAll("#dInhalt .feld[data-wahl]").forEach((el) => el.classList.toggle("waehlt", el.dataset.feld === a?.id));
   grundebenen.visible = a?.wahl === "ebene"; zeichneGewaehlt();
-  if (a) status({ ebene: "Ebene, Konstruktionsebene oder ebene Körperfläche in der Ansicht anklicken – oder in der Liste wählen.", kante: "Kante anklicken: Skizzenlinie, Körperkante oder Achse.",
+  if (a) status({ ebene: "Ebene, Konstruktionsebene oder ebene Körperfläche in der Ansicht anklicken – oder in der Liste wählen.", kante: "Kante anklicken: Skizzenlinie, Körperkante oder Achse.", drehachse: "Drehachse anklicken: Linie oder Hilfslinie der Skizze, oder die waagrechte/senkrechte Skizzenachse.",
     punkt: "Punkt anklicken: Skizzenpunkt, Körperecke oder Ursprung.", zylinder: "Zylindrische Fläche anklicken (extrudierter Kreis).", pfad: "Linie, Kreis oder Körperkante als Pfad anklicken.",
     profil: "Skizzenprofil anklicken – in die geschlossene Fläche oder auf ihre Linie.", flaechen: "Fläche(n) in der Skizze anklicken (jede Teilfläche einzeln, nochmals anklicken = abwählen).", kette: "Offenen Linienzug einer Skizze anklicken.", koerper: "Körper in der Ansicht anklicken.", dach: "Dach in der Ansicht anklicken.", dachflaeche: "Dachfläche anklicken – dort sitzt das Element (Lage wird übernommen)." }[a.wahl] + ` (Feld «${a.label}»)`);
 }
@@ -1017,9 +1021,14 @@ function regionMesh(sk, r, farbe, deckkraft) {
   m.renderOrder = 18; return m;
 }
 function zeichneGewaehlt() { // bereits gewählte Skizzenflächen des Dialog-Features bleiben blau eingefärbt
-  leeren(waehlGruppe);
+  leeren(waehlGruppe); zeichneAchse();
   const f = dlg?.feature, sk = f && finde(f.skizze); if (!sk || !Array.isArray(f.flaechen)) return;
   for (const r of gewaehlteRegionen(f, sk) || []) waehlGruppe.add(regionMesh(sk, r, 0x2f7dd1, 0.55));
+}
+function zeichneAchse() { // gewählte Drehachse bleibt als kräftige blaue Linie sichtbar
+  const f = dlg?.feature; if (f?.typ !== "drehung" || !f.achse) return; const sk = finde(f.skizze), [p, d] = sk ? drehAchse(sk, f.achse) : [null]; if (!p) return;
+  const ax = f.achse === "U" || f.achse === "V", pts = ax ? [zu3D(sk.ebene, [p[0] - d[0] * 5000, p[1] - d[1] * 5000]), zu3D(sk.ebene, [p[0] + d[0] * 5000, p[1] + d[1] * 5000])] : [zu3D(sk.ebene, p), zu3D(sk.ebene, [p[0] + d[0], p[1] + d[1]])];
+  waehlGruppe.add(dickeLinie(pts, 0x2f7dd1, 3, 21));
 }
 let hoverWartet = false;
 function hoverWahl(e) {
@@ -1044,6 +1053,7 @@ function hoverZeichnen(e) {
       strahl.setFromCamera(ndc(e), kamera);
       const t = strahl.intersectObjects(ziele, true).find((x) => x.object.isMesh);
       if (t) { const m = new THREE.Mesh(t.object.geometry, hoverMat()); m.matrixAutoUpdate = false; t.object.updateWorldMatrix(true, false); m.matrix.copy(t.object.matrixWorld); m.renderOrder = 19; hoverGruppe.add(m); }
+    } else if (a.wahl === "drehachse") { const sk = finde(dlg.feature.skizze), [p, d] = sk ? drehAchse(sk, ref) : [null]; if (p) { const ax = ref === "U" || ref === "V"; linie(ax ? [zu3D(sk.ebene, [p[0] - d[0] * 5000, p[1] - d[1] * 5000]), zu3D(sk.ebene, [p[0] + d[0] * 5000, p[1] + d[1] * 5000])] : [zu3D(sk.ebene, p), zu3D(sk.ebene, [p[0] + d[0], p[1] + d[1]])]); }
     } else if (a.wahl === "kante" || a.wahl === "pfad") {
       const k = bezugKante(ref); const d = ref.startsWith("A:") || ref.startsWith("X:") ? k.d.map((x) => x * 5000 / (Math.hypot(...k.d) || 1)) : k.d;
       linie(ref.startsWith("A:") || ref.startsWith("X:") ? [V(k.p).sub(V(d)), V(k.p).add(V(d))] : [V(k.p), V(k.p).add(V(k.d))]);
@@ -1056,7 +1066,7 @@ function uebernimmWahl(e) {
   const a = aktiveWahl(); if (!a) return false;
   let w = null;
   try { w = waehleImRaum(a.wahl, e, dlg.feature, a); } catch { w = null; }
-  if (!w) { status("Hier ist nichts Passendes – " + ({ flaechen: "eine geschlossene Fläche einer Skizze (innen anklicken)", profil: "ein geschlossenes Skizzenprofil (innen) oder seine Linie", kette: "einen offenen Linienzug einer Skizze", ebene: "eine Ebene oder Fläche", kante: "eine Kante", punkt: "einen Punkt", zylinder: "eine Zylinderfläche", pfad: "eine Linie", koerper: "einen Körper", dach: "ein Dach", dachflaeche: "eine Dachfläche des gewählten Dachs" }[a.wahl]) + " anklicken."); return true; }
+  if (!w) { status("Hier ist nichts Passendes – " + ({ flaechen: "eine geschlossene Fläche einer Skizze (innen anklicken)", profil: "ein geschlossenes Skizzenprofil (innen) oder seine Linie", kette: "einen offenen Linienzug einer Skizze", ebene: "eine Ebene oder Fläche", kante: "eine Kante", drehachse: "eine Linie der Profilskizze oder die Skizzenachse", punkt: "einen Punkt", zylinder: "eine Zylinderfläche", pfad: "eine Linie", koerper: "einen Körper", dach: "ein Dach", dachflaeche: "eine Dachfläche des gewählten Dachs" }[a.wahl]) + " anklicken."); return true; }
   if (a.wahl === "flaechen") { // Teilfläche wählen / abwählen (Mehrfachwahl, Klick auf gewählte Fläche hebt sie auf)
     const f = dlg.feature, sel = $("d_" + a.id), p = w[2]._flaechen;
     if (sel.value !== w[0]) { sel.value = w[0]; sel.dispatchEvent(new Event("change")); f.flaechen = []; }
@@ -1385,7 +1395,7 @@ function regen() {
         volumenKoerper(f, drehGeometrie(loops, s.ebene, a, d, f.winkel ?? 360));
       } else if (f.typ === "sweep") {
         const s = finde(f.skizze); if (!s) throw new Error("Skizze fehlt");
-        volumenKoerper(f, sweepGeometrie(s, bezugPfad(f.pfad)));
+        volumenKoerper(f, sweepGeometrie(s, bezugPfad(f.pfad), { orientierung: f.orientierung, fuehrung: f.fuehrung ? bezugPfad(f.fuehrung) : null, skalieren: f.fuehrSkal }));
       } else if (f.typ === "loft") {
         const sks = [f.profil1, f.profil2, f.profil3].filter(Boolean).map((id) => finde(id) || (() => { throw new Error("Profilskizze fehlt"); })());
         if (sks.length < 2 || new Set(sks).size !== sks.length) throw new Error("Zwei verschiedene Profilskizzen wählen");
@@ -2374,10 +2384,10 @@ function drehungDialog(f) {
   f ||= { id: neueId(), typ: "drehung", name: "Drehung " + (doc.features.filter((x) => x.typ === "drehung").length + 1), skizze: vorSk(sk).id, achse: "V", winkel: 360, vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: "Profil aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
-    { id: "achse", label: "Achse", optionen: achsenOpt(finde(f.skizze)), wert: f.achse },
+    { id: "achse", label: "Achse", wahl: "drehachse", optionen: achsenOpt(finde(f.skizze)), wert: f.achse },
     { id: "winkel", label: "Winkel", einheit: "°", wert: f.winkel ?? 360 },
     ...vorgangFelder(f),
-  ], (f, w) => Object.assign(f, w), "Drehen", "Geschlossene Profile der Skizze um eine Achse drehen – Achse = Skizzenachse oder eine gerade (Hilfs-)Linie. Das Profil darf die Achse nicht kreuzen.");
+  ], (f, w) => Object.assign(f, w), "Drehen", "Geschlossene Profile der Skizze um eine Achse drehen. Achse: das Feld «Achse» antippen und eine Linie (auch Hilfslinie) oder die Skizzenachse in der Ansicht anklicken – sie leuchtet blau. Das Profil darf die Achse nicht kreuzen.");
 }
 
 function blechDialog(f) {
@@ -4597,27 +4607,38 @@ function deckel(aussen, loecher, abbild) {
   return tri.map((t) => t.map((i) => abbild(...alle[i])));
 }
 const flaeche2 = (p) => p.reduce((s, a, i) => { const b = p[(i + 1) % p.length]; return s + a[0] * b[1] - b[0] * a[1]; }, 0) / 2;
-function sweepGeometrie(sk, pfad) {
+function sweepGeometrie(sk, pfad, opt = {}) {
   if (pfad.length < 2) throw new Error("Pfad zu kurz");
-  const E = E_(sk.ebene), P = pfad.map(v3).filter((p, i, a) => !i || p.distanceTo(a[i - 1]) > 1e-6);
+  const E = E_(sk.ebene), P = pfad.map(v3).filter((p, i, a) => !i || p.distanceTo(a[i - 1]) > 1e-6), parallel = opt.orientierung === "parallel" && !opt.fuehrung?.length;
   // Rahmen entlang des Pfads (Doppelspiegelung: verdreht sich nicht)
   const T = P.map((p, i) => (i < P.length - 1 ? P[i + 1].clone().sub(p) : p.clone().sub(P[i - 1])).normalize());
   let N0 = v3(E.u).sub(T[0].clone().multiplyScalar(v3(E.u).dot(T[0]))); if (N0.lengthSq() < 1e-9) N0 = v3(E.v).sub(T[0].clone().multiplyScalar(v3(E.v).dot(T[0])));
+  // Führungsschiene (wie «Pfad und Führungsschiene» in Fusion): die Profilrichtung N zeigt zu jedem Pfadpunkt zur Schiene, das Profil wird mit dem Abstand skaliert
+  const G = (opt.fuehrung || []).map(v3).filter((p, i, a) => !i || p.distanceTo(a[i - 1]) > 1e-6), laengen = [0]; for (let i = 1; i < P.length; i++) laengen.push(laengen[i - 1] + P[i].distanceTo(P[i - 1]));
+  const gl = [0]; for (let i = 1; i < G.length; i++) gl.push(gl[i - 1] + G[i].distanceTo(G[i - 1]));
+  const aufSchiene = (i) => { if (G.length < 2) return null; const t = laengen.at(-1) > 0 ? laengen[i] / laengen.at(-1) : 0, z = t * gl.at(-1); let j = 1; while (j < G.length - 1 && gl[j] < z) j++; const u = (z - gl[j - 1]) / ((gl[j] - gl[j - 1]) || 1); return G[j - 1].clone().lerp(G[j], Math.max(0, Math.min(1, u))); };
+  const r = P.map((p, i) => { const g = aufSchiene(i); if (!g) return null; const v = g.sub(p); return v.sub(T[i].clone().multiplyScalar(v.dot(T[i]))); });
+  const fuehrung = !!r[0] && r[0].length() > 1e-6;
+  if (fuehrung) N0 = r[0].clone();
   const N = [N0.normalize()];
   for (let i = 0; i < P.length - 1; i++) {
     const v1 = P[i + 1].clone().sub(P[i]), c1 = v1.dot(v1) || 1, rL = N[i].clone().sub(v1.clone().multiplyScalar((2 / c1) * v1.dot(N[i]))), tL = T[i].clone().sub(v1.clone().multiplyScalar((2 / c1) * v1.dot(T[i])));
     const v2 = T[i + 1].clone().sub(tL), c2 = v2.dot(v2) || 1; N.push(rL.sub(v2.multiplyScalar((2 / c2) * v2.dot(rL))).normalize());
   }
+  const skal = P.map(() => 1);
+  if (fuehrung) for (let i = 0; i < P.length; i++) { // Richtung und Grösse folgen der Schiene (fällt sie auf den Pfad, bleibt der letzte Rahmen)
+    const ri = r[i]; if (ri && ri.length() > 1e-6) { N[i] = ri.clone().normalize(); if (opt.skalieren !== "nein") skal[i] = ri.length() / r[0].length(); } else if (i) { N[i] = N[i - 1].clone(); skal[i] = skal[i - 1]; }
+  }
   const B = N.map((n, i) => new THREE.Vector3().crossVectors(T[i], n));
-  // Profilpunkte relativ zum Pfadanfang in (N0, B0)
-  const ab = (uv) => { const w = v3(zuWelt(E, uv)).sub(P[0]); return [w.dot(N[0]), w.dot(B[0])]; };
+  // Profilpunkte: senkrecht zum Pfad in (N0, B0) relativ zum Pfadanfang; parallel: unverändert in der Profilebene, nur verschoben
+  const ab = (uv) => { if (parallel) return uv; const w = v3(zuWelt(E, uv)).sub(P[0]); return [w.dot(N[0]), w.dot(B[0])]; };
   const geos = [];
   for (const s of formen(sk)) {
     const aussen0 = s.getPoints().map((q) => ab([q.x, q.y])), loecher0 = s.holes.map((h) => h.getPoints().map((q) => ab([q.x, q.y])));
     const ccw = (p, soll) => (Math.sign(flaeche2(p)) === soll ? p : p.slice().reverse());
     const aussen = ccw(aussen0.filter((p, i, a) => i < a.length - 1 || Math.hypot(p[0] - a[0][0], p[1] - a[0][1]) > 1e-6), 1);
     const loecher = loecher0.map((h) => ccw(h.filter((p, i, a) => i < a.length - 1 || Math.hypot(p[0] - a[0][0], p[1] - a[0][1]) > 1e-6), -1));
-    const bei = (i) => (a, b) => P[i].clone().addScaledVector(N[i], a).addScaledVector(B[i], b);
+    const bei = (i) => (a, b) => parallel ? v3(zuWelt(E, [a, b])).add(P[i].clone().sub(P[0])) : P[i].clone().addScaledVector(N[i], a * skal[i]).addScaledVector(B[i], b * skal[i]);
     const ringe = (schleife) => P.map((_, i) => schleife.map(([a, b]) => bei(i)(a, b)));
     const teile = [ringNetz(ringe(aussen), deckel(aussen, loecher, bei(0)), deckel(aussen, loecher, bei(P.length - 1)))];
     for (const h of loecher) teile.push(ringNetz(ringe(h), [], []));
@@ -4656,8 +4677,11 @@ function sweepDialog(f) {
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: "Profil aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
     { id: "pfad", label: "Pfad", wahl: "pfad", optionen: mitWert(pfadListe(f).length ? pfadListe(f) : [["", "– nichts vorhanden –"]], f.pfad), wert: f.pfad },
+    { id: "orientierung", label: "Ausrichtung", optionen: [["senkrecht", "Senkrecht zum Pfad (folgt dem Pfad)"], ["parallel", "Parallel (Profil behält seine Lage)"]], wert: f.fuehrung ? "senkrecht" : f.orientierung || "senkrecht" },
+    { id: "fuehrung", label: "Führungsschiene", wahl: "pfad", optionen: [["", "– keine –"], ...mitWert(pfadListe(f), f.fuehrung || "")], wert: f.fuehrung || "" },
+    ...(f.fuehrung ? [{ id: "fuehrSkal", label: "Profil an der Schiene", optionen: [["ja", "mit dem Abstand skalieren"], ["nein", "Grösse beibehalten"]], wert: f.fuehrSkal || "ja" }] : []),
     ...vorgangFelder(f),
-  ], (f, w) => Object.assign(f, w), "Sweep", "Geschlossenes Profil entlang eines Pfads ziehen. Das Profil wird am Pfadanfang angesetzt – am besten auf einer Ebene senkrecht zum Pfad skizzieren (Konstruieren → Ebene entlang Pfad).");
+  ], (f, w) => Object.assign(f, w), "Sweep", "Geschlossenes Profil entlang eines Pfads ziehen. Ausrichtung: «Senkrecht» dreht das Profil mit dem Pfad, «Parallel» behält die Lage des Profils bei (reine Verschiebung). Führungsschiene (optional): das Feld antippen und eine Linie anklicken – das Profil dreht sich dann zur Schiene und wird mit dem Abstand skaliert (wie «Pfad und Führungsschiene» in Fusion). Das Profil wird am Pfadanfang angesetzt – am besten senkrecht zum Pfad skizzieren (Konstruieren → Ebene entlang Pfad).", { neuBei: ["fuehrung"] });
 }
 function loftDialog(f) {
   const istNeu = !f, sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
