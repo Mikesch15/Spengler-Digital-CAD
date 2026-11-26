@@ -86,7 +86,7 @@ export function abwicklungSvg(res, { breite = 300, schrift = 11 } = {}) {
   teile.push(`<text x="${z(rand / 2 - 1)}" y="${ym}" class="kante-a-text">A</text>`, `<text x="${z(breite - rand / 2 + 1)}" y="${ym}" class="kante-b-text">B</text>`);
   const h = y0 + streifen + (schrift + 2) * 2 + 6;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${h}" width="${breite}" height="${h}" font-size="${schrift}" text-anchor="middle">
-<style>.streifen{fill:none;stroke:currentColor;stroke-width:1.5}.rundung{fill:#c4352b;opacity:.15}.biegelinie{stroke:#c4352b;stroke-width:1.5;stroke-dasharray:4 2}.mass{font-family:Barlow,"Segoe UI",Arial,sans-serif;fill:currentColor}.biegung{font-family:Barlow,"Segoe UI",Arial,sans-serif;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}.kante-a-text{fill:#2e9b4f;font-weight:600}.kante-b-text{fill:#8a969e;font-weight:600}</style>
+<style>.streifen{fill:none;stroke:currentColor;stroke-width:1.5}.rundung{fill:#c4352b;opacity:.15}.biegelinie{stroke:#c4352b;stroke-width:1.5;stroke-dasharray:10 3 2 3}.mass{font-family:Barlow,"Segoe UI",Arial,sans-serif;fill:currentColor}.biegung{font-family:Barlow,"Segoe UI",Arial,sans-serif;font-weight:600;fill:#c4352b}.kante-a{fill:#2e9b4f}.kante-a-text{fill:#2e9b4f;font-weight:600}.kante-b-text{fill:#8a969e;font-weight:600}</style>
 ${teile.join("\n")}
 </svg>`;
 }
@@ -161,7 +161,7 @@ export function zuschnittSvg(abw, gruppen, { breite = 300, hoehe = 220, rand = 2
   out.push(`<text x="${z((A[0] + B[0]) / 2)}" y="${z(A[1] + schrift + 4)}" class="mass">${abw.laenge.toFixed(1)}</text>`);
   out.push(`<text x="${z(B[0] + 6)}" y="${z((B[1] + C[1]) / 2)}" class="mass" transform="rotate(-90 ${z(B[0] + 6)} ${z((B[1] + C[1]) / 2)})">${abw.breite.toFixed(1)}</text>`);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${breite} ${hoehe}" width="${breite}" height="${hoehe}" font-size="${schrift}" text-anchor="middle" dominant-baseline="middle">
-<style>.umriss{fill:color-mix(in srgb,currentColor 6%,transparent);stroke:currentColor;stroke-width:1.4;stroke-linejoin:round}.biegelinie{fill:none;stroke:#c4352b;stroke-width:1;stroke-dasharray:5 3}.biegelinie.aktiv{stroke-width:2.2}.kante{font-family:Arial,sans-serif;font-weight:600;fill:#1f5fbf}.kante.aktiv{fill:#e0782b}.mass{font-family:Barlow,"Segoe UI",Arial,sans-serif;fill:currentColor}</style>
+<style>.umriss{fill:color-mix(in srgb,currentColor 6%,transparent);stroke:currentColor;stroke-width:1.4;stroke-linejoin:round}.biegelinie{fill:none;stroke:#c4352b;stroke-width:1;stroke-dasharray:8 2.5 1.5 2.5}.biegelinie.aktiv{stroke-width:2.2}.kante{font-family:Arial,sans-serif;font-weight:600;fill:#1f5fbf}.kante.aktiv{fill:#e0782b}.mass{font-family:Barlow,"Segoe UI",Arial,sans-serif;fill:currentColor}</style>
 ${out.join("\n")}
 </svg>`;
 }

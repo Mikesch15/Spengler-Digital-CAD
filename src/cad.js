@@ -4888,7 +4888,7 @@ function abwicklungPlanAnsicht(ref, k) {
     if (rest.length) konturen = rest.flatMap((r) => [r.aussen, ...r.loecher]);
   }
   const imLoch = (p) => loecher.some((l) => innen(p, l));
-  const biegeStuecke = biegen.flatMap((l) => l.slice(1).flatMap((q, i) => { const a = l[i], n = Math.max(1, Math.ceil(Math.hypot(q[0] - a[0], q[1] - a[1]) / 1)), st = []; for (let t = 0; t < n; t++) { const p0 = [a[0] + ((q[0] - a[0]) * t) / n, a[1] + ((q[1] - a[1]) * t) / n], p1 = [a[0] + ((q[0] - a[0]) * (t + 1)) / n, a[1] + ((q[1] - a[1]) * (t + 1)) / n]; if (!imLoch([(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2])) st.push([p0, p1]); } return st; }));
+  const biegeStuecke = biegen.flatMap((l) => l.slice(1).flatMap((q, i) => { const a = l[i], n = Math.max(1, Math.ceil(Math.hypot(q[0] - a[0], q[1] - a[1]) / 1)), st = []; for (let t = 0; t < n; t++) { const p0 = [a[0] + ((q[0] - a[0]) * t) / n, a[1] + ((q[1] - a[1]) * t) / n], p1 = [a[0] + ((q[0] - a[0]) * (t + 1)) / n, a[1] + ((q[1] - a[1]) * (t + 1)) / n]; if (!imLoch([(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2])) { const l = st.at(-1); if (l && l[1][0] === p0[0] && l[1][1] === p0[1]) l[1] = p1; else st.push([p0, p1]); } } return st; })); // zusammenhängende Stücke zu einer Linie, damit der Strichpunkt durchläuft
   const xs = aussen.map((p) => p[0]), ys = aussen.map((p) => p[1]), x0 = Math.min(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), x1 = Math.max(...xs);
   const T = (p) => [(p[0] - x0) * k, (y1 - p[1]) * k];
   const layer = [{ farbe: "#000000", strich: "", linien: konturen.flatMap((c) => polySeg(c).map(([a, b]) => [...T(a), ...T(b)])) }];
