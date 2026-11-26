@@ -2355,7 +2355,7 @@ function ebeneDialog(art, f) {
 function extrusionDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && (schleifen(x).length || skizzenRegionen(x).length));
-  if (!sk.length) return status("Zuerst eine Skizze mit geschlossenem Profil zeichnen (Rechteck, Kreis oder geschlossener Linienzug).");
+  if (!sk.length) return ersteErst("Zuerst eine Skizze mit geschlossenem Profil zeichnen (Rechteck, Kreis oder geschlossener Linienzug).", () => $("wSkizze").click(), () => extrusionDialog());
   f ||= { id: neueId(), typ: "extrusion", name: "Extrusion " + (doc.features.filter((x) => x.typ === "extrusion").length + 1), skizze: vorSk(sk).id, flaechen: [], abstand: 100, richtung: "eine", vorgang: finde(vorSk(sk).ebene)?.art === "flaeche" ? "verbinden" : "neu" }; // Skizze auf einer Körperfläche: sinnvoll ist meist «Vereinigen»
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: Array.isArray(f.flaechen) ? "Flächen in" : "Profil aus", wahl: Array.isArray(f.flaechen) ? "flaechen" : "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
@@ -2388,7 +2388,7 @@ const achsenOpt = (sk) => [["U", "Horizontale Achse der Skizze"], ["V", "Vertika
 function drehungDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
-  if (!sk.length) return status("Zuerst eine Skizze mit geschlossenem Profil und einer Achse (z. B. Hilfslinie) zeichnen.");
+  if (!sk.length) return ersteErst("Zuerst eine Skizze mit geschlossenem Profil und einer Achse (z. B. Hilfslinie) zeichnen.", () => $("wSkizze").click(), () => drehungDialog());
   f ||= { id: neueId(), typ: "drehung", name: "Drehung " + (doc.features.filter((x) => x.typ === "drehung").length + 1), skizze: vorSk(sk).id, achse: "V", winkel: 360, vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
     { id: "skizze", label: "Profil aus", wahl: "profil", optionen: sk.map((s) => [s.id, s.name]), wert: f.skizze },
@@ -2401,7 +2401,7 @@ function drehungDialog(f) {
 function blechDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
-  if (!sk.length) return status("Zuerst eine Skizze mit offenem Linienzug zeichnen: Blechmitte oder eine Blechoberfläche.");
+  if (!sk.length) return ersteErst("Zuerst eine Skizze mit offenem Linienzug zeichnen: Blechmitte oder eine Blechoberfläche.", () => $("wSkizze").click(), () => blechDialog());
   f ||= { id: neueId(), typ: "blech", name: "Blechprofil " + (doc.features.filter((x) => x.typ === "blech").length + 1), skizze: vorSk(sk).id, kette: Math.max(0, ketten(vorSk(sk)).findIndex((k) => !k.mitBogen)), lage: einst.neu.lage, material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine" };
   const REGELN = [["Linienzug", () => true], ["Lage des Blechs", (id) => ["lage", "umkehren"].includes(id)], ["Material und Länge", (id) => ["material", "laenge", "laenge2", "stueck", "notiz", "richtung", "bis", "bisEbene", "bisKante"].includes(id)]];
   featureDialog(f, istNeu, (f) => mitSchritten([
@@ -3139,14 +3139,14 @@ function wandPlatte(punkte, innenNormal, t, g) {
   const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); return nachAussen(geo);
 }
 function eindeckungDialog(f) {
-  const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
+  const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) { status("Zuerst ein Dach anlegen – «Dach automatisch» wird geöffnet."); return dachDialog(); }
   const istNeu = !f; f ||= { id: neueId(), typ: "eindeckung", name: "Eindeckung " + (doc.features.filter((x) => x.typ === "eindeckung").length + 1), dach: vorDach(daecher).id };
   featureDialog(f, istNeu, (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "dach", label: "Dach", wahl: "dach", optionen: daecher.map((d) => [d.id, d.name]), wert: f.dach }], (f, w) => { f.name = w.name?.trim() || f.name; if (w.dach) f.dach = w.dach; },
     "Ziegel eindecken", "Zuerst alle Spenglerbleche zeichnen («Dachbleche»): die Eindeckung erkennt Kehle, Wangen-/Fussanschlüsse, Fenster, Kamine und Lukarnen und schneidet die Ziegel dort an. Deckbreite und Lattweite kommen aus der Deckung des Dachs (Einstellungen › Dach). Ziegel sind schematisch (Rechtecke ohne Falzform).",
     { info: () => f._fehler ? "⚠ " + f._fehler : f._ziegel ? (f._ohneBleche ? "⚠ Noch keine Dachbleche vor der Eindeckung – die Ziegel werden nur an Rand und Öffnungen geschnitten. " : "") + `Ziegel ${f._ziegel.anzahl} Stk. (davon ${f._ziegel.geschnitten} geschnitten) · Richtwert ${f._ziegel.richtwert}` : "" });
 }
 function lukarneDialog(f) {
-  const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
+  const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) { status("Zuerst ein Dach anlegen – «Dach automatisch» wird geöffnet."); return dachDialog(); }
   const istNeu = !f; f ||= { id: neueId(), typ: "lukarne", name: "Lukarne " + (doc.features.filter((x) => x.typ === "lukarne").length + 1), dach: vorDach(daecher).id, flaeche: 0, masse: "aufmass", art: "sattel", bu: 1800, bo: 1800, hf: 1200, hL: 0, wL: 90, lL: 1500, hR: 0, wR: 90, lR: 1500, b: 1600, hw: 1100, neigung: 30, ueberstand: 200, wd: 150, dd: 250, x: 3000, y: 1500 };
   if (istNeu) { const fl0 = finde(f.dach)?._dach?.flaechen?.[0]; if (fl0) f.lL = f.lR = Math.round(f.hf / Math.tan((fl0.neigung * Math.PI) / 180)); } // Vorgabe: waagrechte Traufe bis zur Dachfläche
   const flOpt = (id) => (finde(id)?._dach?.flaechen || []).map((x, i) => [String(i), `Fläche ${i + 1}: ${x.neigung.toFixed(0)}°, ${x.flaeche.toFixed(1)} m²`]);
@@ -3171,7 +3171,7 @@ function lukarneDialog(f) {
       return (f._kopplungHinweis ? "⚠ " + f._kopplungHinweis + " " : "") + (l.hinweise.length ? "⚠ " + l.hinweise.join(" · ") + " " : "") + (am ? `${seite("Links", am.links)} · ${seite("Rechts", am.rechts)} · ` : "") + `Öffnung ${l.flaeche.toFixed(2)} m² · höchster Punkt ${(l.firsthoehe / 1000).toFixed(2)} m`; } });
 }
 function dachelementDialog(f) {
-  const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
+  const daecher = doc.features.filter((x) => x.typ === "dach" && x._dach); if (!daecher.length && !f) { status("Zuerst ein Dach anlegen – «Dach automatisch» wird geöffnet."); return dachDialog(); }
   const istNeu = !f; f ||= { id: neueId(), typ: "dachelement", name: "Dachfenster " + (doc.features.filter((x) => x.typ === "dachelement").length + 1), dach: vorDach(daecher).id, flaeche: 0, art: "fenster", velux: "MK04", b: 780, h: 978, x: 3000, y: 1500, hoehe: 1000 };
   const flOpt = (id) => (finde(id)?._dach?.flaechen || []).map((x, i) => [String(i), `Fläche ${i + 1}: ${x.neigung.toFixed(0)}°, ${(x.flaeche).toFixed(1)} m²`]);
   const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "dach", label: "Dach", optionen: daecher.map((d) => [d.id, d.name]), wert: f.dach }, { id: "flaeche", label: "Dachfläche (anklicken)", wahl: "dachflaeche", optionen: flOpt(f.dach), wert: String(f.flaeche ?? 0) },
@@ -3186,7 +3186,7 @@ function dachelementDialog(f) {
     { info: () => f._fehler ? "⚠ " + f._fehler : f._rect ? `Öffnung ${f.b} × ${f.h} mm · ${(elementFlaeche(f)).toFixed(2)} m²` : "" });
 }
 function dachblecheDialog(f) {
-  const daecher = doc.features.filter((x) => x.typ === "dach"); if (!daecher.length && !f) return status("Zuerst ein Dach anlegen («Dach automatisch»).");
+  const daecher = doc.features.filter((x) => x.typ === "dach"); if (!daecher.length && !f) { status("Zuerst ein Dach anlegen – «Dach automatisch» wird geöffnet."); return dachDialog(); }
   const istNeu = !f; f ||= { id: neueId(), typ: "dachbleche", name: "Dachbleche " + (doc.features.filter((x) => x.typ === "dachbleche").length + 1), dach: vorDach(daecher).id, material: neuMaterial(), arten: {}, params: {} };
   const felder = (f) => [{ id: "name", label: "Name", text: true, wert: f.name }, { id: "dach", label: "Dach", wahl: "dach", optionen: daecher.map((d) => [d.id, d.name]), wert: f.dach }, { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     ...Object.keys(BLECHARTEN).flatMap((a) => { const v = VORLAGE[BLECH_VORLAGE[a]], w = { ...standardwerte(v.id), ...(f.params?.[a] || {}) };
@@ -3456,7 +3456,7 @@ function nahtRaupe(f) {
 let nahtWz = null; // { schritt: "a" | "b", a: { ziel, key } | null, kand }
 function starteNahtWz() {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
-  if (!nahtKandidaten().length) return status("Keine Bleche mit wählbaren Kanten vorhanden (Flächenblech oder Blechprofil anlegen).");
+  if (!nahtKandidaten().length) return ersteErst("Keine Bleche mit wählbaren Kanten vorhanden – zuerst ein Flächenblech oder Blechprofil anlegen.", () => $("wSkizze").click(), () => $("wNaht").click());
   nahtWz = { schritt: "a", a: null }; zeigeKanten(); wkZeigen("Naht", "Schritt 1: Kante an Blech A anklicken (blaue Linien). Dann Schritt 2: Kante an Blech B.", endeNahtWz); status("Naht: Kante an Blech A anklicken – Esc bricht ab.");
 }
 function endeNahtWz() { nahtWz = null; wkZu(); zeigeKanten(); }
@@ -3647,7 +3647,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape" && quetschW
 function flaecheDialog(f) {
   const istNeu = !f;
   const sk = doc.features.filter((x) => x.typ === "skizze" && (schleifen(x).length || skizzenRegionen(x).length));
-  if (!sk.length && !f) return status("Zuerst die Grundfläche des Blechs als geschlossenes Profil skizzieren (z. B. Rechteck oder Linienzug, Dachbahnen nebeneinander).");
+  if (!sk.length && !f) return ersteErst("Zuerst die Grundfläche des Blechs als geschlossenes Profil skizzieren (z. B. Rechteck oder Linienzug, Dachbahnen nebeneinander).", () => $("wSkizze").click(), () => flaecheDialog());
   f ||= { id: neueId(), typ: "flaeche", name: "Flächenblech " + (doc.features.filter((x) => x.typ === "flaeche").length + 1), skizze: vorSk(sk).id, flaechen: [],
     kanten: {}, material: neuMaterial(), stueck: einst.neu.stueck, sichtseite: 1 };
   const felder = (f) => [
@@ -4189,7 +4189,7 @@ const KOERPER_WZ = {
 };
 function biegungDialog(f) {
   const istNeu = !f, fl = doc.features.filter((x) => x.typ === "flaeche"), sk = doc.features.filter((x) => x.typ === "skizze" && x.elemente.some((e) => e.art === "linie" && e.pts?.length >= 2));
-  if (!fl.length) return status("Zuerst ein Flächenblech erstellen."); if (!sk.length) return status("Zuerst die Biegelinie als Linie in einer Skizze zeichnen (auf der Ebene des Blechs).");
+  if (!fl.length) return ersteErst("Zuerst ein Flächenblech erstellen.", () => $("wFlaeche").click(), () => biegungDialog()); if (!sk.length) return ersteErst("Zuerst die Biegelinie als Linie in einer Skizze zeichnen (auf der Ebene des Blechs).", () => $("wSkizze").click(), () => biegungDialog());
   f ||= { id: neueId(), typ: "biegung", name: "Biegung " + (doc.features.filter((x) => x.typ === "biegung").length + 1), ziel: (hauptVon(auswahl)?.typ === "flaeche" ? hauptVon(auswahl) : fl.at(-1)).id, skizze: sk.at(-1).id, winkel: 90, radius: 0, richtung: "vorne", blech: 0 };
   featureDialog(f, istNeu, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "ziel", label: "Flächenblech", optionen: fl.map((x) => [x.id, x.name]), wert: ff.ziel }, { id: "skizze", label: "Biegelinie (Skizze, erste Linie)", optionen: sk.map((x) => [x.id, x.name]), wert: ff.skizze },
     { id: "winkel", label: "Biegewinkel", einheit: "°", wert: ff.winkel }, { id: "radius", label: "Innenradius (0 = Material)", einheit: "mm", wert: ff.radius }, { id: "richtung", label: "Biegerichtung", optionen: [["vorne", "Nach oben (Normale)"], ["hinten", "Nach unten"]], wert: ff.richtung }],
@@ -4198,7 +4198,7 @@ function biegungDialog(f) {
 }
 function ripDialog(f) {
   const istNeu = !f, fl = doc.features.filter((x) => x.typ === "flaeche"), sk = doc.features.filter((x) => x.typ === "skizze" && x.elemente.some((e) => e.art === "linie" && e.pts?.length >= 2));
-  if (!fl.length) return status("Zuerst ein Flächenblech erstellen."); if (!sk.length) return status("Zuerst die Trennlinie als Linie in einer Skizze zeichnen (auf der Ebene des Blechs).");
+  if (!fl.length) return ersteErst("Zuerst ein Flächenblech erstellen.", () => $("wFlaeche").click(), () => ripDialog()); if (!sk.length) return ersteErst("Zuerst die Trennlinie als Linie in einer Skizze zeichnen (auf der Ebene des Blechs).", () => $("wSkizze").click(), () => ripDialog());
   f ||= { id: neueId(), typ: "rip", name: "Rip " + (doc.features.filter((x) => x.typ === "rip").length + 1), ziel: (hauptVon(auswahl)?.typ === "flaeche" ? hauptVon(auswahl) : fl.at(-1)).id, skizze: sk.at(-1).id, spalt: 0.5 };
   featureDialog(f, istNeu, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "ziel", label: "Flächenblech", optionen: fl.map((x) => [x.id, x.name]), wert: ff.ziel }, { id: "skizze", label: "Trennlinie (Skizze, erste Linie)", optionen: sk.map((x) => [x.id, x.name]), wert: ff.skizze }, { id: "spalt", label: "Spalt (Schlitzbreite)", einheit: "mm", wert: ff.spalt }],
     (ff, w) => Object.assign(ff, w, { name: w.name?.trim() || ff.name }), "Rip (Auftrennen)", "Trennt das Blech entlang der Linie auf (Schlitz mit Spalt): Eckentlastung bzw. Naht, damit sich Ecken ohne Zwang falten lassen. Der Schlitz erscheint auch in der Abwicklung.",
@@ -4206,7 +4206,7 @@ function ripDialog(f) {
 }
 function loftflanschDialog(f) {
   const istNeu = !f, sk = doc.features.filter((x) => x.typ === "skizze" && ketten(x).length);
-  if (sk.length < 2) return status("Zuerst zwei Profile als offene Linienzüge in zwei Skizzen zeichnen (z. B. auf zwei parallelen Ebenen).");
+  if (sk.length < 2) return ersteErst("Zuerst zwei Profile als offene Linienzüge in zwei Skizzen zeichnen (z. B. auf zwei parallelen Ebenen).", () => $("wSkizze").click(), () => loftflanschDialog());
   f ||= { id: neueId(), typ: "loftflansch", name: "Lofted Flange " + (doc.features.filter((x) => x.typ === "loftflansch").length + 1), profil1: sk.at(-2).id, profil2: sk.at(-1).id, kette1: 0, kette2: 0, material: neuMaterial(), stueck: einst.neu.stueck, sichtseite: 1, lage: "mitte", teilung: 12 };
   featureDialog(f, istNeu, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "profil1", label: "Profil 1 (Skizze)", optionen: sk.map((x) => [x.id, x.name]), wert: ff.profil1 }, { id: "profil2", label: "Profil 2 (Skizze)", optionen: sk.map((x) => [x.id, x.name]), wert: ff.profil2 },
     { id: "material", label: "Material", optionen: matOpt(), wert: ff.material }, { id: "sichtseite", label: "Sichtseite", optionen: [["1", "Vorne (Flächennormale)"], ["-1", "Hinten"]], wert: String(ff.sichtseite ?? 1) },
@@ -4216,9 +4216,9 @@ function loftflanschDialog(f) {
 }
 function koerper2Dialog(typ, f) {
   const istNeu = !f, opt = koerperOpt(f), sk = (arten) => doc.features.filter((x) => x.typ === "skizze" && x.elemente.some((el) => arten.includes(el.art)));
-  if (["skalieren", "bohrung"].includes(typ) && !opt.length) return status("Zuerst einen Körper erstellen.");
-  if (typ === "bohrung" && !sk(["punkt", "kreis"]).length) return status("Zuerst eine Skizze mit Punkten auf der Fläche setzen (Werkzeug «Punkt») – dort wird gebohrt.");
-  if ((typ === "rohr" || typ === "rippe") && !sk(["linie"]).some((x) => ketten(x).length)) return status(typ === "rohr" ? "Zuerst den Pfad des Rohrs als offenen Linienzug skizzieren." : "Zuerst den Verlauf der Rippe als offenen Linienzug skizzieren.");
+  if (["skalieren", "bohrung"].includes(typ) && !opt.length) return ersteErst("Zuerst einen Körper erstellen.", () => $("wExtrusion").click(), () => koerper2Dialog(typ));
+  if (typ === "bohrung" && !sk(["punkt", "kreis"]).length) return ersteErst("Zuerst eine Skizze mit Punkten auf der Fläche setzen (Werkzeug «Punkt») – dort wird gebohrt.", () => $("wSkizze").click(), () => koerper2Dialog(typ));
+  if ((typ === "rohr" || typ === "rippe") && !sk(["linie"]).some((x) => ketten(x).length)) return ersteErst(typ === "rohr" ? "Zuerst den Pfad des Rohrs als offenen Linienzug skizzieren." : "Zuerst den Verlauf der Rippe als offenen Linienzug skizzieren.", () => $("wSkizze").click(), () => koerper2Dialog(typ));
   const ziel = finde(auswahl)?.id && opt.some(([id]) => id === auswahl) ? auswahl : opt.at(-1)?.[0], letzteSk = (a) => sk(a).at(-1)?.id;
   f ||= { id: neueId(), typ, name: KOERPER_WZ2[typ] + " " + (doc.features.filter((x) => x.typ === typ).length + 1), ...({
     skalieren: { ziel, faktor: 1.5, mitte: "mitte", kopie: false },
@@ -4244,7 +4244,7 @@ function koerper2Dialog(typ, f) {
 }
 function koerperDialog(typ, f) {
   const istNeu = !f, opt = typ === "kantenrund" || typ === "schale" ? vorher(f).filter((x) => x.typ === "extrusion" && (x.vorgang || "neu") === "neu").map((x) => [x.id, x.name]) : koerperOpt(f);
-  if (!opt.length) return status(typ === "kantenrund" || typ === "schale" ? "Zuerst einen Körper extrudieren." : "Zuerst einen Körper oder ein Blechteil erstellen.");
+  if (!opt.length) return ersteErst(typ === "kantenrund" || typ === "schale" ? "Zuerst einen Körper extrudieren." : "Zuerst einen Körper oder ein Blechteil erstellen.", () => $("wExtrusion").click(), () => koerperDialog(typ));
   const ziel = finde(auswahl)?.id && opt.some(([id]) => id === auswahl) ? auswahl : opt.at(-1)[0];
   f ||= { id: neueId(), typ, name: KOERPER_WZ[typ] + " " + (doc.features.filter((x) => x.typ === typ).length + 1), ziel,
     ...({ kantenrund: { art: "rund", mass: 5, kanten: "alle" }, schale: { dicke: 2, offen: "oben" }, kmuster: { art: "rechteck", richtung1: "A:X", anzahl: 3, abstand: 200, richtung2: "A:Z", anzahl2: 1, abstand2: 200, achse: "A:Y", winkel: 360 },
@@ -4678,7 +4678,7 @@ function loftGeometrie(skizzen, n = 96) {
 }
 function sweepDialog(f) {
   const istNeu = !f, sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
-  if (!sk.length) return status("Zuerst ein geschlossenes Profil skizzieren – und einen Pfad (Linie, Bogen, Linienzug oder Körperkante).");
+  if (!sk.length) return ersteErst("Zuerst ein geschlossenes Profil skizzieren – und einen Pfad (Linie, Bogen, Linienzug oder Körperkante).", () => $("wSkizze").click(), () => sweepDialog());
   f ||= { id: neueId(), typ: "sweep", name: "Sweep " + (doc.features.filter((x) => x.typ === "sweep").length + 1), skizze: vorSk(sk).id, pfad: "", vorgang: "neu" };
   if (!f.pfad) f.pfad = pfadListe().find(([w]) => !w.startsWith(`L:${f.skizze}:`))?.[0] || ""; // Pfad nicht aus der Profilskizze
   featureDialog(f, istNeu, (f) => [
@@ -4692,7 +4692,7 @@ function sweepDialog(f) {
 }
 function loftDialog(f) {
   const istNeu = !f, sk = doc.features.filter((x) => x.typ === "skizze" && schleifen(x).length);
-  if (sk.length < 2) return status("Für einen Übergang zwei Skizzen mit geschlossenem Profil auf verschiedenen Ebenen zeichnen.");
+  if (sk.length < 2) return ersteErst("Für einen Übergang zwei Skizzen mit geschlossenem Profil auf verschiedenen Ebenen zeichnen.", () => $("wSkizze").click(), () => $("wLoft").click());
   f ||= { id: neueId(), typ: "loft", name: "Übergang " + (doc.features.filter((x) => x.typ === "loft").length + 1), profil1: sk.at(-2).id, profil2: vorSk(sk).id, profil3: "", vorgang: "neu" };
   featureDialog(f, istNeu, (f) => [
     { id: "profil1", wahl: "profil", label: "Profil 1", optionen: sk.map((s) => [s.id, s.name]), wert: f.profil1 },
@@ -5645,6 +5645,14 @@ function schalte2D(an = !modus2d) {
   layerZeigen();
 }
 $("w2D").onclick = () => schalte2D();
+// Fehlt eine Voraussetzung (Skizze, Blech …), meldet das Werkzeug nichts mehr, sondern startet gleich deren Erstellung; nach «Skizze fertig» geht es von selbst weiter
+let nachSkizze = null, nachSkizzeLauf = false;
+function ersteErst(hinweis, starter, weiter) {
+  if (nachSkizzeLauf) { nachSkizzeLauf = false; return status(hinweis); } // zweiter Versuch ohne passende Skizze: nur noch erklären
+  if (skizze) return status("Erst die Skizze beenden.");
+  if (dlg) $("dAbbrechen").click();
+  nachSkizze = weiter; status(hinweis); starter();
+}
 function beendeSkizze() {
   if (!skizze) return;
   abschliessenLinie();
@@ -5661,7 +5669,8 @@ function beendeSkizze() {
   $("eingabe").hidden = true; leeren(live); labels = []; document.querySelectorAll(".massbox").forEach((b) => b.remove()); $("fgAnzeige").textContent = "";
   status(f.elemente.length ? "Skizze fertig – die passenden Werkzeuge stehen oben in der Kontextleiste." : "");
   regen();
-  if (f.elemente.length && doc.features.includes(f) && !modus2d) waehle(f.id); // fertige Skizze ist gewählt → Kontextleiste bietet Extrudieren / Flächenblech / Blechprofil an
+  if (nachSkizze) { const n = nachSkizze; nachSkizze = null; if (f.elemente.length && doc.features.includes(f)) setTimeout(() => { nachSkizzeLauf = true; try { n(); } finally { nachSkizzeLauf = false; } }, 60); }
+  else if (f.elemente.length && doc.features.includes(f) && !modus2d) waehle(f.id); // fertige Skizze ist gewählt → Kontextleiste bietet Extrudieren / Flächenblech / Blechprofil an
 }
 
 // Punkt auf der Skizzenebene unter dem Mauszeiger, mit Fang
@@ -7153,7 +7162,7 @@ $("wBiegesim").onclick = () => {
   if (dlg) $("dAbbrechen").click();
   const gewaehlt = hauptVon(auswahl), brauchbar = (x) => !x._aus && !x.versteckt && ((istProfil(x) && x._res?.schenkel?.length > 1) || (x.typ === "flaeche" && flaechenKanten(x).length));
   const f = gewaehlt && brauchbar(gewaehlt) ? gewaehlt : doc.features.find(brauchbar) || null;
-  if (!f) return status("Zuerst ein Blechprofil oder ein Flächenblech mit Kantenbaustein (Flansch, Umschlag …) erstellen.");
+  if (!f) return ersteErst("Zuerst ein Blechprofil oder ein Flächenblech mit Kantenbaustein (Flansch, Umschlag …) erstellen.", () => $("wSkizze").click(), () => $("wBiegesim").onclick());
   waehle(f.id);
   if (f.typ === "flaeche") return biegenOeffnenQuellen(flaechenKanten(f), { staerke: material(f.material)?.t, titel: f.name, platte: 150 });
   biegenOeffnen(f._res, { staerke: material(f.material)?.t, laenge: laengeVon(f), titel: f.name });
