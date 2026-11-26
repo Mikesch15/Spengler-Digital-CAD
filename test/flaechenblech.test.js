@@ -1,5 +1,7 @@
 // Prüft Flächenblech mit Kantenbausteinen (kern/flaechenblech.js)
 import { innenWand, eckFaktoren, BAUSTEINE_STANDARD, bausteinProfil, kantenGruppen, flaechenblech, plattenUmriss } from "../kern/flaechenblech.js";
+import { flaechenblechPlan } from "../kern/cad/featureBau.js";
+import { BASIS } from "../kern/ebenen.js";
 import { bausteinQuerschnitt } from "../kern/cad/featureBau.js";
 import { MATERIALIEN } from "../kern/materialien.js";
 
@@ -104,3 +106,11 @@ process.exit(fehler ? 1 : 0);
     ok(ln && Math.abs(Math.hypot(ln.p2[0] - ln.p1[0], ln.p2[1] - ln.p1[1]) - soll) < 0.01, `180°-Flansch bis ${bz}: gerader Schenkel ${soll} mm`);
   }
 }
+// Runde Freistellung an der Ecke zweier Flansche – an einer Ecke mit Quetschfalte entfällt sie
+{
+  const pts = [[0, 0], [200, 0], [200, 120], [0, 120]], kt = [B.ortgang, null, null, B.ortgang];
+  const ohne = flaechenblechPlan(flaechenblech(pts, kt, m, [], { freistellung: "eckig" }), BASIS.XY, m, 1), mit = flaechenblechPlan(flaechenblech(pts, kt, m, [0], { freistellung: "eckig" }), BASIS.XY, m, 1);
+  ok(ohne.reliefs.length === 1 && ohne.reliefs[0].zyl, "Ecke mit zwei Flanschen: eine runde Freistellung");
+  ok(mit.reliefs.length === 0, "Ecke mit Quetschfalte: keine Freistellung (kein Loch)");
+}
+
