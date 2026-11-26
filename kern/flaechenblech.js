@@ -271,9 +271,11 @@ const schnitt = (p, r, q, s) => { const d = r[0] * s[1] - r[1] * s[0]; if (Math.
 // Polylinie um d nach aussen (rechts bei Umriss gegen den Uhrzeiger) versetzen; Enden: Ausklinkung (senkrecht) oder
 // bis zur Verlängerung der Nachbarkante, wenn diese keine Zugabe hat
 // Lappen einer Kante im Zuschnitt bei Abwicklungsmass u: Kante um u nach aussen versetzt, Enden je nach Ecke (x(u)·k)
+// Runde Freistellung: Viertelkreis über genau den Biegebereich (u = 0 … bisU): volle Tiefe an der Platte, null am Ende der Biegung
+export const freiFaktor = (u, bisU) => (bisU == null || !(bisU > 0) || u >= bisU - 1e-9 ? 0 : Math.sqrt(Math.max(0, 1 - (Math.max(u, 0) / bisU) ** 2)));
 function lappenLinie(g, u, x, f, y = 0, rel = null) {
   const pts = versatzLinie(g.punkte, -u), d0 = richtung(g.punkte[0], g.punkte[1]), d1 = richtung(g.punkte.at(-2), g.punkte.at(-1));
-  const fr = rel ?? (f.bisU != null && u <= f.bisU + 1e-9), a = -x * f.k0 - y * (f.ky0 || 0) + (f.e0 || 0) + (fr ? f.fr0 || 0 : 0), b = x * f.k1 + y * (f.ky1 || 0) - (f.e1 || 0) - (fr ? f.fr1 || 0 : 0); // Verschiebung längs der Kante am Anfang / Ende
+  const fr = rel == null ? freiFaktor(u, f.bisU) : rel === true ? 1 : rel === false ? 0 : rel, a = -x * f.k0 - y * (f.ky0 || 0) + (f.e0 || 0) + fr * (f.fr0 || 0), b = x * f.k1 + y * (f.ky1 || 0) - (f.e1 || 0) - fr * (f.fr1 || 0); // Verschiebung längs der Kante am Anfang / Ende
   pts[0] = [pts[0][0] + d0[0] * a, pts[0][1] + d0[1] * a];
   pts[pts.length - 1] = [pts.at(-1)[0] + d1[0] * b, pts.at(-1)[1] + d1[1] * b];
   return pts;
@@ -287,7 +289,9 @@ export function abwicklung(pts, gruppen, profile, quetsch = null, opt = null) { 
     if (p?.lage && p.zugabe < -1e-9) { umriss.push(...lappenLinie(g, p.zugabe, 0, ek[k], 0, false).slice(0, -1)); return; } // Kante nach innen gesetzt (z. B. bei Nähten): Zuschnitt kürzer als gezeichnet
     if (!p?.lage || !(p.zugabe > 0)) { umriss.push(...g.punkte.slice(0, -1)); return; }
     const lage = p.lage.filter(([u]) => u <= p.zugabe + 1e-9); if (lage.at(-1)[0] < p.zugabe - 1e-9) lage.push([p.zugabe, xBei(p.lage, p.zugabe)]);
-    const stufe = ek[k].bisU != null && (ek[k].fr0 || ek[k].fr1) ? lage.flatMap(([u, x], i) => (i + 1 < lage.length && u <= ek[k].bisU + 1e-9 && lage[i + 1][0] > ek[k].bisU + 1e-9 ? [[u, x, true], [u, x, false]] : [[u, x, u <= ek[k].bisU + 1e-9 ? true : false]])) : lage.map(([u, x]) => [u, x, null]); // Freistellung: Stufe am Ende der Biegung
+    if (ek[k].bisU != null && (ek[k].fr0 || ek[k].fr1)) for (let j = 1; j < 12; j++) { const u = ek[k].bisU * j / 12; if (u < p.zugabe - 1e-9) lage.push([u, xBei(p.lage, u)]); } // Freistellung: Stützpunkte im Kreisbogen
+    lage.sort((a, b) => a[0] - b[0]);
+    const stufe = lage.map(([u, x]) => [u, x, null]);
     if (qA(k)) umriss.push(qA(k).P1); else for (const [u, x, rel] of stufe) umriss.push(lappenLinie(g, u, x, ek[k], yBei(p.lageY, u), rel)[0]); // Anfang: von der Kante nach aussen (bei Quetschfalte: Spitze der Seitenkante)
     const aussen = lappenLinie(g, p.zugabe, lage.at(-1)[1], ek[k], yBei(p.lageY, p.zugabe)); umriss.push(...aussen.slice(1, -1));
     if (qE(k)) { const q = qE(k); umriss.push(q.P2, ...(q.z.P2s[0] === q.z.P2[0] && q.z.P2s[1] === q.z.P2[1] ? [] : [q.P2s]), q.C, ...(q.z.P1s[0] === q.z.P1[0] && q.z.P1s[1] === q.z.P1[1] ? [] : [q.P1s])); } // Quetschfalte: Überschuss der Ecke

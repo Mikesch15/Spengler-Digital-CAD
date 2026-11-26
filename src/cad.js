@@ -1773,8 +1773,8 @@ function verschiebeFeature(f, ziel) {
 }
 // Abwickeln / Falten wie Unfold / Refold in Fusion: Abwickeln · Skizze auf dem flachen Blech · Extrusion «Ausschneiden» · Falten
 function abwickelnSchalten(f) {
-  if (!f) { const fl = doc.features.filter((x) => x.typ === "flaeche" && !x._aus); f = hauptVon(auswahl); if (f?.typ !== "flaeche") f = fl.length === 1 ? fl[0] : null; }
-  if (!f) return status("Zuerst das Flächenblech im Browser oder in der Ansicht anwählen, dann «Abwickeln / Falten».");
+  if (!f) { f = hauptVon(auswahl); if (f?.typ !== "flaeche" || f.versteckt) f = null; }
+  if (!f) { if (skizze) return status("Erst die Skizze beenden."); if (dlg) $("dAbbrechen").click(); return starteBlechWahl("Abwickeln / Falten", "Flächenblech", (x) => x.typ === "flaeche" && istBlechWahl(x), (h) => abwickelnSchalten(h)); }
   if (skizze) return status("Erst die Skizze beenden.");
   if (dlg) $("dAbbrechen").click();
   const flach = istAbgewickelt(f);
@@ -1866,7 +1866,15 @@ function waehle(id, behalteZeiger = false) { // behalteZeiger: Klick im Raum set
   auswahl = id; markiere(); zeigeWerkstatt();
   // nur die Markierung umschalten: ein Neuaufbau der Liste würde den Doppelklick zum Bearbeiten verschlucken
   document.querySelectorAll("#baum li[data-id]").forEach((li) => li.classList.toggle("aktiv", li.dataset.id === id || String(id).startsWith(li.dataset.id + ":")));
+  if (blechWahl && id) { const h = hauptVon(id); if (h && blechWahl.filter(h)) { const w = blechWahl; blechWahl = null; wkZu(); w.weiter(h); } }
 }
+// Blech-Auswahl als erster Schritt eines Werkzeugs (ohne Vorauswahl): Blech in der Ansicht oder im Browser anklicken, dann geht das Werkzeug weiter
+let blechWahl = null;
+const istBlechWahl = (h) => !!h && !h._aus && !h.versteckt && (h.typ === "flaeche" || istProfil(h));
+function starteBlechWahl(titel, text, filter, weiter) {
+  blechWahl = { filter, weiter }; wkZeigen(titel, "Blech anklicken: " + text + " (in der Ansicht oder im Browser) – Esc bricht ab.", () => { blechWahl = null; wkZu(); }); status(titel + ": zuerst das Blech anklicken.");
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && blechWahl && !dlg && !skizze) { blechWahl = null; wkZu(); status(""); } });
 
 // ------------------------------------------------------------ Werkstatt
 const f1 = (v) => v.toFixed(1);
@@ -2585,6 +2593,7 @@ function bausteinKontur(b0, m) {
   return null;
 }
 // Profil (x = nach aussen, y) entlang z extrudiert; Enden schräg: Anfang bei z = −x·k0, Ende bei z = L + x·k1
+const rundFr = (cs, sBis) => (cs >= sBis - 1e-6 ? 0 : Math.sqrt(Math.max(0, 1 - (cs / sBis) ** 2))); // Viertelkreis über den Biegebereich
 function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0, fr0 = 0, fr1 = 0) { // e0/e1: an der Ecke zurückgesetzt (wie in der Abwicklung)
   // Die Gehrung gilt für die Mittellinie des Blechs: Jeder Ringpunkt wird mit dem x der nächsten Mittellinienstelle verschoben, so steht die Schnittfläche
   // senkrecht auf dem Blech (wie aus der Abwicklung geschnitten) und die Blechstärke wird nicht schräg angeschnitten.
@@ -2593,13 +2602,11 @@ function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0, fr0 = 0, fr1 
   const luft = window.__prismaLuft || 0; // nur für Tests: Gehrungsflächen minimal auseinander
   const cum = [0]; if (mitte) for (let i = 1; i < mitte.length; i++) cum.push(cum[i - 1] + Math.hypot(mitte[i][0] - mitte[i - 1][0], mitte[i][1] - mitte[i - 1][1]));
   const sBis = mitte && kont.bisPunkt ? (() => { let bi = 0, bd = 1e30; mitte.forEach((p, i) => { const d = (p[0] - kont.bisPunkt[0]) ** 2 + (p[1] - kont.bisPunkt[1]) ** 2; if (d < bd) { bd = d; bi = i; } }); return cum[bi] + 1e-6; })() : -1; // Ende der ersten Biegung entlang der Mittellinie
-  if ((fr0 || fr1) && sBis > 0) { // Stufe der Freistellung scharf: an jeder Kontur-Strecke über die Grenze Biegung/Wand zwei Punkte dicht nebeneinander einfügen (sonst Schrägfläche über die ganze Wand)
-    const q2 = [], im = (a) => mx(a[0], a[1])[2] <= sBis;
-    for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; q2.push(a);
-      if (im(a) !== im(b)) { let lo = 0, hi = 1; for (let it = 0; it < 40; it++) { const m = (lo + hi) / 2, pm = [a[0] + (b[0] - a[0]) * m, a[1] + (b[1] - a[1]) * m]; if (im(pm) === im(a)) lo = m; else hi = m; }
-        for (const t of [lo, hi]) q2.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]); } }
+  if ((fr0 || fr1) && sBis > 0) { // runde Freistellung: Kontur im Biegebereich fein unterteilen, damit der Viertelkreis sauber ausgeschnitten wird
+    const q2 = [], N = 6;
+    for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; q2.push(a); if (Math.abs(mx(a[0], a[1])[2] - mx(b[0], b[1])[2]) > 1e-6 && Math.min(mx(a[0], a[1])[2], mx(b[0], b[1])[2]) < sBis) for (let j = 1; j < N; j++) q2.push([a[0] + (b[0] - a[0]) * j / N, a[1] + (b[1] - a[1]) * j / N]); }
     q = q2; }
-  const z0 = (x, y) => { const [cx, cy, cs] = mx(x, y); return -cx * k0 - cy * ky0 + e0 + (fr0 && cs <= sBis ? fr0 : 0) + luft; }, z1 = (x, y) => { const [cx, cy, cs] = mx(x, y); return Math.max(L + cx * k1 + cy * ky1 - e1 - (fr1 && cs <= sBis ? fr1 : 0) - luft, z0(x, y) + 0.01); }, pos = [];
+  const z0 = (x, y) => { const [cx, cy, cs] = mx(x, y); return -cx * k0 - cy * ky0 + e0 + (fr0 ? fr0 * rundFr(cs, sBis) : 0) + luft; }, z1 = (x, y) => { const [cx, cy, cs] = mx(x, y); return Math.max(L + cx * k1 + cy * ky1 - e1 - (fr1 ? fr1 * rundFr(cs, sBis) : 0) - luft, z0(x, y) + 0.01); }, pos = [];
   const P = (x, y, z) => pos.push(x, y, z), n = q.length;
   for (let i = 0; i < n; i++) { const [xa, ya] = q[i], [xb, yb] = q[(i + 1) % n];
     P(xa, ya, z0(xa, ya)); P(xb, yb, z0(xb, yb)); P(xb, yb, z1(xb, yb)); P(xa, ya, z0(xa, ya)); P(xb, yb, z1(xb, yb)); P(xa, ya, z1(xa, ya)); }
@@ -3380,12 +3387,12 @@ function starteQuetschWz() {
     if (!stirnQuetschPunkte(h).length) return status("Quetschfalte am Blechprofil: braucht eine Stirnlasche mit einer Biegung (Flansch an der Stirn) neben einer einfachen Wand – erst «Flansch» an der Stirnkante setzen.");
     quetschWz = { f: h, art: "stirn" }; zeigeKanten(); wkZeigen("Quetschfalte", `Ecke von «${h.name}» anklicken (blaue Punkte): dort treffen Stirnlasche und Wand zusammen – der Überschuss wird gefaltet.`, endeQuetschWz); return status("Quetschfalte: Ecke anklicken – Esc bricht ab.");
   }
-  if (h?.typ !== "flaeche" || h.versteckt) return status("Zuerst ein Flächenblech mit Flanschen an zwei Kanten (oder ein Blechprofil mit Stirnlasche) anklicken.");
+  if (h?.typ !== "flaeche" || h.versteckt) return starteBlechWahl("Quetschfalte", "Flächenblech mit Flanschen an zwei Kanten oder Blechprofil mit Stirnlasche", istBlechWahl, starteQuetschWz);
   quetschWz = { f: h, art: "quetsch" }; zeigeKanten(); wkZeigen("Quetschfalte", `Ecke des Flächenblechs «${h.name}» anklicken (blaue Punkte). Beide Nachbarkanten brauchen einen Flansch; Winkel und Höhe dürfen verschieden sein.`, endeQuetschWz); status("Quetschfalte: Ecke anklicken – Esc bricht ab.");
 }
 function starteEndeWz() {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
-  const h = hauptVon(auswahl); if (h?.typ !== "flaeche" || h.versteckt) return status("Zuerst ein Flächenblech mit Flansch anklicken.");
+  const h = hauptVon(auswahl); if (h?.typ !== "flaeche" || h.versteckt) return starteBlechWahl("Flanschende", "Flächenblech mit Flansch", (x) => x.typ === "flaeche" && istBlechWahl(x), starteEndeWz);
   quetschWz = { f: h, art: "ende" }; zeigeKanten(); wkZeigen("Flanschende", `Ecke des Flächenblechs «${h.name}» anklicken (blaue Punkte): dort lässt sich das Ende des Flansches an einer der beiden Kanten ändern – rechtwinklig, bündig zur Nachbarkante oder mit Winkel, verlängern oder kürzen.`, endeQuetschWz); status("Flanschende: Ecke anklicken – Esc bricht ab.");
 }
 // Ecken eines Blechprofils, an denen eine Quetschfalte möglich ist (Stirnlasche + Wand), mit Lage im Raum
@@ -7146,7 +7153,7 @@ $("wBiegesim").onclick = () => {
   if (dlg) $("dAbbrechen").click();
   const gewaehlt = hauptVon(auswahl), brauchbar = (x) => !x._aus && !x.versteckt && ((istProfil(x) && x._res?.schenkel?.length > 1) || (x.typ === "flaeche" && flaechenKanten(x).length));
   const f = gewaehlt && brauchbar(gewaehlt) ? gewaehlt : doc.features.find(brauchbar) || null;
-  if (!f) return status("Zuerst ein Blechprofil oder ein Flächenblech mit Kantenbaustein (Flansch, Umschlag …) erstellen oder im Browser wählen.");
+  if (!f) return status("Zuerst ein Blechprofil oder ein Flächenblech mit Kantenbaustein (Flansch, Umschlag …) erstellen.");
   waehle(f.id);
   if (f.typ === "flaeche") return biegenOeffnenQuellen(flaechenKanten(f), { staerke: material(f.material)?.t, titel: f.name, platte: 150 });
   biegenOeffnen(f._res, { staerke: material(f.material)?.t, laenge: laengeVon(f), titel: f.name });
