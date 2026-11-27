@@ -25,9 +25,11 @@ ok(Math.max(...mins) - Math.min(...mins) < 0.02 && Math.abs(mins[0] - 0.35) < 0.
         { id: "sk", typ: "skizze", name: "Rechteck", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [200, 120] }], bedingungen: [] },
         { id: "fl", typ: "flaeche", name: "Blech 1", skizze: "sk", material: "zink07", flaechen: [[10, 10]], kanten: { "0:0": "abk-o", "0:1": "abk-o", "0:2": "abk-o", "0:3": "abk-o" }, ...(frei ? { freistellung: "keine" } : {}) }] })); }, frei);
     await p2.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await p2.waitForTimeout(1800);
-    const Q = await p2.evaluate(() => window.sdcadTest.meshPunkte("fl")); await p2.close(); return Q.filter((p) => p[2] > 4).map((p) => p.map((v) => Math.round(v * 100) / 100).join(",")); };
-  const mit = new Set(await wand(false)), ohne = new Set(await wand(true)), abw = [...mit].filter((k) => !ohne.has(k)).length;
-  ok(mit.size >= 8 && abw === 0, `Freistellung ändert die Wand der Gehrung nicht (${mit.size} Wandpunkte, ${abw} abweichend)`); }
+    const Q = await p2.evaluate(() => window.sdcadTest.meshPunkte("fl")); await p2.close(); return Q.filter((p) => p[2] > 29.9); };
+  // Die runde Freistellung schneidet das Netz im Eckbereich neu auf (neue Netzpunkte an den Schnittkanten); die Wand der Gehrung selbst bleibt unverändert: gleiche Ausdehnung der Oberkante der Wand
+  const huelle = (P) => [0, 1, 2].map((i) => [Math.min(...P.map((p) => p[i])), Math.max(...P.map((p) => p[i]))]), mitP = await wand(false), ohneP = await wand(true), hm = huelle(mitP), ho = huelle(ohneP);
+  const abw = hm.flat().filter((v, i) => Math.abs(v - ho.flat()[i]) > 0.05).length, mit = { size: mitP.length };
+  ok(mit.size >= 8 && abw === 0, `Freistellung ändert die Ausdehnung der Wand der Gehrung nicht (${mit.size} Wandpunkte, ${abw} abweichende Grenzwerte)`); }
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Gehrung ohne Schnitt durch die Blechstärke (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

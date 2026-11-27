@@ -274,6 +274,21 @@
       "tests": [
         "blechregister"
       ]
+    },
+    {
+      "muster": "kern/flaechenblech",
+      "tests": [
+        "teilstueck",
+        "quetschfalte",
+        "gehrung"
+      ]
+    },
+    {
+      "muster": "kern/cad/featureBau",
+      "tests": [
+        "teilstueck",
+        "pruefen"
+      ]
     }
   ]
 }

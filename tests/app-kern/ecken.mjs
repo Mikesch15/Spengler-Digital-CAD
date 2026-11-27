@@ -28,7 +28,7 @@ const lauf2 = async (art) => { const s2 = await b.newPage({ viewport: { width: 1
   await s2.addInitScript((e) => { localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] }));
     localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 20, features: [
       { id: "sk", typ: "skizze", name: "Rechteck", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [200, 120] }], bedingungen: [] },
-      { id: "fl", typ: "flaeche", name: "Blech 1", skizze: "sk", material: "zink07", flaechen: [[10, 10]], kanten: { "0:0": "ortgang", "0:3": "ortgang" }, eckEntl: e, eckEntlMass: 3 }] })); }, art);
+      { id: "fl", typ: "flaeche", name: "Blech 1", skizze: "sk", material: "zink07", flaechen: [[10, 10]], kanten: { "0:0": "ortgang", "0:3": "ortgang" }, eckEntl: e, eckEntlMass: 3, freistellung: "keine" }] })); }, art);
   await s2.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s2.waitForTimeout(1500);
   const r = await s2.evaluate(() => ({ v: window.sdcadTest.koerper().filter((k) => String(k.fid).startsWith("fl")).reduce((a, k) => a + Math.abs(k.volumen), 0), l: window.sdcadTest.quetschAbw("fl")?.loecher, fehl: window.sdcadTest.dok().features.map((f) => f.id + ":" + (f._fehler || "")).filter((x) => !x.endsWith(":")) })); await s2.close(); return r; };
 const e0 = await lauf2("keine"), e1 = await lauf2("rund"), e2 = await lauf2("quadrat");

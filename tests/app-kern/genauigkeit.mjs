@@ -18,7 +18,7 @@ const lauf = async (kern) => {
   await s.goto("http://localhost:" + (process.env.PORT || 8793) + "/index.html?test");
   if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern/.test(document.getElementById("status").textContent), null, { timeout: 90000 }); else await s.waitForTimeout(1500);
   await s.waitForTimeout(500);
-  const z = await s.evaluate(() => Object.fromEntries([...document.querySelectorAll("#baum li[data-id]")].map((li) => [li.dataset.id, li.querySelector(".gen")?.className || "", li.querySelector(".gen")?.title || ""]).map(([i, c, t]) => [i, { klasse: c, titel: t }])));
+  const z = await s.evaluate(() => Object.fromEntries([...document.querySelectorAll("#baum li[data-id]")].map((li) => [li.dataset.id, li.querySelector(".gen")?.className || "", li.querySelector(".gen")?.dataset.hinweis || ""]).map(([i, c, t]) => [i, { klasse: c, titel: t }])));
   return { z, pr, s };
 };
 {
