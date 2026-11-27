@@ -227,6 +227,7 @@ export function gehrungEcken(gruppen, profile, opt, t, s = 1, volleEcken = []) {
     const kv = (k - 1 + n) % n, gk = gruppen[k], gv = gruppen[kv], pk = profile[k], pv = profile[kv];
     if (kv === k || !gk.gerade || !gv.gerade || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
     if (!reichtBisAnfang(pk) || !reichtBisEnde(pv)) continue; // Teilstück: der Baustein erreicht die Ecke nicht
+    if (flachProfil(pk) || flachProfil(pv)) continue; // flacher Falz/Saum an einer der Kanten: keine Innenwand, die Enden bleiben rechtwinklig (wie in quadratEcken) – sonst schneidet die Gehrungsebene das flache Profil weit über die Platte hinaus (Spitze)
     const V0 = gk.punkte[0], dn = richtung(V0, gk.punkte[1]), dp = richtung(V0, gv.punkte.at(-2));
     if (!(knick(dn, dp) > 0)) continue; // nur Aussenecken
     const WA = innenWand(pv), WB = innenWand(pk), fa = WA ? { xf: WA.f[0], yf: WA.f[1], r: WA.w[0] / WA.w[1] } : { xf: innenX(pv), yf: 0, r: 0 }, fb = WB ? { xf: WB.f[0], yf: WB.f[1], r: WB.w[0] / WB.w[1] } : { xf: innenX(pk), yf: 0, r: 0 };
