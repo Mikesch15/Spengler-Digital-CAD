@@ -2798,7 +2798,7 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
         }
         continue;
       }
-      const geo = prisma(k2, L, k0, k1, e0, e1, i > 1 ? 0 : ek[k].ky0 || 0, i < pk2.length - 1 ? 0 : ek[k].ky1 || 0, i > 1 ? 0 : ek[k].fr0 || 0, i < pk2.length - 1 ? 0 : ek[k].fr1 || 0, i === 1 && gehrung.has(k) ? gehrungLokal(gehrung.get(k), a, d, seite, bl.opt?.kuerzen?.[`${k}:start`] || 0, true) : null, i === pk2.length - 1 && gehrung.has((k + 1) % n) ? gehrungLokal(gehrung.get((k + 1) % n), a, d, seite, bl.opt?.kuerzen?.[`${k}:ende`] || 0, false) : null);
+      const geo = prisma(k2, L, k0, k1, e0, e1, i > 1 ? 0 : ek[k].ky0 || 0, i < pk2.length - 1 ? 0 : ek[k].ky1 || 0, i > 1 ? 0 : ek[k].fr0 || 0, i < pk2.length - 1 ? 0 : ek[k].fr1 || 0, i === 1 && gehrung.has(k) ? gehrungLokal(gehrung.get(k), a, d, seite, 0, true) : null, i === pk2.length - 1 && gehrung.has((k + 1) % n) ? gehrungLokal(gehrung.get((k + 1) % n), a, d, seite, 0, false) : null);
       geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
       geo.applyMatrix4(B); geos.push(nachAussen(geo)); // Basis kann gespiegelt sein: Dreiecke wieder nach aussen
     }

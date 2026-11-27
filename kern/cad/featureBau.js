@@ -122,9 +122,9 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
       // Gehrung (siehe kern/flaechenblech.js gehrungEcken): im Biegebereich oder – an Ecken mit Quetschfalte – über die ganze Höhe
       const gehr = [], hr = [{ punkt: [0, 0, e0], normale: [-k0, -ky0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, -ky1, 1] }];
       let zlo = z0, zhi = z1; const ebenenWerte = (gl) => ecken.map(([x, y]) => gl.z0 + gl.zx * x + gl.zy * y);
-      if (i === 1 && ecke.has(k)) { const gl = gehrungLokal(ecke.get(k), a, d, s, bl.opt?.kuerzen?.[`${k}:start`] || 0, true);
+      if (i === 1 && ecke.has(k)) { const gl = gehrungLokal(ecke.get(k), a, d, s, 0, true);
         if (gl) { const eb = { punkt: [0, 0, gl.z0], normale: [gl.zx, gl.zy, -1] }; if (gl.voll) { hr[0] = eb; zlo = Math.min(zlo, Math.min(...ebenenWerte(gl)) - 1); } else gehr.push({ ...eb, H: gl.H, ersetzt: 0 }); } }
-      if (i === pk2.length - 1 && ecke.has((k + 1) % nE)) { const gl = gehrungLokal(ecke.get((k + 1) % nE), a, d, s, bl.opt?.kuerzen?.[`${k}:ende`] || 0, false);
+      if (i === pk2.length - 1 && ecke.has((k + 1) % nE)) { const gl = gehrungLokal(ecke.get((k + 1) % nE), a, d, s, 0, false);
         if (gl) { const eb = { punkt: [0, 0, gl.z0], normale: [-gl.zx, -gl.zy, 1] }; if (gl.voll) { hr[1] = eb; zhi = Math.max(zhi, Math.max(...ebenenWerte(gl)) + 1); } else gehr.push({ ...eb, H: gl.H, ersetzt: 1 }); } }
       plan.prismen.push({
         extrusion: { op: "extrusion", profil: bq.profil, ebene: { ursprung: [0, 0, zlo], x: [1, 0, 0], n: [0, 0, 1] }, hoehe: zhi - zlo },
