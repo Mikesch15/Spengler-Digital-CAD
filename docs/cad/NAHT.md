@@ -11,3 +11,9 @@
 
 ## Ablauf des Werkzeugs (seit 27.11.2026)
 Vier Schritte: Blech A anklicken (Ansicht oder Browser) → Kante an Blech A → Blech B → Kante an Blech B. In den Kantenschritten sind nur die Kanten des gewählten Blechs wählbar (blau, die schon gewählte Kante A orange). Danach öffnet sich das Naht-Fenster. Länge der Naht: ganze Kante oder Teilstück (von/bis ab Anfang Kante A, für Blech B als Anteil in Gegenrichtung).
+
+## Nähte an nicht parallelen Blechen (Punktnaht)
+`nahtWinkelAuto` (App) bestimmt den Winkel zwischen den Blechen aus `nahtKante(...).inn/normale` (Richtung in das Blech hinein, Blechnormale; sitzt an der Kante ein Flansch, gelten Richtung und Normale an seinem Ende). Ist er grösser als 2°, legt `nahtFolgen(n, m, winkel)` die Fahne des abgekanteten Blechs um diesen Winkel um; das Blech endet um `t / sin γ` früher (γ = 180° − |θ|), so liegt die Fahne mit der Unterseite auf dem anderen Blech (keine Durchdringung). Der Winkel wird nach der Naht-Rechnung gespeichert (`f._winkel`); ändert er sich, rechnet `regen()` einmal nach. Falz im Winkel und Flanschseitenkanten (Gehrung) sind noch nicht wählbar.
+
+## Durchdringungsschutz (exakter Kern)
+`exaktesModell()` schneidet nach dem Aufbau jedes später angelegte Blechteil um den Überschnitt mit früheren Blechteilen zurück (`boolesch schneiden` → Volumen > 0,02 mm³ → `abziehen`); die Statusleiste nennt die Anzahl. Teile mit Komponentenverschiebung werden nicht verglichen. Test: `tests/app-kern/durchdringung.mjs`.

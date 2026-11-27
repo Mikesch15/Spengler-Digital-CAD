@@ -2943,7 +2943,7 @@ function teilKanten(f) {
   }
   return t;
 }
-function berechneKanten(f) {
+function berechneKanten(f, ohneNaht = false) {
   const m = material(f.material), k = { ...(f.kantenBasis || {}) };
   for (const x of doc.features) {
     if (x.typ !== "kante" || x.ziel !== f.id || x._aus || !x.wert) continue;
@@ -2952,7 +2952,7 @@ function berechneKanten(f) {
     else k[x.key] = x.wert;
   }
   for (const x of doc.features) { // Verbindungsnähte (Überlappung / Falz): Abkantfolge zusätzlich an die gewählte Kante – auch auf einem schon vorhandenen Flansch
-    if (x.typ !== "naht" || x._aus) continue;
+    if (x.typ !== "naht" || x._aus || ohneNaht) continue;
     for (const seite of ["a", "b"]) {
       const s = x[seite]; if (s?.ziel !== f.id || !s.key) continue;
       const nf = nahtFolgen(x, m, x._winkel || null)[seite]; // Winkel zwischen den Blechen: Wert der letzten Naht-Rechnung (siehe Zweig «naht») if (!nf) continue;
@@ -3557,18 +3557,23 @@ function nahtKante(s) {
     const E = E_(sk.ebene), LM = lageVon(f), sg = f.sichtseite === -1 ? -1 : 1, pk = g.punkte.map((p) => { const v = V(zuWelt(blechEbene(sk.ebene, f, material(f.material)), p)); return LM ? v.applyMatrix4(LM) : v; });
     const n = V(E.n).multiplyScalar(sg); if (LM) n.transformDirection(LM);
     const dE = pk.at(-1).clone().sub(pk[0]).normalize(), nE = V(E.n); if (LM) nE.transformDirection(LM); const inn = nE.clone().cross(dE).normalize(); // Richtung in die Blechfläche hinein (Umriss gegen den Uhrzeigersinn: links der Kante)
-    return { punkte: pk, normale: n, inn, f, name: `${f.name} · ${kantenName(f, s.key)}` };
+    let innEnde = inn, nEnde = n; // sitzt schon ein Flansch an der Kante, setzt die Naht an seinem Ende an: Richtung in den Flansch hinein (rückwärts entlang des letzten Schenkels)
+    let lin = null, nb = 0; try { const kb = berechneKanten(f, true)[s.key], pr = kb ? bausteinProfil(werkzeugAuf(bausteinFuer(kb), material(f.material)), material(f.material)) : null; lin = pr?.res?.pfad?.filter((e) => e.typ === "linie").at(-1); nb = pr?.biegungen?.length || 0; } catch { /* ohne Flansch */ } // Flansch ohne die Naht selbst
+    if (lin && nb) { const dx = lin.p2[0] - lin.p1[0], dy = lin.p2[1] - lin.p1[1], l = Math.hypot(dx, dy) || 1; innEnde = inn.clone().multiplyScalar(dx / l).sub(n.clone().multiplyScalar(dy / l)).normalize(); nEnde = inn.clone().multiplyScalar(dy / l).add(n.clone().multiplyScalar(dx / l)).normalize(); /* Blechnormale am Ende des Flansches */ /* Fortsetzung c = dx·(−inn) + dy·n zeigt nach aussen, in den Flansch hinein: −c */ }
+    return { punkte: pk, normale: nEnde, inn: innEnde, f, name: `${f.name} · ${kantenName(f, s.key)}` };
   }
   if (f.typ === "rundblech" && (s.key === "N0" || s.key === "N1") && !f._fehler) { // Längsnaht am Rohr/Kegel: Rand der Abwicklung bei Winkel 0 bzw. Endwinkel
     const E = E_(f.ebene), M = new THREE.Matrix4().makeBasis(V(E.v), V(E.n), V(E.u)).setPosition(V(E.o)), phi = (Math.min(360, f.winkel || 360) * Math.PI) / 180, w = s.key === "N1" ? phi : 0, r1 = f.d1 / 2, r2 = (f.art === "zylinder" ? f.d1 : f.d2) / 2;
     const p = (r, h) => new THREE.Vector3(r * Math.sin(w), h, r * Math.cos(w)).applyMatrix4(M), n = new THREE.Vector3(Math.sin(w), 0, Math.cos(w)).transformDirection(M), LM = lageVon(f);
     const pk = [p(r1, 0), p(r2, f.h)]; if (LM) { pk.forEach((v) => v.applyMatrix4(LM)); n.transformDirection(LM); }
-    return { punkte: pk, normale: n, f, name: `${f.name} · Längsnaht ${s.key === "N1" ? "Ende" : "Anfang"}` };
+    const inn = new THREE.Vector3(Math.cos(w) * (s.key === "N1" ? -1 : 1), 0, -Math.sin(w) * (s.key === "N1" ? -1 : 1)).transformDirection(M); if (LM) inn.transformDirection(LM); // tangential in den Mantel hinein
+    return { punkte: pk, normale: n, inn, f, name: `${f.name} · Längsnaht ${s.key === "N1" ? "Ende" : "Anfang"}` };
   }
   if (istProfil(f) && (s.key === "A" || s.key === "B")) {
     const e = profilKanten(f).find((x) => x.key === s.key), kl = f._kernLage, el = f._res?.pfad; if (!e || !kl || !el?.length) return null;
     const seg = s.key === "A" ? el[0] : el.at(-1), d = [seg.p2[0] - seg.p1[0], seg.p2[1] - seg.p1[1]], l = Math.hypot(...d) || 1, M = basis(kl.ebene), n = new THREE.Vector3(-d[1] / l, d[0] / l, 0).transformDirection(M);
-    return { punkte: [e.p[0].clone(), e.p[1].clone()], normale: n, f, name: `${f.name} · Kante ${s.key}` };
+    const inn = new THREE.Vector3((s.key === "A" ? d[0] : -d[0]) / l, (s.key === "A" ? d[1] : -d[1]) / l, 0).transformDirection(M); // in den Blechkörper hinein
+    return { punkte: [e.p[0].clone(), e.p[1].clone()], normale: n, inn, f, name: `${f.name} · Kante ${s.key}` };
   }
   return null;
 }
