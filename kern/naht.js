@@ -58,7 +58,8 @@ export function nahtFolgen(n, m, winkel = null) { // winkel: { a, b } Winkel zwi
     let ok = false; try { bausteinProfil({ name: "x", folge: hakenFolge(vA, hemL), versatz: 0 }, mm); ok = true; } catch { /* Anlauf zu kurz */ }
     if (!ok) { hemL = Math.max(1.6 * t + 0.6, g.hem - vA); vA = 0; } // Rücken an der Blechkante, Hakenende bleibt an derselben Stelle
   }
-  return kopf({ abg: { folge: hemB, versatz: -fuss }, flach: { folge: (vA > 1e-6 ? `0 ${zahl(vA)} ` : "") + `U${s > 0 ? "+" : "-"}r${zahl(g.rA)} ${zahl(hemL)}`, versatz: Math.min(0, vA) } }); // Rücken des Hakens relativ zur Blechkante: nach aussen (> 0) als gerader Anlauf, damit die Fläche bis zum Haken reicht (kein Spalt)
+  const th = winkel ? (absB ? winkel.b : winkel.a) : 0, lead = Math.max(2, 2 * t + g.kr.tang), prefix = Math.abs(th) > 2 ? `${zahl(Math.max(-170, Math.min(170, th)))} ${zahl(lead)} ` : ''; // Bleche nicht in einer Ebene: das abgesetzte Blech wird erst um den Winkel zwischen den Blechen umgelegt, danach greift der Falz wie bei parallelen Blechen
+  return kopf({ abg: { folge: prefix + hemB, versatz: -fuss }, flach: { folge: (vA > 1e-6 ? `0 ${zahl(vA)} ` : "") + `U${s > 0 ? "+" : "-"}r${zahl(g.rA)} ${zahl(hemL)}`, versatz: Math.min(0, vA) } }); // Rücken des Hakens relativ zur Blechkante: nach aussen (> 0) als gerader Anlauf, damit die Fläche bis zum Haken reicht (kein Spalt)
 }
 
 // Raupenmasse: Breite etwa 2 t, Höhe etwa t (mindestens 1.2 / 0.6 mm)
