@@ -3570,29 +3570,50 @@ function nahtRaupe(f) {
   const arr = raupenNetz(pts, e.normale.clone().multiplyScalar(sg).toArray(), f.art, b, h), geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(arr, 3)); geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0x7d8288, metalness: 0.5, roughness: 0.45, side: THREE.DoubleSide })); mesh.userData.fid = f.id; mesh.userData.naht = true; return mesh;
 }
-let nahtWz = null; // { schritt: "a" | "b", a: { ziel, key } | null, kand }
+let nahtWz = null; // { schritt: "blechA" | "kanteA" | "blechB" | "kanteB", blech: Blech-ID der aktuellen Seite, a: { ziel, key } | null }
+const NAHT_TEXT = {
+  blechA: "Schritt 1 von 4: Blech A anklicken (in der Ansicht oder im Browser).", kanteA: "Schritt 2 von 4: die Kante an Blech A anklicken (blaue Linien).",
+  blechB: "Schritt 3 von 4: Blech B anklicken (in der Ansicht oder im Browser).", kanteB: "Schritt 4 von 4: die Kante an Blech B anklicken (blaue Linien).",
+};
+function nahtSchritt(schritt, blech = null) { // zeigt den Schritt an; bei «blech…» nimmt auch der Browser eine Blechwahl entgegen
+  nahtWz = { ...nahtWz, schritt, blech }; const bl = blech ? finde(blech) : null;
+  wkZeigen("Naht", NAHT_TEXT[schritt] + (bl ? ` (Blech «${bl.name}»)` : "") + " – Esc bricht ab.", endeNahtWz); status("Naht: " + NAHT_TEXT[schritt].replace(/^Schritt \d von 4: /, ""));
+  blechWahl = schritt.startsWith("blech") ? { filter: (h) => nahtKandidaten().some((k) => k.ziel === h.id), weiter: (h) => nahtBlechGewaehlt(h.id) } : null; zeigeKanten();
+}
+function nahtBlechGewaehlt(id) {
+  if (!nahtWz || !nahtWz.schritt.startsWith("blech")) return;
+  nahtSchritt(nahtWz.schritt === "blechA" ? "kanteA" : "kanteB", id); waehle(id);
+}
 function starteNahtWz() {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
   if (!nahtKandidaten().length) return fehltDialog("Naht", "Keine Bleche mit wählbaren Kanten vorhanden – zuerst ein Flächenblech oder Blechprofil anlegen.");
-  nahtWz = { schritt: "a", a: null }; zeigeKanten(); wkZeigen("Naht", "Schritt 1: Kante an Blech A anklicken (blaue Linien). Dann Schritt 2: Kante an Blech B.", endeNahtWz); status("Naht: Kante an Blech A anklicken – Esc bricht ab.");
+  nahtWz = { a: null }; nahtSchritt("blechA");
 }
-function endeNahtWz() { nahtWz = null; wkZu(); zeigeKanten(); }
+function endeNahtWz() { nahtWz = null; blechWahl = null; wkZu(); zeigeKanten(); }
+// Kanten, die im aktuellen Schritt wählbar sind: nur die des gewählten Blechs (Schritt «kante…»), sonst keine
+const nahtWaehlbar = () => (nahtWz?.schritt === "kanteA" || nahtWz?.schritt === "kanteB" ? nahtKandidaten().filter((k) => k.ziel === nahtWz.blech && !(nahtWz.a && nahtWz.a.ziel === k.ziel && nahtWz.a.key === k.key)) : []);
 function zeigeNahtKanten() {
+  const gewaehlt = (k) => nahtWz?.a && nahtWz.a.ziel === k.ziel && nahtWz.a.key === k.key;
+  const frei = new Set(nahtWaehlbar().map((k) => k.ziel + "|" + k.key));
   for (const k of nahtKandidaten()) {
-    const gewaehlt = nahtWz?.a && nahtWz.a.ziel === k.ziel && nahtWz.a.key === k.key;
-    kantenZeiger.add(Object.assign(dickeLinie(k.punkte, gewaehlt ? 0x1d8fff : 0x1f5fbf, gewaehlt ? 4 : 2, 13), { userData: { dicke: true } }));
+    if (!frei.has(k.ziel + "|" + k.key) && !gewaehlt(k)) continue; // in den Blechschritten keine Kanten, im Kantenschritt nur die des gewählten Blechs
+    kantenZeiger.add(Object.assign(dickeLinie(k.punkte, gewaehlt(k) ? 0xff8a00 : 0x1d8fff, gewaehlt(k) ? 4 : 3, 13), { userData: { dicke: true } }));
   }
 }
 function nahtKlick(e) {
-  const sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 30 : 16;
-  for (const k of nahtKandidaten()) {
-    if (nahtWz.a && nahtWz.a.ziel === k.ziel && nahtWz.a.key === k.key) continue;
-    for (let i = 1; i < k.punkte.length; i++) { const A = aufSchirm(k.punkte[i - 1].toArray()), B = aufSchirm(k.punkte[i].toArray()); if (A[2] > 1 || B[2] > 1) continue; const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = k; } }
+  const w = nahtWz;
+  if (w.schritt.startsWith("blech")) { // Blech in der Ansicht anklicken
+    strahl.setFromCamera(ndc(e), kamera);
+    const t = strahl.intersectObjects(modell.children.filter((o) => o.isMesh), false)[0], h = t ? hauptVon(t.object.userData.fid) : null;
+    if (!h || !nahtKandidaten().some((k) => k.ziel === h.id)) { status("Hier ist kein Blech mit Kanten – " + NAHT_TEXT[w.schritt]); return true; }
+    nahtBlechGewaehlt(h.id); return true;
   }
-  if (!best) { status("Eine Kante anklicken (blaue Linien)."); return true; }
-  if (nahtWz.schritt === "a") { nahtWz = { schritt: "b", a: { ziel: best.ziel, key: best.key } }; wkZeigen("Naht", `Blech A: ${best.name}. Schritt 2: Kante an Blech B anklicken.`, endeNahtWz); zeigeKanten(); status("Naht: Kante an Blech B anklicken."); return true; }
+  const sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 30 : 16;
+  for (const k of nahtWaehlbar()) for (let i = 1; i < k.punkte.length; i++) { const A = aufSchirm(k.punkte[i - 1].toArray()), B = aufSchirm(k.punkte[i].toArray()); if (A[2] > 1 || B[2] > 1) continue; const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = k; } }
+  if (!best) { status("Eine Kante des gewählten Blechs anklicken (blaue Linien) – " + NAHT_TEXT[w.schritt]); return true; }
+  if (w.schritt === "kanteA") { nahtWz.a = { ziel: best.ziel, key: best.key }; nahtSchritt("blechB"); return true; }
   const a = nahtWz.a, n = { id: neueId(), typ: "naht", name: `Naht ${doc.features.filter((x) => x.typ === "naht").length + 1}`, a, b: { ziel: best.ziel, key: best.key }, ...nahtStandard("punkt") };
-  nahtWz = null; wkZu(); einfuegen(n); regen(); zeigeKanten(); waehle(n.id); nahtDialog(n); status(n._fehler ? "⚠ " + n._fehler : "Naht angelegt – Art und Richtung im Fenster einstellen."); return true;
+  endeNahtWz(); einfuegen(n); regen(); zeigeKanten(); waehle(n.id); nahtDialog(n); status(n._fehler ? "⚠ " + n._fehler : "Naht angelegt – Art und Richtung im Fenster einstellen."); return true;
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && nahtWz && !dlg && !skizze) { endeNahtWz(); status(""); } });
 // Längsnaht am Rohr/Kegel: Zugabe in der Abwicklung (Summe der Abkantzugaben beider Seiten) und Überlappungsstreifen im Modell

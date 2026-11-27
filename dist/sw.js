@@ -10,7 +10,7 @@
 //  • Grosse Dateien (CAD-Kern als WebAssembly, STEP-Leser, PDF-Leser, Hilfebilder) werden nach dem Start nachgeladen; die Seite erfährt, ob der
 //    Offline-Betrieb vollständig ist.
 //  • Online gilt weiter «Netz zuerst» (GitHub Pages erlaubt sonst bis zu 10 Minuten HTTP-Zwischenspeicher).
-const VERSION = "0.2.0-315cc79a";
+const VERSION = "0.2.0-831ffd21";
 const CACHE = "sdcad-" + VERSION;
 const KRITISCH = ["./","index.html","manifest.webmanifest","icon-192.png","icon-512.png","logo.png","startbanner.jpg","cad/cad-worker.js"];
 const GROSS = ["cad/replicad_single.wasm","occt/occt-import-js.js","occt/occt-import-js.wasm","pdfjs/pdf.min.mjs","pdfjs/pdf.worker.min.mjs","startbanner.svg","hilfe/sim-01-reiter.jpg","hilfe/sim-02-fenster-oben.jpg","hilfe/sim-03-lager-formular.jpg","hilfe/sim-04-lager-gesetzt.jpg","hilfe/sim-05-last-formular.jpg","hilfe/sim-06-last-gesetzt.jpg","hilfe/sim-07-spannung.jpg","hilfe/sim-08-verschiebung.jpg","hilfe/sim-09-ergebnisfenster.jpg","hilfe/sim-10-normlast-formular.jpg","hilfe/sim-11-kombinationen.jpg","hilfe/sim-12-bericht.jpg"];

@@ -8,3 +8,6 @@
 - **Schweiss-/Ecknaht:** nur Darstellung (Raupe als Netz, `raupenNetz`), die Bleche ändern sich nicht.
 - Wirkung über `berechneKanten` (Flächenblech, hängt an einen vorhandenen Flansch an) und `profilErweiterungen` (Blechprofil, Kante A/B). Rohr/Kegel: Längsnaht «N0/N1» → Zugabe in der Abwicklung (`rundNahtZugabe`) und Überlappungsstreifen im Modell.
 - Grenzen: Die Rücksetzung gilt nur beim Flächenblech; an Blechprofilen (Kante A/B) und Rohren/Kegeln ist sie nicht umgesetzt (Kollisionsfreiheit dort ungeprüft). Rohr-Falz im Modell nur als Überlappungsstreifen; Stirnkanten von Blechprofilen noch nicht wählbar. Die Falz-Haken wurden im Querschnitt geprüft, nicht im 3D-Bild.
+
+## Ablauf des Werkzeugs (seit 27.11.2026)
+Vier Schritte: Blech A anklicken (Ansicht oder Browser) → Kante an Blech A → Blech B → Kante an Blech B. In den Kantenschritten sind nur die Kanten des gewählten Blechs wählbar (blau, die schon gewählte Kante A orange). Danach öffnet sich das Naht-Fenster. Länge der Naht: ganze Kante oder Teilstück (von/bis ab Anfang Kante A, für Blech B als Anteil in Gegenrichtung).
