@@ -3392,9 +3392,9 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
         const sh = new THREE.Shape(); sh.moveTo(K[0] + Ro * Math.cos(a0), K[1] + Ro * Math.sin(a0)); sh.absarc(K[0], K[1], Ro, a0, a1, cw);
         sh.lineTo(K[0] + Ri * Math.cos(a1), K[1] + Ri * Math.sin(a1)); sh.absarc(K[0], K[1], Ri, a1, a0, !cw); sh.closePath();
         const geoR = new THREE.ExtrudeGeometry(sh, { depth: P.length(), bevelEnabled: false, curveSegments: 16 });
-        const lageR = new THREE.Matrix4().makeBasis(ayV, n, uV), dC = C.clone().normalize(), mV = uV.clone().sub(dC), mitre = (gq) => { // Gehrung an der Ecke O: Anfangsfläche liegt in der Ebene durch O, die den Winkel zwischen Ecklinie und Faltkante halbiert (kein Überstand über die Dreiecksspitze)
+        const lageR = new THREE.Matrix4().makeBasis(ayV, n, uV), dC = C.clone().normalize(), mV = uV.clone().sub(dC), xd = (r / Math.max(0.05, Math.sqrt(Math.max(0, 1 - uV.dot(dC) ** 2)))) * uV.dot(mV.clone().normalize()), mitre = (gq) => { // Gehrungsebene durch den Schnittpunkt der Achsen von Wulst und Ecklinie // Gehrung an der Ecke O: Anfangsfläche liegt in der Ebene durch O, die den Winkel zwischen Ecklinie und Faltkante halbiert (kein Überstand über die Dreiecksspitze)
           if (mV.length() < 1e-6) return; mV.normalize(); const ps = gq.attributes.position, w = new THREE.Vector3(), den = uV.dot(mV); if (Math.abs(den) < 1e-6) return;
-          for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.dot(mV); if (d < 0) { w.addScaledVector(uV, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; },
+          for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.dot(mV) - xd; if (d < 0) { w.addScaledVector(uV, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; },
         dazu = (shape) => { const gq = new THREE.ExtrudeGeometry(shape, { depth: P.length(), bevelEnabled: false, curveSegments: 16 }); gq.applyMatrix4(lageR); mitre(gq); gq.applyMatrix4(M); biegeTeile.push(koerperAusGeo(gq, farbe, fid)); };
         geoR.applyMatrix4(lageR); mitre(geoR); geoR.applyMatrix4(M); biegeStueck = koerperAusGeo(geoR, farbe, fid);
         // Ende von Flansch B: Gehrungsschnitt durch die Innenkante der Ecklinie – von dort läuft das Blech gerade bis zum Beginn der Biegung
@@ -3414,7 +3414,7 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
     cyl.translate(mitte.x, mitte.y, t); // Mitte der beiden Lagen (Dicke 2 t)
     if (fold) { // Gehrung an der Ecke O: gleiche Ebene wie bei der 90°-Biegung (halbiert den Winkel zwischen Ecklinie und Faltkante); der Überstand wird entlang der Faltkante auf die Ebene gezogen
       cyl.applyMatrix4(aussen); const uR = P.clone().normalize(), dR = C.clone().normalize(), mR = uR.clone().sub(dR);
-      if (mR.length() > 1e-6) { mR.normalize(); const ps = cyl.attributes.position, w = new THREE.Vector3(), den = dR.dot(mR); if (Math.abs(den) > 1e-6) { for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.dot(mR); if (d > 0) { w.addScaledVector(dR, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; } }
+      if (mR.length() > 1e-6) { mR.normalize(); const ps = cyl.attributes.position, w = new THREE.Vector3(), den = dR.dot(mR), xr = (r / Math.max(0.05, Math.sqrt(Math.max(0, 1 - uR.dot(dR) ** 2)))) * uR.dot(mR); if (Math.abs(den) > 1e-6) { for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.dot(mR) - xr; if (d > 0) { w.addScaledVector(dR, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; } }
       cyl.applyMatrix4(M); meshes.push(koerperAusGeo(cyl, farbe, fid)); continue;
     }
     meshes.push(mk(cyl, aussen));
