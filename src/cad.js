@@ -1570,11 +1570,12 @@ function regen() {
         for (const o of modell.children.filter((o) => o.isMesh && String(o.userData.fid).startsWith(z.id + ":"))) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); }
         flachStand.delete(z.id);
         z._bleche.forEach((bl, i) => {
-          bl.abw.loecher = [...(bl._eckLoecher || []), ...st.schnitte.filter((l) => boxUeberlappt(l, bl.abw.umriss))];
+          bl.abw.loecher = st.schnitte.filter((l) => boxUeberlappt(l, bl.abw.umriss));
           if (z.versteckt) return;
           const eb = blechEbene(s0.ebene, z, m), teile = flaechenKoerper(bl, eb, m, seite, `${z.id}:${i}`, darstellungVon(z, m));
           let hinweis = null; if (bl.abw.loecher.length) try { schneideAus(teile, bl, bl.abw.loecher, eb, m, seite); } catch (e) { hinweis = e.message; }
           teile.forEach((o) => modell.add(o)); if (hinweis) f._fehler = hinweis;
+          if ((z.eckEntl && z.eckEntl !== "keine") || (z.freistellung !== "keine" && (z.ecken || "gehrung") === "gehrung")) eckenEntlastung(z, bl, m, s0); // Eckfreistellung wie im Grundkörper (schneidet das gefaltete Blech, Loch steht wieder in der Abwicklung)
         });
       } else if (f.typ === "rundblech") { // Zylinder-/Kegelmantel: exakte Abwicklung (kern/abwicklungRund.js), 3D als Drehkörper
         const m = material(f.material), kegel = f.art !== "zylinder";
