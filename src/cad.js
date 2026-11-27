@@ -1522,7 +1522,7 @@ function regenEinmal() {
         if (!nahtKante(f.b)) throw new Error("Die Kante an Blech B gibt es nicht mehr – Naht neu setzen");
         { const wn = nahtWinkelAuto(f); if (JSON.stringify(wn) !== JSON.stringify(f._winkel ?? null)) { f._winkel = wn; nahtWinkelGeaendert = true; } }
         if ((f.art === "schweiss" || f.art === "ecke") && !f.versteckt) { const o = nahtRaupe(f); if (o) modell.add(o); }
-        f._fahne = null; { const fd = nahtFahneDaten(f); if (fd) { f._fahne = fd; if (!f.versteckt) modell.add(nahtFahneMesh(f, fd)); nahtFahneAbwicklung(f, fd); } }
+        f._fahne = null; { const fd = nahtFahneDaten(f); if (fd) { f._fahne = fd; if (!f.versteckt && !flachStand.has(fd.host)) modell.add(nahtFahneMesh(f, fd)); nahtFahneAbwicklung(f, fd); } }
       } else if (f.typ === "stirnquetsch") { // Quetschfalte an der Ecke Stirnlasche + Wand eines Blechprofils (Rechnung beim Profil: stirnBerechnen)
         const z = finde(f.ziel); if (!z || !istProfil(z)) throw new Error("Das Blechprofil fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Blechprofil muss vor diesem Schritt stehen");
@@ -1582,6 +1582,7 @@ function regenEinmal() {
           const eb = blechEbene(s0.ebene, z, m), teile = flaechenKoerper(bl, eb, m, seite, `${z.id}:${i}`, darstellungVon(z, m));
           let hinweis = null; if (bl.abw.loecher.length) try { schneideAus(teile, bl, bl.abw.loecher, eb, m, seite); } catch (e) { hinweis = e.message; }
           teile.forEach((o) => modell.add(o)); if (hinweis) f._fehler = hinweis;
+          for (const nx of doc.features) if (nx.typ === "naht" && !nx._aus && !nx.versteckt && nx._fahne && nx._fahne.host === z.id && String(nx._fahne.hostFid) === `${z.id}:${i}`) modell.add(nahtFahneMesh(nx, nx._fahne)); // Nahtfahnen bleiben im gefalteten Blech erhalten
           if ((z.eckEntl && z.eckEntl !== "keine") || (z.freistellung !== "keine" && (z.ecken || "gehrung") === "gehrung")) eckenEntlastung(z, bl, m, s0); // Eckfreistellung wie im Grundkörper (schneidet das gefaltete Blech, Loch steht wieder in der Abwicklung)
         });
       } else if (f.typ === "rundblech") { // Zylinder-/Kegelmantel: exakte Abwicklung (kern/abwicklungRund.js), 3D als Drehkörper
@@ -3554,19 +3555,37 @@ function stirnQuetschDialog(f) {
 // Freie Körperkante (Schlüssel «E:x,y,z;x,y,z»): beliebige Kante eines Blechkörpers. Die anliegende Blechfläche (grösste Höhe senkrecht zur Kante) liefert Normale und die Richtung in das Blech hinein.
 function freieKante(s) {
   const f = finde(s?.ziel); if (!f || !String(s.key).startsWith("E:")) return null;
-  const [a, b] = s.key.slice(2).split(";").map(zahl3).map((p) => new THREE.Vector3(...p)), e = b.clone().sub(a), L = e.length(); if (L < 1e-6) return null; e.divideScalar(L);
-  let best = null;
-  for (const m of modell.children.filter((o) => o.isMesh && hauptVon(o.userData.fid)?.id === f.id && !o.userData.naht)) {
-    const P = m.geometry.attributes.position, idx = m.geometry.index, n = idx ? idx.count : P.count, vert = (i) => new THREE.Vector3().fromBufferAttribute(P, idx ? idx.getX(i) : i);
-    for (let i = 0; i + 2 < n; i += 3) {
-      const v = [vert(i), vert(i + 1), vert(i + 2)], ia = v.findIndex((q) => q.distanceTo(a) < 2e-3), ib = v.findIndex((q) => q.distanceTo(b) < 2e-3); if (ia < 0 || ib < 0 || ia === ib) continue;
-      const c = v[3 - ia - ib], w = c.clone().sub(a), quer = w.clone().addScaledVector(e, -w.dot(e)), h = quer.length(); if (h < 1e-6) continue;
-      const nrm = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0])).normalize();
-      if (!best || h > best.h) best = { h, inn: quer.normalize(), nrm, fid: String(m.userData.fid) };
+  const meshes = modell.children.filter((o) => o.isMesh && hauptVon(o.userData.fid)?.id === f.id && !o.userData.nahtFahne && !o.userData.naht);
+  let [a, b] = s.key.slice(2).split(";").map(zahl3).map((p) => new THREE.Vector3(...p));
+  const suche = (a, b) => {
+    const e = b.clone().sub(a), L = e.length(); if (L < 1e-6) return null; e.divideScalar(L); let best = null;
+    for (const m of meshes) {
+      const P = m.geometry.attributes.position, idx = m.geometry.index, n = idx ? idx.count : P.count, vert = (i) => new THREE.Vector3().fromBufferAttribute(P, idx ? idx.getX(i) : i);
+      for (let i = 0; i + 2 < n; i += 3) {
+        const v = [vert(i), vert(i + 1), vert(i + 2)], ia = v.findIndex((q) => q.distanceTo(a) < 2e-3), ib = v.findIndex((q) => q.distanceTo(b) < 2e-3); if (ia < 0 || ib < 0 || ia === ib) continue;
+        const c = v[3 - ia - ib], w = c.clone().sub(a), quer = w.clone().addScaledVector(e, -w.dot(e)), h = quer.length(); if (h < 1e-6) continue;
+        const nrm = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0])).normalize();
+        if (!best || h > best.h) best = { h, inn: quer.normalize(), nrm, fid: String(m.userData.fid), m };
+      }
     }
+    return best;
+  };
+  let best = suche(a, b);
+  if (!best) { // Kante nach einer Änderung nicht mehr genau da: die nächstliegende Körperkante desselben Blechs nehmen (die Naht darf nicht verschwinden)
+    let nah = null, bd = 6;
+    for (const m of meshes) { const pos = m.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const p = new THREE.Vector3().fromBufferAttribute(pos, i), q = new THREE.Vector3().fromBufferAttribute(pos, i + 1), d = Math.max(Math.min(p.distanceTo(a) + q.distanceTo(b), p.distanceTo(b) + q.distanceTo(a)) / 2, 0); if (d < bd) { bd = d; nah = p.distanceTo(a) + q.distanceTo(b) <= p.distanceTo(b) + q.distanceTo(a) ? [p, q] : [q, p]; } } }
+    if (nah) { [a, b] = nah; best = suche(a, b); }
   }
   if (!best) return null;
-  return { punkte: [a, b], normale: best.nrm, inn: best.inn, f, frei: true, meshFid: best.fid, name: `${f.name} · Körperkante` };
+  // Aussenrichtung der Blechfläche unabhängig von der Dreiecksreihenfolge: Auf der Materialseite liegt in Blechdicke Abstand die Gegenfläche
+  let nrm = best.nrm.clone();
+  try {
+    const e = b.clone().sub(a).normalize(), p0 = a.clone().add(b).multiplyScalar(0.5).addScaledVector(best.inn, Math.min(best.h * 0.5, 3)), rc = new THREE.Raycaster(), t = material(f.material || doc.features.find((x) => x.material)?.material)?.t || 0.7, treffer = (dir) => { rc.set(p0.clone().addScaledVector(dir, 1e-3), dir); rc.far = t * 3 + 1; const h = rc.intersectObjects(meshes, false).find((x) => x.distance > t * 0.3); return h ? h.distance : Infinity; };
+    const dInnen = treffer(nrm.clone().negate()), dAussen = treffer(nrm); // Gegenfläche in Richtung −n: n zeigt nach aussen; in Richtung +n: n zeigt ins Blech
+    if (dAussen < dInnen && dAussen < t * 3) nrm.negate();
+    void e;
+  } catch { /* Normale aus der Dreiecksreihenfolge */ }
+  return { punkte: [a, b], normale: nrm, inn: best.inn, f, frei: true, meshFid: best.fid, name: `${f.name} · Körperkante` };
 }
 function nahtKante(s) {
   const f = finde(s?.ziel); if (!f || !s.key) return null;
