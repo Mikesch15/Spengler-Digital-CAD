@@ -149,3 +149,13 @@ process.exit(fehler ? 1 : 0);
   const ek = eckFaktoren(teil.gruppen, teil.profile, teil.opt); ok(ek[0].k0 === 0 && ek[0].k1 === 0 && ek[3].k1 === 0, "Enden des Teilstücks und Nachbarkante rechtwinklig");
 }
 
+// Flansch neben einem flachen Falz (Dokument «Test Quetschfalte & Naht»): der Flansch auf der schrägen Kante und der Falz an der linken Kante laufen über die ganze Länge –
+// kein Rücksprung der Enden (vorher 106 mm am Flansch und 36 mm am Falz, weil der Falz als Scheinwand in die Gehrung einging)
+{
+  const mm = MATERIALIEN[0], pts = [[0, 0], [147.37469481721087, 0], [147.37469481721084, 174.08204695192532], [0, 227.1494628668137]];
+  const kt = [null, { id: "a", name: "a", folge: "90 61", versatz: 0 }, { id: "b", name: "b", folge: "61 41", versatz: 0 }, { id: "c", name: "c", folge: "45r1.5 2.97 -45r1.5 6.816 U-r0.35 4.5", versatz: 0 }];
+  const bl = flaechenblech(pts, kt, mm, [], { ecken: "gehrung", freistellung: "eckig" }), ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt);
+  ok(Math.abs(ek[2].e1) < 1 && Math.abs(ek[3].e0) < 1e-9 && Math.abs(ek[3].k0) < 1e-9, `schräger Flansch und Falz: Enden laufen bis zur Ecke (e1 ${ek[2].e1.toFixed(2)} mm, Falz-Anfang ${ek[3].e0.toFixed(2)} mm)`);
+  ok(bl.profile[3].biegungen.length === 3 && ek[1].e1 < 1, "Falz bleibt ein Falz (3 Biegungen), der 90°-Flansch behält seine Gehrung");
+}
+

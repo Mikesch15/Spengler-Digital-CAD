@@ -180,10 +180,13 @@ function freistellen(ek, profile, kv, k, opt) {
   if (a) { ek[kv].fr1 = a.fr; ek[kv].bisU = a.bis; }
   if (b) { ek[k].fr0 = b.fr; ek[k].bisU = b.bis; }
 }
+// Flaches Profil (Saum, Falz, Umschlag): Höhe über der Platte höchstens 4,5 Blechstärken – hat keine aufstehende Wand, an der sich eine Ecke bilden liesse
+function flachProfil(p) { const q = p?.quer || [], t = p?.t || 1; if (!q.length) return false; return Math.max(...q.map(([, y]) => Math.abs(y))) <= 4.5 * t; }
 function quadratEcken(gruppen, profile, ek, opt = null) {
   const n = gruppen.length;
   gruppen.forEach((g, k) => {
     const kv = (k - 1 + n) % n; if (kv === k || !profile[k]?.lage || !profile[kv]?.lage) return;
+    if (flachProfil(profile[k]) || flachProfil(profile[kv])) { for (const [j, w] of [[k, 0], [kv, 1]]) { const o = ek[j]; if (!o) continue; if (w === 0) { o.k0 = 0; o.ky0 = 0; o.e0 = 0; } else { o.k1 = 0; o.ky1 = 0; o.e1 = 0; } } return; } // flacher Saum/Falz an einer Nachbarkante: keine Innenwand – beide Enden rechtwinklig (statt Gehrungsebene aus einer Scheinwand)
     const dV = richtung(gruppen[kv].punkte.at(-2), gruppen[kv].punkte.at(-1)), d0 = richtung(g.punkte[0], g.punkte[1]), beta = knick(dV, d0), sb = Math.sin(beta);
     if (beta < 0.2 || sb < 0.2) return; // gerade Fortsetzung oder einspringende Ecke: wie bisher
     const nA = [dV[1], -dV[0]], nB = [d0[1], -d0[0]], WA = innenWand(profile[kv]), WB = innenWand(profile[k]);
