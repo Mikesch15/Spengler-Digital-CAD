@@ -16,8 +16,12 @@ const m = { t: 0.7, ri: 1, k: 0.4 }, pu = nahtFolgen(nahtStandard("punkt"), m), 
 ok(pu.a.folge === "0 2" && pu.a.versatz < 0 && pu.b && zug.biegungen.length === 2, "Punktnaht: abgesetztes Blech mit Kröpfung (zwei Biegelinien), das andere Blech endet davor");
 ok(Math.abs(zug.zugabe - 16.27) < 0.05, `Punktnaht: Zugabe am abgesetzten Blech ≈ 15 mm + Kröpfung (${zug.zugabe.toFixed(2)})`);
 const fz = nahtFolgen(nahtStandard("falz"), m), za = bausteinProfil({ name: "a", folge: fz.a.folge, versatz: fz.a.versatz }, m), zb = bausteinProfil({ name: "b", folge: fz.b.folge, versatz: 0 }, m);
-ok(/^U\+r[\d.]+ 5$/.test(fz.a.folge) && /U-r[\d.]+ [\d.]+$/.test(fz.b.folge) && za.biegungen.length === 1 && zb.biegungen.length === 3, "Falz: Haken 5 mm, abgesetztes Blech gekröpft und um den Haken gelegt");
-const mi = nahtFolgen({ ...nahtStandard("falz"), mittig: true }, m); ok(/ 7\.5$/.test(mi.a.folge) && mi.b.folge.includes("U"), "Falz mittig: Haken 7.5 mm");
+ok(/^U\+r[\d.]+ [\d.]+$/.test(fz.a.folge) && /U-r[\d.]+ [\d.]+$/.test(fz.b.folge) && za.biegungen.length === 1 && zb.biegungen.length === 3, "Falz: Haken, abgesetztes Blech gekröpft und um den Haken gelegt");
+const xmax = (p, v) => Math.max(...p.quer.map((q) => q[0])) - v;
+ok(Math.abs(xmax(zb, fz.b.versatz) - 10) < 0.05, `Falz: gesamte Falzbreite (Fuss der Absetzung bis Hakenende) = 10 mm (${xmax(zb, fz.b.versatz).toFixed(2)})`);
+ok(fz.a.versatz <= 0 && fz.a.versatz > -4 && fz.b.versatz === 0, `Falz: Rücken des Hakens liegt an der Absetzung (Abstand ${(-fz.a.versatz).toFixed(2)} mm), keine Lücke`);
+const mi = nahtFolgen({ ...nahtStandard("falz"), mittig: true }, m), zbm = bausteinProfil({ name: "b", folge: mi.b.folge, versatz: mi.b.versatz }, m);
+ok(Math.abs(mi.b.versatz + 5) < 1e-9 && Math.abs(xmax(zbm, mi.b.versatz) - 10) < 0.05 && Math.abs(mi.a.versatz - (5 + fz.a.versatz)) < 1e-9, `Falz mittig: ganzer Falz um 5 mm verschoben, Falzmitte über der Blechkante (B ${mi.b.versatz}, A ${mi.a.versatz.toFixed(2)})`);
 // Blechprofil: Rücksetzung des nicht abgesetzten Blechs verkürzt den letzten bzw. ersten Schenkel
 { const mm = { t: 0.7, ri: 1, k: 0.4 }, p = freiesProfil(0, [{ L: 50, winkel: 90 }, { L: 40 }], mm);
   const b = profilErweitern(p, [{ ende: "B", zeilen: [], kuerzen: 6 }], mm), a = profilErweitern(p, [{ ende: "A", zeilen: [], kuerzen: 6 }], mm), z = profilErweitern(p, [{ ende: "B", zeilen: [], kuerzen: 500 }], mm);

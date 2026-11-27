@@ -3654,18 +3654,18 @@ function nahtTeilSetzen(ff, w) {
 }
 function nahtDialog(f, istNeu = false) {
   const ea = nahtKante(f.a), eb = nahtKante(f.b);
-  const NUR = { punkt: ["absetz", "richtung", "zugabe"], falz: ["absetz", "richtung", "mittig", "falzA", "falzB"], schweiss: ["seite", "raupeBreite", "raupeHoehe"], ecke: ["seite", "raupeBreite", "raupeHoehe"] }; // je Nahtart nur die passenden Felder
+  const NUR = { punkt: ["absetz", "richtung", "zugabe"], falz: ["absetz", "richtung", "mittig", "falzB"], schweiss: ["seite", "raupeBreite", "raupeHoehe"], ecke: ["seite", "raupeBreite", "raupeHoehe"] }; // je Nahtart nur die passenden Felder
   featureDialog(f, istNeu, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "art", label: "Nahtart", optionen: Object.entries(NAHT_ARTEN), wert: ff.art || "punkt" },
     { id: "absetz", label: "Abgesetztes Blech (Punkt/Falz)", optionen: [["b", "Blech B"], ["a", "Blech A"]], wert: ff.absetz === "a" ? "a" : "b" },
     { id: "richtung", label: "Absetzung / Falz Richtung", optionen: [["oben", "zur Sichtseite"], ["unten", "zur Rückseite"]], wert: ff.richtung || "oben" },
     { id: "zugabe", label: "Überlappung (Punktnaht)", einheit: "mm", wert: ff.zugabe ?? 15 },
-    { id: "mittig", label: "Falz (Falznaht)", optionen: [["nein", "5 + 10 mm (Blech A/B, abgesetzt)"], ["ja", "mittig, je Hälfte der Summe"]], wert: ff.mittig ? "ja" : "nein" },
-    { id: "falzA", label: "Falzbreite nicht abgesetztes Blech", einheit: "mm", wert: ff.falzA ?? 5 }, { id: "falzB", label: "Falzbreite abgesetztes Blech", einheit: "mm", wert: ff.falzB ?? 10 },
+    { id: "mittig", label: "Falz (Falznaht)", optionen: [["nein", "Falz beginnt an der Blechkante"], ["ja", "Falzmitte genau über den Blechkanten"]], wert: ff.mittig ? "ja" : "nein" },
+    { id: "falzB", label: "Falzbreite gesamt (Absetzung bis Hakenende)", einheit: "mm", wert: ff.falzB ?? 10 },
     { id: "seite", label: "Raupe auf der Seite (Schweiss-/Ecknaht)", optionen: [["oben", "Sichtseite"], ["unten", "Rückseite"]], wert: ff.seite || "oben" },
     { id: "raupeBreite", label: "Raupenbreite (0 = automatisch)", einheit: "mm", wert: ff.raupeBreite ?? 0 }, { id: "raupeHoehe", label: "Raupenhöhe (0 = automatisch)", einheit: "mm", wert: ff.raupeHoehe ?? 0 }].filter((x) => x.id === "name" || x.id === "art" || (NUR[ff.art || "punkt"] || []).includes(x.id)).concat(nahtTeilFelder(ff)),
     (ff, w) => { nahtTeilSetzen(ff, w); if (w.name != null) ff.name = w.name; if (w.art) ff.art = w.art; if (w.absetz) ff.absetz = w.absetz; if (w.richtung) ff.richtung = w.richtung; if (w.mittig) ff.mittig = w.mittig === "ja"; if (w.seite) ff.seite = w.seite;
       for (const k of ["zugabe", "falzA", "falzB", "raupeBreite", "raupeHoehe"]) if (Number.isFinite(w[k])) ff[k] = Math.max(0, w[k]); },
-    "Naht", "Verbindung zweier Bleche an den gewählten Kanten. Punktnaht: Überlappung (Standard 15 mm), das abgesetzte Blech wird um eine Blechstärke gekröpft, so dass beide bündig liegen. Falznaht: einfacher liegender Falz, 5 mm + 10 mm (abgesetzt) oder mittig. Schweiss-/Ecknaht: nur Darstellung als Raupe. Sitzt an der Kante schon ein Flansch, läuft die Naht zusätzlich darauf.",
+    "Naht", "Verbindung zweier Bleche an den gewählten Kanten. Punktnaht: Überlappung (Standard 15 mm), das abgesetzte Blech wird um eine Blechstärke gekröpft, so dass beide bündig liegen. Falznaht: einfacher liegender Falz; die Falzbreite (Standard 10 mm) gilt gesamt, der Haken des unteren Blechs liegt an der Absetzung. «Mittig»: Falzmitte genau über den Blechkanten. Schweiss-/Ecknaht: nur Darstellung als Raupe. Sitzt an der Kante schon ein Flansch, läuft die Naht zusätzlich darauf.",
     { neuBei: ["art", "nahtLaenge"], pflicht: () => (!f.a?.key || !f.b?.key ? "Zuerst Blech und Kante für beide Seiten wählen (Schritte 1–4)." : ""),
       info: () => (!f.a?.key || !f.b?.key ? "▶ " + NAHT_TEXT[nahtWz?.schritt || "blechA"] : f._fehler ? "⚠ " + f._fehler : `A: ${nahtKante(f.a)?.name || "–"} · B: ${nahtKante(f.b)?.name || "–"}`) });
 }

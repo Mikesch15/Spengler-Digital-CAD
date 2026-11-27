@@ -1,6 +1,8 @@
 // Spengler Digital CAD – Kern: Verbindungsnähte zwischen zwei Blechen (Punktschweissnaht mit Überlappung, Falznaht, Schweissnaht, Ecknaht)
 // Überlappung und Falz werden als Kantenbausteine (Abkantfolgen) an den beiden gewählten Kanten abgebildet; Schweiss- und Ecknaht sind nur Darstellung.
 // Absetzung (Kröpfung) immer um genau eine Blechstärke, so dass die Bleche danach bündig liegen. Winkel + = zur Sichtseite, − = Rückseite.
+import { bausteinProfil } from "./flaechenblech.js";
+const mittig = (n) => !!n.mittig;
 const zahl = (v) => String(+(+v).toFixed(3));
 export const NAHT_ARTEN = { punkt: "Punktschweissnaht (Überlappung)", falz: "Falznaht", schweiss: "Schweissnaht (Raupe)", ecke: "Ecknaht (Raupe)" };
 export const nahtStandard = (art = "punkt") => ({ art, absetz: art === "falz" || art === "punkt" ? "b" : "keine", richtung: "oben", zugabe: 15, falzA: 5, falzB: 10, mittig: false, absetzen: true, raupeBreite: 0, raupeHoehe: 0, seite: "oben" });
@@ -9,6 +11,23 @@ export const nahtStandard = (art = "punkt") => ({ art, absetz: art === "falz" ||
 export function kroepfung(t, ri, vorz, h = t) {
   const leg = h / Math.sin(Math.PI / 4), rMax = leg / (2 * Math.tan(Math.PI / 8)) - t / 2, r = Math.max(0.05, Math.min(ri > 0 ? ri : t, rMax * 0.98)), tang = (r + t / 2) * Math.tan(Math.PI / 8);
   return { leg, r, tang, folge: `${vorz * 45}r${zahl(r)} ${zahl(leg)} ${-vorz * 45}r${zahl(r)}`, tangente: tang, breite: h };
+}
+
+// Falzmasse (unabhängig von der Lage): Rücken des Hakens A berührt die Absetzung von B. Abstand c = kleinster Wert ohne Durchdringung der Querschnitte (Raster).
+const falzCache = new Map();
+function falzMasse(t, ri, s, W, m) {
+  const key = [t, ri, s, W, m?.k].join("|"); if (falzCache.has(key)) return falzCache.get(key);
+  const mm = { t, ri, k: m?.k ?? 0.4 }, kr = kroepfung(t, ri, s, 3 * t), rA = t / 2, rB = t / 2, rmB = rB + t / 2;
+  const inP = (p, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c; } return c; };
+  const bau = (folge, versatz) => bausteinProfil({ name: "x", folge, versatz }, mm).quer;
+  const stufe = (c) => {
+    const hem = Math.max(2, 3 * t, W - c - (t + 0.3)), rueck = Math.max(rmB + t / 2 + 1, hem - 0.5 - t), bf = (mid) => `${kr.folge} ${zahl(mid)} U${s > 0 ? "-" : "+"}r${zahl(rB)} ${zahl(rueck)}`;
+    const x0 = Math.max(...bau(bf(10 + kr.tang + rmB + t), 0).map((q) => q[0])), mid = Math.max(2 + kr.tang + rmB + t / 2, 10 + kr.tang + rmB + t - (x0 - W)); // äusserstes Hakenende des abgesetzten Blechs genau W vom Fuss
+    return { c, hem, rueck, mid, rA, rB, kr, B: bau(bf(mid), 0).map(([x, y]) => [-x, y]), A: bau(`U${s > 0 ? "+" : "-"}r${zahl(rA)} ${zahl(hem)}`, -c).map(([x, y]) => [x, y]) }; // B gespiegelt (Fuss bei 0), A: Rücken bei -c
+  };
+  const ueber = (g) => { let o = 0; const h = 0.1; for (let x = -W - 2; x <= 2; x += h) for (let y = -4 * t - 2; y <= 4 * t + 2; y += h) if (inP([x, y], g.A) && inP([x, y], g.B)) o += h * h; return o; };
+  let best = null; for (let c = 0; c <= W / 2; c += 0.2) { const g = stufe(c), o = ueber(g); if (!best || o < best.o - 1e-9) best = { g, o }; if (o < 0.05) { best = { g, o }; break; } }
+  const g = best.g; falzCache.set(key, g); return g;
 }
 
 // Abkantfolgen der beiden Seiten: { a: { folge, versatz } | null, b: ... }. Die Folge hängt an der Kante des Blechs (wie ein Kantenbaustein), «versatz» setzt die Kante des nicht
@@ -21,14 +40,12 @@ export function nahtFolgen(n, m) {
     const zug = Math.max(1, +n.zugabe || 15), kr = kroepfung(t, ri, s), rueck = t + kr.tang + 0.3; // Kröpfung des einen Blechs reicht um t + Tangente über die Kante: das andere endet davor
     return kopf({ abg: { folge: `${kr.folge} ${zahl(zug + kr.tang)}`, versatz: 0 }, flach: { folge: "0 2", versatz: -(rueck + 2) } });
   }
-  // Falz: das abgesetzte Blech (Falz «falzB») wird um 3 t gekröpft, läuft unter dem Haken des anderen Blechs (Falz «falzA») durch und hakt sich mit einem 180°-Bogen um dessen Ende
-  const fa = Math.max(2, +n.falzA || 5), fb = Math.max(2, +n.falzB || 10), mittig = !!n.mittig, hA = mittig ? (fa + fb) / 2 : fa, hB = mittig ? hA : fb;
-  const rA = t / 2, rmA = rA + t / 2, kr = kroepfung(t, ri, s, 3 * t), rB = t / 2, rmB = rB + t / 2;
-  const lauf = Math.max(hB, 2), setzen = lauf - hA + 3 * t + kr.tang + rmB - t / 2 - 0.3; // Rücksetzung des Hakenblechs: Haken endet vor dem Jog des anderen Blechs
-  const hemA = `U${s > 0 ? "+" : "-"}r${zahl(rA)} ${zahl(hA)}`;
-  const rueckB = Math.max(rmB + t / 2 + 1.5, hA - 0.5), mid = lauf + kr.tang + (rmB + t / 2); // gerader Lauf unter dem Haken, dann Haken um dessen Ende
-  const hemB = `${kr.folge} ${zahl(mid)} U${s > 0 ? "-" : "+"}r${zahl(rB)} ${zahl(rueckB)}`;
-  return kopf({ abg: { folge: hemB, versatz: 0 }, flach: { folge: hemA, versatz: -setzen } });
+  // Falz: «falzB» ist die GESAMTE Falzbreite (Fuss der Absetzung bis Aussenkante des Hakens des abgesetzten Blechs, inkl. Kröpfung und Biegung).
+  // Das nicht abgesetzte Blech hat einen 180°-Haken; sein Rücken liegt genau an der Absetzung (kleinster kollisionsfreier Abstand), der Haken des abgesetzten Blechs greift darum.
+  // «mittig»: die Falzmitte (Fuss der Absetzung … Hakenende) liegt genau über der früheren Blechkante – der ganze Falz verschiebt sich, beide Bleche werden entsprechend versetzt.
+  const W = Math.max(4, +n.falzB || 10), fuss = mittig(n) ? W / 2 : 0, g = falzMasse(t, ri, s, W, m);
+  const hemA = `U${s > 0 ? "+" : "-"}r${zahl(g.rA)} ${zahl(g.hem)}`, hemB = `${g.kr.folge} ${zahl(g.mid)} U${s > 0 ? "-" : "+"}r${zahl(g.rB)} ${zahl(g.rueck)}`;
+  return kopf({ abg: { folge: hemB, versatz: -fuss }, flach: { folge: hemA, versatz: fuss - g.c } });
 }
 
 // Raupenmasse: Breite etwa 2 t, Höhe etwa t (mindestens 1.2 / 0.6 mm)
