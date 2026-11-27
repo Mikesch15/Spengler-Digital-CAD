@@ -103,3 +103,20 @@ Klassen: exact (B-Rep über OCCT), mesh, hybrid (Netz-Darstellung, exakte Rechnu
 - `kantenwz` (App-Test) schlägt in der jetzigen Umgebung reproduzierbar fehl («Richtung-Schalter kehrt den eben angelegten Flansch sofort um», «Länge im Werkzeug ändert den Flansch sofort»), auch bei älteren Ständen (`905e3c1`, `d8c58a3`). Er war früher erst im 2. Versuch grün. Ursache nicht geklärt. Der Hilfsablauf `klick()` des Tests klickt «Übernehmen» (`kbOk`), die Live-Umschaltung wirkt aber auf noch nicht übernommene Vorschau-Features. Test nicht geändert. Rot.
 - Die Release-Sperre als Pflicht-Check an jedem Push wird bewusst **nicht** eingeführt (Entscheidung des Eigentümers). Der Workflow ist manuell auszulösen; die Windows-/Web-Workflows laufen unverändert mit `npm test`.
 - Weitere Referenzfälle (Rinne/Traufe, Ortgang/First, Wandanschluss, Lukarne, Doppelstehfalz, Rund-/Kegelblech …) und DXF-/STEP-Prüfung gegen einen unabhängigen Viewer: nicht umgesetzt (Rot).
+
+## 8. Etappe 3 – Service Worker, Offline (umgesetzt am 27.11.2026)
+
+**Gefundener Mangel (vorher):** `web/sw.js` legte nur 7 Dateien vorab ab, cachte jede Antwort (auch 404), nutzte einen festen Cache-Namen (`sdcad-v6`) ohne Versionsbindung und aktivierte sich sofort (`skipWaiting`). Der CAD-Kern (22 MB WASM, Worker) kam nicht in den Zwischenspeicher; ein Kaltstart ohne Netz auf einem frisch eingerichteten Gerät hatte keinen Kern.
+
+**Änderung (`web/sw.js`, `build.mjs`, `src/cad.js`)**
+- `build.mjs` setzt Version (Version + Prüfsumme der HTML) und Dateilisten in `dist/sw.js` ein und bricht ab, wenn eine gelistete Datei im Build fehlt.
+- **Kritische Dateien** (HTML, Manifest, Icons, Logo, Banner, `cad-worker.js`): alles oder nichts beim Installieren. Schlägt eine Datei fehl, schlägt die Installation fehl und die bisherige Version bleibt unverändert aktiv.
+- **Grosse Dateien** (CAD-Kern-WASM, STEP-Leser, PDF-Leser, Hilfebilder): werden nach dem Start nachgeladen. Ältere Zwischenspeicher werden erst gelöscht, wenn der neue alles selbst vollständig hat; bis dahin werden vorhandene Kopien übernommen.
+- **Kontrolliertes Update:** Eine neue Version wartet, bis die Seite «Jetzt neu laden» wählt (Nachricht `aktivieren`) oder alle Fenster zu sind. Kein stilles Umschalten und keine Mischung HTML neu / Kern alt innerhalb einer Sitzung.
+- Nur 200-Antworten gleicher Herkunft werden gespeichert (keine 404, keine Teilantworten). `version.json` und `sw.js` kommen nie aus dem Zwischenspeicher.
+- **Race-Bedingung behoben (vom neuen Test gefunden):** Ein älterer Service Worker löschte beim Aufräumen den Zwischenspeicher einer gerade installierten neueren Version. Jetzt führt `sdcad-meta` die Entstehungszeiten, und es werden nur ältere Stände entfernt.
+- **Anzeige:** Meldung «Offline: Du arbeitest lokal weiter …» beim Verbindungsverlust (mit Warnung, falls Programmteile offline fehlen), «Wieder online.», Statuszeile «Offline-Betrieb bereit …» (einmal je Version). Keine blockierende Meldung über der CAD-Fläche.
+
+**Neuer Test `tests/app-kern/offline.mjs` (grün, dreimal hintereinander):** Zwischenspeicher vollständig; Offline-Kaltstart (Seite lädt, WASM-Kern kommt aus dem Zwischenspeicher); `version.json` wird offline nicht vorgetäuscht; neue Version wartet, laufende bleibt; nach Aktivierung bleibt nur der neue Zwischenspeicher; fehlgeschlagenes Update (404 auf kritische Datei) lässt die laufende Version und den Offline-Start unberührt.
+
+**Tatsächlich geprüft:** Chromium unter Playwright, simuliertes Offline (`setOffline`). **Nicht geprüft (Rot):** Kaltstart nach Geräteneustart am Android-Gerät, abgebrochener Download mitten in einer grossen Datei, Safari/iOS, Android-WebView mit Capacitor, echtes Speicherlimit auf dem Gerät (der Zwischenspeicher belegt rund 32 MB), Cloud-Wiederabgleich nach Offline (nicht untersucht).

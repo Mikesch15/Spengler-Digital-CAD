@@ -249,6 +249,18 @@
         "genauigkeit",
         "pruefen"
       ]
+    },
+    {
+      "muster": "web/sw.js",
+      "tests": [
+        "offline"
+      ]
+    },
+    {
+      "muster": "build.mjs",
+      "tests": [
+        "offline"
+      ]
     }
   ]
 }

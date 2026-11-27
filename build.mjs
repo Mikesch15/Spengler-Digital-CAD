@@ -1,6 +1,7 @@
 // Baut eine einzige HTML-Datei, die ohne Internet läuft (Doppelklick, PC-Programm, Handy): node build.mjs
 // three.js, Spengler-Kern, Oberfläche und Schriften werden eingebettet.
-import { readFileSync, writeFileSync, mkdirSync, cpSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, cpSync, readdirSync, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { execFileSync } from "node:child_process";
@@ -57,4 +58,13 @@ cpSync(url("./node_modules/pdfjs-dist/LICENSE"), url("./dist/pdfjs/LICENSE"));
 // Exakter CAD-Kern (OpenCascade 8.0 als WebAssembly, Beta): eigener Worker + separate WASM-Datei (LGPL, austauschbar),
 // wird nur geladen, wenn er in den Einstellungen eingeschaltet ist
 execFileSync(process.execPath, [fileURLToPath(url("./kern/cad/bauen.mjs")), fileURLToPath(url("./dist/cad"))], { stdio: "ignore" });
+// Service Worker: Version + Dateilisten einsetzen (kritisch = alles-oder-nichts beim Installieren; gross = danach nachgeladen)
+{
+  const version = (process.env.SDCAD_VERSION || JSON.parse(lies("./package.json")).version) + "-" + createHash("sha256").update(html).digest("hex").slice(0, 8);
+  const hilfe = readdirSync(url("./dist/hilfe/")).filter((f) => /\.(jpg|png|svg)$/.test(f)).map((f) => `hilfe/${f}`);
+  const kritisch = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "logo.png", "startbanner.jpg", "cad/cad-worker.js"];
+  const gross = ["cad/replicad_single.wasm", "occt/occt-import-js.js", "occt/occt-import-js.wasm", "pdfjs/pdf.min.mjs", "pdfjs/pdf.worker.min.mjs", "startbanner.svg", ...hilfe];
+  for (const d of [...kritisch, ...gross]) if (d !== "./" && !existsSync(url(`./dist/${d}`))) throw new Error(`Service Worker: Datei fehlt im Build: ${d}`);
+  writeFileSync(url("./dist/sw.js"), lies("./web/sw.js").replace("__VERSION__", version).replace("__KRITISCH__", JSON.stringify(kritisch)).replace("__GROSS__", JSON.stringify(gross)));
+}
 console.log("index.html gebaut,", (html.length / 1024).toFixed(0), "KB");
