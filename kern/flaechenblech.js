@@ -211,28 +211,43 @@ function innenX(p) {
   return xs.length ? Math.min(...xs) : 0;
 }
 
-// Gehrung im Biegebereich (siehe kern/cad/featureBau.js): an jeder Aussenecke zweier einfacher Flansche enden beide Biegezonen in derselben senkrechten Ebene durch die
-// Ecke der Biegelinien (halbiert den Winkel der beiden Kanten). Ergebnis: Map Eckenindex k (Anfang der Kante k) → { Of, mm (Normale der Ebene in Skizzenkoordinaten), H (Höhe des Biegebereichs) }
-export function gehrungEcken(gruppen, profile, opt, t) {
-  const n = gruppen.length, ecke = new Map();
+// Gehrung an Aussenecken zweier einfacher Flansche: beide Enden liegen in EINER Ebene, die die Ecklinie ε (Schnitt der Innenflächen) enthält und den Winkel der beiden
+// Wände halbiert (Normale = nA − nB der äusseren Wandnormalen). Gilt für beliebige Flanschwinkel (auch 61° und 90° gemischt): die Kanten der Flansche laufen dann
+// parallel und lassen oben keine Lücke. Ergebnis: Map Eckenindex k (Anfang der Kante k) → { I (Punkt auf ε), M (Ebenennormale), H (Höhe des Biegebereichs), voll }.
+// voll = true: die Ebene gilt über die ganze Höhe (Ecken mit Quetschfalte); sonst nur im Biegebereich, darüber gilt der Eckenschnitt der Wand.
+// s = Sichtseite (+1/−1): lokales y der Flanschprofile liegt in Richtung s·(Plattennormale).
+export function gehrungEcken(gruppen, profile, opt, t, s = 1, volleEcken = []) {
+  const n = gruppen.length, ecke = new Map(), sg = s === -1 ? -1 : 1;
   if ((opt?.ecken || "gehrung") !== "gehrung") return ecke;
+  const kr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], pr = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], nm = (a) => { const l = Math.hypot(...a) || 1; return a.map((x) => x / l); };
   for (let k = 0; k < n; k++) {
     const kv = (k - 1 + n) % n, gk = gruppen[k], gv = gruppen[kv], pk = profile[k], pv = profile[kv];
     if (kv === k || !gk.gerade || !gv.gerade || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
     const V0 = gk.punkte[0], dn = richtung(V0, gk.punkte[1]), dp = richtung(V0, gv.punkte.at(-2));
     if (!(knick(dn, dp) > 0)) continue; // nur Aussenecken
-    let Of; try { Of = eckSchnitt2(V0, dn, dp, pk.biegungen[0].abstand, pv.biegungen[0].abstand); } catch { continue; }
-    const mx = dn[0] - dp[0], my = dn[1] - dp[1], ml = Math.hypot(mx, my) || 1, rB = (q) => (q.biegungen[0].ri ?? q.ri ?? 1) + (q.t || t);
-    ecke.set(k, { Of, mm: [mx / ml, my / ml], H: Math.max(rB(pk), rB(pv)) + 0.2 });
+    const WA = innenWand(pv), WB = innenWand(pk), fa = WA ? { xf: WA.f[0], yf: WA.f[1], r: WA.w[0] / WA.w[1] } : { xf: innenX(pv), yf: 0, r: 0 }, fb = WB ? { xf: WB.f[0], yf: WB.f[1], r: WB.w[0] / WB.w[1] } : { xf: innenX(pk), yf: 0, r: 0 };
+    const dV = [-dp[0], -dp[1]], xrA = [dV[1], -dV[0]], xrB = [dn[1], -dn[0]], la = Math.hypot(1, fa.r), lb = Math.hypot(1, fb.r);
+    const nA = [xrA[0] / la, xrA[1] / la, (-fa.r / la) * sg], nB = [xrB[0] / lb, xrB[1] / lb, (-fb.r / lb) * sg]; // äussere Wandnormalen
+    const PA = [V0[0] + fa.xf * xrA[0], V0[1] + fa.xf * xrA[1], fa.yf * sg], PB = [V0[0] + fb.xf * xrB[0], V0[1] + fb.xf * xrB[1], fb.yf * sg];
+    const e = kr(nA, nB); if (Math.hypot(...e) < 1e-6) continue;
+    // Punkt I auf ε: nA·I = nA·PA, nB·I = nB·PB, e·I = e·V0 (Cramer)
+    const Z = [V0[0], V0[1], 0], r1 = [pr(nA, PA), pr(nB, PB), pr(e, Z)], det3 = (a, b, c) => pr(a, kr(b, c)), D = det3(nA, nB, e); if (Math.abs(D) < 1e-9) continue;
+    const I = [0, 0, 0];
+    // Lösung des 3×3-Systems A·I = r (Zeilen nA, nB, e) über die Adjungierte
+    const cA = kr(nB, e), cB = kr(e, nA), cE = kr(nA, nB); // Spalten der Inversen
+    I[0] = (r1[0] * cA[0] + r1[1] * cB[0] + r1[2] * cE[0]) / D; I[1] = (r1[0] * cA[1] + r1[1] * cB[1] + r1[2] * cE[1]) / D; I[2] = (r1[0] * cA[2] + r1[1] * cB[2] + r1[2] * cE[2]) / D;
+    const M = nm([nA[0] - nB[0], nA[1] - nB[1], nA[2] - nB[2]]), rB = (q) => (q.biegungen[0].ri ?? q.ri ?? 1) + (q.t || t);
+    ecke.set(k, { I, M, H: Math.max(rB(pk), rB(pv)) + 0.2, voll: volleEcken.includes(k) });
   }
   return ecke;
 }
-// Gehrungsebene im lokalen System eines Flansch-Abschnitts (x nach aussen, z entlang der Kante ab a, Richtung d): z = z0 + zx·x
-export function gehrungLokal(c, a, d) {
-  const xr = [d[1], -d[0]], xm = xr[0] * c.mm[0] + xr[1] * c.mm[1], dm = d[0] * c.mm[0] + d[1] * c.mm[1];
-  if (Math.abs(dm) < 1e-9) return null;
-  const xO = (c.Of[0] - a[0]) * xr[0] + (c.Of[1] - a[1]) * xr[1], zO = (c.Of[0] - a[0]) * d[0] + (c.Of[1] - a[1]) * d[1];
-  return { zx: -xm / dm, z0: zO + (xm / dm) * xO, H: c.H };
+// Gehrungsebene im lokalen System eines Flansch-Abschnitts (x nach aussen, y Höhe, z entlang der Kante ab a, Richtung d): z = z0 + zx·x + zy·y.
+// kuerz: zusätzliche Kürzung dieses Endes entlang der Kante (Flansch unter einer Quetschfalte); start = Anfang (true) oder Ende (false) der Kante
+export function gehrungLokal(c, a, d, s = 1, kuerz = 0, start = true) {
+  const sg = s === -1 ? -1 : 1, X = [d[1], -d[0], 0], Y = [0, 0, sg], Zd = [d[0], d[1], 0], M = c.M, pr = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+  const MZ = pr(M, Zd); if (Math.abs(MZ) < 1e-9) return null;
+  const k0 = pr(M, [a[0] - c.I[0], a[1] - c.I[1], -c.I[2]]);
+  return { zx: -pr(M, X) / MZ, zy: -pr(M, Y) / MZ, z0: -k0 / MZ + (start ? kuerz : -kuerz), H: c.voll ? Infinity : c.H, voll: !!c.voll };
 }
 // Eckfaktoren mit nachträglichen Überschreibungen je Flanschende (opt.enden["k:start"|"k:ende"] = { art: "rechtwinklig" | "buendig" | "winkel", winkel, versatz })
 export function eckFaktoren(gruppen, profile, opt = null) {

@@ -1,5 +1,5 @@
 // Prüft Flächenblech mit Kantenbausteinen (kern/flaechenblech.js)
-import { innenWand, eckFaktoren, BAUSTEINE_STANDARD, bausteinProfil, kantenGruppen, flaechenblech, plattenUmriss } from "../kern/flaechenblech.js";
+import { innenWand, eckFaktoren, BAUSTEINE_STANDARD, bausteinProfil, kantenGruppen, flaechenblech, plattenUmriss, gehrungEcken, gehrungLokal } from "../kern/flaechenblech.js";
 import { flaechenblechPlan } from "../kern/cad/featureBau.js";
 import { BASIS } from "../kern/ebenen.js";
 import { bausteinQuerschnitt } from "../kern/cad/featureBau.js";
@@ -112,5 +112,26 @@ process.exit(fehler ? 1 : 0);
   const ohne = flaechenblechPlan(flaechenblech(pts, kt, m, [], { freistellung: "eckig" }), BASIS.XY, m, 1), mit = flaechenblechPlan(flaechenblech(pts, kt, m, [0], { freistellung: "eckig" }), BASIS.XY, m, 1);
   ok(ohne.reliefs.length === 1 && ohne.reliefs[0].zyl, "Ecke mit zwei Flanschen: eine runde Freistellung");
   ok(mit.reliefs.length === 0, "Ecke mit Quetschfalte: keine Freistellung (kein Loch)");
+}
+
+// Gehrung an Ecken mit verschiedenen Flanschwinkeln (90° und 61°): beide Enden liegen in derselben Ebene durch die Ecklinie ε (Innenkante), Normale = nA − nB
+{
+  const mm = MATERIALIEN[0], mk = (winkel, laenge) => ({ id: "t" + winkel, name: "t", gruppe: "T", folge: `${winkel} ${laenge}`, versatz: 0 });
+  const pts = [[0, 0], [150, 0], [150, 175], [0, 227]], kt = [mk(90, 61), null, mk(61, 41), null];
+  const bl = flaechenblech(pts, kt, mm, [], null), e = gehrungEcken(bl.gruppen, bl.profile, bl.opt, mm.t, 1, [2]);
+  const c = [...e.values()][0];
+  ok(e.size >= 1 && c, "gemischte Flanschwinkel: Gehrungsebene wird berechnet");
+  if (c) {
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    ok(Math.abs(Math.hypot(...c.M) - 1) < 1e-9, "Normale der Gehrungsebene ist ein Einheitsvektor");
+    // beide Flanschenden: die lokalen Ebenen beschreiben dieselbe Ebene im Raum (Punkt aus Anfang und Ende der Nachbarkanten liegen darauf)
+    const k = [...e.keys()][0], n = bl.gruppen.length, kv = (k - 1 + n) % n, gk = bl.gruppen[k], gv = bl.gruppen[kv], V0 = gk.punkte[0];
+    const dn = [(gk.punkte[1][0] - V0[0]), (gk.punkte[1][1] - V0[1])], ln = Math.hypot(...dn), d1 = [dn[0] / ln, dn[1] / ln];
+    const pv = gv.punkte.at(-2), dv0 = [V0[0] - pv[0], V0[1] - pv[1]], lv = Math.hypot(...dv0), d2 = [dv0[0] / lv, dv0[1] / lv];
+    const wk = gehrungLokal(c, V0, d1, 1, 0, true), we = gehrungLokal(c, pv, d2, 1, 0, false);
+    const welt = (a, d, x, y, z) => [a[0] + x * d[1] + z * d[0], a[1] - x * d[0] + z * d[1], y];
+    for (const [gl, a, d] of [[wk, V0, d1], [we, pv, d2]]) for (const [x, y] of [[0, 0], [5, 3], [-2, 8]]) { const p = welt(a, d, x, y, gl.z0 + gl.zx * x + gl.zy * y); ok(Math.abs(dot(c.M, [p[0] - c.I[0], p[1] - c.I[1], p[2] - c.I[2]])) < 1e-6, `Punkt (x ${x}, y ${y}) liegt auf der gemeinsamen Gehrungsebene`); }
+    ok(c.voll === true, "Ecke mit Quetschfalte: Gehrung über die ganze Höhe");
+  }
 }
 

@@ -65,7 +65,7 @@ import { abstandGerade, winkelZwischen } from "../kern/bedingungen.js";
 import { rechne, parameterWerte, istZahl, namenIn, NAME as PARAMNAME } from "../kern/ausdruck.js";
 import { splinePunkte, ellipsePunkte } from "../kern/skizze.js";
 import { langdruck, tastaturSichtbar, wertBlase, maus, schalter as touchSchalter } from "./touch.js";
-import { fensterVerschieben } from "./fenster.js";
+import { fensterVerschieben, fensterGroesse } from "./fenster.js";
 import { logoVarianten, logoBanner, logoPapier } from "./logo.js";
 import { biegenInit, biegenOeffnen, biegenOeffnenQuellen, biegenOffen, biegenNeuZeichnen, maschinenVorschau } from "./biegen.js";
 import { VORLAGE_SCHROEDER, VORLAGE_JORNS, VORLAGEN as MASCHINEN_VORLAGEN, maschineAusVorlage, werkzeugeAlsText, werkzeugeAusText, maschineFehlt } from "../kern/biegen/maschinen.js";
@@ -1430,7 +1430,7 @@ function regen() {
         stirnAnhaengen(f, m, s.ebene, vz0);
       } else if (f.typ === "vorlage") {
         if (!ebene(f.ebene)) throw new Error("Ebene fehlt");
-        const m = material(f.material), v = VORLAGE[f.vorlage];
+        const m = material(f.material), v = vorlageVon(f);
         const { start, ops } = profilErweitern(v.bau(f.params, m), profilErweiterungen(f, m), m);
         f._res = berechne(start, ops, m.t, m.ri, m.k);
         f._kernLage = null; stirnBerechnen(f, m);
@@ -1687,11 +1687,25 @@ document.querySelector(".browser .ptitel").addEventListener("click", () => docum
 // ------------------------------------------------------------ Browser und Zeitleiste
 const NAMEN = { loftflansch: "Lofted Flange", rip: "Rip (Auftrennen)", biegung: "Biegung an Linie", skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", flanschende: "Flanschende", stirnquetsch: "Quetschfalte (Stirn)", naht: "Naht", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
+// Hinweisblase für Kennzeichen im Browser («≈» = Näherung/teilweise exakt): erscheint beim Darüberfahren (Maus, Stift-Schweben) und beim Antippen
+{
+  let blase = null, zeitweg = 0;
+  const zu = () => { blase?.remove(); blase = null; clearTimeout(zeitweg); };
+  const zeige = (el) => {
+    zu(); const t = el.dataset.hinweis; if (!t) return;
+    blase = document.createElement("div"); blase.className = "hinweisblase"; blase.setAttribute("role", "tooltip"); blase.textContent = t; document.body.appendChild(blase);
+    const r = el.getBoundingClientRect(), b = blase.getBoundingClientRect(); blase.style.left = Math.max(8, Math.min(innerWidth - b.width - 8, r.right + 8)) + "px"; blase.style.top = Math.max(8, Math.min(innerHeight - b.height - 8, r.top - 4)) + "px";
+    zeitweg = setTimeout(zu, 9000);
+  };
+  document.addEventListener("pointerover", (e) => { const g = e.target.closest?.(".gen[data-hinweis]"); if (g) zeige(g); });
+  document.addEventListener("pointerout", (e) => { if (e.target.closest?.(".gen[data-hinweis]") && e.pointerType !== "touch") zu(); });
+  document.addEventListener("click", (e) => { const g = e.target.closest?.(".gen[data-hinweis]"); if (g) { e.stopPropagation(); e.preventDefault(); zeige(g); } else zu(); }, true);
+}
 function zeigeBrowser() {
   aktualisiereGenauigkeit();
   const KON = ["ebene", "achse", "konpunkt", "bild"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft", "rohr", "spirale", "rippe"].includes(f.typ) && (f.vorgang || "neu") !== "neu") && f.typ !== "bohrung" && f.typ !== "biegung" && f.typ !== "rip" && !(f.typ === "skalieren" && !f.kopie) && f.typ !== "abwickeln" && f.typ !== "falten" && f.typ !== "kante" && f.typ !== "profilkante" && f.typ !== "quetschfalte" && f.typ !== "naht"); // Flansche/Kanten/Falten gehören zum Blech (nur Zeitleiste); Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
-  const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span>${f._genau && f._genau.klasse !== "exact" && f.typ !== "skizze" ? `<span class="gen gen-${f._genau.klasse}" title="${esc(`${GENAU_TEXT[f._genau.klasse]}: ${f._genau.grund}`)}" aria-label="${esc(GENAU_TEXT[f._genau.klasse])}">≈</span>` : ""}</li>`;
+  const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span>${f._genau && f._genau.klasse !== "exact" && f.typ !== "skizze" ? `<span class="gen gen-${f._genau.klasse}" tabindex="0" role="img" data-hinweis="${esc(`${GENAU_TEXT[f._genau.klasse]}: ${f._genau.grund}`)}" aria-label="${esc(`${GENAU_TEXT[f._genau.klasse]}: ${f._genau.grund}`)}">≈</span>` : ""}</li>`;
   $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, f.typ === "ebene" ? "ebene" : f.typ)).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
     <li class="kopf">Körper</li>${kp.filter((f) => !f.komponente).map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech")).join("") || (kp.length ? "" : '<li class="hinweis">Noch keine</li>')}` +
     // Komponenten (wie in Fusion): Körper zu Baugruppen zusammenfassen, gemeinsam ein-/ausblenden
@@ -1749,7 +1763,7 @@ $("zeit").addEventListener("pointerout", (e) => { if (e.pointerType !== "touch" 
   const melden = (text) => { text = String(text ?? "").trim(); if (!text || /ResizeObserver|^Script error|AbortError|cancel/i.test(text) || Date.now() - letzte < 10000) return; letzte = Date.now();
     try { speichern(); } catch {} zeigeMeldung(`Unerwarteter Fehler: ${text.slice(0, 140)}. Dein Modell ist automatisch gesichert – mit «Rückgängig» oder nach einem Neustart geht es weiter.`, "warn", 12000); };
   addEventListener("error", (e) => melden(e.message)); addEventListener("unhandledrejection", (e) => melden(e.reason?.message ?? e.reason)); }
-fensterVerschieben(); langdruck($("zeit"), "button[data-id]"); langdruck($("baum"), "li[data-id]"); tastaturSichtbar();
+fensterVerschieben(); fensterGroesse(); langdruck($("zeit"), "button[data-id]"); langdruck($("baum"), "li[data-id]"); tastaturSichtbar();
 $("zeit").addEventListener("click", (e) => { const id = e.target.closest("button")?.dataset.id; const f = finde(id); if (!f) return; if (f._aus) return status(`«${f.name}» ist ${f._aus === "zurueck" ? "zurückgerollt – Marke dahinter ziehen" : "unterdrückt – Rechtsklick → Aktivieren"}.`); bearbeite(f); });
 // Ziehen: Feature verschieben (nur wenn Bezüge davor bleiben) oder Rückrollmarke setzen
 let gezogen = null;
@@ -1987,7 +2001,7 @@ function zeigeWerkstatt() {
     <table class="liste"><thead><tr><th>Biegung</th><th class="num" title="Anschlag ab Kante A${abB ? ", darunter ab Kante B (Blech gewendet)" : ""}">Anschlag ${abB ? 'A<br><span class="abb">ab B</span>' : "ab A"}</th><th class="num">Winkel</th><th>Richtung</th></tr></thead><tbody>
     ${r.biegungen.map((b) => `<tr><td><span class="bnr">B${b.nr}</span> ${b.art === "Abkanten" ? "" : b.art}</td><td class="num">${b.art === "Rundung" ? `${b.von.toFixed(0)}–${b.bis.toFixed(0)}` : `${f1(b.pos)}${abB ? `<br><span class="abb">${f1(r.zuschnitt - b.pos)}</span>` : ""}`}</td><td class="num">${f1(Math.abs(b.winkel))}°</td><td>${b.richtung}</td></tr>`).join("")}
     </tbody></table>
-    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button>${f.typ === "profil" ? '<button class="knopf" id="kEigene">Als eigene Vorlage speichern</button>' : ""}${f.typ === "vorlage" && alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
+    <div class="reihe"><button class="knopf haupt" id="kListe">Abkantliste kopieren</button><button class="knopf" id="kDxf">DXF speichern</button><button class="knopf" id="kDruck">Werkstattblatt drucken</button><button class="knopf" id="kKopie" title="Strg+D">Duplizieren</button>${f.typ === "profil" ? '<button class="knopf" id="kEigene">Als eigene Vorlage speichern</button>' : ""}${f.typ === "vorlage" && alsZeilen(...Object.values(vorlageDef(f.vorlage).bau(f.params, m))) ? '<button class="knopf" id="kFrei">Als freies Profil bearbeiten</button>' : ""}</div>
     <dl class="etikett"><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Teil</dt><dd>${esc(f.name)}</dd>
     <dt>Blech</dt><dd>${m.name.replace(/ [\d.]+$/, "")} ${m.t.toFixed(2)} mm</dd><dt>Mass</dt><dd>${f1(r.zuschnitt)} × ${laengeVon(f)} mm${f._stirn?.length ? ` + ${f._stirn.length} Stirnlaschen` : ""} · ${f.stueck ?? 1} Stk.</dd></dl>`;
   $("kListe").onclick = () => kopiere([`${doc.objekt} · Nr. ${doc.nr} · ${f.name}`, `${m.name} · Zuschnitt ${f1(r.zuschnitt)} × ${laengeVon(f)} mm`, "",
@@ -2005,7 +2019,7 @@ function zeigeWerkstatt() {
     status(`«${f.name}» ${i >= 0 ? "aktualisiert" : "gespeichert"}: unter «Freies Profil» → «Eigene Vorlage» wählbar.`);
   };
   if ($("kFrei")) $("kFrei").onclick = () => { // Vorlage in Tabelle umwandeln, um Schenkel frei zu ergänzen
-    const { start, zeilen } = alsZeilen(...Object.values(VORLAGE[f.vorlage].bau(f.params, m)));
+    const { start, zeilen } = alsZeilen(...Object.values(vorlageVon(f).bau(f.params, m)));
     Object.assign(f, { typ: "profil", start, zeilen }); delete f.vorlage; delete f.params;
     regen(); profilDialog(f);
   };
@@ -2191,7 +2205,7 @@ function zeigeSchritt(nr) {
   const i = viele ? Math.min(o.schritt ?? 0, namen.length - 1) : 0;
   $("dSchritte").hidden = !viele; $("dZurueck").hidden = !viele || i === 0; $("dWeiter").hidden = !viele || i === namen.length - 1;
   document.querySelectorAll("#dInhalt .feld").forEach((el) => { el.hidden = viele && el.dataset.s !== namen[i]; });
-  const zus = $("dZusatz"); if (zus) zus.hidden = viele && i !== namen.length - 1;
+  const zus = $("dZusatz"); if (zus) zus.hidden = viele && i !== namen.length - 1 && !o.zusatzAlle; // zusatzAlle: der Zusatzbereich bleibt in jedem Schritt sichtbar
   const hin = document.querySelector("#dInhalt .hinweis"); if (hin) hin.hidden = viele && i !== 0;
   if (viele) $("dSchritte").innerHTML = `<span class="titel">Schritt ${i + 1} von ${namen.length}: ${esc(namen[i])}</span>` + namen.map((n, k) => `<button type="button" data-k="${k}" class="${k === i ? "jetzt" : ""}" title="${esc(n)}">${k + 1}</button>`).join("");
   $("dSchritte").querySelectorAll("button").forEach((b) => (b.onclick = () => zeigeSchritt(+b.dataset.k)));
@@ -2225,6 +2239,12 @@ $("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); if (
 $("dLoeschen").onclick = () => { dlg?.loeschen?.(); schliesse(); regen(); };
 
 // Neue oder bestehende Features mit Live-Vorschau. felder(f) liefert die Felder, setze(f, w) übernimmt Werte.
+// Skizzen, die ein neues Feature als Profil/Pfad/Fläche verwendet, werden ausgeblendet (im Browser wieder einblendbar)
+function verwendeteSkizzenAusblenden(f) {
+  const ids = new Set(); const nimm = (v) => { if (typeof v !== "string") return; const t = v.startsWith("L:") ? v.split(":")[1] : v.split(":")[0]; if (t) ids.add(t); };
+  for (const k of ["skizze", "profil1", "profil2", "pfad", "fuehrung", "quelle"]) nimm(f[k]);
+  for (const id of ids) { const sk = finde(id); if (sk?.typ === "skizze" && id !== f.id) sk.versteckt = true; }
+}
 function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
   const kopie = JSON.parse(JSON.stringify(f, (k, v) => (k.startsWith("_") ? undefined : v))), alteAuswahl = auswahl;
   if (istNeu) einfuegen(f);
@@ -2238,7 +2258,7 @@ function featureDialog(f, istNeu, felder, setze, titel, hinweis, extra = {}) {
       if (feld === "vorlage" || feld === "skizze" || feld === "vorgang" || extra.neuBei?.includes(feld)) { const d = dlg; dialog({ ...d, felder: felder(f) }); setze(f, werte()); }
       regen();
     },
-    ok: (w) => { setze(f, w); merkeAusdruecke(f); auswahl = f.id; },
+    ok: (w) => { setze(f, w); merkeAusdruecke(f); auswahl = f.id; if (istNeu) verwendeteSkizzenAusblenden(f); },
     abbrechen: () => { if (istNeu) { entferneFeature(f); auswahl = alteAuswahl; } else Object.assign(f, kopie); },
     loeschen: istNeu ? null : () => { entferneFeature(f); auswahl = null; },
   });
@@ -2422,13 +2442,25 @@ function blechDialog(f) {
   "Jeder Knick wird zur Biegung mit dem Innenradius des Materials. «Mitte»: die Linie ist die Blechmitte. «Links/Rechts»: die Linie ist eine Blechoberfläche (gezeichnete Masse = Innen- bzw. Aussenmasse), das Blech liegt in Pfeilrichtung gesehen links bzw. rechts davon. In der Ansicht: grüner Punkt = Kante A, blauer Pfeil = Richtung.", { neuBei: ["richtung", "bis"] });
 }
 
+// Spengler-Vorlagen: eingebaute (parametrisch) und eigene (gespeicherte Profile, Einstellungen › Vorlagen); eigene haben die Kennung «eigen:<Name>» und keine Parameter
+const vorlagenListe = () => [...VORLAGEN, ...(einst.vorlagen || []).map((v) => ({ id: `eigen:${v.name}`, name: `${v.name} (eigene)`, params: [], eigen: v, bau: (p, m) => freiesProfil(v.start, v.zeilen, m) }))];
+const vorlageDef = (id) => VORLAGE[id] || vorlagenListe().find((x) => x.id === id) || (String(id).startsWith("eigen:") ? null : VORLAGEN[0]);
+// Vorlage eines Features: eigene Vorlagen werden im Feature als Kopie mitgeführt, damit das Projekt auch ohne die Einstellung geöffnet werden kann
+const vorlageVon = (f) => { const d = vorlageDef(f.vorlage); if (d) return d; if (f.eigen) return { id: f.vorlage, name: f.name, params: [], bau: (p, m) => freiesProfil(f.eigen.start, f.eigen.zeilen, m) }; throw new Error(`Eigene Vorlage «${String(f.vorlage).slice(6)}» fehlt – unter Einstellungen › Vorlagen anlegen oder eine andere Vorlage wählen`); };
+const vorlageStandard = (id) => (VORLAGE[id] ? standardwerte(id) : {});
+function eigeneVorlageSpeichern(name, start, zeilen) { // legt die Vorlage an oder aktualisiert die gleichnamige
+  name = String(name || "").trim(); if (!name) return status("Zuerst einen Namen für die Vorlage eingeben.");
+  const v = { name, start: Number.isFinite(start) ? start : 0, zeilen: JSON.parse(JSON.stringify(zeilen)) }, i = einst.vorlagen.findIndex((x) => x.name === name);
+  if (i >= 0) einst.vorlagen[i] = v; else einst.vorlagen.push(v);
+  einstSpeichern(); status(`Vorlage «${name}» ${i >= 0 ? "aktualisiert" : "gespeichert"}: im Werkzeug «Spengler-Vorlage» unter «Vorlage» wählbar.`);
+}
 function vorlageDialog(f) {
   const istNeu = !f;
   f ||= { id: neueId(), typ: "vorlage", name: VORLAGEN[0].name, vorlage: VORLAGEN[0].id, params: standardwerte(VORLAGEN[0].id), material: neuMaterial(), laenge: einst.neu.laenge, stueck: einst.neu.stueck, richtung: "eine", ebene: einst.neu.ebene };
   const felder = (f) => [
-    { id: "vorlage", label: "Vorlage", optionen: VORLAGEN.map((x) => [x.id, x.name]), wert: f.vorlage },
+    { id: "vorlage", label: "Vorlage", optionen: vorlagenListe().map((x) => [x.id, x.name]), wert: f.vorlage },
     { id: "name", label: "Name", text: true, wert: f.name },
-    ...VORLAGE[f.vorlage].params.map(([k, l, e]) => ({ id: "p_" + k, label: l, einheit: e, wert: f.params[k] })),
+    ...vorlageVon(f).params.map(([k, l, e]) => ({ id: "p_" + k, label: l, einheit: e, wert: f.params[k] })),
     { id: "material", label: "Material", optionen: matOpt(), wert: f.material },
     { id: "laenge", label: "Länge", einheit: "mm", wert: f.laenge },
     { id: "richtung", label: "Richtung", optionen: RICHTUNGEN, wert: f.richtung || "eine" },
@@ -2440,15 +2472,23 @@ function vorlageDialog(f) {
   ];
   const setze = (f, w) => {
     if (w.vorlage !== f.vorlage) { // Name nur mitwechseln, wenn er nicht von Hand geändert wurde
-      if (f.name === VORLAGE[f.vorlage].name) f.name = VORLAGE[w.vorlage].name;
-      f.vorlage = w.vorlage; f.params = standardwerte(w.vorlage); return;
+      if (f.name === vorlageVon(f).name) f.name = vorlageDef(w.vorlage).name;
+      f.vorlage = w.vorlage; f.params = vorlageStandard(w.vorlage); const ev = vorlageDef(w.vorlage)?.eigen; if (ev) f.eigen = JSON.parse(JSON.stringify(ev)); else delete f.eigen; return;
     }
     f.name = w.name.trim() || f.name;
-    for (const [k] of VORLAGE[f.vorlage].params) if (Number.isFinite(w["p_" + k])) f.params[k] = w["p_" + k];
+    for (const [k] of vorlageVon(f).params) if (Number.isFinite(w["p_" + k])) f.params[k] = w["p_" + k];
     Object.assign(f, { material: w.material, laenge: w.laenge, stueck: w.stueck, ebene: w.ebene, notiz: w.notiz, richtung: w.richtung || f.richtung || "eine", bis: w.bis || "mass", ...(w.bisEbene ? { bisEbene: w.bisEbene } : {}), ...(w.bisKante ? { bisKante: w.bisKante } : {}) }); if (Number.isFinite(w.laenge2)) f.laenge2 = w.laenge2;
   };
   const REGELN = [["Vorlage", () => true], ["Masse", (id) => id.startsWith("p_")], ["Material, Länge, Lage", (id) => ["material", "laenge", "laenge2", "richtung", "bis", "bisEbene", "bisKante", "stueck", "notiz", "ebene"].includes(id)]];
-  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Spengler-Vorlage", "", { wahlNr: -1, neuBei: ["richtung", "bis"] });
+  featureDialog(f, istNeu, (f) => mitSchritten(felder(f), REGELN), setze, "Spengler-Vorlage", "Eigene Vorlagen anlegen: die gewählte Vorlage unten als eigene Vorlage speichern oder ein neues Profil zeichnen – sie erscheinen danach in der Liste «Vorlage».", {
+    wahlNr: -1, neuBei: ["richtung", "bis"], zusatzAlle: true,
+    zusatz: () => `<div class="reihe"><button class="knopf" type="button" data-vorlage="speichern" title="Die Form der gewählten Vorlage (mit den eingestellten Massen) als eigene Vorlage ablegen">Als eigene Vorlage speichern</button><button class="knopf" type="button" data-vorlage="neu" title="Neues Profil schenkelweise eingeben und als Vorlage ablegen">Neue Vorlage anlegen …</button></div>`,
+    binden: (box) => box?.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-vorlage]"); if (!t) return;
+      if (t.dataset.vorlage === "neu") { const d = dlg; $("dAbbrechen").click(); setTimeout(() => profilDialog(), 0); return; }
+      try { const m = material(f.material), { start, zeilen } = alsZeilen(...Object.values(vorlageVon(f).bau(f.params, m))); const name = f.name.trim() || vorlageVon(f).name; eigeneVorlageSpeichern(name === vorlageVon(f).name ? name + " (eigen)" : name, start, zeilen); const d = dlg; if (d) { dialog({ ...d, felder: mitSchritten(felder(f), REGELN) }); } }
+      catch (err) { status("Diese Vorlage lässt sich nicht als Zeilen ablegen: " + err.message); }
+    }) });
 }
 
 // Freies Profil: Schenkel als Tabelle, Winkel jeweils nach dem Schenkel
@@ -2484,7 +2524,7 @@ function profilDialog(f) {
       <td>${letzte ? "–" : `<input data-k="winkel" type="number" step="any" inputmode="decimal" value="${z.winkel}" aria-label="Winkel nach Schenkel ${i + 1}">`}</td>
       <td>${letzte ? "" : `<select data-k="art" aria-label="Art nach Schenkel ${i + 1}"><option value="abkanten" ${z.art !== "umschlag" ? "selected" : ""}>Abkanten</option><option value="umschlag" ${z.art === "umschlag" ? "selected" : ""}>Umschlag</option></select>`}</td>
       <td>${f.zeilen.length > 2 ? `<button class="weg" data-weg="${i}" aria-label="Schenkel ${i + 1} entfernen">×</button>` : ""}</td></tr>`; }).join("")}
-    </tbody></table><button class="knopf" data-neu>+ Schenkel</button>`;
+    </tbody></table><div class="reihe"><button class="knopf" data-neu>+ Schenkel</button><button class="knopf" data-vorlage-speichern title="Dieses Profil unter dem eingegebenen Namen als Vorlage ablegen (Werkzeug «Spengler-Vorlage»)">Als Vorlage speichern</button></div>`;
   const binden = (box) => {
     const neu = () => { const d = dlg; dialog({ ...d, felder: felder(f) }); regen(); };
     box.addEventListener("input", (e) => {
@@ -2494,6 +2534,7 @@ function profilDialog(f) {
     });
     box.addEventListener("click", (e) => {
       if (e.target.dataset.weg != null) { f.zeilen.splice(+e.target.dataset.weg, 1); f.zeilen.at(-1).winkel = 0; neu(); }
+      else if (e.target.dataset.vorlageSpeichern != null) { const w = werte(); eigeneVorlageSpeichern(w.name || f.name, Number.isFinite(w.start) ? w.start : f.start, f.zeilen); }
       else if (e.target.dataset.neu != null) { const l = f.zeilen.at(-1); l.winkel = 90; l.art = "abkanten"; f.zeilen.push({ L: 30, winkel: 0, art: "abkanten" }); neu(); box.querySelector("tr:last-child input")?.focus(); }
     });
   };
@@ -2604,7 +2645,7 @@ function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0, fr0 = 0, fr1 
   const luft = window.__prismaLuft || 0; // nur für Tests: Gehrungsflächen minimal auseinander
   const cum = [0]; if (mitte) for (let i = 1; i < mitte.length; i++) cum.push(cum[i - 1] + Math.hypot(mitte[i][0] - mitte[i - 1][0], mitte[i][1] - mitte[i - 1][1]));
   const sBis = mitte && kont.bisPunkt ? (() => { let bi = 0, bd = 1e30; mitte.forEach((p, i) => { const d = (p[0] - kont.bisPunkt[0]) ** 2 + (p[1] - kont.bisPunkt[1]) ** 2; if (d < bd) { bd = d; bi = i; } }); return cum[bi] + 1e-6; })() : -1; // Ende der ersten Biegung entlang der Mittellinie
-  if ((gh0 || gh1) && sBis > 0) { // Gehrung nur im Biegebereich: an jeder Kontur-Strecke über die Grenze Biegung/Wand zwei Punkte dicht nebeneinander einfügen (scharfe Stufe statt Schrägfläche über die ganze Wand)
+  if (((gh0 && !gh0.voll) || (gh1 && !gh1.voll)) && sBis > 0) { // Gehrung nur im Biegebereich: an jeder Kontur-Strecke über die Grenze Biegung/Wand zwei Punkte dicht nebeneinander einfügen (scharfe Stufe statt Schrägfläche über die ganze Wand)
     const q2 = [], im = (a) => mx(a[0], a[1])[2] <= sBis;
     for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; q2.push(a);
       if (im(a) !== im(b)) { let lo = 0, hi = 1; for (let it = 0; it < 40; it++) { const mm = (lo + hi) / 2, pm = [a[0] + (b[0] - a[0]) * mm, a[1] + (b[1] - a[1]) * mm]; if (im(pm) === im(a)) lo = mm; else hi = mm; }
@@ -2614,7 +2655,7 @@ function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0, fr0 = 0, fr1 
     const q2 = [], N = 6;
     for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; q2.push(a); if (Math.abs(mx(a[0], a[1])[2] - mx(b[0], b[1])[2]) > 1e-6 && Math.min(mx(a[0], a[1])[2], mx(b[0], b[1])[2]) < sBis) for (let j = 1; j < N; j++) q2.push([a[0] + (b[0] - a[0]) * j / N, a[1] + (b[1] - a[1]) * j / N]); }
     q = q2; }
-  const z0 = (x, y) => { const [cx, cy, cs] = mx(x, y); if (gh0 && cs <= sBis) return gh0.z0 + gh0.zx * x + luft; return -cx * k0 - cy * ky0 + e0 + (fr0 ? fr0 * rundFr(cs, sBis) : 0) + luft; }, z1 = (x, y) => { const [cx, cy, cs] = mx(x, y); if (gh1 && cs <= sBis) return Math.max(gh1.z0 + gh1.zx * x - luft, z0(x, y) + 0.01); return Math.max(L + cx * k1 + cy * ky1 - e1 - (fr1 ? fr1 * rundFr(cs, sBis) : 0) - luft, z0(x, y) + 0.01); }, pos = [];
+  const z0 = (x, y) => { const [cx, cy, cs] = mx(x, y); if (gh0 && (gh0.voll || cs <= sBis)) return gh0.z0 + gh0.zx * x + gh0.zy * y + luft; return -cx * k0 - cy * ky0 + e0 + (fr0 ? fr0 * rundFr(cs, sBis) : 0) + luft; }, z1 = (x, y) => { const [cx, cy, cs] = mx(x, y); if (gh1 && (gh1.voll || cs <= sBis)) return Math.max(gh1.z0 + gh1.zx * x + gh1.zy * y - luft, z0(x, y) + 0.01); return Math.max(L + cx * k1 + cy * ky1 - e1 - (fr1 ? fr1 * rundFr(cs, sBis) : 0) - luft, z0(x, y) + 0.01); }, pos = [];
   const P = (x, y, z) => pos.push(x, y, z), n = q.length;
   for (let i = 0; i < n; i++) { const [xa, ya] = q[i], [xb, yb] = q[(i + 1) % n];
     P(xa, ya, z0(xa, ya)); P(xb, yb, z0(xb, yb)); P(xb, yb, z1(xb, yb)); P(xa, ya, z0(xa, ya)); P(xb, yb, z1(xb, yb)); P(xa, ya, z1(xa, ya)); }
@@ -2722,7 +2763,7 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   const richt = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]); // + = links (konvexe Ecke)
   const ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt); // dieselbe Eckregel wie die Abwicklung
-  const n = bl.gruppen.length, gehrung = gehrungEcken(bl.gruppen, bl.profile, bl.opt, m.t); // Gehrung im Biegebereich wie im exakten Kern
+  const n = bl.gruppen.length, gehrung = gehrungEcken(bl.gruppen, bl.profile, bl.opt, m.t, seite, [...(bl.quetsch?.keys?.() || [])]); // Gehrung wie im exakten Kern (Biegebereich; an Ecken mit Quetschfalte über die ganze Höhe)
 
   for (const k of bl.quetsch?.keys() || []) { // Quetschfalte: die Fläche läuft in der Ecke bis zur gezeichneten Ecke durch, damit zwischen Fläche, Biegungen und Falte keine Lücke bleibt
     const kv = (k - 1 + n) % n, V = bl.gruppen[k].punkte[0], dV = richt(bl.gruppen[kv].punkte.at(-2), bl.gruppen[kv].punkte.at(-1)), d0 = richt(bl.gruppen[k].punkte[0], bl.gruppen[k].punkte[1]), dA = kuerzen[kv] || 0, dB = kuerzen[k] || 0;
@@ -2752,7 +2793,7 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
         }
         continue;
       }
-      const geo = prisma(k2, L, k0, k1, e0, e1, i > 1 ? 0 : ek[k].ky0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0, i > 1 ? 0 : ek[k].fr0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].fr1 || 0, i === 1 && gehrung.has(k) ? gehrungLokal(gehrung.get(k), a, d) : null, i === g.punkte.length - 1 && gehrung.has((k + 1) % n) ? gehrungLokal(gehrung.get((k + 1) % n), a, d) : null);
+      const geo = prisma(k2, L, k0, k1, e0, e1, i > 1 ? 0 : ek[k].ky0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0, i > 1 ? 0 : ek[k].fr0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].fr1 || 0, i === 1 && gehrung.has(k) ? gehrungLokal(gehrung.get(k), a, d, seite, bl.opt?.kuerzen?.[`${k}:start`] || 0, true) : null, i === g.punkte.length - 1 && gehrung.has((k + 1) % n) ? gehrungLokal(gehrung.get((k + 1) % n), a, d, seite, bl.opt?.kuerzen?.[`${k}:ende`] || 0, false) : null);
       geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
       geo.applyMatrix4(B); geos.push(nachAussen(geo)); // Basis kann gespiegelt sein: Dreiecke wieder nach aussen
     }
@@ -3273,6 +3314,8 @@ function kantenBarZeigen() {
   $("kbText").textContent = kantenWzText();
   $("kbOk").hidden = w.schritt !== "kante"; $("kbOk").disabled = !w.vorschau?.size; $("kbOk").textContent = w.vorschau?.size ? `Übernehmen (${w.vorschau.size})` : "Übernehmen";
   $("kbWinkelL").hidden = w.typ !== "flansch"; $("kbSaumL").hidden = w.typ !== "umschlag"; $("kbBezugL").hidden = $("kbPosL").hidden = w.typ !== "flansch"; $("kbLaengeL").hidden = w.typ === "baustein";
+  $("kbBausteinL").hidden = w.typ !== "baustein";
+  if (w.typ === "baustein") { const alle = alleBausteine(), gr = [...new Set(alle.map((b) => b.gruppe || "Eigene"))], sel = $("kbBaustein"); sel.innerHTML = gr.map((g) => `<optgroup label="${esc(g)}">${alle.filter((b) => (b.gruppe || "Eigene") === g).map((b) => `<option value="${esc(b.id)}">${esc(b.name)} – ${esc(b.folge)}</option>`).join("")}</optgroup>`).join(""); sel.value = w.baustein; }
   $("kbRichtung").textContent = `${w.seite === -1 ? "Nach hinten" : "Sichtseite"} ⇄`; document.querySelector(".mitte")?.classList.add("dialogMitWerk"); // Teil-Panel (Zuschnitt) bleibt unter dem Werkzeugfenster sichtbar
 }
 function endeKantenWz() { vorschauVerwerfen(); regen(); kantenWz = null; menueKante = null; kantenBarZeigen(); zeigeKanten(); }
@@ -3414,6 +3457,11 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
     if (fold) { // Gehrung an der Ecke O: gleiche Ebene wie bei der 90°-Biegung (halbiert den Winkel zwischen Ecklinie und Faltkante); der Überstand wird entlang der Faltkante auf die Ebene gezogen
       cyl.applyMatrix4(aussen); const uR = P.clone().normalize(), dR = C.clone().normalize(), mR = uR.clone().sub(dR);
       if (mR.length() > 1e-6) { mR.normalize(); const ps = cyl.attributes.position, w = new THREE.Vector3(), den = dR.dot(mR); if (Math.abs(den) > 1e-6) { for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.dot(mR); if (d > 0) { w.addScaledVector(dR, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; } }
+      { // oberes Ende: parallel zur freien Oberkante des Dreiecks (P–C) abschneiden, damit die Wulst nicht darüber hinausragt
+        const tk = C.clone().sub(P).normalize(), nTop = new THREE.Vector3().crossVectors(n, tk).normalize(); if (nTop.dot(P.clone().negate()) > 0) nTop.negate(); // zeigt vom Dreieck weg
+        const ps = cyl.attributes.position, w = new THREE.Vector3(), axR = C.clone().normalize(), den = axR.dot(nTop);
+        if (Math.abs(den) > 1e-6) { for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.clone().sub(P).dot(nTop); if (d > 0) { w.addScaledVector(axR, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; }
+      }
       cyl.applyMatrix4(M); meshes.push(koerperAusGeo(cyl, farbe, fid)); continue;
     }
     meshes.push(mk(cyl, aussen));
@@ -3601,11 +3649,11 @@ function starteKantenWz(typ, x = 200, y = 80) {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
   const los = (baustein) => { kantenWz = { typ, baustein, seite: 1, schritt: "blech", f: null, sel: [] }; const h = hauptVon(auswahl); if ((h?.typ === "flaeche" || istProfil(h)) && !h.versteckt) { kantenWz.f = h; kantenWz.schritt = "kante"; zeigeKanten(); } kantenBarZeigen(); status(kantenWzText()); };
   if (typ !== "baustein") return los(null);
-  const m = $("kantenMenue"), gruppen = [...new Set(alleBausteine().map((b) => b.gruppe || "Eigene"))];
-  m.innerHTML = `<div class="kmkopf"><b>Baustein wählen</b><button class="kmzu" data-kmzu aria-label="Schliessen">×</button></div>${gruppen.map((gr) => `<div class="kmgruppe">${esc(gr)}</div>${alleBausteine().filter((b) => (b.gruppe || "Eigene") === gr).map((b) => `<button data-kb="${esc(b.id)}">${esc(b.name)}<small>${esc(b.folge)}</small></button>`).join("")}`).join("")}`;
-  m.hidden = false; const r = m.getBoundingClientRect(); Object.assign(m.style, { left: Math.max(8, Math.min(x, innerWidth - r.width - 8)) + "px", top: Math.max(8, Math.min(y, innerHeight - r.height - 8)) + "px" });
-  m.onclick = (e) => { const t = e.target.closest("button"); if (!t) return; m.hidden = true; if (t.dataset.kb) los(t.dataset.kb); };
+  // Das Bearbeitungsfenster öffnet sich zuerst; den Baustein wählt man darin (Feld «Baustein»), zuletzt benutzter Baustein ist vorgewählt
+  const alle = alleBausteine(); if (!alle.length) return status("Keine Bausteine vorhanden – unter Einstellungen › Bausteine anlegen.");
+  los(alle.some((b) => b.id === letzterBaustein) ? letzterBaustein : alle[0].id);
 }
+let letzterBaustein = "";
 function kantenWzKlick(e) { // true = Klick verbraucht
   const w = kantenWz;
   strahl.setFromCamera(ndc(e), kamera);
@@ -3686,6 +3734,11 @@ document.querySelectorAll("[data-kantenwz]").forEach((b) => b.addEventListener("
 $("kbRichtung").onclick = () => { if (!kantenWz) return; kantenWz.seite = kantenWz.seite === -1 ? 1 : -1; kantenBarZeigen(); for (const l of vorschauFeatures()) kanteUmkehren(l, l.key); zeichneGriffe(); };
 for (const id of ["kbWinkel", "kbLaenge"]) $(id).addEventListener("input", vorschauAktualisieren);
 for (const id of ["kbBezug", "kbPos", "kbSaum"]) $(id).addEventListener("change", vorschauAktualisieren);
+$("kbBaustein").addEventListener("change", () => { // anderen Baustein wählen: gilt für die nächsten Kanten und sofort für die noch nicht übernommenen Vorschau-Kanten
+  const w = kantenWz; if (!w || w.typ !== "baustein") return; w.baustein = letzterBaustein = $("kbBaustein").value; const m = material(w.f?.material);
+  for (const l of vorschauFeatures()) l.wert = kantenWert(w, m);
+  kantenBarZeigen(); status(kantenWzText()); if (vorschauFeatures().length) { regen(); zeigeKanten(); zeichneGriffe(); }
+});
 $("kbEnde").onclick = () => { if (kantenWz?.vorschau?.size) uebernehmeKanten(); endeKantenWz(); }; // «Fertig» übernimmt noch offene Vorschauen
 $("kbOk").onclick = uebernehmeKanten;
 $("kbAbbr").onclick = () => { endeKantenWz(); status(""); };
@@ -6932,6 +6985,7 @@ function neueSkizze(ebenenId) {
   }
   const f = { id: neueId(), typ: "skizze", name: "Skizze " + (doc.features.filter((x) => x.typ === "skizze").length + 1), ebene: id, elemente: [] };
   einfuegen(f); setTimeout(() => starteSkizze(f));
+  const eb = finde(id); if (eb?.typ === "ebene") eb.versteckt = true; // die Konstruktionsebene ist verwendet: ausblenden (im Browser wieder einblendbar)
 }
 $("wSkizzeBlech").onclick = () => $("wSkizze").click(); // Skizze direkt aus dem Blech-Reiter
 $("wSkizze").onclick = () => {
@@ -7635,7 +7689,7 @@ initKontext({
   dachAusSkizze: (id) => dachDialog(undefined, { skizze: id }),
   flaecheSkizze: (ref) => neueSkizze(ref), flaecheBlech: (ref) => blechAufFlaeche(ref), ebeneSkizze: (id) => neueSkizze(id),
 });
-if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { startseite: () => startseite(true), quetschEckenSchirm: () => { const z = quetschWz?.f; if (!z) return null; const s0 = finde(z.skizze), B = basis(blechEbene(s0.ebene, z, material(z.material))), r = leinwand.getBoundingClientRect(); return quetschEcken(z).map((c) => { const w = aufSchirm(new THREE.Vector3(c.p[0], c.p[1], 0).applyMatrix4(B).toArray()); return { key: c.key, x: r.left + w[0], y: r.top + w[1] }; }); }, setzeKamera: (p, z) => { kamera.position.set(...p); steuerung.target.set(...z); steuerung.update(); }, einstSeite: (id) => { einstRegister = id; zeigeEinst(); }, sim: simulation.test, simApi: simulation, fov: () => kamera.fov, meshPunkte: (fid) => { const r = []; for (const o of modell.children) if (o.isMesh && String(o.userData.fid).split(":")[0] === fid) { o.updateMatrixWorld(true); const P = o.geometry.attributes.position; for (let i = 0; i < P.count; i++) r.push(new THREE.Vector3().fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld).toArray()); } return r; }, quetschAbw: (id) => { const bl = finde(id)?._bleche?.[0]; return bl ? { umriss: bl.abw.umriss, arten: bl.abw.linien.map((l) => l.art), quetsch: [...(bl.quetsch?.keys() || [])], fehler: bl.quetschFehler, loecher: (bl.abw.loecher || []).length } : null; }, dachPunkt: (id, i, ds = 0.5, dt = 0.5) => { const d = finde(id), fl = d?._dach?.flaechen?.[i], g = d && finde(d.gebaeude); if (!fl || !g) return null; const R = dachRahmen(fl), p = dachWelt(g, R.S.punkt(R.s0 + (R.s1 - R.s0) * ds, R.t0 + (R.t1 - R.t0) * dt, d._schichten?.oben ?? 0)), q = aufSchirm(p), r = leinwand.getBoundingClientRect(); return [r.left + q[0], r.top + q[1]]; }, kantenWahl: (key) => wendeKantenWz(key), kantenAktiv: () => menueKante?.key ?? null, profilKanten: () => { const f = kantenWz?.f; return f ? profilKanten(f).map((k) => ({ key: k.key, mitte: (() => { const m = k.p[0].clone().add(k.p[1]).multiplyScalar(0.5), q = aufSchirm(m.toArray()), r = leinwand.getBoundingClientRect(); return [r.left + q[0], r.top + q[1]]; })() })) : []; }, kontext: kontextAktionen, zeigerAuswahl: () => zeigerAuswahl, pruefeNeueVersion, offlineStatus: () => offlineStatus, kameraBlick: () => kamera.getWorldDirection(new THREE.Vector3()).toArray(), kameraQ: () => kamera.quaternion.toArray(), griffe: () => griffe.map((g) => ({ feld: g.feld, faktor: g.faktor, dir: g.dir.toArray(), pos: g.pos.toArray(), schirm: (() => { const r = leinwand.getBoundingClientRect(), A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos) * 0.7).toArray()); return { b: [r.left + B[0], r.top + B[1]], a: [r.left + A[0], r.top + A[1]] }; })() })), kameraZiel: () => { const t = flaechenTreffer(new THREE.Vector2(0, 0)); return { abstand: t ? t.distance : null, kamera: kamera.position.toArray(), min: Math.max(4, modellRadius() * 0.0004) }; }, maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
+if (new URLSearchParams(location.search).has("test")) window.sdcadTest = { startseite: () => startseite(true), quetschEckenSchirm: () => { const z = quetschWz?.f; if (!z) return null; const s0 = finde(z.skizze), B = basis(blechEbene(s0.ebene, z, material(z.material))), r = leinwand.getBoundingClientRect(); return quetschEcken(z).map((c) => { const w = aufSchirm(new THREE.Vector3(c.p[0], c.p[1], 0).applyMatrix4(B).toArray()); return { key: c.key, x: r.left + w[0], y: r.top + w[1] }; }); }, setzeKamera: (p, z) => { kamera.position.set(...p); steuerung.target.set(...z); steuerung.update(); }, einstSeite: (id) => { einstRegister = id; zeigeEinst(); }, sim: simulation.test, simApi: simulation, fov: () => kamera.fov, meshPunkte: (fid) => { const r = []; for (const o of modell.children) if (o.isMesh && String(o.userData.fid).split(":")[0] === fid) { o.updateMatrixWorld(true); const P = o.geometry.attributes.position; for (let i = 0; i < P.count; i++) r.push(new THREE.Vector3().fromBufferAttribute(P, i).applyMatrix4(o.matrixWorld).toArray()); } return r; }, quetschAbw: (id) => { const bl = finde(id)?._bleche?.[0]; return bl ? { umriss: bl.abw.umriss, arten: bl.abw.linien.map((l) => l.art), quetsch: [...(bl.quetsch?.keys() || [])], fehler: bl.quetschFehler, loecher: (bl.abw.loecher || []).length } : null; }, dachPunkt: (id, i, ds = 0.5, dt = 0.5) => { const d = finde(id), fl = d?._dach?.flaechen?.[i], g = d && finde(d.gebaeude); if (!fl || !g) return null; const R = dachRahmen(fl), p = dachWelt(g, R.S.punkt(R.s0 + (R.s1 - R.s0) * ds, R.t0 + (R.t1 - R.t0) * dt, d._schichten?.oben ?? 0)), q = aufSchirm(p), r = leinwand.getBoundingClientRect(); return [r.left + q[0], r.top + q[1]]; }, kantenWahl: (key) => wendeKantenWz(key), kantenAktiv: () => menueKante?.key ?? null, profilKanten: () => { const f = kantenWz?.f; return f ? profilKanten(f).map((k) => ({ key: k.key, mitte: (() => { const m = k.p[0].clone().add(k.p[1]).multiplyScalar(0.5), q = aufSchirm(m.toArray()), r = leinwand.getBoundingClientRect(); return [r.left + q[0], r.top + q[1]]; })() })) : []; }, kontext: kontextAktionen, zeigerAuswahl: () => zeigerAuswahl, pruefeNeueVersion, offlineStatus: () => offlineStatus, quetschDaten: (id) => { const f = finde(id); if (!f?._q) return null; const q = f._q, z = q.zus; return JSON.parse(JSON.stringify({ wand: q.wand, O: q.O, X3: q.X3, Y3: q.Y3, Z3: q.Z3, ri: q.ri, geometrie: z.geometrie, m: z.m, ell: z.ell, hoehe: z.hoehe, hoehe2: z.hoehe2, psi: z.psi, sS: z.sS, pruefung: q.pruefung })); }, kameraBlick: () => kamera.getWorldDirection(new THREE.Vector3()).toArray(), kameraQ: () => kamera.quaternion.toArray(), griffe: () => griffe.map((g) => ({ feld: g.feld, faktor: g.faktor, dir: g.dir.toArray(), pos: g.pos.toArray(), schirm: (() => { const r = leinwand.getBoundingClientRect(), A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos) * 0.7).toArray()); return { b: [r.left + B[0], r.top + B[1]], a: [r.left + A[0], r.top + A[1]] }; })() })), kameraZiel: () => { const t = flaechenTreffer(new THREE.Vector2(0, 0)); return { abstand: t ? t.distance : null, kamera: kamera.position.toArray(), min: Math.max(4, modellRadius() * 0.0004) }; }, maxLinie: (fid) => { let m = 0, n = 0, bad = 0; for (const o of modell.children) if (o.userData.fid === fid) for (const l of o.children) { const p = l.geometry?.attributes.position; if (!p) continue; for (let i = 0; i + 1 < p.count; i += 2) { const d = Math.hypot(p.getX(i) - p.getX(i + 1), p.getY(i) - p.getY(i + 1), p.getZ(i) - p.getZ(i + 1)); if (!isFinite(d)) bad++; else m = Math.max(m, d); n++; } } let tm = 0, ti = -1; for (const o of modell.children) if (o.userData.fid === fid && o.geometry?.attributes.position) { const p = o.geometry.attributes.position; for (let i = 0; i + 2 < p.count; i += 3) for (const [a, b] of [[0, 1], [1, 2], [2, 0]]) { const d = Math.hypot(p.getX(i + a) - p.getX(i + b), p.getY(i + a) - p.getY(i + b), p.getZ(i + a) - p.getZ(i + b)); if (d > tm) { tm = d; ti = i / 3; } } } return { max: m, n, bad, dreieckMax: tm, ti }; }, setzeAuftrag: (x) => setzeAuftrag(x), exportiere: (n, i, art) => herunterladen(n, i, "text/plain", null, art), waehle: (id) => waehle(id), segmenteImKasten: (praefix, u0, u1, v0, v1, w0 = -1e9, w1 = 1e9) => { let n = 0; for (const o of modell.children.filter((x) => x.isMesh && String(x.userData.fid).startsWith(praefix))) { const pos = o.children[0]?.geometry.attributes.position; if (!pos) continue; for (let i = 0; i + 1 < pos.count; i += 2) { const m = new THREE.Vector3((pos.getX(i) + pos.getX(i + 1)) / 2, (pos.getY(i) + pos.getY(i + 1)) / 2, (pos.getZ(i) + pos.getZ(i + 1)) / 2), uv = aufEbene("XY", m); const E0 = E_("XY"); uv[2] = m.clone().sub(V(E0.o)).dot(V(E0.n)); if (uv[0] > u0 && uv[0] < u1 && uv[1] > v0 && uv[1] < v1 && uv[2] > w0 && uv[2] < w1) n++; } } return n; }, kanteBei: (x, y) => kanteUnterMaus(kantenWz.f, { clientX: x, clientY: y, pointerType: "mouse" }), kantenAn: () => kantenLabels.filter((l) => l.an).map((l) => l.kante), sichtbareKoerper: () => modell.children.filter((o) => o.isMesh && o.visible).length, pivot: () => drehPivot?.toArray() ?? null, griff: () => { const r = leinwand.getBoundingClientRect(); return griffe.map((g) => { const A = aufSchirm(g.pos.toArray()), B = aufSchirm(g.pos.clone().addScaledVector(g.dir, griffLaenge(g.pos)).toArray()); return { feld: g.feld, x: r.left + (A[0] + B[0]) / 2, y: r.top + (A[1] + B[1]) / 2 }; }); }, waehl: () => waehlGruppe.children.length, hover: () => hoverGruppe.children.length, beendeSkizze: () => beendeSkizze(), kamera: () => ({ pos: kamera.position.toArray(), ziel: steuerung.target.toArray() }), dok: () => JSON.parse(JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v))), raster: () => einst.skizze.raster, steuerung: () => ({ damping: steuerung.enableDamping, mitte: steuerung.mouseButtons.MIDDLE, links: steuerung.mouseButtons.LEFT, rechts: steuerung.mouseButtons.RIGHT, zoomZeiger: steuerung.zoomToCursor }), bearbeite: (id) => bearbeite(doc.features.find((f) => f.id === id)), exaktAnsicht: (art, m = 1, verdeckt = true, lage = null) => { const e = exakteAnsicht(art, m, verdeckt, () => {}, lage); return { stand: e.stand, exakt: !!e.r?.exakt, flaechen: e.r?.flaechen ?? null, sichtbar: e.r?.sichtbar ?? null, verdeckt: e.r?.verdeckt ?? null, breite: e.r?.breite, hoehe: e.r?.hoehe }; }, koerperInfo: () => { modell.updateMatrixWorld(true); return modell.children.filter((o) => o.isMesh && o.userData.fid).map((o) => { const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry, p = g.attributes.position.array; let v = 0;
     for (let i = 0; i < p.length; i += 9) v += (p[i] * (p[i + 4] * p[i + 8] - p[i + 5] * p[i + 7]) - p[i + 1] * (p[i + 3] * p[i + 8] - p[i + 5] * p[i + 6]) + p[i + 2] * (p[i + 3] * p[i + 7] - p[i + 4] * p[i + 6])) / 6;
     g.computeBoundingBox(); return { fid: o.userData.fid, exakt: !!o.userData.exakt, flaechen: o.userData.exakt?.flaechen.length ?? 0, volumen: v, min: g.boundingBox.min.toArray(), max: g.boundingBox.max.toArray() }; }); }, abw: () => doc.features.flatMap((f) => (f._bleche || []).map((b) => b.abw.flaeche)), profilUeberschneidung: () => { // Test: Kantenprofile desselben Blechs untereinander (ohne Grundplatte)
     const out = []; const ms = modell.children.filter((o) => o.isMesh && String(o.userData.fid).includes(":"));

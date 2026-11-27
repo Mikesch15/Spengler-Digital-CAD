@@ -7,7 +7,7 @@ import { blechQuerschnitt, verschiebeProfil } from "./blech.js";
 import { berechne } from "../geometrie.js";
 import { freiesProfil } from "../profile.js";
 import { folge } from "../details.js";
-import { eckFaktoren, gehrungEcken } from "../flaechenblech.js";
+import { eckFaktoren, gehrungEcken, gehrungLokal } from "../flaechenblech.js";
 import { eckSchnitt2 } from "../quetschfalte.js";
 
 const kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -105,7 +105,7 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
   const ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt);
   // Gehrung im Biegebereich: an jeder Aussenecke zweier einfacher Flansche enden beide Biegezonen in derselben senkrechten Ebene durch die Ecke der Biegelinien
   // (halbiert den Winkel der Kanten); darüber (gerade Wand) gilt weiter der Schnitt der Ecke. So ragt keine Ecke des Nachbarflanschs über den Biegebereich hinaus.
-  const nE = bl.gruppen.length, ecke = gehrungEcken(bl.gruppen, bl.profile, bl.opt, t);
+  const nE = bl.gruppen.length, ecke = gehrungEcken(bl.gruppen, bl.profile, bl.opt, t, s, [...(bl.quetsch?.keys?.() || [])]);
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p?.baustein) return;
     const bq = bausteinQuerschnitt(p.baustein, m); if (!bq) throw new Error(`Baustein «${p.baustein.name ?? p.baustein.folge}» lässt sich nicht rechnen`);
@@ -118,12 +118,16 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
       const lokal = [d[1], 0, d[0], a[0], -d[0], 0, d[1], a[1], 0, s, 0, 0], M = mal(B, lokal);
       const ky0 = i > 1 ? 0 : ek[k].ky0 || 0, ky1 = i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0, ecken = [[bq.xmin, bq.ymin], [bq.xmin, bq.ymax], [bq.xmax, bq.ymin], [bq.xmax, bq.ymax]];
       const z0 = Math.min(...ecken.map(([x, y]) => -x * k0 - y * ky0)) + e0 - 1, z1 = L + Math.max(...ecken.map(([x, y]) => x * k1 + y * ky1)) - e1 + 1;
-      const xr = [d[1], -d[0]], gehr = [], lokalEbene = (c, vorz) => ({ punkt: [(c.Of[0] - a[0]) * xr[0] + (c.Of[1] - a[1]) * xr[1], 0, (c.Of[0] - a[0]) * d[0] + (c.Of[1] - a[1]) * d[1]], normale: [vorz * (xr[0] * c.mm[0] + xr[1] * c.mm[1]), 0, vorz * (d[0] * c.mm[0] + d[1] * c.mm[1])], H: c.H });
-      if (i === 1 && ecke.has(k)) gehr.push({ ...lokalEbene(ecke.get(k), -1), ersetzt: 0 }); // Anfang: bleibt die Seite von +d
-      if (i === g.punkte.length - 1 && ecke.has((k + 1) % nE)) gehr.push({ ...lokalEbene(ecke.get((k + 1) % nE), 1), ersetzt: 1 }); // Ende: bleibt die Seite von −d
+      // Gehrung (siehe kern/flaechenblech.js gehrungEcken): im Biegebereich oder – an Ecken mit Quetschfalte – über die ganze Höhe
+      const gehr = [], hr = [{ punkt: [0, 0, e0], normale: [-k0, -ky0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, -ky1, 1] }];
+      let zlo = z0, zhi = z1; const ebenenWerte = (gl) => ecken.map(([x, y]) => gl.z0 + gl.zx * x + gl.zy * y);
+      if (i === 1 && ecke.has(k)) { const gl = gehrungLokal(ecke.get(k), a, d, s, bl.opt?.kuerzen?.[`${k}:start`] || 0, true);
+        if (gl) { const eb = { punkt: [0, 0, gl.z0], normale: [gl.zx, gl.zy, -1] }; if (gl.voll) { hr[0] = eb; zlo = Math.min(zlo, Math.min(...ebenenWerte(gl)) - 1); } else gehr.push({ ...eb, H: gl.H, ersetzt: 0 }); } }
+      if (i === g.punkte.length - 1 && ecke.has((k + 1) % nE)) { const gl = gehrungLokal(ecke.get((k + 1) % nE), a, d, s, bl.opt?.kuerzen?.[`${k}:ende`] || 0, false);
+        if (gl) { const eb = { punkt: [0, 0, gl.z0], normale: [-gl.zx, -gl.zy, 1] }; if (gl.voll) { hr[1] = eb; zhi = Math.max(zhi, Math.max(...ebenenWerte(gl)) + 1); } else gehr.push({ ...eb, H: gl.H, ersetzt: 1 }); } }
       plan.prismen.push({
-        extrusion: { op: "extrusion", profil: bq.profil, ebene: { ursprung: [0, 0, z0], x: [1, 0, 0], n: [0, 0, 1] }, hoehe: z1 - z0 },
-        halbraeume: [{ punkt: [0, 0, e0], normale: [-k0, -ky0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, -ky1, 1] }],
+        extrusion: { op: "extrusion", profil: bq.profil, ebene: { ursprung: [0, 0, zlo], x: [1, 0, 0], n: [0, 0, 1] }, hoehe: zhi - zlo },
+        halbraeume: hr,
         gehrung: gehr,
         m: M,
       });

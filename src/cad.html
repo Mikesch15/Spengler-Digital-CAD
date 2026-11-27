@@ -630,8 +630,10 @@ fieldset { border: 1px solid var(--line); } legend { color: var(--accent); font-
   .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr:last-child { border-right: 0; }
   .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr::before { position: absolute; left: 0; right: 0; bottom: 1px; padding: 0; text-align: center; }
   /* einheitliche Kacheln: gleiche Grösse, Beschriftung höchstens zwei Zeilen, Gruppentitel auf einer Linie */
-  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr { min-height: 92px; align-content: flex-start; }
-  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr .wz { box-sizing: border-box; width: 84px; min-width: 0; height: 66px; justify-content: flex-start; padding: 6px 3px 2px; line-height: 1.15; font-size: 11.5px; white-space: normal; overflow: hidden; }
+  /* nur eine Reihe: Gruppen laufen nebeneinander, bei zu wenig Platz wird seitlich gewischt/gescrollt statt umgebrochen */
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; -webkit-overflow-scrolling: touch; flex: 1 1 100%; min-width: 0; width: 100%; max-width: calc(100vw - 40px); }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr { flex-wrap: nowrap; flex: none; min-height: 92px; align-content: flex-start; padding-left: 5px; padding-right: 5px; }
+  .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr .wz { box-sizing: border-box; width: auto; min-width: 56px; max-width: 100px; height: 66px; justify-content: flex-start; padding: 6px 2px 2px; line-height: 1.15; font-size: 11.5px; white-space: normal; overflow: visible; }
   .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr .wz > span { display: block; max-width: 100%; }
   .leiste:not(.imSkizze):not(.imDialog) .klappmenue .mgr .wz b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 }
@@ -955,7 +957,16 @@ body.stiftpalette .stiftleiste { display: flex; }
 }
 
 .wz svg, .kk-knopf svg, .stiftleiste svg, .zeitleiste svg { stroke-linecap: round; stroke-linejoin: round; }
-#baum .gen { margin-left: auto; padding: 0 6px; font-size: 13px; font-weight: 700; cursor: help; color: var(--muted); } #baum .gen-hybrid { color: #8a6d00; } #baum .gen-mesh { color: #b26a00; } #baum .gen-failed, #baum .gen-unsupported { color: #c0392b; }
+#baum .gen { margin-left: auto; min-width: 22px; text-align: center; padding: 0 6px; font-size: 13px; font-weight: 700; cursor: help; color: var(--muted); } #baum .gen-hybrid { color: #8a6d00; } #baum .gen-mesh { color: #b26a00; } #baum .gen-failed, #baum .gen-unsupported { color: #c0392b; }
+.hinweisblase { position: fixed; z-index: 9999; max-width: 320px; padding: 8px 12px; border-radius: 8px; background: #1f2937; color: #fff; font: 500 13px/1.35 var(--font-body); box-shadow: 0 6px 20px rgba(0,0,0,.3); pointer-events: none; }
+/* Fenster in der Grösse ändern: Griff unten rechts */
+.dialog, .modalbox, .layerbox { position: relative; } .dialog { position: absolute; } .layerbox { position: absolute; }
+.groessengriff { position: absolute; right: 0; bottom: 0; width: 26px; height: 26px; cursor: nwse-resize; touch-action: none; z-index: 3; background: linear-gradient(135deg, transparent 0 55%, var(--muted) 55% 60%, transparent 60% 70%, var(--muted) 70% 75%, transparent 75% 85%, var(--muted) 85% 90%, transparent 90%); opacity: .55; border-bottom-right-radius: inherit; }
+.groessengriff:hover { opacity: 1; }
+.dialog[data-groesse="1"] { display: flex; flex-direction: column; max-height: calc(100vh - 12px); } .dialog[data-groesse="1"] .inhalt { flex: 1 1 auto; min-height: 0; max-height: none; }
+.dialog.klein[data-groesse="1"] { height: auto !important; } .dialog.klein .groessengriff { display: none; }
+.modalbox[data-groesse="1"] { max-width: calc(100vw - 12px); max-height: calc(100vh - 12px); }
+.layerbox[data-groesse="1"] { overflow: auto; max-width: calc(100vw - 12px); }
 </style>
 
 <a class="skip" href="#leinwand" id="skipLink">Zur 3D-Ansicht</a>
@@ -1006,7 +1017,7 @@ body.stiftpalette .stiftleiste { display: flex; }
       <div class="mgr" data-titel="Kanten">
       <button class="wz" data-kantenwz="flansch" title="Einfacher Flansch (Winkel, Länge): Blech anklicken, dann Kante – auch an einem bestehenden Baustein/Flansch"><svg viewBox="0 0 24 24"><path class="f" d="M3 19h13V8h3v14H3z"/></svg><span><b>Flansch</b><small>Winkel, Länge · Blech, dann Kante</small></span></button>
       <button class="wz" data-kantenwz="umschlag" title="Umschlag (Saum): Blech anklicken, dann Kante"><svg viewBox="0 0 24 24"><path d="M3 18h13a4 4 0 0 0 0-8H8"/></svg><span><b>Umschlag</b><small>Länge · Blech, dann Kante</small></span></button>
-      <button class="wz" data-kantenwz="baustein" title="Spenglerbaustein aus der Bibliothek (Falz, Traufe, Ortgang …): Baustein wählen, Blech anklicken, dann Kante"><svg viewBox="0 0 24 24"><path class="f" d="M4 18l4-10h8l4 10z"/></svg><span><b>Kantenbaustein …</b><small>Falz, Traufe, Ortgang …</small></span></button>
+      <button class="wz" data-kantenwz="baustein" title="Spenglerbaustein aus der Bibliothek (Falz, Traufe, Ortgang …): im Fenster den Baustein wählen, Blech anklicken, dann Kante"><svg viewBox="0 0 24 24"><path class="f" d="M4 18l4-10h8l4 10z"/></svg><span><b>Kantenbaustein</b><small>Falz, Traufe, Ortgang …</small></span></button>
       <button class="wz" id="wQuetsch" title="Quetschfalte an der Ecke zweier Aufkantungen eines Flächenblechs: Blech wählen, dann Ecke anklicken"><svg viewBox="0 0 24 24"><path class="f" d="M4 20V8l8 4 8-4v12z"/><path d="M12 12v8"/></svg><span><b>Quetschfalte</b><small>Ecke zweier Aufkantungen</small></span></button>
       <button class="wz" id="wFlanschEnde" title="Flanschende ändern: rechtwinklig, bündig zur Nachbarkante oder mit Winkel – verlängern oder kürzen. Blech wählen, dann Ecke anklicken"><svg viewBox="0 0 24 24"><path d="M4 18h10l4-9"/><path d="M14 18l4-9" stroke-dasharray="2 2"/></svg>Flanschende</button>
       <button class="wz" id="wNaht" title="Naht: zwei Bleche an einer Kante verbinden – Punktschweissnaht mit Überlappung, Falznaht, Schweiss- oder Ecknaht (Raupe)"><svg viewBox="0 0 24 24"><path d="M3 15h8l2 3h8M3 9h8l2-3h8"/><path class="f" d="M9 12h6v1.2H9z"/></svg>Naht</button>
@@ -1171,6 +1182,7 @@ body.stiftpalette .stiftleiste { display: flex; }
     <!-- Werkzeugfenster: alle Werkzeuge öffnen dasselbe angedockte Fenster (Titel, Felder, Fuss mit Schaltflächen) -->
     <div class="dialog" id="kantenBar" hidden><h3 id="kbTitel"></h3><button class="dklein" data-gen title="Fenster einklappen – Ansicht frei zum Antippen" aria-label="Fenster einklappen">▾</button><div class="inhalt">
       <p class="hinweis" id="kbText"></p>
+      <div class="feld" id="kbBausteinL" hidden><label for="kbBaustein">Baustein</label><select id="kbBaustein"></select></div>
       <div class="feld" id="kbWinkelL"><label for="kbWinkel">Winkel (°)</label><input id="kbWinkel" type="text" inputmode="decimal" value="90"></div>
       <div class="feld" id="kbLaengeL"><label for="kbLaenge">Länge (mm)</label><input id="kbLaenge" type="text" inputmode="decimal" value="25"></div>
       <div class="feld" id="kbSaumL" hidden><label for="kbSaum">Saumart</label><select id="kbSaum"><option value="geschlossen">Geschlossen</option><option value="offen">Offen</option><option value="tropfen">Tropfen</option></select></div>
