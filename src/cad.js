@@ -1504,6 +1504,7 @@ function regen() {
         f._q = quetschGeo(z, f);
         if (!f.versteckt) quetschMeshes(z, f).forEach((o) => modell.add(o));
       } else if (f.typ === "naht") { // Verbindungsnaht zwischen zwei Blechen: Überlappung/Falz wirken über die Kantenbausteine (berechneKanten, profilErweiterungen), Raupen sind Darstellung
+        if (!f.a?.key || !f.b?.key) throw new Error("Blech und Kante für beide Seiten wählen (Schritte im Naht-Fenster)"); // noch nicht vollständig
         const za = finde(f.a?.ziel), zb = finde(f.b?.ziel); if (!za || !zb) throw new Error("Eines der beiden Bleche der Naht fehlt");
         if (doc.features.indexOf(za) > doc.features.indexOf(f) || doc.features.indexOf(zb) > doc.features.indexOf(f)) throw new Error("Beide Bleche müssen vor der Naht stehen");
         if (za.versteckt || zb.versteckt) throw new Error("Ein Blech der Naht ist ausgeblendet");
@@ -2238,8 +2239,8 @@ function schliesse() {
   if (dlg?.felder.some((fd) => fd.wahl)) status(""); // Hinweis «… anklicken» gilt nur im Dialog
   $("dialog").hidden = true; document.querySelector(".mitte")?.classList.remove("dialogMitWerk"); dlg = null; grundebenen.visible = false; hoverLoeschen(); zeichneGriffe(); setTimeout(leisteZustand);
 }
-$("dOk").onclick = () => { const m = dlg?.pflicht?.(); if (m) return status(m); dlg?.ok?.(werte()); schliesse(); regen(); };
-$("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); regen(); if (typeof wendeSchnittAn === "function") wendeSchnittAn(); };
+$("dOk").onclick = () => { const m = dlg?.pflicht?.(); if (m) return status(m); dlg?.ok?.(werte()); schliesse(); if (nahtWz) endeNahtWz(); regen(); };
+$("dAbbrechen").onclick = () => { dlg?.abbrechen?.(); schliesse(); if (nahtWz) endeNahtWz(); regen(); if (typeof wendeSchnittAn === "function") wendeSchnittAn(); };
 $("dLoeschen").onclick = () => { dlg?.loeschen?.(); schliesse(); regen(); };
 
 // Neue oder bestehende Features mit Live-Vorschau. felder(f) liefert die Felder, setze(f, w) übernimmt Werte.
@@ -3575,19 +3576,19 @@ const NAHT_TEXT = {
   blechA: "Schritt 1 von 4: Blech A anklicken (in der Ansicht oder im Browser).", kanteA: "Schritt 2 von 4: die Kante an Blech A anklicken (blaue Linien).",
   blechB: "Schritt 3 von 4: Blech B anklicken (in der Ansicht oder im Browser).", kanteB: "Schritt 4 von 4: die Kante an Blech B anklicken (blaue Linien).",
 };
-function nahtSchritt(schritt, blech = null) { // zeigt den Schritt an; bei «blech…» nimmt auch der Browser eine Blechwahl entgegen
-  nahtWz = { ...nahtWz, schritt, blech }; const bl = blech ? finde(blech) : null;
-  wkZeigen("Naht", NAHT_TEXT[schritt] + (bl ? ` (Blech «${bl.name}»)` : "") + " – Esc bricht ab.", endeNahtWz); status("Naht: " + NAHT_TEXT[schritt].replace(/^Schritt \d von 4: /, ""));
-  blechWahl = schritt.startsWith("blech") ? { filter: (h) => nahtKandidaten().some((k) => k.ziel === h.id), weiter: (h) => nahtBlechGewaehlt(h.id) } : null; zeigeKanten();
+function nahtSchritt(schritt, blech = null) { // zeigt den Schritt im Naht-Fenster (Zeile unten) an; bei «blech…» nimmt auch der Browser eine Blechwahl entgegen
+  nahtWz = { ...nahtWz, schritt, blech }; status("Naht: " + NAHT_TEXT[schritt].replace(/^Schritt \d von 4: /, ""));
+  blechWahl = schritt.startsWith("blech") ? { filter: (h) => nahtKandidaten().some((k) => k.ziel === h.id), weiter: (h) => nahtBlechGewaehlt(h.id) } : null; zeigeKanten(); if (dlg?.info) $("dInfo").textContent = dlg.info();
 }
 function nahtBlechGewaehlt(id) {
   if (!nahtWz || !nahtWz.schritt.startsWith("blech")) return;
-  nahtSchritt(nahtWz.schritt === "blechA" ? "kanteA" : "kanteB", id); waehle(id);
+  nahtSchritt(nahtWz.schritt === "blechA" ? "kanteA" : "kanteB", id);
 }
 function starteNahtWz() {
   if (dlg) $("dAbbrechen").click(); if (skizze) return status("Erst die Skizze beenden.");
   if (!nahtKandidaten().length) return fehltDialog("Naht", "Keine Bleche mit wählbaren Kanten vorhanden – zuerst ein Flächenblech oder Blechprofil anlegen.");
-  nahtWz = { a: null }; nahtSchritt("blechA");
+  const n = { id: neueId(), typ: "naht", name: `Naht ${doc.features.filter((x) => x.typ === "naht").length + 1}`, a: { ziel: "", key: "" }, b: { ziel: "", key: "" }, ...nahtStandard("punkt") };
+  nahtWz = { a: null, f: n }; nahtDialog(n, true); nahtSchritt("blechA"); // das Fenster öffnet sofort; Blech und Kante beider Seiten werden darin der Reihe nach gewählt
 }
 function endeNahtWz() { nahtWz = null; blechWahl = null; wkZu(); zeigeKanten(); }
 // Kanten, die im aktuellen Schritt wählbar sind: nur die des gewählten Blechs (Schritt «kante…»), sonst keine
@@ -3612,8 +3613,8 @@ function nahtKlick(e) {
   for (const k of nahtWaehlbar()) for (let i = 1; i < k.punkte.length; i++) { const A = aufSchirm(k.punkte[i - 1].toArray()), B = aufSchirm(k.punkte[i].toArray()); if (A[2] > 1 || B[2] > 1) continue; const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = k; } }
   if (!best) { status("Eine Kante des gewählten Blechs anklicken (blaue Linien) – " + NAHT_TEXT[w.schritt]); return true; }
   if (w.schritt === "kanteA") { nahtWz.a = { ziel: best.ziel, key: best.key }; nahtSchritt("blechB"); return true; }
-  const a = nahtWz.a, n = { id: neueId(), typ: "naht", name: `Naht ${doc.features.filter((x) => x.typ === "naht").length + 1}`, a, b: { ziel: best.ziel, key: best.key }, ...nahtStandard("punkt") };
-  endeNahtWz(); einfuegen(n); regen(); zeigeKanten(); waehle(n.id); nahtDialog(n); status(n._fehler ? "⚠ " + n._fehler : "Naht angelegt – Art und Richtung im Fenster einstellen."); return true;
+  const n = nahtWz.f; n.a = { ...nahtWz.a }; n.b = { ziel: best.ziel, key: best.key };
+  endeNahtWz(); regen(); zeigeKanten(); if (dlg?.info) $("dInfo").textContent = dlg.info(); status(n._fehler ? "⚠ " + n._fehler : "Naht gesetzt – Art und Richtung im Fenster einstellen, dann OK."); return true;
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && nahtWz && !dlg && !skizze) { endeNahtWz(); status(""); } });
 // Längsnaht am Rohr/Kegel: Zugabe in der Abwicklung (Summe der Abkantzugaben beider Seiten) und Überlappungsstreifen im Modell
@@ -3644,10 +3645,10 @@ function nahtTeilSetzen(ff, w) {
   von = Math.max(0, Math.min(von, LA - 1)); bis = Math.max(von + 1, Math.min(bis, LA)); ff.a.teil = { von: Math.round(von * 10) / 10, bis: Math.round(bis * 10) / 10 };
   if (LB > 0) { const vb = LB - bis / LA * LB, bb = LB - von / LA * LB; ff.b.teil = { von: Math.round(vb * 10) / 10, bis: Math.round(bb * 10) / 10 }; }
 }
-function nahtDialog(f) {
+function nahtDialog(f, istNeu = false) {
   const ea = nahtKante(f.a), eb = nahtKante(f.b);
   const NUR = { punkt: ["absetz", "richtung", "zugabe"], falz: ["absetz", "richtung", "mittig", "falzA", "falzB"], schweiss: ["seite", "raupeBreite", "raupeHoehe"], ecke: ["seite", "raupeBreite", "raupeHoehe"] }; // je Nahtart nur die passenden Felder
-  featureDialog(f, false, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "art", label: "Nahtart", optionen: Object.entries(NAHT_ARTEN), wert: ff.art || "punkt" },
+  featureDialog(f, istNeu, (ff) => [{ id: "name", label: "Name", text: true, wert: ff.name }, { id: "art", label: "Nahtart", optionen: Object.entries(NAHT_ARTEN), wert: ff.art || "punkt" },
     { id: "absetz", label: "Abgesetztes Blech (Punkt/Falz)", optionen: [["b", "Blech B"], ["a", "Blech A"]], wert: ff.absetz === "a" ? "a" : "b" },
     { id: "richtung", label: "Absetzung / Falz Richtung", optionen: [["oben", "zur Sichtseite"], ["unten", "zur Rückseite"]], wert: ff.richtung || "oben" },
     { id: "zugabe", label: "Überlappung (Punktnaht)", einheit: "mm", wert: ff.zugabe ?? 15 },
@@ -3658,7 +3659,8 @@ function nahtDialog(f) {
     (ff, w) => { nahtTeilSetzen(ff, w); if (w.name != null) ff.name = w.name; if (w.art) ff.art = w.art; if (w.absetz) ff.absetz = w.absetz; if (w.richtung) ff.richtung = w.richtung; if (w.mittig) ff.mittig = w.mittig === "ja"; if (w.seite) ff.seite = w.seite;
       for (const k of ["zugabe", "falzA", "falzB", "raupeBreite", "raupeHoehe"]) if (Number.isFinite(w[k])) ff[k] = Math.max(0, w[k]); },
     "Naht", "Verbindung zweier Bleche an den gewählten Kanten. Punktnaht: Überlappung (Standard 15 mm), das abgesetzte Blech wird um eine Blechstärke gekröpft, so dass beide bündig liegen. Falznaht: einfacher liegender Falz, 5 mm + 10 mm (abgesetzt) oder mittig. Schweiss-/Ecknaht: nur Darstellung als Raupe. Sitzt an der Kante schon ein Flansch, läuft die Naht zusätzlich darauf.",
-    { neuBei: ["art", "nahtLaenge"], info: () => (f._fehler ? "⚠ " + f._fehler : `A: ${ea?.name || "–"} · B: ${eb?.name || "–"}`) });
+    { neuBei: ["art", "nahtLaenge"], pflicht: () => (!f.a?.key || !f.b?.key ? "Zuerst Blech und Kante für beide Seiten wählen (Schritte 1–4)." : ""),
+      info: () => (!f.a?.key || !f.b?.key ? "▶ " + NAHT_TEXT[nahtWz?.schritt || "blechA"] : f._fehler ? "⚠ " + f._fehler : `A: ${nahtKante(f.a)?.name || "–"} · B: ${nahtKante(f.b)?.name || "–"}`) });
 }
 function endeQuetschWz() { quetschWz = null; wkZu(); zeigeKanten(); }
 function quetschKlick(e) {
@@ -6997,7 +6999,7 @@ leinwand.addEventListener("pointerup", (e) => {
   if (simulation?.klick(e)) return;
   if (dlg?.kantenWahl?.(e)) return;
   if (uebernimmWahl(e)) return;
-  if (nahtWz && !dlg && nahtKlick(e)) return;
+  if (nahtWz && nahtKlick(e)) return;
   if (quetschWz && !dlg && quetschKlick(e)) return;
   if (kantenWz && !dlg && kantenWzKlick(e)) return;
   strahl.setFromCamera(ndc(e), kamera);

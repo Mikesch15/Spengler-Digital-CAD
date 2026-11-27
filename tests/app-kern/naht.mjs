@@ -62,18 +62,20 @@ p = await seite([...basis, naht({ art: "ecke" })]); ok(!(await fe(p)) && (await 
 }
 // Werkzeug: Kante an Blech A, dann Blech B → Naht + Dialog
 p = await seite(basis); await p.evaluate(() => document.getElementById("wNaht").click()); await p.waitForTimeout(400);
-ok(await p.isVisible("#wkFenster"), "Werkzeug «Naht»: Hinweisfenster");
+ok(await p.isVisible("#dialog") && /Naht/.test(await p.textContent("#dTitel")) && await p.isVisible("#d_art"), "Werkzeug «Naht»: das Naht-Fenster öffnet sich sofort (mit Nahtart)");
 // neuer Ablauf: erst das Blech, dann die Kante – für beide Nahtseiten (4 Schritte)
-const klickUV = async (uv, text) => { const q = await p.evaluate((u) => window.sdcadTest.schirmUV("XY", u), uv); await p.mouse.move(q[0], q[1]); await p.waitForTimeout(100); await p.mouse.down(); await p.mouse.up(); await p.waitForTimeout(600); if (text) ok(new RegExp(text).test(await p.textContent("#wkText")), `Naht-Fenster zeigt «${text}»`); };
-ok(/Schritt 1 von 4/.test(await p.textContent("#wkText")), "Naht-Fenster: Schritt 1 von 4 (Blech A)");
+const klickUV = async (uv, text) => { const q = await p.evaluate((u) => window.sdcadTest.schirmUV("XY", u), uv); await p.mouse.move(q[0], q[1]); await p.waitForTimeout(100); await p.mouse.down(); await p.mouse.up(); await p.waitForTimeout(600); if (text) ok(new RegExp(text).test(await p.textContent("#dInfo")), `Naht-Fenster zeigt «${text}»`); };
+ok(/Schritt 1 von 4/.test(await p.textContent("#dInfo")), "Naht-Fenster: Schritt 1 von 4 (Blech A)");
 await klickUV([50, 30], "Schritt 2 von 4"); await klickUV([100, 30], "Schritt 3 von 4"); await klickUV([150, 30], "Schritt 4 von 4"); await klickUV([100, 30], null);
 const f = await p.evaluate(() => window.sdcadTest.dok().features.find((x) => x.typ === "naht"));
-ok(!!f && f.a.ziel !== f.b.ziel && f.art === "punkt", "zwei Kanten angeklickt → Schritt «Naht»");
+ok(!!f && f.a.ziel !== f.b.ziel && f.a.key && f.b.key && f.art === "punkt", "vier Klicks → Naht mit beiden Kanten im offenen Fenster");
+await p.click("#dOk"); await p.waitForTimeout(400); ok(await p.evaluate(() => document.getElementById("dialog").hidden) && (await p.evaluate(() => window.sdcadTest.dok().features.filter((x) => x.typ === "naht").length)) === 1, "OK schliesst das Fenster, die Naht bleibt");
+await p.evaluate(() => window.sdcadTest.bearbeite("" + window.sdcadTest.dok().features.find((x) => x.typ === "naht").id)); await p.waitForTimeout(500);
 ok(await p.isVisible("#d_art") && await p.isVisible("#d_zugabe"), "Dialog mit Nahtart, Richtung, Überlappung");
 { // Blechwahl auch im Browser: Blech A über die Auswahl (wie ein Klick im Browser) wählen
   const p2 = await seite(basis); await p2.evaluate(() => document.getElementById("wNaht").click()); await p2.waitForTimeout(400);
   await p2.evaluate(() => window.sdcadTest.waehle("f1")); await p2.waitForTimeout(400);
-  ok(/Schritt 2 von 4/.test(await p2.textContent("#wkText")) && /Blech/.test(await p2.textContent("#wkText")), "Blech A im Browser gewählt → Schritt 2 von 4 (Kante an Blech A)"); await p2.close();
+  ok(/Schritt 2 von 4/.test(await p2.textContent("#dInfo")), "Blech A im Browser gewählt → Schritt 2 von 4 (Kante an Blech A)"); await p2.close();
 }
 await p.evaluate(() => { const e = document.getElementById("d_art"); e.value = "falz"; e.dispatchEvent(new Event("change", { bubbles: true })); }); await p.waitForTimeout(500);
 ok(!(await fe(p)), "Art im Dialog auf Falz gestellt, rechnet");
