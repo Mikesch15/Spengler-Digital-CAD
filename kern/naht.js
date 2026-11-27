@@ -21,7 +21,7 @@ function falzMasse(t, ri, s, W, m) {
   const inP = (p, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c; } return c; };
   const bau = (folge, versatz) => bausteinProfil({ name: "x", folge, versatz }, mm).quer;
   const stufe = (c) => {
-    const hem = Math.max(2, 3 * t, W - c - (t + 0.3)), rueck = Math.max(rmB + t / 2 + 1, hem - 0.5 - t), bf = (mid) => `${kr.folge} ${zahl(mid)} U${s > 0 ? "-" : "+"}r${zahl(rB)} ${zahl(rueck)}`;
+    const hem = Math.max(2, 1.6 * t + 0.6, W - c - (t + 0.3)), rueck = Math.max(rmB + t / 2 + 1, hem - 0.5 - t), bf = (mid) => `${kr.folge} ${zahl(mid)} U${s > 0 ? "-" : "+"}r${zahl(rB)} ${zahl(rueck)}`;
     const x0 = Math.max(...bau(bf(10 + kr.tang + rmB + t), 0).map((q) => q[0])), mid = Math.max(2 + kr.tang + rmB + t / 2, 10 + kr.tang + rmB + t - (x0 - W)); // äusserstes Hakenende des abgesetzten Blechs genau W vom Fuss
     return { c, hem, rueck, mid, rA, rB, kr, B: bau(bf(mid), 0).map(([x, y]) => [-x, y]), A: bau(`U${s > 0 ? "+" : "-"}r${zahl(rA)} ${zahl(hem)}`, -c).map(([x, y]) => [x, y]) }; // B gespiegelt (Fuss bei 0), A: Rücken bei -c
   };
@@ -44,8 +44,14 @@ export function nahtFolgen(n, m) {
   // Das nicht abgesetzte Blech hat einen 180°-Haken; sein Rücken liegt genau an der Absetzung (kleinster kollisionsfreier Abstand), der Haken des abgesetzten Blechs greift darum.
   // «mittig»: die Falzmitte (Fuss der Absetzung … Hakenende) liegt genau über der früheren Blechkante – der ganze Falz verschiebt sich, beide Bleche werden entsprechend versetzt.
   const W = Math.max(4, +n.falzB || 10), fuss = mittig(n) ? W / 2 : 0, g = falzMasse(t, ri, s, W, m);
-  const hemA = `U${s > 0 ? "+" : "-"}r${zahl(g.rA)} ${zahl(g.hem)}`, hemB = `${g.kr.folge} ${zahl(g.mid)} U${s > 0 ? "-" : "+"}r${zahl(g.rB)} ${zahl(g.rueck)}`;
-  return kopf({ abg: { folge: hemB, versatz: -fuss }, flach: { folge: hemA, versatz: fuss - g.c } });
+  const hemB = `${g.kr.folge} ${zahl(g.mid)} U${s > 0 ? "-" : "+"}r${zahl(g.rB)} ${zahl(g.rueck)}`;
+  let vA = fuss - g.c, hemL = g.hem;
+  if (vA > 1e-6) { // Anlauf neben der Biegung muss lang genug sein (Biegeradien): sonst kürzester gültiger Anlauf, Hakenende bleibt an derselben Stelle
+    const mm = { t, ri, k: m?.k ?? 0.4 }, hakenFolge = (l, h) => `0 ${zahl(l)} U${s > 0 ? "+" : "-"}r${zahl(g.rA)} ${zahl(h)}`;
+    let ok = false; try { bausteinProfil({ name: "x", folge: hakenFolge(vA, hemL), versatz: 0 }, mm); ok = true; } catch { /* Anlauf zu kurz */ }
+    if (!ok) { hemL = Math.max(1.6 * t + 0.6, g.hem - vA); vA = 0; } // Rücken an der Blechkante, Hakenende bleibt an derselben Stelle
+  }
+  return kopf({ abg: { folge: hemB, versatz: -fuss }, flach: { folge: (vA > 1e-6 ? `0 ${zahl(vA)} ` : "") + `U${s > 0 ? "+" : "-"}r${zahl(g.rA)} ${zahl(hemL)}`, versatz: Math.min(0, vA) } }); // Rücken des Hakens relativ zur Blechkante: nach aussen (> 0) als gerader Anlauf, damit die Fläche bis zum Haken reicht (kein Spalt)
 }
 
 // Raupenmasse: Breite etwa 2 t, Höhe etwa t (mindestens 1.2 / 0.6 mm)

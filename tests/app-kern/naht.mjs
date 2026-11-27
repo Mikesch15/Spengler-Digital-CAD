@@ -80,7 +80,7 @@ ok(await p.isVisible("#d_art") && await p.isVisible("#d_zugabe"), "Dialog mit Na
 await p.evaluate(() => { const e = document.getElementById("d_art"); e.value = "falz"; e.dispatchEvent(new Event("change", { bubbles: true })); }); await p.waitForTimeout(500);
 ok(!(await fe(p)), "Art im Dialog auf Falz gestellt, rechnet");
 const da = async (art) => { await p.evaluate((a) => { const e = document.getElementById("d_art"); e.value = a; e.dispatchEvent(new Event("change", { bubbles: true })); }, art); await p.waitForTimeout(400); return p.evaluate(() => ["zugabe", "falzA", "falzB", "mittig", "seite", "raupeBreite", "absetz", "absetzen"].filter((i) => document.getElementById("d_" + i))); };
-ok((await da("falz")).join() === "falzA,falzB,mittig,absetz", "Dialog Falznaht: nur Falzfelder");
+ok((await da("falz")).join() === "falzB,mittig,absetz", "Dialog Falznaht: nur Falzfelder");
 ok((await da("punkt")).join() === "zugabe,absetz", "Dialog Punktnaht: nur Überlappung/Absetzung");
 ok((await da("schweiss")).join() === "seite,raupeBreite", "Dialog Schweissnaht: nur Raupenfelder");
 await da("falz");
