@@ -1,0 +1,33 @@
+// App-Test Naht an einer freien Körperkante (beliebige Kante eines Blechkörpers): Fahne als eigener Körper auf dem anderen Blech
+import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
+const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
+const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] || "application/octet-stream" }); a.end(d); }).listen(process.env.PORT || 8797);
+let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
+const b = await chromium.launch(), pr = [], mat = { id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 };
+const mk = (naht) => ({ objekt: "T", nr: "1", zaehler: 30, features: [
+  { id: "s1", typ: "skizze", name: "A", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [100, 100] }], bedingungen: [] },
+  { id: "f1", typ: "flaeche", name: "Blech A", skizze: "s1", material: "zink07", flaechen: [[50, 50]], kanten: {} },
+  { id: "e1", typ: "ebene", art: "versatz", name: "Ebene", ref: "YZ", abstand: 100 },
+  { id: "s2", typ: "skizze", name: "B", ebene: "e1", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [100, 80] }], bedingungen: [] },
+  { id: "f2", typ: "flaeche", name: "Blech B", skizze: "s2", material: "zink07", flaechen: [[50, 40]], kanten: {} },
+  ...(naht ? [{ id: "n1", typ: "naht", name: "Naht", a: { ziel: "f1", key: "0:1" }, b: { ziel: "f2", key: naht }, art: "punkt", absetz: "b", richtung: "oben", zugabe: 15, falzA: 5, falzB: 10, mittig: false, absetzen: true, raupeBreite: 0, raupeHoehe: 0, seite: "oben" }] : [])] });
+const seite = async (naht, kern, fn) => { const s = await b.newPage({ viewport: { width: 1280, height: 800 } }); s.on("pageerror", (e) => pr.push(e.message));
+  await s.addInitScript(([d, m, k]) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [m], ...(k ? { programm: { kern: "occt" } } : {}) })); }, [mk(naht), mat, kern]);
+  await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test");
+  if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern/.test(document.getElementById("status").textContent), null, { timeout: 90000 }); else await s.waitForTimeout(1800);
+  await s.waitForTimeout(500); const r = await fn(s); await s.close(); return r; };
+// Kantenkoordinaten am unteren Rand von Blech B (Aussenfläche zu Blech A hin) ohne Naht bestimmen
+const kante = await seite(null, false, (s) => s.evaluate(() => { const P = window.sdcadTest.meshPunkte("f2").filter((p) => Math.abs(p[1]) < 1e-3 && Math.abs(p[0] - 99.65) < 1e-3), z = P.map((p) => p[2]); return P.length ? { a: [99.65, 0, Math.max(...z)], b: [99.65, 0, Math.min(...z)] } : null; }));
+ok(!!kante, `Kante am unteren Rand von Blech B gefunden (${JSON.stringify(kante)})`);
+const key = kante ? `E:${kante.a.join(",")};${kante.b.join(",")}` : "";
+const r = await seite(key, false, (s) => s.evaluate(() => ({ w: window.sdcadTest.nahtWinkel("n1").w, fahne: window.sdcadTest.meshListe("n1"), fehl: window.sdcadTest.dok().features.map((x) => x._fehler).filter(Boolean) })));
+ok(r.w && Math.abs(Math.abs(r.w.b) - 90) < 1 && r.fehl.length === 0, `freie Kante: Winkel erkannt (${JSON.stringify(r.w)}) ${r.fehl.join(";")}`);
+ok(r.fahne.length === 1 && r.fahne[0].mn[1] >= 0.33 && r.fahne[0].mn[0] < 90, `Fahne liegt auf Blech A, 15 mm lang (min y ${r.fahne[0]?.mn[1]}, min x ${r.fahne[0]?.mn[0]})`);
+const x = await seite(key, true, (s) => s.evaluate(() => ({ k: window.sdcadTest.koerper().map((k) => [String(k.fid), Math.round(Math.abs(k.volumen) * 10) / 10]), st: document.getElementById("status").textContent })));
+const v = (f) => x.k.filter(([i]) => i.startsWith(f)).reduce((a, [, w]) => a + w, 0);
+ok(v("n1:fahne") > 10, `exakter Kern: Fahne als Körper (${v("n1:fahne")} mm³)`);
+ok(v("f2") < 5600 - 20 && v("f2") > 5600 - 120, `Blech B am Rand um die Rücksetzung gekürzt (${v("f2")} mm³ statt 5600)`);
+ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
+await b.close(); srv.close();
+console.log(fehler ? `${fehler} Fehler` : "Naht an freier Körperkante (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

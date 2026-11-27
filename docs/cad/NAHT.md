@@ -17,3 +17,6 @@ Vier Schritte: Blech A anklicken (Ansicht oder Browser) → Kante an Blech A →
 
 ## Durchdringungsschutz (exakter Kern)
 `exaktesModell()` schneidet nach dem Aufbau jedes später angelegte Blechteil um den Überschnitt mit früheren Blechteilen zurück (`boolesch schneiden` → Volumen > 0,02 mm³ → `abziehen`); die Statusleiste nennt die Anzahl. Teile mit Komponentenverschiebung werden nicht verglichen. Test: `tests/app-kern/durchdringung.mjs`.
+
+## Naht an freien Körperkanten
+Im Kantenschritt lässt sich neben den gelisteten Umrisskanten **jede Körperkante des gewählten Blechs** anklicken (Schlüssel `E:x,y,z;x,y,z`, `freieKante`): die anliegende Blechfläche (grösste Höhe senkrecht zur Kante) liefert Normale und Richtung ins Blech. Raupen (Schweiss-/Ecknaht) funktionieren dort sofort. Eine Punktnaht, deren **abgekantete** Seite eine freie Kante ist, baut `nahtFahneDaten` als eigenen Körper (Querschnitt aus dem Kantenbaustein, Netz `nahtFahneMesh`, im Kern Extrusion entlang der Kante); das Blech wird am Rand um die Rücksetzung gekürzt (Streifen abgezogen). Die Fahne ist ein eigenes Blechteil (nicht in der Abwicklung des Blechs). Grenzen: Falz an freien Kanten fehlt noch; Test `tests/app-kern/nahtfrei.mjs`.

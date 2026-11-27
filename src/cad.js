@@ -1522,6 +1522,7 @@ function regenEinmal() {
         if (!nahtKante(f.b)) throw new Error("Die Kante an Blech B gibt es nicht mehr – Naht neu setzen");
         { const wn = nahtWinkelAuto(f); if (JSON.stringify(wn) !== JSON.stringify(f._winkel ?? null)) { f._winkel = wn; nahtWinkelGeaendert = true; } }
         if ((f.art === "schweiss" || f.art === "ecke") && !f.versteckt) { const o = nahtRaupe(f); if (o) modell.add(o); }
+        f._fahne = null; { const fd = nahtFahneDaten(f); if (fd) { f._fahne = fd; if (!f.versteckt) { const o = nahtFahneMesh(f, fd); o.userData.fid = `${f.id}:fahne`; modell.add(o); } } }
       } else if (f.typ === "stirnquetsch") { // Quetschfalte an der Ecke Stirnlasche + Wand eines Blechprofils (Rechnung beim Profil: stirnBerechnen)
         const z = finde(f.ziel); if (!z || !istProfil(z)) throw new Error("Das Blechprofil fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Blechprofil muss vor diesem Schritt stehen");
@@ -2954,7 +2955,7 @@ function berechneKanten(f, ohneNaht = false) {
   for (const x of doc.features) { // Verbindungsnähte (Überlappung / Falz): Abkantfolge zusätzlich an die gewählte Kante – auch auf einem schon vorhandenen Flansch
     if (x.typ !== "naht" || x._aus || ohneNaht) continue;
     for (const seite of ["a", "b"]) {
-      const s = x[seite]; if (s?.ziel !== f.id || !s.key) continue;
+      const s = x[seite]; if (s?.ziel !== f.id || !s.key || String(s.key).startsWith("E:")) continue; // freie Körperkanten: Fahne als eigener Körper (nahtFahne)
       const nf = nahtFolgen(x, m, x._winkel || null)[seite]; // Winkel zwischen den Blechen: Wert der letzten Naht-Rechnung (siehe Zweig «naht») if (!nf) continue;
       const vor = k[s.key]; if (vor) { const bv = werkzeugAuf(bausteinFuer(vor), m); k[s.key] = { folge: folgeAnhaengen(bausteinFolge(bv, m), nf.folge), versatz: +bv.versatz || 0 }; } else k[s.key] = { folge: nf.folge, versatz: nf.versatz || 0 }; // Rücksetzung der Kante nur ohne vorhandenen Flansch
     }
@@ -3550,8 +3551,26 @@ function stirnQuetschDialog(f) {
 }
 // ------------------------------------------------------------ Verbindungsnähte (Naht)
 // Kante eines Blechs: Flächenblech «pi:k» (auch gebogene Kanten) oder Blechprofil «A» / «B»; Rückgabe { punkte: [Vector3], normale (Sichtseite) }
+// Freie Körperkante (Schlüssel «E:x,y,z;x,y,z»): beliebige Kante eines Blechkörpers. Die anliegende Blechfläche (grösste Höhe senkrecht zur Kante) liefert Normale und die Richtung in das Blech hinein.
+function freieKante(s) {
+  const f = finde(s?.ziel); if (!f || !String(s.key).startsWith("E:")) return null;
+  const [a, b] = s.key.slice(2).split(";").map(zahl3).map((p) => new THREE.Vector3(...p)), e = b.clone().sub(a), L = e.length(); if (L < 1e-6) return null; e.divideScalar(L);
+  let best = null;
+  for (const m of modell.children.filter((o) => o.isMesh && hauptVon(o.userData.fid)?.id === f.id && !o.userData.naht)) {
+    const P = m.geometry.attributes.position, idx = m.geometry.index, n = idx ? idx.count : P.count, vert = (i) => new THREE.Vector3().fromBufferAttribute(P, idx ? idx.getX(i) : i);
+    for (let i = 0; i + 2 < n; i += 3) {
+      const v = [vert(i), vert(i + 1), vert(i + 2)], ia = v.findIndex((q) => q.distanceTo(a) < 2e-3), ib = v.findIndex((q) => q.distanceTo(b) < 2e-3); if (ia < 0 || ib < 0 || ia === ib) continue;
+      const c = v[3 - ia - ib], w = c.clone().sub(a), quer = w.clone().addScaledVector(e, -w.dot(e)), h = quer.length(); if (h < 1e-6) continue;
+      const nrm = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0])).normalize();
+      if (!best || h > best.h) best = { h, inn: quer.normalize(), nrm };
+    }
+  }
+  if (!best) return null;
+  return { punkte: [a, b], normale: best.nrm, inn: best.inn, f, frei: true, name: `${f.name} · Körperkante` };
+}
 function nahtKante(s) {
   const f = finde(s?.ziel); if (!f || !s.key) return null;
+  if (String(s.key).startsWith("E:")) return freieKante(s);
   if (f.typ === "flaeche" && f._bleche) {
     const [pi, k] = String(s.key).split(":").map(Number), bl = f._bleche.find((b) => b.pi === pi), g = bl?.gruppen[k], sk = finde(f.skizze); if (!g || !sk) return null;
     const E = E_(sk.ebene), LM = lageVon(f), sg = f.sichtseite === -1 ? -1 : 1, pk = g.punkte.map((p) => { const v = V(zuWelt(blechEbene(sk.ebene, f, material(f.material)), p)); return LM ? v.applyMatrix4(LM) : v; });
@@ -3587,6 +3606,25 @@ function nahtKandidaten() {
     else if (f.typ === "rundblech") for (const key of ["N0", "N1"]) { const s = { ziel: f.id, key }, e = nahtKante(s); if (e) out.push({ ...s, ...e }); }
   }
   return out;
+}
+// Punktnaht an einer freien Körperkante: Fahne als eigener Körper entlang der Kante (Querschnitt aus dem Kantenbaustein, nicht an Umrisskanten gebunden)
+function nahtFahneDaten(f) {
+  if (f.art !== "punkt") return null;
+  const bent = f.absetz === "a" ? "a" : "b", andere = bent === "a" ? "b" : "a"; if (!String(f[bent]?.key).startsWith("E:")) return null;
+  const ke = nahtKante(f[bent]), ko = nahtKante(f[andere]); if (!ke || !ko) return null;
+  const m = material(ke.f.material || doc.features.find((x) => x.material)?.material), t = m.t, w = nahtWinkelAuto(f);
+  const e = ke.punkte[1].clone().sub(ke.punkte[0]), L = e.length(); e.normalize();
+  const c = ke.inn.clone().negate(), v = e.clone().cross(c).normalize(), spiegel = v.dot(ke.normale) < 0; // Querschnitt-y soll zur Blechnormale zeigen, sonst Winkel/Richtung spiegeln
+  const w2 = w ? { a: spiegel ? -w.a : w.a, b: spiegel ? -w.b : w.b } : null, nf = nahtFolgen({ ...f, richtung: spiegel ? (f.richtung === "unten" ? "oben" : "unten") : f.richtung }, m, w2)[bent]; if (!nf) return null;
+  const mid = ke.punkte[0].clone().addScaledVector(ke.normale, -t / 2); // Blechmitte unter der gewählten Oberfläche
+  const q = bausteinQuerschnitt({ name: "n", folge: nf.folge, versatz: nf.versatz || 0 }, m); if (!q) return null;
+  return { m, t, L, e, c, v, mid, folge: nf.folge, versatz: nf.versatz || 0, profil: q.profil, host: ke.f.id, a: ke.punkte[0].clone(), b: ke.punkte[1].clone() };
+}
+function nahtFahneMesh(f, fd) {
+  const poly = profilPolygon(fd.profil), shape = new THREE.Shape(poly.map(([x, y]) => new THREE.Vector2(x, y)));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: fd.L, bevelEnabled: false, curveSegments: 12 });
+  geo.applyMatrix4(new THREE.Matrix4().makeBasis(fd.c, fd.v, fd.e).setPosition(fd.mid));
+  const o = koerperAusGeo(geo, darstellungVon(finde(fd.host), fd.m), `${f.id}:fahne`); o.userData.naht = true; return o;
 }
 // Schweissraupe (Stumpf-/Kehlnaht) entlang der Kante von Blech A
 function nahtRaupe(f) {
@@ -3636,7 +3674,15 @@ function nahtKlick(e) {
   }
   const sm = smPos(e); let best = null, bd = e.pointerType === "touch" ? 30 : 16;
   for (const k of nahtWaehlbar()) for (let i = 1; i < k.punkte.length; i++) { const A = aufSchirm(k.punkte[i - 1].toArray()), B = aufSchirm(k.punkte[i].toArray()); if (A[2] > 1 || B[2] > 1) continue; const d = abstandStrecke(sm, A, B); if (d < bd) { bd = d; best = k; } }
-  if (!best) { status("Eine Kante des gewählten Blechs anklicken (blaue Linien) – " + NAHT_TEXT[w.schritt]); return true; }
+  for (const m of modell.children.filter((o) => o.isMesh && hauptVon(o.userData.fid)?.id === w.blech && !o.userData.naht)) { // jede beliebige Körperkante des gewählten Blechs (Flanschseiten, Gehrungskanten …)
+    const pos = m.children[0]?.geometry.attributes.position; if (!pos) continue;
+    for (let i = 0; i + 1 < pos.count; i += 2) {
+      const a = [pos.getX(i), pos.getY(i), pos.getZ(i)], b = [pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1)], A = aufSchirm(a), B = aufSchirm(b); if (A[2] > 1 || B[2] > 1) continue;
+      const d = abstandStrecke(sm, A, B) + 3; // gelistete Umrisskanten haben Vorrang
+      if (d < bd) { const key = `E:${fmt3(a)};${fmt3(b)}`; if (nahtWz.a && nahtWz.a.ziel === w.blech && nahtWz.a.key === key) continue; bd = d; best = { ziel: w.blech, key }; }
+    }
+  }
+  if (!best) { status("Eine Kante des gewählten Blechs anklicken (blaue Linien, auch jede andere Körperkante) – " + NAHT_TEXT[w.schritt]); return true; }
   if (w.schritt === "kanteA") { nahtWz.a = { ziel: best.ziel, key: best.key }; nahtSchritt("blechB"); return true; }
   const n = nahtWz.f; n.a = { ...nahtWz.a }; n.b = { ziel: best.ziel, key: best.key };
   endeNahtWz(); regen(); zeigeKanten(); if (dlg?.info) $("dInfo").textContent = dlg.info(); status(n._fehler ? "⚠ " + n._fehler : "Naht gesetzt – Art und Richtung im Fenster einstellen, dann OK."); return true;
@@ -7579,6 +7625,19 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         try { const r = await K.ausfuehren({ op: "stepImport", text: f.step }); ids.push(...r.ids); koerper.set(f.id, await vereinige(r.ids)); }
         catch (e) { nicht.set(f.id, `STEP-Import: ${e.message}`); }
       } else if (["sweep", "loft", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
+    }
+    // Nahtfahnen an freien Körperkanten: Fahne als exakter Körper, das Blech an der Kante wird um die Rücksetzung gekürzt
+    for (const x0 of doc.features) {
+      const fd = x0.typ === "naht" && !x0._aus && !x0.versteckt ? x0._fahne : null; if (!fd) continue;
+      try {
+        const ebene = { ursprung: fd.mid.toArray(), x: fd.c.toArray(), n: fd.e.toArray() };
+        blech.set(`${x0.id}:fahne`, (await x({ op: "extrusion", profil: fd.profil, ebene, hoehe: fd.L })).id);
+        if (fd.versatz < -1e-6) { // Rücksetzung: Streifen am Blechende abziehen
+          const rechteck = { start: [fd.versatz - 0.01, -fd.t], segmente: [{ bis: [0.3, -fd.t] }, { bis: [0.3, fd.t] }, { bis: [fd.versatz - 0.01, fd.t] }, { bis: [fd.versatz - 0.01, -fd.t] }] };
+          const slab = (await x({ op: "extrusion", profil: rechteck, ebene, hoehe: fd.L })).id;
+          for (const [k] of [...blech, ...koerper]) { if (hauptVon(k)?.id !== fd.host || nicht.has(k) || (k.includes(":") && nicht.has(k.split(":")[0]))) continue; const m = blech.has(k) ? blech : koerper; try { m.set(k, (await x({ op: "boolesch", art: "abziehen", a: m.get(k), b: slab })).id); } catch { /* Körper nicht am Streifen */ } }
+        }
+      } catch (e) { nicht.set(`${x0.id}:fahne`, `Nahtfahne: ${e.message}`); }
     }
     // Durchdringungsschutz: Blechteile dürfen sich nie durchdringen – das später angelegte Blechteil wird um den Überschnitt zurückgeschnitten
     let zurueck = 0;

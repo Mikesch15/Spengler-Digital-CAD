@@ -72,7 +72,8 @@
       "tests": [
         "naht",
         "nahtwinkel",
-        "durchdringung"
+        "durchdringung",
+        "nahtfrei"
       ]
     },
     {
