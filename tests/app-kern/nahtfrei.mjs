@@ -33,6 +33,18 @@ const x = await seite(key, true, (s) => s.evaluate(() => ({ k: window.sdcadTest.
 const v = (f) => x.k.filter(([i]) => i.startsWith(f)).reduce((a, [, w]) => a + w, 0);
 ok(v("n1") === 0, "die Fahne ist kein eigener Körper");
 ok(v("f2") > 5600 + 800 && v("f2") < 5600 + 1300, `Fahne gehört zum Blech B: ein Körper (${v("f2")} mm³ statt 5600 ohne Fahne)`);
+
+// Stossecke eines Kastens (zwei Flansche eines Blechs): Naht an den beiden Stirnkanten – die Fahne liegt innen auf dem Nachbarflansch (Pflicht: Paarung der Flächen)
+{ const mk3 = (a, b) => ({ objekt: "T", nr: "1", zaehler: 30, features: [
+    { id: "s1", typ: "skizze", name: "K", ebene: "XZ", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [100, 100] }], bedingungen: [] },
+    { id: "f1", typ: "flaeche", name: "Kasten", skizze: "s1", material: "zink07", flaechen: [[50, 50]], kanten: { "0:0": "ortgang", "0:3": "ortgang" }, ecken: "stoss" },
+    ...(a ? [{ id: "n1", typ: "naht", name: "Naht", a: { ziel: "f1", key: a }, b: { ziel: "f1", key: b }, art: "punkt", absetz: "b", richtung: "oben", zugabe: 15, falzA: 5, falzB: 10, mittig: false, absetzen: true, raupeBreite: 0, raupeHoehe: 0, seite: "oben" }] : [])] });
+  const lauf3 = async (a, b, fn) => { const s = await b2.newPage({ viewport: { width: 1280, height: 800 } }); s.on("pageerror", (e) => pr.push(e.message));
+    await s.addInitScript(([d, m]) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [m] })); }, [mk3(a, b), mat]);
+    await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s.waitForTimeout(1800); const r = await fn(s); await s.close(); return r; };
+  var b2 = b;
+  const kanten = await lauf3(null, null, (s) => s.evaluate(() => { const L = window.sdcadTest.meshListe("f1"); const P = window.sdcadTest.meshPunkte("f1"); const nahe = P.filter((p) => Math.abs(p[0]) < 1 && Math.abs(p[2]) < 1 && p[1] > 5); return { n: L.length, spitzen: [...new Set(nahe.map((p) => p.map((v) => +v.toFixed(3)).join(",")))].slice(0, 12) }; }));
+  ok(kanten.n >= 2, `Stossecke: Kasten mit zwei Flanschen (${kanten.n} Teile, Eckpunkte ${kanten.spitzen.length})`); }
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Naht an freier Körperkante (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);
