@@ -7,7 +7,7 @@ import { blechQuerschnitt, verschiebeProfil } from "./blech.js";
 import { berechne } from "../geometrie.js";
 import { freiesProfil } from "../profile.js";
 import { folge } from "../details.js";
-import { eckFaktoren, gehrungEcken, gehrungLokal } from "../flaechenblech.js";
+import { eckFaktoren, gehrungEcken, gehrungLokal, teilGruppe, reichtBisAnfang, reichtBisEnde } from "../flaechenblech.js";
 import { eckSchnitt2 } from "../quetschfalte.js";
 
 const kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -109,21 +109,22 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p?.baustein) return;
     const bq = bausteinQuerschnitt(p.baustein, m); if (!bq) throw new Error(`Baustein «${p.baustein.name ?? p.baustein.folge}» lässt sich nicht rechnen`);
-    for (let i = 1; i < g.punkte.length; i++) {
-      const a = g.punkte[i - 1], b = g.punkte[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
+    const tg = teilGruppe(g, p), pk2 = tg ? tg.punkte : g.punkte; // Teilstück: der Baustein liegt nur zwischen von und bis
+    for (let i = 1; i < pk2.length; i++) {
+      const a = pk2[i - 1], b = pk2[i], L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) continue;
       const d = richt(a, b);
-      const k0 = i > 1 ? Math.tan(knick(richt(g.punkte[i - 2], a), d) / 2) : ek[k].k0, e0 = i > 1 ? 0 : ek[k].e0 || 0;
-      const k1 = i < g.punkte.length - 1 ? Math.tan(knick(d, richt(b, g.punkte[i + 1])) / 2) : ek[k].k1, e1 = i < g.punkte.length - 1 ? 0 : ek[k].e1 || 0;
+      const k0 = i > 1 ? Math.tan(knick(richt(pk2[i - 2], a), d) / 2) : ek[k].k0, e0 = i > 1 ? 0 : ek[k].e0 || 0;
+      const k1 = i < pk2.length - 1 ? Math.tan(knick(d, richt(b, pk2[i + 1])) / 2) : ek[k].k1, e1 = i < pk2.length - 1 ? 0 : ek[k].e1 || 0;
       // lokal: x nach aussen (d rechtwinklig), y = Sichtseite, z entlang der Kante ab a
       const lokal = [d[1], 0, d[0], a[0], -d[0], 0, d[1], a[1], 0, s, 0, 0], M = mal(B, lokal);
-      const ky0 = i > 1 ? 0 : ek[k].ky0 || 0, ky1 = i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0, ecken = [[bq.xmin, bq.ymin], [bq.xmin, bq.ymax], [bq.xmax, bq.ymin], [bq.xmax, bq.ymax]];
+      const ky0 = i > 1 ? 0 : ek[k].ky0 || 0, ky1 = i < pk2.length - 1 ? 0 : ek[k].ky1 || 0, ecken = [[bq.xmin, bq.ymin], [bq.xmin, bq.ymax], [bq.xmax, bq.ymin], [bq.xmax, bq.ymax]];
       const z0 = Math.min(...ecken.map(([x, y]) => -x * k0 - y * ky0)) + e0 - 1, z1 = L + Math.max(...ecken.map(([x, y]) => x * k1 + y * ky1)) - e1 + 1;
       // Gehrung (siehe kern/flaechenblech.js gehrungEcken): im Biegebereich oder – an Ecken mit Quetschfalte – über die ganze Höhe
       const gehr = [], hr = [{ punkt: [0, 0, e0], normale: [-k0, -ky0, -1] }, { punkt: [0, 0, L - e1], normale: [-k1, -ky1, 1] }];
       let zlo = z0, zhi = z1; const ebenenWerte = (gl) => ecken.map(([x, y]) => gl.z0 + gl.zx * x + gl.zy * y);
       if (i === 1 && ecke.has(k)) { const gl = gehrungLokal(ecke.get(k), a, d, s, bl.opt?.kuerzen?.[`${k}:start`] || 0, true);
         if (gl) { const eb = { punkt: [0, 0, gl.z0], normale: [gl.zx, gl.zy, -1] }; if (gl.voll) { hr[0] = eb; zlo = Math.min(zlo, Math.min(...ebenenWerte(gl)) - 1); } else gehr.push({ ...eb, H: gl.H, ersetzt: 0 }); } }
-      if (i === g.punkte.length - 1 && ecke.has((k + 1) % nE)) { const gl = gehrungLokal(ecke.get((k + 1) % nE), a, d, s, bl.opt?.kuerzen?.[`${k}:ende`] || 0, false);
+      if (i === pk2.length - 1 && ecke.has((k + 1) % nE)) { const gl = gehrungLokal(ecke.get((k + 1) % nE), a, d, s, bl.opt?.kuerzen?.[`${k}:ende`] || 0, false);
         if (gl) { const eb = { punkt: [0, 0, gl.z0], normale: [-gl.zx, -gl.zy, 1] }; if (gl.voll) { hr[1] = eb; zhi = Math.max(zhi, Math.max(...ebenenWerte(gl)) + 1); } else gehr.push({ ...eb, H: gl.H, ersetzt: 1 }); } }
       plan.prismen.push({
         extrusion: { op: "extrusion", profil: bq.profil, ebene: { ursprung: [0, 0, zlo], x: [1, 0, 0], n: [0, 0, 1] }, hoehe: zhi - zlo },
@@ -139,6 +140,7 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
   if (bl.opt?.freistellung !== "keine" && (bl.opt?.ecken || "gehrung") === "gehrung") for (let k = 0; k < n; k++) {
     const kv = (k - 1 + n) % n, gk = bl.gruppen[k], gv = bl.gruppen[kv], pk = bl.profile[k], pv = bl.profile[kv];
     if (kv === k || !gk.gerade || !gv.gerade || bl.quetsch?.has?.(k) || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
+    if (!reichtBisAnfang(pk) || !reichtBisEnde(pv)) continue; // Teilstück erreicht die Ecke nicht
     const V0 = gk.punkte[0], dn = richt(V0, gk.punkte[1]), dp = richt(V0, gv.punkte.at(-2));
     if (!(knick(dn, dp) > 0)) continue; // nur Aussenecken
     const rB = (p) => (p.biegungen[0].ri ?? p.ri ?? 1) + (p.t || t), r = Math.max(rB(pk), rB(pv));

@@ -135,3 +135,17 @@ process.exit(fehler ? 1 : 0);
   }
 }
 
+// Teilstück einer Kante (Baustein nur zwischen von und bis): Zuschnittumriss mit Aussparungen, Fläche = Platte + Lappen nur über die Teillänge
+{
+  const pts = [[0, 0], [1000, 0], [1000, 500], [0, 500]], kt = [B.ortgang, null, null, null], mm = MATERIALIEN[0];
+  const voll = flaechenblech(pts, kt, mm, [], null), teil = flaechenblech(pts, kt, mm, [], { teil: { 0: { von: 200, bis: 600 } } });
+  const zug = voll.profile[0].zugabe, soll = 1000 * 500 + 400 * zug;
+  ok(Math.abs(teil.abw.flaeche * 1e6 - soll) < 1e-6, `Teilstück 200…600: Zuschnittfläche = Platte + 400 mm × Zugabe (${(teil.abw.flaeche * 1e6).toFixed(3)} mm²)`);
+  ok(Math.abs(voll.abw.flaeche * 1e6 - (1000 * 500 + 1000 * zug)) < 1e-6, "ganze Kante: Fläche = Platte + 1000 mm × Zugabe");
+  ok(teil.profile[0].teil.von === 200 && teil.profile[0].teil.bis === 600 && teil.profile[0].teil.L === 1000, "Profil trägt das Teilstück");
+  const t0 = flaechenblech(pts, kt, mm, [], { teil: { 0: { von: 0, bis: 1000 } } }); ok(!t0.profile[0].teil, "von 0 bis ganze Länge = ganze Kante (kein Teilstück)");
+  const u = teil.abw.umriss.map((p) => p.map((x) => +x.toFixed(2)));
+  ok(u.some((p) => Math.abs(p[0] - 200) < 1e-6 && Math.abs(p[1]) < 1e-6) && u.some((p) => Math.abs(p[0] - 600) < 1e-6 && Math.abs(p[1] + zug) < 1e-6), "Umriss hat Aussparungen an den Enden des Teilstücks");
+  const ek = eckFaktoren(teil.gruppen, teil.profile, teil.opt); ok(ek[0].k0 === 0 && ek[0].k1 === 0 && ek[3].k1 === 0, "Enden des Teilstücks und Nachbarkante rechtwinklig");
+}
+

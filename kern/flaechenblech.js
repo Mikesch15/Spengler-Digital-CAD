@@ -223,6 +223,7 @@ export function gehrungEcken(gruppen, profile, opt, t, s = 1, volleEcken = []) {
   for (let k = 0; k < n; k++) {
     const kv = (k - 1 + n) % n, gk = gruppen[k], gv = gruppen[kv], pk = profile[k], pv = profile[kv];
     if (kv === k || !gk.gerade || !gv.gerade || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
+    if (!reichtBisAnfang(pk) || !reichtBisEnde(pv)) continue; // Teilstück: der Baustein erreicht die Ecke nicht
     const V0 = gk.punkte[0], dn = richtung(V0, gk.punkte[1]), dp = richtung(V0, gv.punkte.at(-2));
     if (!(knick(dn, dp) > 0)) continue; // nur Aussenecken
     const WA = innenWand(pv), WB = innenWand(pk), fa = WA ? { xf: WA.f[0], yf: WA.f[1], r: WA.w[0] / WA.w[1] } : { xf: innenX(pv), yf: 0, r: 0 }, fb = WB ? { xf: WB.f[0], yf: WB.f[1], r: WB.w[0] / WB.w[1] } : { xf: innenX(pk), yf: 0, r: 0 };
@@ -259,6 +260,11 @@ export function eckFaktoren(gruppen, profile, opt = null) {
     const kw = ov.art === "buendig" ? eckFaktor(beta, false) : ov.art === "winkel" ? Math.tan((Math.max(-80, Math.min(80, +ov.winkel || 0)) * Math.PI) / 180) : 0, ver = +ov.versatz || 0;
     if (start) Object.assign(ek[k], { k0: kw, ky0: 0, e0: -ver }); else Object.assign(ek[k], { k1: kw, ky1: 0, e1: -ver });
   }
+  gruppen.forEach((g, k) => { // Teilstück: dort, wo der Baustein nicht bis zur Ecke reicht, enden Baustein und Nachbarkante rechtwinklig
+    const tl = profile[k]?.teil; if (!tl || !ek[k]) return; const quadr = (o, anfang) => { if (!o) return; if (anfang) { o.k0 = 0; o.ky0 = 0; o.e0 = 0; o.fr0 = 0; } else { o.k1 = 0; o.ky1 = 0; o.e1 = 0; o.fr1 = 0; } };
+    if (!reichtBisAnfang(profile[k])) { quadr(ek[k], true); quadr(ek[(k - 1 + n) % n], false); }
+    if (!reichtBisEnde(profile[k])) { quadr(ek[k], false); quadr(ek[(k + 1) % n], true); }
+  });
   for (const [key, d] of Object.entries(opt?.kuerzen || {})) { const [ks, seite] = key.split(":"), k = +ks; if (!ek[k]) continue; if (seite === "start") ek[k].e0 += d; else ek[k].e1 += d; } // Flansch unter der Quetschfalte endet um eine Blechstärke früher (Saum der Falte)
   return ek;
 }
@@ -289,6 +295,14 @@ const flaeche = (p) => p.reduce((s, a, i) => { const b = p[(i + 1) % p.length]; 
 export const gegenUhrzeiger = (pts) => (flaeche(pts) < 0 ? pts.slice().reverse() : pts.slice());
 
 // Kanten eines geschlossenen Umrisses: gerade Strecken; Strecken mit kleinem Knick (Bogen) bilden eine Kante
+// Teilstück einer geraden Kante: der Baustein (Flansch, Falz …) liegt nur zwischen von und bis (mm ab dem Anfang der Kante), nicht auf der ganzen Länge.
+// teilGruppe liefert die Gruppe, auf die der Baustein wirkt (Anfang/Ende verschoben), oder null bei voller Länge.
+export function teilGruppe(g, p) {
+  const t = p?.teil; if (!t || !g?.gerade || g.punkte.length !== 2) return null;
+  const d = richtung(g.punkte[0], g.punkte[1]), P = (u) => [g.punkte[0][0] + d[0] * u, g.punkte[0][1] + d[1] * u];
+  return { ...g, punkte: [P(t.von), P(t.bis)], laenge: t.bis - t.von, teil: t };
+}
+export const reichtBisAnfang = (p) => !p?.teil || p.teil.von <= 1e-6, reichtBisEnde = (p) => !p?.teil || p.teil.bis >= p.teil.L - 1e-6;
 export function kantenGruppen(pts, knickGrad = 15) {
   const n = pts.length, ri = (i) => { const d = sub(pts[(i + 1) % n], pts[i]); return Math.atan2(d[1], d[0]); };
   const knick = (i) => { let d = ri(i) - ri((i - 1 + n) % n); while (d > Math.PI) d -= 2 * Math.PI; while (d <= -Math.PI) d += 2 * Math.PI; return Math.abs(d) * 180 / Math.PI; };
@@ -324,8 +338,9 @@ function lappenLinie(g, u, x, f, y = 0, rel = null) {
 // genau dort abgeschnitten, wo das gekantete Profil an der Ecke endet. Biegelinien auf denselben Lappen.
 export function abwicklung(pts, gruppen, profile, quetsch = null, opt = null) { // quetsch: Map k → Quetschfalte an der Ecke am Anfang der Kante k (siehe quetschEckeFlach)
   const ek = eckFaktoren(gruppen, profile, opt), umriss = [], n0 = gruppen.length, qA = (k) => quetsch?.get(k), qE = (k) => quetsch?.get((k + 1) % n0);
-  gruppen.forEach((g, k) => {
-    const p = profile[k];
+  gruppen.forEach((g0, k) => {
+    const p = profile[k], tg = p?.lage && p.zugabe > 0 ? teilGruppe(g0, p) : null, g = tg || g0; // Teilstück: der Lappen liegt nur zwischen von und bis, davor/danach läuft der Umriss an der Plattenkante
+    if (tg && !reichtBisAnfang(p)) umriss.push(g0.punkte[0]);
     if (p?.lage && p.zugabe < -1e-9) { umriss.push(...lappenLinie(g, p.zugabe, 0, ek[k], 0, false).slice(0, -1)); return; } // Kante nach innen gesetzt (z. B. bei Nähten): Zuschnitt kürzer als gezeichnet
     if (!p?.lage || !(p.zugabe > 0)) { umriss.push(...g.punkte.slice(0, -1)); return; }
     const lage = p.lage.filter(([u]) => u <= p.zugabe + 1e-9); if (lage.at(-1)[0] < p.zugabe - 1e-9) lage.push([p.zugabe, xBei(p.lage, p.zugabe)]);
@@ -336,6 +351,7 @@ export function abwicklung(pts, gruppen, profile, quetsch = null, opt = null) { 
     const aussen = lappenLinie(g, p.zugabe, lage.at(-1)[1], ek[k], yBei(p.lageY, p.zugabe)); umriss.push(...aussen.slice(1, -1));
     if (qE(k)) { const q = qE(k); umriss.push(q.P2, ...(q.z.P2s[0] === q.z.P2[0] && q.z.P2s[1] === q.z.P2[1] ? [] : [q.P2s]), q.C, ...(q.z.P1s[0] === q.z.P1[0] && q.z.P1s[1] === q.z.P1[1] ? [] : [q.P1s])); } // Quetschfalte: Überschuss der Ecke
     else for (const [u, x, rel] of stufe.slice().reverse()) umriss.push(lappenLinie(g, u, x, ek[k], yBei(p.lageY, u), rel).at(-1)); // Ende: zurück zur Kante
+    if (tg && !reichtBisEnde(p)) umriss.push(g0.punkte.at(-1));
   });
   let sauber = umriss.filter((p, i) => len(sub(p, umriss[(i + umriss.length - 1) % umriss.length])) > 1e-6);
   sauber = sauber.filter((p, i) => { // Punkte auf einer Geraden zwischen ihren Nachbarn weglassen
@@ -343,7 +359,7 @@ export function abwicklung(pts, gruppen, profile, quetsch = null, opt = null) { 
     return Math.abs(u[0] * v[1] - u[1] * v[0]) > 1e-6 * len(u) * len(v) || u[0] * v[0] + u[1] * v[1] < 0;
   });
   const linien = [];
-  gruppen.forEach((g, k) => (profile[k]?.biegungen || []).forEach((b) => { const u = profile[k].zugabe < -1e-9 ? b.abstand : Math.max(b.abstand, 0), pk = lappenLinie(g, u, xBei(profile[k].lage, u), ek[k], yBei(profile[k].lageY, u)); if (qA(k) && b === profile[k].biegungen[0]) pk[0] = qA(k).O; if (qE(k) && b === profile[k].biegungen[0]) pk[pk.length - 1] = qE(k).O; linien.push({ kante: k, nr: b.nr, art: b.art, punkte: pk }); }));
+  gruppen.forEach((g, k) => (profile[k]?.biegungen || []).forEach((b) => { const u = profile[k].zugabe < -1e-9 ? b.abstand : Math.max(b.abstand, 0), pk = lappenLinie(teilGruppe(g, profile[k]) || g, u, xBei(profile[k].lage, u), ek[k], yBei(profile[k].lageY, u)); if (qA(k) && b === profile[k].biegungen[0]) pk[0] = qA(k).O; if (qE(k) && b === profile[k].biegungen[0]) pk[pk.length - 1] = qE(k).O; linien.push({ kante: k, nr: b.nr, art: b.art, punkte: pk }); }));
   if (quetsch) for (const q of quetsch.values()) linien.push({ kante: -1, nr: 0, art: "quetsch", punkte: [q.O, q.C] }, { kante: -1, nr: 0, art: "ecklinie", punkte: [q.O, q.P1] }, { kante: -1, nr: 0, art: "ecklinie", punkte: [q.O, q.P2] });
   // Ausrichtung: längste gerade Kante waagrecht
   const gerade = gruppen.filter((g) => g.gerade).sort((a, b) => b.laenge - a.laenge)[0] || gruppen[0];
@@ -355,12 +371,20 @@ export function abwicklung(pts, gruppen, profile, quetsch = null, opt = null) { 
 
 // Fläche des Blechs bis zum Biegebeginn: jede Kante mit Baustein wird um kuerzen[k] mm nach innen versetzt (Ecken mit den Nachbarkanten
 // verschnitten). So endet die ebene Platte dort, wo die erste Biegung beginnt – nicht erst an der gezeichneten Kante.
-export function plattenUmriss(pts, gruppen, kuerzen) {
-  const n = pts.length, d = new Array(n).fill(0);
-  gruppen.forEach((g, k) => g.segmente.forEach((i) => { d[i] = Math.max(0, kuerzen[k] || 0); }));
-  if (!d.some((v) => v > 1e-9)) return pts;
+export function plattenUmriss(pts, gruppen, kuerzen, teile = null) { // teile: Map Kantenindex → { von, bis } (Teilstück): die Platte wird nur dort zurückgesetzt (Aussparung statt Versatz der ganzen Kante)
+  const n = pts.length, d = new Array(n).fill(0), tk = [];
+  gruppen.forEach((g, k) => g.segmente.forEach((i) => { const t = teile?.get?.(k) ?? teile?.[k]; if (t && g.gerade) { tk.push({ i, k, t, dist: Math.max(0, kuerzen[k] || 0) }); d[i] = 0; } else d[i] = Math.max(0, kuerzen[k] || 0); }));
+  if (!d.some((v) => v > 1e-9) && !tk.some((x) => x.dist > 1e-9)) return pts;
   const lin = pts.map((a, i) => { const r = richtung(a, pts[(i + 1) % n]); return { p: [a[0] - r[1] * d[i], a[1] + r[0] * d[i]], r }; }); // nach links = nach innen (Umriss gegen den Uhrzeiger)
-  return pts.map((_, i) => { const L0 = lin[(i - 1 + n) % n], L1 = lin[i]; return schnitt(L0.p, L0.r, L1.p, L1.r) ?? L1.p; });
+  const res = pts.map((_, i) => { const L0 = lin[(i - 1 + n) % n], L1 = lin[i]; return schnitt(L0.p, L0.r, L1.p, L1.r) ?? L1.p; });
+  if (!tk.length) return res;
+  const aus = [];
+  res.forEach((q, i) => {
+    aus.push(q); const x = tk.find((e) => e.i === i); if (!x || x.dist < 1e-9) return;
+    const r = lin[i].r, nrm = [-r[1], r[0]], sA = (q[0] - pts[i][0]) * r[0] + (q[1] - pts[i][1]) * r[1], P = (u) => [q[0] + r[0] * (u - sA), q[1] + r[1] * (u - sA)];
+    for (const [u, innen] of [[x.t.von, false], [x.t.von, true], [x.t.bis, true], [x.t.bis, false]]) { const pp = P(u); aus.push(innen ? [pp[0] + nrm[0] * x.dist, pp[1] + nrm[1] * x.dist] : pp); }
+  });
+  return aus;
 }
 
 // Quetschfalte an der Ecke am Anfang der Kante k: beide Nachbarkanten brauchen einen Flansch (eine Biegung) – Winkel und Höhen dürfen verschieden sein
@@ -378,6 +402,11 @@ export function quetschEcke(pts, gruppen, profile, k) {
 export function flaechenblech(ptsRoh, kanten, m, quetschEcken = [], opt = null) { // quetschEcken: Ecken (Index k = Anfang der Kante k), an denen eine Quetschfalte gesetzt ist
   const pts = gegenUhrzeiger(ptsRoh), gruppen = kantenGruppen(pts);
   const profile = gruppen.map((_, k) => { const b = kanten[k]; try { return b ? { ...bausteinProfil(b, m), baustein: b } : null; } catch (e) { throw new Error(`Kante ${k + 1} (${b.name}): ${e.message}`); } });
+  if (opt?.teil) gruppen.forEach((g, k) => { // Teilstücke: nur gerade Kanten mit Baustein; ausserhalb von 0…Länge beschnitten
+    const t = opt.teil[k]; if (!t || !g.gerade || !profile[k]) return;
+    const von = Math.max(0, +t.von || 0), bis = Math.min(g.laenge, Number.isFinite(+t.bis) ? +t.bis : g.laenge);
+    if (bis - von > 1e-6 && (von > 1e-6 || bis < g.laenge - 1e-6)) profile[k].teil = { von, bis, L: g.laenge };
+  });
   const quetsch = new Map(), fehlerQ = {};
   for (const k of quetschEcken || []) {
     try { quetsch.set(k, quetschEcke(pts, gruppen, profile, k)); } catch (e) { fehlerQ[k] = e.message; }

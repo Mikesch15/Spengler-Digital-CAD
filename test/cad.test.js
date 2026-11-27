@@ -321,6 +321,14 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   // 3 Doppelstehfalz (Umschlag) und Traufe-Einhang gemischt: schräg angeschnittene Säume, gültig
   const bl3 = flaechenblech(pts, [B("dsf-u"), B("trauf"), B("dsf-o"), B("ortgang")], zink), e3 = await eig(await baueFlaechenblech(x, flaechenblechPlan(bl3, BASIS.XY, zink, -1)));
   ok(e3.gueltig && e3.anzahl.koerper === 1 && e3.volumen > 0, `Flächenblech gemischt (Doppelstehfalz, Traufe, Ortgang, Sichtseite −1): ein gültiger Körper (V ${(e3.volumen / 1000).toFixed(1)} cm³)`);
+  // 5 Referenz: Teilstück – Aufkantung nur zwischen 200 und 600 mm der 1000 mm langen Kante: Volumen/t = Zuschnittfläche − Länge·Biegeausgleich (Toleranz 1e-4 mm²)
+  {
+    const kt = [null, null, null, null]; kt[gruppeVon(leer, [0, 0], [1000, 0])] = B("ortgang");
+    const bt = flaechenblech(pts, kt, zink, [], { teil: { [gruppeVon(leer, [0, 0], [1000, 0])]: { von: 200, bis: 600 } } }), et = await eig(await baueFlaechenblech(x, flaechenblechPlan(bt, BASIS.XY, zink, 1)));
+    const flaecheBlank = bt.abw.flaeche * 1e6, soll = flaecheBlank - 400 * (zink.k - 0.5) * zink.t * PI / 2, ist = et.volumen / zink.t;
+    ok(et.gueltig && et.anzahl.koerper === 1 && Math.abs(ist - soll) < 1e-4, `Referenz Teilstück 200…600 mm: V/t ${ist.toFixed(4)} = Zuschnittfläche − Ausgleich ${soll.toFixed(4)} mm²`);
+    ok(Math.abs(et.grenzen.max[2] - (25 - 0.35)) < 0.5, "Referenz Teilstück: Aufkantung hat die richtige Höhe");
+  }
   // 4 Referenz (Qualitätsoffensive): zwei gegenüberliegende Aufkantungen – Zuschnittlänge aus dem exakten Volumen = Abwicklung (je Biegung Biegeausgleich (k − 0,5)·t·π/2), Toleranz 1e-6 mm
   {
     const kt = [null, null, null, null]; kt[gruppeVon(leer, [0, 0], [1000, 0])] = B("ortgang"); kt[gruppeVon(leer, [1000, 500], [0, 500])] = B("ortgang");
