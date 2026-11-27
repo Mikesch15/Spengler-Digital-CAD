@@ -50,6 +50,7 @@ const ab2 = await s.evaluate(() => window.sdcadTest.quetschAbw("fl")); ok(ab2 &&
   await p.selectOption("#d_nahtLaenge", "teil"); await p.waitForTimeout(600);
   const n1 = await p.evaluate(() => { const f = window.sdcadTest.dok().features.find((x) => x.id === "n1"); return { a: f.a.teil, b: f.b.teil, fehl: window.sdcadTest.dok().features.map((x) => x._fehler).filter(Boolean) }; });
   ok(n1.a && n1.b && n1.a.bis - n1.a.von > 1 && n1.fehl.length === 0, `Naht auf Teilstück: A ${JSON.stringify(n1.a)}, B ${JSON.stringify(n1.b)}`);
+  ok(await p.evaluate(() => window.sdcadTest.griffe().some((g) => g.feld === "nahtVon") && window.sdcadTest.griffe().some((g) => g.feld === "nahtBis")), "Naht auf Teilstück: zwei Pfeile (von/bis) an Kante A");
   const b1 = await p.evaluate(() => { const a = window.sdcadTest.quetschAbw("f2"); return a.umriss.length; });
   ok(b1 > b0.n, `Zuschnitt von Blech 2 hat Aussparungen am Nahtende (${b0.n} → ${b1} Eckpunkte)`);
   await p.selectOption("#d_nahtLaenge", "ganz"); await p.waitForTimeout(500);

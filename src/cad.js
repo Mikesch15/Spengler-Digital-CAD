@@ -1193,6 +1193,11 @@ function griffeFuer(f) {
     const ds = P(sm + 100, tm).sub(c).normalize(), dt = P(sm, tm + 100).sub(c).normalize();
     for (const [feld, dir, faktor, farbe] of [["x", ds, 1, 0xd23c3c], ["x", ds.clone().negate(), -1, 0xd23c3c], ["y", dt, 1, 0x3aa655], ["y", dt.clone().negate(), -1, 0x3aa655]]) l.push({ feld, pos: c.clone(), dir, faktor, farbe });
   } else if (f.typ === "kante" || f.typ === "profilkante") { return griffeKante(f);
+  } else if (f.typ === "naht") { // Naht auf Teilstück: Pfeile an Kante A (Von/Bis in mm ab Kantenanfang)
+    const t = f.a?.teil, ke = t ? nahtKante(f.a) : null, pk = ke?.punkte; if (!pk || pk.length < 2) return l;
+    const P0 = pk[0], P1 = pk.at(-1), L = P0.distanceTo(P1), d = P1.clone().sub(P0).normalize(), at = (u) => P0.clone().addScaledVector(d, u);
+    l.push({ feld: "nahtVon", pos: at(t.von), dir: d.clone(), faktor: 1, min: 0, max: L, farbe: 0xff8a00 }, { feld: "nahtBis", pos: at(t.bis), dir: d.clone().negate(), faktor: -1, min: 0, max: L, farbe: 0xff8a00 });
+    return l;
   } else if (f.typ === "drehung") { return griffeDrehung(f);
   } else if (f.typ === "gebaeude") { // Breite/Tiefe/Wandhöhe: Pfeile an den Wänden, in beide Richtungen ziehbar
     const bb = mitte(modell.children.filter((o) => o.isMesh && o.userData.fid === f.id)); if (!bb) return l;
