@@ -3357,7 +3357,21 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
   const fold = lin(O2, C2), eps = lin(O2, P2), schn = (a, b, c0, d0) => { const w = b.clone().sub(a), x = d0.clone().sub(c0), den = w.x * x.y - w.y * x.x; if (Math.abs(den) < 1e-12) return null; const tt = ((c0.x - a.x) * x.y - (c0.y - a.y) * x.x) / den; return a.clone().addScaledVector(w, tt); };
   const zuSeite = (l, P) => (l.nm.dot(P.clone().sub(l.A)) < 0 ? l.nm.clone().negate() : l.nm.clone()); // Normale zur Dreiecksseite hin
   const dF = zuSeite(fold, P2).dot(P2.clone().sub(O2)), dE = zuSeite(eps, C2).dot(C2.clone().sub(O2)), r = Math.min(t, dF * 0.3, dE * 0.3);
-  const nF = zuSeite(fold, P2).multiplyScalar(r), nE = zuSeite(eps, C2).multiplyScalar(r);
+  // Die Dreiecksflächen beginnen erst dort, wo die Biegungen an der Ecklinie enden (90°-Biegung und 180°-Saum): Abstand der Anschlusskante von der Ecklinie
+  let aStart = r;
+  try {
+    const eB0 = v(q.wand === "wand1" ? g.e2 : g.e1), eA0 = v(q.wand === "wand1" ? g.e1 : g.e2), uV0 = v(g.eps).normalize();
+    const ay0 = eA0.clone().addScaledVector(uV0, -eA0.dot(uV0)).normalize(), wB0 = eB0.clone().addScaledVector(uV0, -eB0.dot(uV0)).normalize(), dBa0 = wB0.dot(ay0), dBb0 = wB0.dot(n);
+    if (dBb0 < -0.05) {
+      const R0 = Math.max(t, 0.5) * 1.5, u10 = [-dBa0, -dBb0], l0 = Math.hypot(...u10); u10[0] /= l0; u10[1] /= l0;
+      const sk0 = 2 * t / u10[1], th0 = Math.acos(Math.max(-1, Math.min(1, u10[0]))), tl0 = R0 * Math.tan(th0 / 2);
+      let pB0 = [-dBb0, dBa0]; if (pB0[0] < 0) pB0 = [-pB0[0], -pB0[1]];
+      const sE0 = (-t / 2 - (t / 2) * pB0[1]) / dBb0, aI0 = (t / 2) * pB0[0] + sE0 * dBa0;
+      aStart = Math.max(u10[0] * sk0 + tl0, aI0 + t, r);
+    }
+  } catch { aStart = r; }
+  aStart = Math.min(aStart, dE * 0.45);
+  const nF = zuSeite(fold, P2).multiplyScalar(r), nE = zuSeite(eps, C2).multiplyScalar(aStart);
   const fA = O2.clone().add(nF), fB = C2.clone().add(nF), eA = O2.clone().add(nE), eB = P2.clone().add(nE);
   const Oi = schn(fA, fB, eA, eB) || O2, Pi = schn(eA, eB, P2, C2) || P2, Ci = schn(fA, fB, P2, C2) || C2;
   const mk = (geo, lage) => { geo.applyMatrix4(lage); geo.applyMatrix4(M); return koerperAusGeo(geo, farbe, fid); };
