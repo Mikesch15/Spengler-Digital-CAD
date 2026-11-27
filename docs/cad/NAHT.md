@@ -23,3 +23,9 @@ Im Kantenschritt lässt sich neben den gelisteten Umrisskanten **jede Körperkan
 - **Teil des Blechs:** Die Fahne trägt die Kennung des Blechkörpers (Netz `nahtFahneMesh`); im exakten Kern wird am Rand ein Streifen abgezogen und die Fahne mit dem Blechkörper **vereinigt** (ein Körper).
 - **Abwicklung:** `nahtFahneAbwicklung` bildet die Kante auf den Zuschnitt ab (Platte direkt, Flansch über das Profil) und setzt am Rand einen Lappen (Breite = Kantenlänge, Tiefe = Zugabe des Bausteins) samt Biegelinie ein. Liegt die Kante nicht am Rand des Zuschnitts (z. B. Kante über eine Ecke), bleibt `f._abwHinweis` gesetzt, die Fahne steht dann nur im 3D-Modell.
 - Grenzen: Falz an freien Kanten fehlt noch; nach «Abwickeln» + «Falten» fehlt die Fahne im gefalteten Netz; Test `tests/app-kern/nahtfrei.mjs`.
+
+## Stand 28.11.2026 (Stossecke, Ecknaht, Falz frei, exakter Kern)
+- **Stossecken:** Bei Stirnkanten (beide anliegenden Flächen sind Stirnflächen) wählt `nahtPaar` die Flächenpaarung, bei der die Blechmitten an der Fuge zusammenliegen; die Aussenrichtung jeder Fläche kommt aus einer Innen/Aussen-Prüfung per Strahl (nicht aus der Dreiecksreihenfolge). Test mit dem Nutzerdokument: `tests/app-kern/nahtstoss.mjs` (+ `tests/daten/naht-stossecke.sdcad`).
+- **Ecknaht:** Dreieck in der Fuge zwischen beiden Blechen (`nahtEckDaten`), bei Blechen in einer Ebene flaches Dreieck auf der Fuge; Teilstück; **exakter Körper** (Extrusion). Schweissnaht (Linse) ebenfalls exakt. Test `ecknaht.mjs`.
+- **Falz an freien Kanten:** beide Seiten bekommen ihre Haken (`nahtFahneDaten(f, seite)`), im Winkel legt das abgesetzte Blech zuerst die Fuge-Biegung um den Winkel zwischen den Blechen um. Die Kollisionsfreiheit des Falz im Winkel ist nicht rechnerisch geprüft.
+- **Exakter Kern:** abgewickeltes Blech als flache Platte (mit Ausschnitten), Abwickeln + Falten ohne Netz-Rückfall, Loft exakt. Noch Netz: Sweep, Kehle, Quetschfalte, Teilen, Ausschnitte im gefalteten Blech.

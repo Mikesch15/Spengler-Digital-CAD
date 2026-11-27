@@ -20,7 +20,7 @@ p = await seite([...basis, naht({})]); const w1 = await breite(p, "f2"), v1 = aw
 ok(!(await fe(p)), "Punktnaht rechnet ohne Fehler " + (await fe(p)));
 ok(w1 && Math.abs(w1.w - w0.w - 15.5) < 1.5 && Math.abs(v1.w - v0.w) < 0.1, `Punktnaht: abgesetztes Blech 2 wird um die Überlappung länger (${w0.w.toFixed(1)} → ${w1.w.toFixed(1)}), Blech 1 bleibt`); await p.close();
 p = await seite([...basis, naht({ absetz: "a" })]); const w2 = await breite(p, "f1"); ok(w2 && w2.w - v0.w > 14, `Absetzung an Blech A: Blech 1 wird länger (${w2.w.toFixed(1)})`); await p.close();
-p = await seite([...basis, naht({ absetzen: false })]); const w3 = await breite(p, "f2"); ok(w3 && Math.abs(w3.w - w0.w - 15) < 0.5, `gerade Überlappung ohne Absetzung: +15 mm (${w3?.w.toFixed(1)})`); await p.close();
+p = await seite([...basis, naht({ absetzen: false })]); const w3 = await breite(p, "f2"); ok(w3 && Math.abs(w3.w - w0.w - 16.3) < 0.5, `Punktnaht (Absetzung entfällt als Option): 15 mm + Kröpfung = +16.3 mm (${w3?.w.toFixed(1)})`); await p.close();
 p = await seite([...basis, naht({ art: "falz" })]); const fa = await breite(p, "f1"), fb = await breite(p, "f2");
 ok(!(await fe(p)) && fa.w - v0.w > 3 && fb.w - w0.w > 8, `Falznaht: Blech 1 +${(fa.w - v0.w).toFixed(1)} mm, Blech 2 (abgesetzt) +${(fb.w - w0.w).toFixed(1)} mm`); await p.close();
 p = await seite([...basis, naht({ art: "falz", mittig: true })]); const ma = await breite(p, "f1"), mb = await breite(p, "f2"); ok(Math.abs((ma.w - v0.w) - (mb.w - w0.w)) < 1.5 && ma.w - v0.w > 5, `Falz mittig: beide Bleche gleich lang zugegeben (+${(ma.w - v0.w).toFixed(1)} / +${(mb.w - w0.w).toFixed(1)})`); await p.close();

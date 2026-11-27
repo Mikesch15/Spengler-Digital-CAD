@@ -3707,7 +3707,9 @@ function nahtEckDaten(f) { // Ecknaht (Kehlnaht): Dreieck in der Fuge zwischen b
   if (f.a?.teil && ka.punkte.length === 2) { const [v, bis] = [f.a.teil.von, f.a.teil.bis]; p1 = p0.clone().addScaledVector(e, bis); p0 = p0.clone().addScaledVector(e, v); }
   const nA = ka.normale.clone(), uA = ka.inn.clone(), uB = kb.inn.clone(), apex = p0.clone().addScaledVector(nA, sg * t / 2);
   const x = uA.clone(), v = e.clone().cross(x).normalize(), hoehe = p1.distanceTo(p0);
-  let pts = [[0, 0], [leg, 0], [leg * uB.dot(x), leg * uB.dot(v)]]; const fl = pts[0][0] * pts[1][1] - pts[1][0] * pts[0][1] + pts[1][0] * pts[2][1] - pts[2][0] * pts[1][1] + pts[2][0] * pts[0][1] - pts[0][0] * pts[2][1]; if (fl < 0) pts = pts.reverse();
+  let pts = [[0, 0], [leg, 0], [leg * uB.dot(x), leg * uB.dot(v)]];
+  if (Math.abs(leg * leg * (uB.dot(v))) < 1e-3 * leg * leg) { const hoch = v.dot(nA) * sg >= 0 ? 1 : -1; pts = [[-leg / 2, 0], [leg / 2, 0], [0, hoch * leg / 2]]; } // Bleche in einer Ebene (Stossnaht): flaches Dreieck auf der Fuge
+  const fl = pts[0][0] * pts[1][1] - pts[1][0] * pts[0][1] + pts[1][0] * pts[2][1] - pts[2][0] * pts[1][1] + pts[2][0] * pts[0][1] - pts[0][0] * pts[2][1]; if (fl < 0) pts = pts.reverse();
   if (Math.abs(fl) < 1e-6) return null;
   return { pts, x, v, e, apex, L: hoehe, ebene: { ursprung: apex.toArray(), x: x.toArray(), n: e.toArray() }, profil: { start: pts[0], segmente: [{ bis: pts[1] }, { bis: pts[2] }, { bis: pts[0] }] }, host: ka.f.id };
 }
