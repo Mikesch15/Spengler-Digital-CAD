@@ -18,16 +18,19 @@ const seite = async (naht, kern, fn) => { const s = await b.newPage({ viewport: 
   if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern/.test(document.getElementById("status").textContent), null, { timeout: 90000 }); else await s.waitForTimeout(1800);
   await s.waitForTimeout(500); const r = await fn(s); await s.close(); return r; };
 // Kantenkoordinaten am unteren Rand von Blech B (Aussenfläche zu Blech A hin) ohne Naht bestimmen
+const flaeche = (u) => { let a = 0; for (let i = 0; i < u.length; i++) { const p = u[i], q = u[(i + 1) % u.length]; a += p[0] * q[1] - q[0] * p[1]; } return Math.abs(a / 2); };
+const basis = await seite(null, false, (s) => s.evaluate(() => window.sdcadTest.quetschAbw("f2").umriss));
 const kante = await seite(null, false, (s) => s.evaluate(() => { const P = window.sdcadTest.meshPunkte("f2").filter((p) => Math.abs(p[1]) < 1e-3 && Math.abs(p[0] - 99.65) < 1e-3), z = P.map((p) => p[2]); return P.length ? { a: [99.65, 0, Math.max(...z)], b: [99.65, 0, Math.min(...z)] } : null; }));
 ok(!!kante, `Kante am unteren Rand von Blech B gefunden (${JSON.stringify(kante)})`);
 const key = kante ? `E:${kante.a.join(",")};${kante.b.join(",")}` : "";
-const r = await seite(key, false, (s) => s.evaluate(() => ({ w: window.sdcadTest.nahtWinkel("n1").w, fahne: window.sdcadTest.meshListe("n1"), fehl: window.sdcadTest.dok().features.map((x) => x._fehler).filter(Boolean) })));
+const r = await seite(key, false, (s) => s.evaluate(() => ({ abw: window.sdcadTest.quetschAbw("f2").umriss, hinweis: window.sdcadTest.dok().features.length, w: window.sdcadTest.nahtWinkel("n1").w, fahne: window.sdcadTest.meshListe("f2").filter((m) => m.mn[0] < 95), fehl: window.sdcadTest.dok().features.map((x) => x._fehler).filter(Boolean) })));
 ok(r.w && Math.abs(Math.abs(r.w.b) - 90) < 1 && r.fehl.length === 0, `freie Kante: Winkel erkannt (${JSON.stringify(r.w)}) ${r.fehl.join(";")}`);
+ok(Math.abs(flaeche(r.abw) - flaeche(basis) - 100 * 13.6) < 60, `Fahne steht in der Abwicklung: Zuschnitt ${Math.round(flaeche(basis))} → ${Math.round(flaeche(r.abw))} mm² (+ ca. 1361)`);
 ok(r.fahne.length === 1 && r.fahne[0].mn[1] >= 0.33 && r.fahne[0].mn[0] < 90, `Fahne liegt auf Blech A, 15 mm lang (min y ${r.fahne[0]?.mn[1]}, min x ${r.fahne[0]?.mn[0]})`);
 const x = await seite(key, true, (s) => s.evaluate(() => ({ k: window.sdcadTest.koerper().map((k) => [String(k.fid), Math.round(Math.abs(k.volumen) * 10) / 10]), st: document.getElementById("status").textContent })));
 const v = (f) => x.k.filter(([i]) => i.startsWith(f)).reduce((a, [, w]) => a + w, 0);
-ok(v("n1:fahne") > 10, `exakter Kern: Fahne als Körper (${v("n1:fahne")} mm³)`);
-ok(v("f2") < 5600 - 20 && v("f2") > 5600 - 120, `Blech B am Rand um die Rücksetzung gekürzt (${v("f2")} mm³ statt 5600)`);
+ok(v("n1") === 0, "die Fahne ist kein eigener Körper");
+ok(v("f2") > 5600 + 800 && v("f2") < 5600 + 1300, `Fahne gehört zum Blech B: ein Körper (${v("f2")} mm³ statt 5600 ohne Fahne)`);
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Naht an freier Körperkante (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

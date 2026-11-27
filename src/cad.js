@@ -1522,7 +1522,7 @@ function regenEinmal() {
         if (!nahtKante(f.b)) throw new Error("Die Kante an Blech B gibt es nicht mehr – Naht neu setzen");
         { const wn = nahtWinkelAuto(f); if (JSON.stringify(wn) !== JSON.stringify(f._winkel ?? null)) { f._winkel = wn; nahtWinkelGeaendert = true; } }
         if ((f.art === "schweiss" || f.art === "ecke") && !f.versteckt) { const o = nahtRaupe(f); if (o) modell.add(o); }
-        f._fahne = null; { const fd = nahtFahneDaten(f); if (fd) { f._fahne = fd; if (!f.versteckt) { const o = nahtFahneMesh(f, fd); o.userData.fid = `${f.id}:fahne`; modell.add(o); } } }
+        f._fahne = null; { const fd = nahtFahneDaten(f); if (fd) { f._fahne = fd; if (!f.versteckt) modell.add(nahtFahneMesh(f, fd)); nahtFahneAbwicklung(f, fd); } }
       } else if (f.typ === "stirnquetsch") { // Quetschfalte an der Ecke Stirnlasche + Wand eines Blechprofils (Rechnung beim Profil: stirnBerechnen)
         const z = finde(f.ziel); if (!z || !istProfil(z)) throw new Error("Das Blechprofil fehlt");
         if (doc.features.indexOf(z) > doc.features.indexOf(f)) throw new Error("Das Blechprofil muss vor diesem Schritt stehen");
@@ -3562,11 +3562,11 @@ function freieKante(s) {
       const v = [vert(i), vert(i + 1), vert(i + 2)], ia = v.findIndex((q) => q.distanceTo(a) < 2e-3), ib = v.findIndex((q) => q.distanceTo(b) < 2e-3); if (ia < 0 || ib < 0 || ia === ib) continue;
       const c = v[3 - ia - ib], w = c.clone().sub(a), quer = w.clone().addScaledVector(e, -w.dot(e)), h = quer.length(); if (h < 1e-6) continue;
       const nrm = new THREE.Vector3().subVectors(v[1], v[0]).cross(new THREE.Vector3().subVectors(v[2], v[0])).normalize();
-      if (!best || h > best.h) best = { h, inn: quer.normalize(), nrm };
+      if (!best || h > best.h) best = { h, inn: quer.normalize(), nrm, fid: String(m.userData.fid) };
     }
   }
   if (!best) return null;
-  return { punkte: [a, b], normale: best.nrm, inn: best.inn, f, frei: true, name: `${f.name} · Körperkante` };
+  return { punkte: [a, b], normale: best.nrm, inn: best.inn, f, frei: true, meshFid: best.fid, name: `${f.name} · Körperkante` };
 }
 function nahtKante(s) {
   const f = finde(s?.ziel); if (!f || !s.key) return null;
@@ -3618,13 +3618,45 @@ function nahtFahneDaten(f) {
   const w2 = w ? { a: spiegel ? -w.a : w.a, b: spiegel ? -w.b : w.b } : null, nf = nahtFolgen({ ...f, richtung: spiegel ? (f.richtung === "unten" ? "oben" : "unten") : f.richtung }, m, w2)[bent]; if (!nf) return null;
   const mid = ke.punkte[0].clone().addScaledVector(ke.normale, -t / 2); // Blechmitte unter der gewählten Oberfläche
   const q = bausteinQuerschnitt({ name: "n", folge: nf.folge, versatz: nf.versatz || 0 }, m); if (!q) return null;
-  return { m, t, L, e, c, v, mid, folge: nf.folge, versatz: nf.versatz || 0, profil: q.profil, host: ke.f.id, a: ke.punkte[0].clone(), b: ke.punkte[1].clone() };
+  return { m, t, L, e, c, v, mid, folge: nf.folge, versatz: nf.versatz || 0, profil: q.profil, host: ke.f.id, hostFid: ke.meshFid, a: ke.punkte[0].clone(), b: ke.punkte[1].clone(), inn: ke.inn.clone(), nrm: ke.normale.clone(), zugabe: (() => { try { return bausteinProfil({ name: "n", folge: nf.folge, versatz: nf.versatz || 0 }, m); } catch { return null; } })() };
 }
 function nahtFahneMesh(f, fd) {
   const poly = profilPolygon(fd.profil), shape = new THREE.Shape(poly.map(([x, y]) => new THREE.Vector2(x, y)));
   const geo = new THREE.ExtrudeGeometry(shape, { depth: fd.L, bevelEnabled: false, curveSegments: 12 });
   geo.applyMatrix4(new THREE.Matrix4().makeBasis(fd.c, fd.v, fd.e).setPosition(fd.mid));
-  const o = koerperAusGeo(geo, darstellungVon(finde(fd.host), fd.m), `${f.id}:fahne`); o.userData.naht = true; return o;
+  const o = koerperAusGeo(geo, darstellungVon(finde(fd.host), fd.m), fd.hostFid); o.userData.nahtFahne = f.id; return o; // Teil des Blechs: gleiche Kennung wie der Blechkörper
+}
+// Die Fahne gehört zum Blech: in der Abwicklung als Lappen am Rand des Zuschnitts (Breite = Kantenlänge, Tiefe = Zugabe des Bausteins), mit Biegelinie
+function nahtFahneAbwicklung(f, fd) {
+  f._abwHinweis = null;
+  const z = finde(fd.host); if (z?.typ !== "flaeche" || !z._bleche) return; // nur Flächenbleche haben diese Abwicklung
+  const pi = +String(fd.hostFid).split(":")[1], bl = z._bleche.find((b) => b.pi === pi) || z._bleche[0], sk = finde(z.skizze), m = material(z.material), sg = z.sichtseite === -1 ? -1 : 1, t = m.t, hint = (x) => { f._abwHinweis = x; };
+  if (!bl || !sk || !(fd.zugabe?.zugabe > 0)) return hint("Fahne nicht in der Abwicklung (keine Zugabe)");
+  const B = basis(blechEbene(sk.ebene, z, m)), LM = lageVon(z), Binv = B.clone().invert(), LMinv = LM ? LM.clone().invert() : null;
+  const flach = (P) => { // Weltpunkt auf dem Blech → Punkt der Abwicklung (Skizzenkoordinaten)
+    const q = P.clone(); if (LMinv) q.applyMatrix4(LMinv); q.applyMatrix4(Binv); const h = q.z * sg;
+    if (Math.abs(q.z) <= t / 2 + 0.02) return [q.x, q.y]; // auf der Platte
+    let best = null;
+    bl.gruppen.forEach((g, k) => { const pr = bl.profile[k]; if (!g.gerade || !pr?.res || !pr.biegungen?.length) return;
+      const a = g.punkte[0], b = g.punkte.at(-1), L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, d = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], no = [d[1], -d[0]], sx = (q.x - a[0]) * d[0] + (q.y - a[1]) * d[1], out = (q.x - a[0]) * no[0] + (q.y - a[1]) * no[1];
+      if (sx < -5 || sx > L + 5) return;
+      for (let u = 0; u <= pr.zugabe; u += 0.05) { const pp = profilPunkt(pr, u); if (!pp) continue; const dd = Math.hypot(pp.x - out, pp.y - h); if (!best || dd < best.dd) best = { dd, p: [a[0] + d[0] * sx + no[0] * u, a[1] + d[1] * sx + no[1] * u] }; } });
+    return best && best.dd <= t + 0.4 ? best.p : null;
+  };
+  const A = flach(fd.a), Bp = flach(fd.b); if (!A || !Bp) return hint("Fahne nicht in der Abwicklung (Kante liegt nicht auf Platte oder Flansch einer Umrisskante)");
+  const U = bl.abw.umriss, n = U.length, D = fd.zugabe.zugabe, flaecheU = U.reduce((acc, p, i) => { const r = U[(i + 1) % n]; return acc + p[0] * r[1] - r[0] * p[1]; }, 0);
+  const abst = (P, S, E) => { const dx = E[0] - S[0], dy = E[1] - S[1], l2 = dx * dx + dy * dy || 1e-12, u = Math.max(0, Math.min(1, ((P[0] - S[0]) * dx + (P[1] - S[1]) * dy) / l2)); return Math.hypot(P[0] - (S[0] + u * dx), P[1] - (S[1] + u * dy)); };
+  for (let i = 0; i < n; i++) {
+    const S = U[i], E = U[(i + 1) % n]; if (abst(A, S, E) > 0.35 || abst(Bp, S, E) > 0.35) continue;
+    const L = Math.hypot(E[0] - S[0], E[1] - S[1]), u = [(E[0] - S[0]) / L, (E[1] - S[1]) / L], aus = flaecheU > 0 ? [u[1], -u[0]] : [-u[1], u[0]], sa = (A[0] - S[0]) * u[0] + (A[1] - S[1]) * u[1], sb = (Bp[0] - S[0]) * u[0] + (Bp[1] - S[1]) * u[1];
+    const [P1, P2] = sa <= sb ? [A, Bp] : [Bp, A], ausP = (P, d) => [P[0] + aus[0] * d, P[1] + aus[1] * d];
+    bl.abw.umriss = [...U.slice(0, i + 1), P1, ausP(P1, D), ausP(P2, D), P2, ...U.slice(i + 1)];
+    const bg = fd.zugabe.biegungen?.[0]; if (bg) bl.abw.linien.push({ kante: -1, nr: bg.nr || 1, art: bg.art || "Abkanten", punkte: [ausP(P1, bg.abstand), ausP(P2, bg.abstand)], nahtFahne: f.id });
+    const gr = grenzen(bl.abw.umriss.map(bl.abw.dreh)); bl.abw.laenge = gr.x1 - gr.x0; bl.abw.breite = gr.y1 - gr.y0; bl.abw.flaeche = Math.abs(bl.abw.umriss.reduce((acc, p, j, arr) => { const r = arr[(j + 1) % arr.length]; return acc + p[0] * r[1] - r[0] * p[1]; }, 0)) / 2e6;
+    const tl = z._teile?.find((x) => x._blech === bl); if (tl) { tl.laenge = +bl.abw.laenge.toFixed(1); if (tl._res) tl._res.zuschnitt = bl.abw.breite; }
+    return;
+  }
+  hint("Fahne nicht in der Abwicklung (Kante liegt nicht am Rand des Zuschnitts)");
 }
 // Schweissraupe (Stumpf-/Kehlnaht) entlang der Kante von Blech A
 function nahtRaupe(f) {
@@ -7626,18 +7658,19 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         catch (e) { nicht.set(f.id, `STEP-Import: ${e.message}`); }
       } else if (["sweep", "loft", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
-    // Nahtfahnen an freien Körperkanten: Fahne als exakter Körper, das Blech an der Kante wird um die Rücksetzung gekürzt
+    // Nahtfahnen an freien Körperkanten: die Fahne gehört zum Blech – Streifen am Rand abziehen, Fahne mit dem Blechkörper vereinigen
     for (const x0 of doc.features) {
       const fd = x0.typ === "naht" && !x0._aus && !x0.versteckt ? x0._fahne : null; if (!fd) continue;
+      const wirt = fd.hostFid; if (!blech.has(wirt) || nicht.has(wirt)) { if (!nicht.has(wirt)) nicht.set(wirt, "Nahtfahne: Blechkörper nicht exakt"); continue; }
       try {
         const ebene = { ursprung: fd.mid.toArray(), x: fd.c.toArray(), n: fd.e.toArray() };
-        blech.set(`${x0.id}:fahne`, (await x({ op: "extrusion", profil: fd.profil, ebene, hoehe: fd.L })).id);
+        let fahne = (await x({ op: "extrusion", profil: fd.profil, ebene, hoehe: fd.L })).id, wirtId = blech.get(wirt);
         if (fd.versatz < -1e-6) { // Rücksetzung: Streifen am Blechende abziehen
           const rechteck = { start: [fd.versatz - 0.01, -fd.t], segmente: [{ bis: [0.3, -fd.t] }, { bis: [0.3, fd.t] }, { bis: [fd.versatz - 0.01, fd.t] }, { bis: [fd.versatz - 0.01, -fd.t] }] };
-          const slab = (await x({ op: "extrusion", profil: rechteck, ebene, hoehe: fd.L })).id;
-          for (const [k] of [...blech, ...koerper]) { if (hauptVon(k)?.id !== fd.host || nicht.has(k) || (k.includes(":") && nicht.has(k.split(":")[0]))) continue; const m = blech.has(k) ? blech : koerper; try { m.set(k, (await x({ op: "boolesch", art: "abziehen", a: m.get(k), b: slab })).id); } catch { /* Körper nicht am Streifen */ } }
+          wirtId = (await x({ op: "boolesch", art: "abziehen", a: wirtId, b: (await x({ op: "extrusion", profil: rechteck, ebene, hoehe: fd.L })).id })).id;
         }
-      } catch (e) { nicht.set(`${x0.id}:fahne`, `Nahtfahne: ${e.message}`); }
+        blech.set(wirt, (await x({ op: "boolesch", art: "vereinigen", a: wirtId, b: fahne })).id);
+      } catch (e) { nicht.set(wirt, `Nahtfahne: ${e.message}`); }
     }
     // Durchdringungsschutz: Blechteile dürfen sich nie durchdringen – das später angelegte Blechteil wird um den Überschnitt zurückgeschnitten
     let zurueck = 0;
