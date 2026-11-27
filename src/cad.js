@@ -3462,7 +3462,9 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
         const sE = (-t / 2 - (t / 2) * pB[1]) / dBb, lamE = -sE, lamP = sk - tl, aI = (t / 2) * pB[0] + sE * dBa;
         if (lamP - lamE > 0.01) { const pt = (lam, sg) => [lam * u1[0] + sg * (t / 2) * pB[0], lam * u1[1] + sg * (t / 2) * pB[1]], sq = new THREE.Shape(); sq.moveTo(...pt(lamE, -1)); sq.lineTo(...pt(lamE, 1)); sq.lineTo(...pt(lamP, 1)); sq.lineTo(...pt(lamP, -1)); sq.closePath(); dazu(sq); }
         // Flansch A, auf dem die Falte liegt: sein Ende wird um 180° (geschlossener Saum) auf die erste Lage der Falte zurückgebogen
-        const aH = quetschAnschluss(g, q.wand, t).aK, hs = new THREE.Shape(); // Mittelpunkt des Saums = Mittelpunkt der 90°-Biegung (konzentrisch) hs.moveTo(aH, -t / 2); hs.absarc(aH, t / 2, t, -Math.PI / 2, -1.5 * Math.PI, true); hs.closePath(); dazu(hs); // um eine Blechstärke nach innen: liegt im Hohlraum der 90°-Biegung
+        const aH = quetschAnschluss(g, q.wand, t).aK, hs = new THREE.Shape();
+        // Mittelpunkt des Saums = Mittelpunkt der 90°-Biegung (konzentrisch)
+        hs.moveTo(aH, -t / 2); hs.absarc(aH, t / 2, t, -Math.PI / 2, -1.5 * Math.PI, true); hs.closePath(); dazu(hs); // um eine Blechstärke nach innen: liegt im Hohlraum der 90°-Biegung
       }
     }
   } catch (e) { biegeStueck = null; }
