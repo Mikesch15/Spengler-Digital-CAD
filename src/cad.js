@@ -44,7 +44,7 @@ import { abwicklungDxf, abwicklungenDxf, flaecheDxf, rundblechDxf } from "../ker
 import { rundblechAbwicklung, rundblechSvg } from "../kern/abwicklungRund.js";
 import { stepDatei, stlDatei, stlLesen } from "../kern/step.js";
 import { cadKlient } from "../kern/cad/klient.js";
-import { blechTeilKommando, extrusionKommandos, rotationKommandos, extrusionsHoehen, extrusionsKanten, extrusionsFlaechen, matrixZeilen, flaechenblechPlan, baueFlaechenblech, bausteinQuerschnitt } from "../kern/cad/featureBau.js";
+import { kernEbene, blechTeilKommando, extrusionKommandos, rotationKommandos, extrusionsHoehen, extrusionsKanten, extrusionsFlaechen, matrixZeilen, flaechenblechPlan, baueFlaechenblech, bausteinQuerschnitt } from "../kern/cad/featureBau.js";
 import { skizzenProfile, profilPolygon, NichtExakt } from "../kern/cad/skizzeProfile.js";
 import { ansichtAusProjektion, kameraAchsen, kettenAusKanten } from "../kern/cad/ansichtExakt.js";
 import { zuschnittAusVolumen } from "../kern/cad/blech.js";
@@ -1467,7 +1467,7 @@ function regenEinmal() {
         f._teile = f._bleche.map((bl, i) => ({ id: `${f.id}:${i}`, typ: "flaechenteil", eltern: f, name: viele ? `${f.name} · Blech ${bl.pi + 1}` : f.name, material: f.material,
           laenge: +bl.abw.laenge.toFixed(1), stueck: f.stueck ?? 1, notiz: f.notiz, _blech: bl,
           _res: { zuschnitt: bl.abw.breite, biegungen: bl.profile.flatMap((p) => p?.biegungen || []), pfad: [], beschriftungen: [], schenkel: [], summeSchenkel: 0 } }));
-        for (const bl of f._bleche) bl.abw.loecher = [];
+        for (const bl of f._bleche) bl.abw.loecher = []; f._flach = false;
         if (!f.versteckt) f._bleche.forEach((bl, i) => flaechenKoerper(bl, blechEbene(s.ebene, f, m), m, f.sichtseite === -1 ? -1 : 1, `${f.id}:${i}`, darstellungVon(f, m)).forEach((o) => modell.add(o)));
         if ((f.eckEntl && f.eckEntl !== "keine") || (f.freistellung !== "keine" && (f.ecken || "gehrung") === "gehrung")) f._bleche.forEach((bl) => eckenEntlastung(f, bl, m, s));
       } else if (f.typ === "loftflansch") { // Lofted Flange: Blech zwischen zwei Profilen
@@ -1569,13 +1569,13 @@ function regenEinmal() {
         if (flachStand.has(z.id)) throw new Error(`«${z.name}» ist schon abgewickelt`);
         const m = material(z.material), s0 = finde(z.skizze);
         for (const o of modell.children.filter((o) => o.isMesh && String(o.userData.fid).startsWith(z.id + ":"))) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); }
-        flachStand.set(z.id, { schnitte: [] }); z._mitAbwicklung = true;
+        flachStand.set(z.id, { schnitte: [] }); z._mitAbwicklung = true; z._flach = true;
         if (!z.versteckt) z._bleche.forEach((bl, i) => { bl.abw.loecher = [...(bl._eckLoecher || [])]; modell.add(flachKoerper(bl, blechEbene(s0.ebene, z, m), m, `${z.id}:${i}`, darstellungVon(z, m))); });
       } else if (f.typ === "falten") { // Refold: gefaltetes Blech zurück, die Ausschnitte der Abwicklung werden aufs gekantete Blech abgebildet
         const z = finde(f.ziel), st = z && flachStand.get(z.id); if (!st) throw new Error("Dieses Blech ist nicht abgewickelt (vorher «Abwickeln»)");
         const m = material(z.material), s0 = finde(z.skizze), seite = z.sichtseite === -1 ? -1 : 1;
         for (const o of modell.children.filter((o) => o.isMesh && String(o.userData.fid).startsWith(z.id + ":"))) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); }
-        flachStand.delete(z.id);
+        flachStand.delete(z.id); z._flach = false;
         z._bleche.forEach((bl, i) => {
           bl.abw.loecher = st.schnitte.filter((l) => boxUeberlappt(l, bl.abw.umriss));
           if (z.versteckt) return;
@@ -7698,9 +7698,16 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       } else if (f.typ === "flaeche") { // Flächenblech: Fläche bis Biegebeginn, Bausteinprofile exakt mit derselben Eckregel wie die Abwicklung
         if (f.versteckt || !f._bleche) continue;
         const m = material(f.material), ebene = blechEbene(finde(f.skizze).ebene, f, m);
-        if (f._mitAbwicklung || f._bleche.some((bl) => bl.abw.loecher?.some((h) => !h._auto))) { f._bleche.forEach((_, i) => nicht.set(`${f.id}:${i}`, "Abwicklung/Ausschnitte noch nicht exakt")); continue; }
+        const flachJetzt = !!f._flach, manuell = f._bleche.some((bl) => bl.abw.loecher?.some((h) => !h._auto));
+        if (manuell && !flachJetzt) { f._bleche.forEach((_, i) => nicht.set(`${f.id}:${i}`, "Ausschnitte im gefalteten Blech noch nicht exakt")); continue; } // Ausschnitte lassen sich im flachen Blech exakt schneiden, im gefalteten noch nicht
+        const profilVon = (poly) => ({ start: poly[0], segmente: poly.slice(1).map((q) => ({ bis: q })) });
         for (const [i, bl] of f._bleche.entries()) {
-          try { blech.set(`${f.id}:${i}`, await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1))); }
+          try {
+            if (flachJetzt) { // abgewickeltes Blech: flache Platte aus dem Zuschnitt mit allen Ausschnitten
+              const plan = flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1);
+              blech.set(`${f.id}:${i}`, (await x({ ...plan.platte, profil: profilVon(bl.abw.umriss), loecher: (bl.abw.loecher || []).map(profilVon) })).id);
+            } else blech.set(`${f.id}:${i}`, await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1)));
+          }
           catch (e) { nicht.set(`${f.id}:${i}`, e.message); }
         }
       } else if (f.typ === "rundblech") { // Mantel als Drehkörper um die Ebenennormale (Meridianebene u/n)
@@ -7720,7 +7727,14 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       } else if (f.typ === "import" && f.step) { // STEP-Import als exakter Körper
         try { const r = await K.ausfuehren({ op: "stepImport", text: f.step }); ids.push(...r.ids); koerper.set(f.id, await vereinige(r.ids)); }
         catch (e) { nicht.set(f.id, `STEP-Import: ${e.message}`); }
-      } else if (["sweep", "loft", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
+      } else if (f.typ === "loft") { // Loft: Profile der Skizzen als Schnitte (exakt, glatte Verbindung)
+        if (f.versteckt) continue;
+        try {
+          const sks = [f.profil1, f.profil2, f.profil3].filter(Boolean).map((id) => finde(id));
+          const schnitte = sks.map((sk) => { const p = exakteProfile(sk, f).sort((a, c) => c.flaeche - a.flaeche)[0]; if (!p) throw new Error("Profil fehlt"); return { profil: p.profil, ebene: kernEbene(E_(sk.ebene)) }; });
+          koerper.set(f.id, (await x({ op: "loft", schnitte })).id);
+        } catch (e) { nicht.set(f.id, `Loft: ${e.message}`); }
+      } else if (["sweep", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
     // Nahtfahnen an freien Körperkanten: die Fahne gehört zum Blech – Streifen am Rand abziehen, Fahne mit dem Blechkörper vereinigen
     for (const x0 of doc.features) for (const fd of (x0.typ === "naht" && !x0._aus && !x0.versteckt ? x0._fahnen : null) || []) {

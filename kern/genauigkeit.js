@@ -17,7 +17,6 @@ const OHNE_KOERPER = new Set(["skizze", "ebene", "achse", "konpunkt", "bild", "p
 // Features, die ausschliesslich als Netz entstehen (nicht im exakten Kern vorhanden)
 const NUR_NETZ = {
   sweep: "Sweep ist noch nicht exakt (Netz)",
-  loft: "Loft ist noch nicht exakt (Netz)",
   kehle: "Kehle/Grat ist noch nicht exakt (Netz)",
   quetschfalte: "Quetschfalte ist nur als Netz modelliert",
   stirnquetsch: "Quetschfalte an der Stirn ist nur als Netz modelliert",
