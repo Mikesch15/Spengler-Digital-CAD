@@ -288,7 +288,7 @@ function eckFaktorenRoh(gruppen, profile, opt = null) { // opt: { ecken: "gehrun
     const kv = (k - 1 + n) % n; if (!profile[k]?.lage || !profile[kv]?.lage || kv === k) return;
     const dV = richtung(gruppen[kv].punkte.at(-2), gruppen[kv].punkte.at(-1)), d0 = richtung(g.punkte[0], g.punkte[1]), beta = knick(dV, d0);
     if (art === "spalt") { ek[k].e0 += gap / 2; ek[kv].e1 += gap / 2; }
-    else if (art === "stoss") { ek[k].k0 = eckFaktor(beta, false); ek[kv].k1 = 0; ek[kv].e1 += t / Math.max(0.2, Math.abs(Math.sin(beta))); } // Kante k läuft bis zur Aussenfläche der Nachbarkante, die Nachbarkante endet an ihrer Innenfläche
+    else if (art === "stoss") { const dd = (t / 2) / Math.max(0.2, Math.abs(Math.sin(beta))); ek[k].k0 = eckFaktor(beta, false); ek[k].e0 -= dd; ek[kv].k1 = 0; ek[kv].e1 += dd; } // Blech liegt mittig auf der Linie: Kante k reicht um t/2 über die Ecke bis zur Aussenfläche der Nachbarkante, diese endet t/2 vor der Ecke an der Innenfläche von k (kein Spalt, keine Durchdringung) // Kante k läuft bis zur Aussenfläche der Nachbarkante, die Nachbarkante endet an ihrer Innenfläche
   });
   return ek;
 }

@@ -34,6 +34,17 @@ const lauf2 = async (art) => { const s2 = await b.newPage({ viewport: { width: 1
 const e0 = await lauf2("keine"), e1 = await lauf2("rund"), e2 = await lauf2("quadrat");
 ok(e1.fehl.length === 0 && e2.fehl.length === 0 && e1.v < e0.v - 5 && e2.v < e0.v - 5 && e2.v <= e1.v + 0.5, `Eckentlastung entfernt Material (${Math.round(e0.v)} → rund ${Math.round(e1.v)} → quadratisch ${Math.round(e2.v)} mm³)`);
 ok(e0.l === 0 && e1.l >= 1 && e2.l >= 1, `Entlastung steht auch in der Abwicklung (Ausschnitte ${e0.l} → ${e1.l}/${e2.l})`);
+// Eckfreistellung der Gehrung (automatisch): Loch auch in der Abwicklung, auch nach «Abwickeln»
+const lauf3 = async (extra) => { const s3 = await b.newPage({ viewport: { width: 1280, height: 800 } }); s3.on("pageerror", (e) => pr.push(e.message));
+  await s3.addInitScript((ex) => { localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }] }));
+    localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "T", nr: "1", zaehler: 20, features: [
+      { id: "sk", typ: "skizze", name: "Rechteck", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [0, 0], b: [200, 120] }], bedingungen: [] },
+      { id: "fl", typ: "flaeche", name: "Blech 1", skizze: "sk", material: "zink07", flaechen: [[10, 10]], kanten: { "0:0": "ortgang", "0:3": "ortgang" }, ecken: "gehrung", freistellung: "eckig" }, ...ex] })); }, extra);
+  await s3.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test"); await s3.waitForTimeout(1500);
+  const r = await s3.evaluate(() => ({ l: window.sdcadTest.blechDaten("fl")?.[0]?.loecher, fehl: window.sdcadTest.dok().features.map((x) => x._fehler).filter(Boolean) })); await s3.close(); return r; };
+const f0 = await lauf3([]), f1 = await lauf3([{ id: "ab", typ: "abwickeln", name: "Abwickeln", ziel: "fl" }]);
+ok(f0.l >= 1, `Eckfreistellung der Gehrung: Loch in der Abwicklung (${f0.l})`);
+ok(f1.l >= 1 && f1.fehl.length === 0, `Eckfreistellung bleibt nach «Abwickeln» erhalten (${f1.l}) ${f1.fehl.join(";")}`);
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Eckenschluss und Säume (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);
