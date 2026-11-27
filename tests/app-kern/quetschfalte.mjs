@@ -20,7 +20,8 @@ const d = await s.evaluate(() => { const f = window.sdcadTest.dok().features.fin
 ok(!!d && !d.fehler && d.vol > 10, "Quetschfalte an der Ecke angelegt (" + JSON.stringify(d) + ")");
 ok(d && d.vol > 10, "Gefaltete Quetschfalte als Körper (Volumen " + Math.round(d?.vol || 0) + ")");
 // Ecke ohne Flansch an der Nachbarkante → Fehlermeldung statt Falte
-const q2 = await s.evaluate(() => window.sdcadTest.schirmUV("XY", [200, 120])); await s.evaluate(() => window.sdcadTest.waehle("fl")); await s.evaluate(() => document.getElementById("wQuetsch").click()); await s.waitForTimeout(200); await s.mouse.click(q2[0], q2[1]); await s.waitForTimeout(600);
+await s.evaluate(() => window.sdcadTest.waehle("fl")); await s.evaluate(() => document.getElementById("wQuetsch").click()); await s.waitForTimeout(600); // erst danach die Bildschirmposition lesen: mit gewähltem Flächenblech hat die Ansicht eine andere Grösse
+const q2 = await s.evaluate(() => window.sdcadTest.schirmUV("XY", [200, 120])); await s.mouse.click(q2[0], q2[1]); await s.waitForTimeout(600);
 const st2 = await s.evaluate(() => document.getElementById("status")?.textContent || "");
 ok(/Flansch/.test(st2), "Ecke ohne Flansche: verständliche Meldung (" + st2.slice(0, 80) + ")");
 // Ungleiche Flansche (75° / 40 mm hoch an der linken Kante, 90° / 25 mm unten): Quetschfalte funktioniert, Zuschnitt enthält die Ecke

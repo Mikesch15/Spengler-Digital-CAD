@@ -321,6 +321,14 @@ const sch = (l) => ({ typ: "schenkel", L: l }), bg = (w, r = null, modus = "shar
   // 3 Doppelstehfalz (Umschlag) und Traufe-Einhang gemischt: schräg angeschnittene Säume, gültig
   const bl3 = flaechenblech(pts, [B("dsf-u"), B("trauf"), B("dsf-o"), B("ortgang")], zink), e3 = await eig(await baueFlaechenblech(x, flaechenblechPlan(bl3, BASIS.XY, zink, -1)));
   ok(e3.gueltig && e3.anzahl.koerper === 1 && e3.volumen > 0, `Flächenblech gemischt (Doppelstehfalz, Traufe, Ortgang, Sichtseite −1): ein gültiger Körper (V ${(e3.volumen / 1000).toFixed(1)} cm³)`);
+  // 4 Referenz (Qualitätsoffensive): zwei gegenüberliegende Aufkantungen – Zuschnittlänge aus dem exakten Volumen = Abwicklung (je Biegung Biegeausgleich (k − 0,5)·t·π/2), Toleranz 1e-6 mm
+  {
+    const kt = [null, null, null, null]; kt[gruppeVon(leer, [0, 0], [1000, 0])] = B("ortgang"); kt[gruppeVon(leer, [1000, 500], [0, 500])] = B("ortgang");
+    const b2 = flaechenblech(pts, kt, zink), e2 = await eig(await baueFlaechenblech(x, flaechenblechPlan(b2, BASIS.XY, zink, 1)));
+    const zug = b2.profile.reduce((s2, p) => s2 + (p?.zugabe || 0), 0), zus2 = e2.volumen / (zink.t * 1000) + 2 * (zink.k - 0.5) * zink.t * PI / 2, soll2 = 500 + zug;
+    ok(e2.gueltig && e2.anzahl.koerper === 1 && Math.abs(zus2 - soll2) < 1e-6, `Referenz zwei Aufkantungen: Zuschnittbreite aus 3D ${zus2.toFixed(4)} = Abwicklung ${soll2.toFixed(4)} mm (Toleranz 1e-6)`);
+    ok(Math.abs(b2.abw.laenge * b2.abw.breite - b2.abw.flaeche * 1e6) < 1, "Referenz zwei Aufkantungen: Zuschnitt ist ein Rechteck (Länge × Breite = Fläche)");
+  }
 }
 
 // ---------------------------------------------------------------- 10e Zeichnungsansicht aus exakter Projektion (Phase E)

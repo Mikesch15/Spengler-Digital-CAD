@@ -2,9 +2,9 @@
 //   node tests/lauf.mjs                → Kern-Tests + App-Tests passend zu den geänderten Dateien (tests/karte.json), sonst Schnelltest-Satz
 //   node tests/lauf.mjs alle           → alle Kern- und App-Tests
 //   node tests/lauf.mjs kontext dach   → nur diese App-Tests (Namen ohne .mjs)
-//   Optionen: --bauen (vorher node build.mjs), --ohnekern (Kern-Tests überspringen), --j=N (Parallelität, Standard 3)
+//   Optionen: --bauen (vorher node build.mjs), --ohnekern (Kern-Tests überspringen), --j=N (Parallelität, Standard 3), --strikt (instabile Tests = Fehler), Umgebungsvariable LAUF_BERICHT=Datei (JSON-Bericht)
 import { spawn, execSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 const arg = process.argv.slice(2), opt = (n) => arg.find((a) => a.startsWith(`--${n}`)), namen = arg.filter((a) => !a.startsWith("--"));
 const J = +(opt("j=")?.split("=")[1] || 3), alleApp = readdirSync("tests/app-kern").filter((f) => f.endsWith(".mjs")).map((f) => f.slice(0, -4));
 const karte = JSON.parse(readFileSync("tests/karte.json", "utf8"));
@@ -32,9 +32,14 @@ const lauf = (job, slot) => new Promise((ok) => {
     if (!gut) fehl.push({ name: job.name, zeilen: (schlecht.length ? schlecht : out.trim().split("\n").slice(-4)).slice(0, 6) }); ok(); });
 });
 await Promise.all(Array.from({ length: Math.min(J, jobs.length) }, async (_, slot) => { while (nr < jobs.length) await lauf(jobs[nr++], slot); }));
-// Fehlgeschlagene Tests einmal einzeln wiederholen (parallel läuft die Software-Grafik oft zu langsam → Zeitüberschreitungen)
-const erst = fehl.splice(0); const wieder = []; 
-for (const f of erst) { const job = jobs.find((j) => j.name === f.name); await lauf(job, 0); if (fehl.some((x) => x.name === f.name)) continue; wieder.push(f.name); }
+// Fehlgeschlagene Tests einmal einzeln wiederholen (parallel läuft die Software-Grafik oft zu langsam → Zeitüberschreitungen).
+// Ein erst beim 2. Versuch grüner Test gilt als INSTABIL: er wird namentlich mit der ersten Fehlermeldung ausgewiesen (--strikt: zählt als Fehler).
+const erst = fehl.splice(0); const wieder = [];
+for (const f of erst) { const job = jobs.find((j) => j.name === f.name); await lauf(job, 0); if (fehl.some((x) => x.name === f.name)) continue; wieder.push(f); }
+const strikt = !!opt("strikt"), instabilFehler = strikt ? wieder : [];
 for (const f of fehl) console.log(`✗ ${f.name}\n   ${f.zeilen.map((z) => z.slice(0, 180)).join("\n   ")}`);
-console.log(`${jobs.length - fehl.length}/${jobs.length} grün · ${grund} · ${Math.round((Date.now() - t0) / 1000)} s${wieder.length ? ` · beim 2. Versuch grün: ${wieder.join(", ")}` : ""}${fehl.length ? " · FEHLER: " + fehl.map((f) => f.name).join(", ") : ""}`);
-process.exit(fehl.length ? 1 : 0);
+for (const f of wieder) console.log(`⚠ INSTABIL ${f.name} (1. Versuch fehlgeschlagen${strikt ? " – im strikten Lauf ein Fehler" : ""}):\n   ${f.zeilen.map((z) => z.slice(0, 180)).join("\n   ")}`);
+const nFehl = fehl.length + instabilFehler.length;
+console.log(`${jobs.length - nFehl}/${jobs.length} grün · ${grund} · ${Math.round((Date.now() - t0) / 1000)} s${wieder.length ? ` · INSTABIL (erst im 2. Versuch grün): ${wieder.map((f) => f.name).join(", ")}` : ""}${nFehl ? " · FEHLER: " + [...fehl, ...instabilFehler].map((f) => f.name).join(", ") : ""}`);
+if (process.env.LAUF_BERICHT) writeFileSync(process.env.LAUF_BERICHT, JSON.stringify({ grund, anzahl: jobs.length, sekunden: Math.round((Date.now() - t0) / 1000), fehler: fehl.map((f) => ({ name: f.name, zeilen: f.zeilen })), instabil: wieder.map((f) => ({ name: f.name, zeilen: f.zeilen })), strikt }, null, 1));
+process.exit(nFehl ? 1 : 0);

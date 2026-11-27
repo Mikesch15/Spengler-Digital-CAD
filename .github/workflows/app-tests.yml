@@ -1,0 +1,87 @@
+# App-Integrationstests (Playwright/Chromium) und Kern-Tests – NUR auf Anweisung (manuell starten), nicht bei jedem Push.
+#   GitHub → Actions → «App-Tests (manuell)» → Run workflow.
+#   auswahl: «alle» oder Testnamen getrennt durch Leerzeichen (z. B. «kontext dach»).
+#   strikt:  instabile Tests (erst im 2. Versuch grün) zählen als Fehler.
+# Instabile Tests werden immer namentlich im Lauf-Bericht (Job-Zusammenfassung) ausgewiesen, nie stillschweigend als grün gezählt.
+name: App-Tests (manuell)
+
+on:
+  workflow_dispatch:
+    inputs:
+      auswahl:
+        description: "«alle» oder Testnamen (Leerzeichen getrennt)"
+        default: "alle"
+        required: true
+      strikt:
+        description: "Instabile Tests als Fehler werten"
+        type: boolean
+        default: false
+      kern:
+        description: "Kern-Tests (npm test) vorher ausführen"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  app-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Kern-Tests
+        if: ${{ inputs.kern }}
+        run: npm test
+
+      - name: Produktionsbuild (Web)
+        run: SDCAD_VERSION="$(node -p "require('./package.json').version")+${GITHUB_SHA::7}" npm run build
+
+      - name: Playwright und Chromium installieren
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: App-Tests
+        id: app
+        env:
+          AUSWAHL: ${{ inputs.auswahl }}
+          STRIKT: ${{ inputs.strikt }}
+        run: |
+          set +e
+          ARGS="--ohnekern --j=2"
+          [ "$STRIKT" = "true" ] && ARGS="$ARGS --strikt"
+          LAUF_BERICHT="$RUNNER_TEMP/lauf-bericht.json" node tests/lauf.mjs $AUSWAHL $ARGS
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Zusammenfassung
+        if: always()
+        run: |
+          node -e '
+            const fs = require("fs"), p = process.env.RUNNER_TEMP + "/lauf-bericht.json";
+            if (!fs.existsSync(p)) { console.log("### App-Tests: kein Bericht erzeugt (Lauf abgebrochen)"); process.exit(0); }
+            const b = JSON.parse(fs.readFileSync(p, "utf8")), z = [];
+            z.push(`### App-Tests (${b.grund}): ${b.anzahl - b.fehler.length - (b.strikt ? b.instabil.length : 0)}/${b.anzahl} grün in ${b.sekunden} s`);
+            if (b.fehler.length) z.push("\n**Fehlgeschlagen:**\n" + b.fehler.map((f) => `- ❌ \`${f.name}\`: ${f.zeilen.join(" / ")}`).join("\n"));
+            if (b.instabil.length) z.push("\n**Instabil (erst im 2. Versuch grün):**\n" + b.instabil.map((f) => `- ⚠️ \`${f.name}\`: ${f.zeilen.join(" / ")}`).join("\n"));
+            if (!b.fehler.length && !b.instabil.length) z.push("\nAlle Tests im ersten Versuch grün.");
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, z.join("\n") + "\n");
+          '
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lauf-bericht
+          path: ${{ runner.temp }}/lauf-bericht.json
+          if-no-files-found: ignore
+
+      - name: Ergebnis
+        if: ${{ steps.app.outputs.exit != '0' }}
+        run: |
+          echo "App-Tests fehlgeschlagen (Exit ${{ steps.app.outputs.exit }})" >&2
+          exit 1

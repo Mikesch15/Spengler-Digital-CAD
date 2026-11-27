@@ -90,3 +90,16 @@ Klassen: exact (B-Rep über OCCT), mesh, hybrid (Netz-Darstellung, exakte Rechnu
 - Nicht ausgeführt: `npm run t:alle`, Android-Build, Windows-Build lokal.
 
 **Entscheidung des Eigentümers (27.11.2026):** App-Tests laufen nicht automatisch bei jedem Push, sondern nur auf Anweisung. Die Release-Sperre in der CI (Etappe 2) wird entsprechend als **manuell ausgelöster** Workflow geplant, nicht als Pflicht-Check bei jedem Push.
+
+## 7. Etappe 2 – umgesetzt (27.11.2026)
+
+- **Manueller App-Test-Workflow** `.github/workflows/app-tests.yml` («App-Tests (manuell)», nur `workflow_dispatch`, nicht bei Push): optional Kern-Tests (`npm test`), Produktionsbuild, Playwright/Chromium, dann `tests/lauf.mjs` mit Auswahl («alle» oder Namen) und Option `strikt`. Job-Zusammenfassung nennt fehlgeschlagene und instabile Tests namentlich; JSON-Bericht als Artefakt. Eingaben laufen über Umgebungsvariablen, nicht über die Shell-Zeile.
+- **Instabile Tests sichtbar:** `tests/lauf.mjs` wiederholt Fehlschläge weiter einmal, weist einen dann grünen Test aber als **INSTABIL** mit der ersten Fehlermeldung aus (`⚠ INSTABIL …`). Neu `--strikt` (instabil = Fehler, Exit 1) und `LAUF_BERICHT=<Datei>` für einen JSON-Bericht.
+- **`quetschfalte`-Test geklärt und behoben (Testfehler, kein App-Fehler):** Der Test las die Bildschirmposition der zweiten Ecke, bevor das Flächenblech gewählt war. Mit gewähltem Blech ändert sich die Grösse der Ansicht, die Position verschob sich um etwa 150 px. Der Test liest die Position jetzt danach. Die Aussage des Tests («Ecke ohne Flansche: verständliche Meldung») ist unverändert.
+- **Neue Referenz (Geometrie):** In `test/cad.test.js` zwei gegenüberliegende Aufkantungen: Zuschnittbreite aus dem exakten Volumen (inkl. Biegeausgleich `(k − 0,5)·t·π/2` je Biegung) gleich Abwicklung mit Toleranz 1e-6 mm; Zuschnitt ist ein Rechteck. Sie ergänzt die bestehende Referenzbibliothek.
+- **Testhook** `window.sdcadTest.quetschEckenSchirm` (nur im Testmodus).
+
+**Offen / nicht behoben (Etappe 2)**
+- `kantenwz` (App-Test) schlägt in der jetzigen Umgebung reproduzierbar fehl («Richtung-Schalter kehrt den eben angelegten Flansch sofort um», «Länge im Werkzeug ändert den Flansch sofort»), auch bei älteren Ständen (`905e3c1`, `d8c58a3`). Er war früher erst im 2. Versuch grün. Ursache nicht geklärt. Der Hilfsablauf `klick()` des Tests klickt «Übernehmen» (`kbOk`), die Live-Umschaltung wirkt aber auf noch nicht übernommene Vorschau-Features. Test nicht geändert. Rot.
+- Die Release-Sperre als Pflicht-Check an jedem Push wird bewusst **nicht** eingeführt (Entscheidung des Eigentümers). Der Workflow ist manuell auszulösen; die Windows-/Web-Workflows laufen unverändert mit `npm test`.
+- Weitere Referenzfälle (Rinne/Traufe, Ortgang/First, Wandanschluss, Lukarne, Doppelstehfalz, Rund-/Kegelblech …) und DXF-/STEP-Prüfung gegen einen unabhängigen Viewer: nicht umgesetzt (Rot).
