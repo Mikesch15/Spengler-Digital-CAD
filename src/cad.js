@@ -18,6 +18,7 @@ import { rueckVersatz, zweiseitig, laengeVon } from "../kern/richtung.js";
 import { stirnLaschen, schenkelBereiche, laschenStart, laschenEnde } from "../kern/stirnflansch.js";
 import { stirnQuetsch, stirnQuetschKandidaten } from "../kern/stirnquetsch.js";
 import { nahtFolgen, nahtStandard, raupeMasse, raupenNetz, NAHT_ARTEN } from "../kern/naht.js";
+import { bewerteGenauigkeit, modellStatus } from "../kern/genauigkeit.js";
 import { quetschZuschnitt, quetschDreieck, quetschDxf, faltenPruefen, eckSchnitt2 } from "../kern/quetschfalte.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
@@ -1687,9 +1688,10 @@ document.querySelector(".browser .ptitel").addEventListener("click", () => docum
 const NAMEN = { loftflansch: "Lofted Flange", rip: "Rip (Auftrennen)", biegung: "Biegung an Linie", skalieren: "Skalieren", bohrung: "Bohrung", rohr: "Rohr", spirale: "Spirale", rippe: "Rippe", quetschfalte: "Quetschfalte", flanschende: "Flanschende", stirnquetsch: "Quetschfalte (Stirn)", naht: "Naht", profilkante: "Profilkante", eindeckung: "Eindeckung", lukarne: "Lukarne", dachelement: "Dachfenster/Kamin", dachbleche: "Dachbleche", dach: "Dach", gebaeude: "Gebäude", kante: "Kante", abwickeln: "Abwickeln", falten: "Falten", detail3d: "3D-Detail", rundblech: "Rund-/Kegelblech", kehle: "Kehle/Grat", kanten3d: "Kanten abrunden", bild: "Bild", import: "Import", kantenrund: "Abrunden/Fasen", schale: "Schale", kmuster: "Muster", kspiegel: "Spiegeln", teilen: "Teilen", bewegen: "Verschieben", sweep: "Sweep", loft: "Übergang", achse: "Achse", konpunkt: "Punkt", skizze: "Skizze", extrusion: "Extrusion", drehung: "Drehung", blech: "Blechprofil", vorlage: "Vorlage", profil: "Freies Profil", detail: "Spenglerdetail", flaeche: "Flächenblech" };
 const AUGE = (zu) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>${zu ? '<path d="M4 4l16 16"/>' : ""}</svg>`;
 function zeigeBrowser() {
+  aktualisiereGenauigkeit();
   const KON = ["ebene", "achse", "konpunkt", "bild"];
   const eb = doc.features.filter((f) => KON.includes(f.typ)), sk = doc.features.filter((f) => f.typ === "skizze"), kp = doc.features.filter((f) => f.typ !== "skizze" && !KON.includes(f.typ) && !(["extrusion", "drehung", "sweep", "loft", "rohr", "spirale", "rippe"].includes(f.typ) && (f.vorgang || "neu") !== "neu") && f.typ !== "bohrung" && f.typ !== "biegung" && f.typ !== "rip" && !(f.typ === "skalieren" && !f.kopie) && f.typ !== "abwickeln" && f.typ !== "falten" && f.typ !== "kante" && f.typ !== "profilkante" && f.typ !== "quetschfalte" && f.typ !== "naht"); // Flansche/Kanten/Falten gehören zum Blech (nur Zeitleiste); Ausschnitte/Vereinigungen sind keine eigenen Körper (nur in der Zeitleiste)
-  const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span></li>`;
+  const zeile = (f, typ) => `<li data-id="${f.id}" class="${f.id === auswahl ? "aktiv" : ""}${f._aus ? " aus" : ""}${f.versteckt ? " verborgen" : ""}"><button class="auge${f.versteckt ? " zu" : ""}" data-auge="${f.id}" aria-label="${f.versteckt ? "Einblenden" : "Ausblenden"}" title="${f.versteckt ? "Einblenden" : "Ausblenden"}">${AUGE(f.versteckt)}</button><span class="typ ${typ}"></span><span class="nm">${f.name}${f._fehler ? " ⚠" : ""}</span>${f._genau && f._genau.klasse !== "exact" && f.typ !== "skizze" ? `<span class="gen gen-${f._genau.klasse}" title="${esc(`${GENAU_TEXT[f._genau.klasse]}: ${f._genau.grund}`)}" aria-label="${esc(GENAU_TEXT[f._genau.klasse])}">≈</span>` : ""}</li>`;
   $("baum").innerHTML = (eb.length ? `<li class="kopf">Konstruktion</li>${eb.map((f) => zeile(f, f.typ === "ebene" ? "ebene" : f.typ)).join("")}` : "") + `<li class="kopf">Skizzen</li>${sk.map((f) => zeile(f, "skizze")).join("") || '<li class="hinweis">Noch keine</li>'}
     <li class="kopf">Körper</li>${kp.filter((f) => !f.komponente).map((f) => zeile(f, f.typ === "extrusion" ? "koerper" : "blech")).join("") || (kp.length ? "" : '<li class="hinweis">Noch keine</li>')}` +
     // Komponenten (wie in Fusion): Körper zu Baugruppen zusammenfassen, gemeinsam ein-/ausblenden
@@ -7324,6 +7326,15 @@ function ersetzeNetz(mesh, n, M) { // Anzeige-Netz durch die Tessellierung des e
   const kante = mesh.children.find((c) => c.isLineSegments); if (kante) { kante.geometry.dispose(); kante.geometry = l; }
   mesh.userData.exakt = { flaechen: n.flaechen }; // Dreieck → Flächenindex (Auswahl auf exakte Topologie)
 }
+// Genauigkeitsstatus je Feature (kern/genauigkeit.js): exakt, hybrid, Netz (Näherung), nicht unterstützt, Fehler; abgeleitete Features erben die ungenauere Klasse
+function aktualisiereGenauigkeit() {
+  const kernBereit = kernAn() && exaktFuer === regenStand, offen = kernAn() && !kernBereit;
+  const erg = bewerteGenauigkeit({ features: doc.features, kernAn: kernAn() && !offen, exakt: new Set(kernBereit ? exaktEig.keys() : []), nicht: kernBereit ? exaktNicht : new Map() });
+  for (const f of doc.features) { const r = erg.get(f.id); f._genau = r ? (offen && r.klasse !== "exact" && r.klasse !== "failed" ? { ...r, grund: "exakte Berechnung läuft …" } : r) : null; }
+  const st = modellStatus(erg, doc.features); modellGenauigkeit = st; return st;
+}
+let modellGenauigkeit = { gesamt: "exact", zaehl: {}, nichtExakt: [] };
+const GENAU_TEXT = { exact: "exakt", hybrid: "teilweise exakt", mesh: "Näherung (Netz)", unsupported: "nicht unterstützt", failed: "Fehler" };
 async function exaktesModell({ step = false } = {}) { // step: exakte Körper als STEP herunterladen statt Netze ersetzen
   if (!kernAn()) return;
   const lauf = step ? null : ++exaktLauf, stand = regenStand, uebernommen = new Set(), K = kern(), ids = [], koerper = new Map(), nicht = new Map(), blech = new Map(), netzVon = new Map(); // netzVon: Körperschlüssel → fid des Netzes (Kopien «id:k» → «id:k:0»)
@@ -7425,19 +7436,21 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       } else if (["sweep", "loft", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
     if (step) { // alle sichtbaren exakten Körper (mit Komponentenlage) in eine STEP-Datei
-      const ziele = [], namen = [];
+      const ziele = [], namen = [], ungueltig = [];
       for (const [schl, id] of [...koerper, ...blech]) {
         if (nicht.has(schl) || (schl.includes(":") && nicht.has(schl.split(":")[0]))) continue;
         const h = hauptVon(schl); if (!h || h.versteckt) continue;
+        const gp = await K.ausfuehren({ op: "eigenschaften", ziel: id }); if (!(gp.gueltig && gp.geschlossen)) { ungueltig.push(h.name); continue; } // nur gültige, geschlossene B-Rep-Körper exportieren
         const L = lageVon(h);
         ziele.push(L ? (await x({ op: "matrix", ziel: id, m: matrixZeilen(L.elements) })).id : id);
         namen.push(schl.includes(":") ? `${h.name} ${schl.split(":")[1]}` : h.name);
       }
       const rest = [...nicht].filter(([fid]) => !finde(fid)?.versteckt).map(([fid, g]) => `${finde(fid)?.name ?? fid} (${g})`);
-      if (!ziele.length) return status(`STEP exakt: keine exakten Körper${rest.length ? ` (noch nicht exakt: ${rest.join(", ")})` : ""}.`);
+      if (ungueltig.length) rest.push(...ungueltig.map((n) => `${n} (kein gültiger B-Rep-Körper)`));
+      if (!ziele.length) return status(`STEP exakt: keine exakten Körper${rest.length ? ` (nicht exportiert: ${rest.join(", ")})` : ""}.`);
       const { text } = await K.ausfuehren({ op: "stepExport", ziele, namen });
       herunterladen(dateiBasis() + " (exakt).step", text, "application/step");
-      return status(`STEP exakt (B-Rep, AP242): ${ziele.length} Körper${rest.length ? ` · nicht enthalten, da noch nicht exakt: ${rest.join(", ")}` : ""}.`);
+      return status(rest.length ? `STEP nur teilweise exakt (B-Rep, AP242): ${ziele.length} Körper exportiert · NICHT enthalten: ${rest.join(", ")}.` : `STEP exakt (B-Rep, AP242): ${ziele.length} Körper, alle gültig.`);
     }
     let n = 0; const eig = new Map(), ansichtIds = [], ansichtFids = [];
     for (const [schl, id] of [...koerper, ...blech]) {
@@ -7452,6 +7465,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
       eig.set(fid, { ...e, verschoben: !!lageVon(hauptVon(fid)) });
     }
     exaktEig = eig; exaktNicht = nicht;
+    exaktFuer = stand; aktualisiereGenauigkeit(); zeigeBrowser?.();
     // Zeichnungsansichten: Körper in Weltlage behalten (die der vorigen Runde werden frei), nur wenn alle sichtbaren Körper exakt sind
     const alte = exaktAnsichtIds; ansichtIds.forEach((i) => uebernommen.add(i));
     exaktAnsichtIds = ansichtIds; exaktAnsichtFids = ansichtFids; exaktFuer = stand; exaktAnsichtCache = new Map();

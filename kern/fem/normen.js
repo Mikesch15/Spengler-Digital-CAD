@@ -3,10 +3,20 @@
 
 export const kNm2 = (x) => x * 1e-3; // kN/m² → N/mm²
 
+// Quellenstand der Normwerte – ehrlich ausgewiesen (Stand 27.11.2026): Die Formeln sind NICHT gegen die Originalnorm geprüft (kein Zugriff auf SIA 261 / SIA 261/1).
+// Solange die fachliche Verifikation offen ist, gilt jede Normlast als Eingabewert, den die Anwenderin / der Anwender an der gültigen Norm prüfen muss.
+export const QUELLENSTAND = {
+  geprueft: false,
+  text: "Quellenstand: Normlasten sind vereinfachte Richtwerte, NICHT gegen die gültige Originalnorm (SIA 261, SIA 261/1, EN 1991) geprüft; fachliche Verifikation offen. Werte vor jeder Verwendung an der Norm prüfen.",
+  schnee: "Schneelast: Formel s_k = (1 + (h₀/350)²)·0,4 ab 300 m, darunter fest 0,9 kN/m² – Mindestwert, Bezugshöhe h₀ und Geltungsbereich nicht verifiziert; die Formel ist bei 300 m unstetig (0,69 gegenüber 0,9 kN/m²).",
+  wind: "Windlast: q_p und c_p sind Eingaben der Anwenderin / des Anwenders; Exposition, Gelände und Formbeiwerte werden nicht berechnet.",
+  kombination: "Lastkombinationen: γ_G = 1,35, γ_Q = 1,5, ψ₀ = 0,6/0,7 sind Standardannahmen, nicht gegen die Norm verifiziert.",
+};
+
 // Schneelast auf dem Dach: s_k nach Höhe ü. M. (SIA 261, vereinfacht), Formbeiwert μ nach Dachneigung
 export function schneelast({ hoehe = 500, neigung = 0, ce = 1, ct = 1 } = {}) {
   const sk = hoehe >= 300 ? (1 + (hoehe / 350) ** 2) * 0.4 : 0.9, a = Math.abs(neigung), mu = a <= 30 ? 0.8 : a < 60 ? (0.8 * (60 - a)) / 30 : 0;
-  const q = mu * ce * ct * sk; return { sk, mu, qk_kNm2: q, q: kNm2(q), text: `s_k = ${sk.toFixed(2)} kN/m² (h₀ = ${hoehe} m ü. M.), μ = ${mu.toFixed(2)} → q = ${q.toFixed(2)} kN/m²` };
+  const q = mu * ce * ct * sk; return { sk, mu, qk_kNm2: q, q: kNm2(q), geprueft: false, hinweis: QUELLENSTAND.schnee, warnung: hoehe >= 300 && hoehe < 350 ? "Bei 300 m springt s_k von 0,90 auf 0,69 kN/m² – Mindestwert nicht verifiziert." : "", text: `s_k = ${sk.toFixed(2)} kN/m² (h₀ = ${hoehe} m ü. M.), μ = ${mu.toFixed(2)} → q = ${q.toFixed(2)} kN/m²` };
 }
 // Windlast: Staudruck q_p (kN/m²) mal Aussendruckbeiwert c_p (positiv Druck, negativ Sog); Betrag in N/mm²
 export function windlast({ qp = 0.9, cp = 0.8 } = {}) { const q = Math.abs(qp * cp); return { qk_kNm2: q, q: kNm2(q), sog: cp < 0, text: `q_p = ${qp.toFixed(2)} kN/m², c_p = ${cp.toFixed(2)} → w = ${q.toFixed(2)} kN/m² (${cp < 0 ? "Sog" : "Druck"})` }; }

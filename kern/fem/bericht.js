@@ -1,4 +1,5 @@
 // Spengler Digital CAD – Kern: Berichtsseite (HTML) für eine Simulationsstudie
+import { QUELLENSTAND } from "./normen.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const z = (v, n = 2) => { // Zahl mit höchstens n Nachkommastellen; Nullen werden nur NACH dem Komma entfernt (210000 bleibt 210000)
   if (!Number.isFinite(v)) return "∞"; let t = (+v).toFixed(n); if (t.includes(".")) t = t.replace(/0+$/, "").replace(/\.$/, ""); return t === "-0" || t === "" ? "0" : t; };
@@ -33,7 +34,7 @@ ${d.bilder?.length ? `<h2>Darstellung</h2>${d.bilder.map((b) => `<figure><img sr
 <p>Werkstoff ${esc(d.werkstoff?.name || "")}: E = ${z(d.werkstoff?.E, 0)} N/mm², ν = ${z(d.werkstoff?.nu)}, R<sub>p0,2</sub> = ${z(d.werkstoff?.rp, 0)} N/mm², Teilsicherheit γ<sub>M</sub> = ${z(d.studie?.gammaM || 1, 2)}. Netz: ${d.netz?.knoten} Knoten, ${d.netz?.elemente} Dreiecks-Schalenelemente, Elementgrösse ≈ ${z(d.netz?.h, 1)} mm.</p>
 <h2>Lager</h2><ul>${(d.studie?.lager || []).map((l) => `<li>${esc(lagerText(l))}</li>`).join("") || "<li>–</li>"}</ul>
 <h2>Lasten</h2><ul>${(d.studie?.lasten || []).map((l) => `<li>${esc(lastText(l))} <small>(${esc((d.studie.lastfaelle.find((f) => f.id === l.lastfall) || d.studie.lastfaelle[0])?.name || "")})</small></li>`).join("") || "<li>–</li>"}</ul>
-${d.norm?.length ? `<h2>Normlasten</h2><ul>${d.norm.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+${d.norm?.length ? `<h2>Normlasten</h2><ul>${d.norm.map((t) => `<li>${esc(t)}</li>`).join("")}</ul><p class="hinweis"><b>${esc(QUELLENSTAND.text)}</b></p><ul><li>${esc(QUELLENSTAND.schnee)}</li><li>${esc(QUELLENSTAND.wind)}</li><li>${esc(QUELLENSTAND.kombination)}</li></ul>` : ""}
 <h2>Lastfälle und Kombinationen</h2><table><tr><th>Lastfall</th><th>Art</th></tr>${(d.studie?.lastfaelle || []).map((f) => `<tr><td>${esc(f.name)}</td><td>${f.art === "G" ? "ständig (G)" : "veränderlich (Q)"}</td></tr>`).join("")}</table>
 <table><tr><th>Kombination</th><th>Faktoren</th></tr>${(d.ergebnisse || []).map((e) => `<tr><td>${esc(e.name)}</td><td>${Object.entries(e.faktoren || {}).map(([k, v]) => `${esc((d.studie.lastfaelle.find((f) => f.id === k) || {}).name || k)} × ${z(v)}`).join(", ")}</td></tr>`).join("")}</table>
 <p><small>${esc(HINWEIS)}</small></p></div>`;

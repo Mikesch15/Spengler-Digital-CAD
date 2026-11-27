@@ -132,3 +132,20 @@ test("Werkstoff-Erkennung: «Stahl verzinkt» ist Stahl, nicht Zink", () => {
   assert.equal(werkstoff({ name: "Aluminium 0.80" }).E, 70000);
   assert.equal(werkstoff({ name: "Kupfer 0.60" }).E, 120000);
 });
+
+// Quellenstand der Normwerte: ungeprüfte Normlasten müssen als solche ausgewiesen werden (Qualitätsoffensive)
+import { QUELLENSTAND } from "../kern/fem/normen.js";
+test("Normlasten tragen den Quellenstand «ungeprüft»; Zahlenwerte bleiben unverändert", () => {
+  const s300 = schneelast({ hoehe: 300, neigung: 0 }), s299 = schneelast({ hoehe: 299, neigung: 0 });
+  assert.equal(QUELLENSTAND.geprueft, false);
+  assert.equal(s300.geprueft, false);
+  near(s300.sk, (1 + (300 / 350) ** 2) * 0.4, 1e-12, "s_k bei 300 m unverändert");
+  near(s299.sk, 0.9, 1e-12, "s_k unter 300 m unverändert");
+  assert.ok(/springt/.test(s300.warnung), "Unstetigkeit bei 300 m wird gemeldet");
+  assert.equal(s299.warnung, "");
+  assert.ok(/NICHT gegen die gültige Originalnorm/.test(QUELLENSTAND.text));
+});
+test("Bericht mit Normlasten enthält den Quellenstand", () => {
+  const html = berichtHtml({ titel: "T", projekt: "P", datum: "27.11.2026", teile: [{ name: "A", t: 0.7 }], werkstoff: { name: "Zink", E: 100000, nu: 0.3, rp: 100 }, netz: { knoten: 1, elemente: 1, h: 10 }, studie: { lager: [], lasten: [], lastfaelle: [], kombis: [], gammaM: 1.1, durchbiegung: 200 }, ergebnisse: [], bilder: [], norm: ["Schnee: s_k = 0.9"] });
+  assert.ok(/NICHT gegen die gültige Originalnorm/.test(html) && /Mindestwert, Bezugshöhe/.test(html));
+});

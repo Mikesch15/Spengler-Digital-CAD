@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { baueModell } from "../kern/fem/blechmodell.js";
 import { analyse, auswahl, rechneStudie } from "../kern/fem/studie.js";
 import { werkstoff } from "../kern/fem/werkstoff.js";
-import { schneelast, windlast, personenlast, kombinationen, BEIWERTE } from "../kern/fem/normen.js";
+import { schneelast, windlast, personenlast, kombinationen, BEIWERTE, QUELLENSTAND } from "../kern/fem/normen.js";
 import { berichtHtml, lagerText, lastText, HINWEIS } from "../kern/fem/bericht.js";
 
 export const LAGERARTEN = [["eingespannt", "Einspannung (fest)"], ["gelenkig", "Gelenkig (Verschiebung gesperrt)"], ["gleitX", "Gleitlager – frei in X"], ["gleitY", "Gleitlager – frei in Y"], ["gleitZ", "Gleitlager – frei in Z"], ["nurX", "Nur X gesperrt"], ["nurY", "Nur Y gesperrt"], ["nurZ", "Nur Z gesperrt (Auflager)"], ["vorgabe", "Vorgegebene Verschiebung"]];
@@ -178,7 +178,7 @@ export function simModul(ctx) {
       const k = w.norm, v = k === "schnee" ? schneelast({ hoehe: +w.hoehe, neigung: +w.neigung }).text : k === "wind" ? windlast({ qp: +w.qp, cp: +w.cp }).text : k === "person" ? personenlast().text : "";
       inner = feld("Last", sel("sf_norm", [["schnee", "Schnee (SIA 261, vereinfacht)"], ["wind", "Wind (q_p · c_p)"], ["person", "Person / Montage (1 kN)"], ["nutz", "Nutzlast (frei)"]], k)) + wahl
         + (k === "schnee" ? feld("Höhe ü. M. (m)", zahl("sf_hoehe", w.hoehe)) + feld("Dachneigung (°)", zahl("sf_neigung", w.neigung)) : k === "wind" ? feld("Staudruck q_p (kN/m²)", zahl("sf_qp", w.qp)) + feld("Beiwert c_p (negativ = Sog)", zahl("sf_cp", w.cp)) : k === "nutz" ? feld("Nutzlast (kN/m²)", zahl("sf_q", w.q)) : "")
-        + `<p class="hinweis">${esc(v)}<br>Legt einen eigenen Lastfall an und schaltet auf Normkombinationen (γ<sub>G</sub> ${BEIWERTE.gammaG}, γ<sub>Q</sub> ${BEIWERTE.gammaQ}). Normwerte vor dem Einsatz an der gültigen Norm prüfen.</p>`;
+        + `<p class="hinweis">${esc(v)}<br>Legt einen eigenen Lastfall an und schaltet auf Normkombinationen (γ<sub>G</sub> ${BEIWERTE.gammaG}, γ<sub>Q</sub> ${BEIWERTE.gammaQ}). Normwerte vor dem Einsatz an der gültigen Norm prüfen.</p><p class="hinweis"><b>${esc(QUELLENSTAND.text)}</b>${k === "schnee" ? "<br>" + esc(QUELLENSTAND.schnee) : ""}</p>`;
     }
     return inner;
   }
