@@ -33,9 +33,16 @@ function falzMasse(t, ri, s, W, m) {
 // Abkantfolgen der beiden Seiten: { a: { folge, versatz } | null, b: ... }. Die Folge hängt an der Kante des Blechs (wie ein Kantenbaustein), «versatz» setzt die Kante des nicht
 // abgesetzten Blechs zurück, so dass sich die Bleche nirgends durchdringen (Bleche liegen nur aufeinander, Falzhaken greifen ineinander).
 // Das abgesetzte Blech (n.absetz) wird gekröpft, die Oberflächen sind danach bündig; Richtung + = zur Sichtseite.
-export function nahtFolgen(n, m) {
+export function nahtFolgen(n, m, winkel = null) { // winkel: { a, b } Winkel zwischen den Blechen in Grad (siehe nahtWinkelAuto in der App); null/0 = in einer Ebene
   const t = +m?.t || 0.7, ri = +m?.ri || 1, s = n.richtung === "unten" ? -1 : 1, art = n.art || "punkt", absB = n.absetz !== "a", kopf = (x) => (absB ? { a: x.flach, b: x.abg } : { a: x.abg, b: x.flach });
   if (art === "schweiss" || art === "ecke") return { a: null, b: null };
+  if (art === "punkt" && winkel && Math.abs(absB ? winkel.b : winkel.a) > 2) { // Bleche nicht in einer Ebene: die Fahne des abgekanteten Blechs wird um den Winkel zwischen den Blechen umgelegt und liegt auf dem anderen Blech auf (Überlappung)
+    const zug = Math.max(1, +n.zugabe || 15), th = Math.max(-170, Math.min(170, absB ? winkel.b : winkel.a));
+    // Die Fahne soll mit ihrer Unterseite auf dem anderen Blech liegen (keine Durchdringung): Das abgekantete Blech endet um s vor der Fugenlinie, s = t / sin γ (scharfe Ecke der Biegung auf Höhe der Fahnen-Mittellinie; die Biegung beginnt die Tangentenlänge davor)
+    // mit γ = Winkel zwischen den Blechen = 180° − |θ|.
+    const gam = (Math.PI * (180 - Math.abs(th))) / 180, versatz = -(t / Math.max(0.05, Math.sin(gam)));
+    return kopf({ abg: { folge: `${zahl(th)} ${zahl(zug)}`, versatz }, flach: { folge: "0 2", versatz: 0 } });
+  }
   if (art === "punkt") {
     const zug = Math.max(1, +n.zugabe || 15), kr = kroepfung(t, ri, s), rueck = t + kr.tang + 0.3; // Kröpfung des einen Blechs reicht um t + Tangente über die Kante: das andere endet davor
     return kopf({ abg: { folge: `${kr.folge} ${zahl(zug + kr.tang)}`, versatz: 0 }, flach: { folge: "0 2", versatz: -(rueck + 2) } });

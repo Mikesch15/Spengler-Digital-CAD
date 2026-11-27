@@ -70,7 +70,8 @@
     {
       "muster": "kern/naht",
       "tests": [
-        "naht"
+        "naht",
+        "nahtwinkel"
       ]
     },
     {
