@@ -19,7 +19,7 @@ import { stirnLaschen, schenkelBereiche, laschenStart, laschenEnde } from "../ke
 import { stirnQuetsch, stirnQuetschKandidaten } from "../kern/stirnquetsch.js";
 import { nahtFolgen, nahtStandard, raupeMasse, raupenNetz, NAHT_ARTEN } from "../kern/naht.js";
 import { bewerteGenauigkeit, modellStatus } from "../kern/genauigkeit.js";
-import { quetschZuschnitt, quetschDreieck, quetschDxf, faltenPruefen, eckSchnitt2 } from "../kern/quetschfalte.js";
+import { quetschZuschnitt, quetschDreieck, quetschDxf, faltenPruefen, eckSchnitt2, quetschAnschluss } from "../kern/quetschfalte.js";
 import { rechteckDach, waende, DACHFORMEN } from "../kern/dach/form.js";
 import { dachAusFlaechen } from "../kern/dach/flaechen.js";
 import { aufmassAusPunkt } from "../kern/dach/lukarneAufmass.js";
@@ -54,7 +54,7 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import schriftDaten from "three/examples/fonts/droid/droid_sans_bold.typeface.json";
-import { ausschnittWerkzeug, ausschnittKante, profilPunkt } from "../kern/flaechenblech.js";
+import { ausschnittWerkzeug, ausschnittKante, profilPunkt, gehrungEcken, gehrungLokal } from "../kern/flaechenblech.js";
 import { BAUSTEINE_STANDARD, flaechenblech, plattenUmriss, kantenGruppen, gegenUhrzeiger, bausteinProfil, eckFaktoren } from "../kern/flaechenblech.js";
 import { profilSvg, abwicklungSvg, zuschnittSvg, bausteinSvg, bausteinGrenzen } from "../kern/zeichnung.js";
 import { folge } from "../kern/details.js";
@@ -2596,7 +2596,7 @@ function bausteinKontur(b0, m) {
 }
 // Profil (x = nach aussen, y) entlang z extrudiert; Enden schräg: Anfang bei z = −x·k0, Ende bei z = L + x·k1
 const rundFr = (cs, sBis) => (cs >= sBis - 1e-6 ? 0 : Math.sqrt(Math.max(0, 1 - (cs / sBis) ** 2))); // Viertelkreis über den Biegebereich
-function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0, fr0 = 0, fr1 = 0) { // e0/e1: an der Ecke zurückgesetzt (wie in der Abwicklung)
+function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0, fr0 = 0, fr1 = 0, gh0 = null, gh1 = null) { // gh0/gh1: Gehrungsebene im Biegebereich (z = z0 + zx·x); e0/e1: an der Ecke zurückgesetzt (wie in der Abwicklung)
   // Die Gehrung gilt für die Mittellinie des Blechs: Jeder Ringpunkt wird mit dem x der nächsten Mittellinienstelle verschoben, so steht die Schnittfläche
   // senkrecht auf dem Blech (wie aus der Abwicklung geschnitten) und die Blechstärke wird nicht schräg angeschnitten.
   const mitte = kont.mitte, mx = mitte ? (x, y) => { let best = 1e30, bx = x, by = y, bs = 0; for (let i = 1; i < mitte.length; i++) { const a = mitte[i - 1], b = mitte[i], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-12, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2)), px = a[0] + dx * t, py = a[1] + dy * t, d = (x - px) ** 2 + (y - py) ** 2; if (d < best) { best = d; bx = px; by = py; bs = cum[i - 1] + Math.hypot(px - a[0], py - a[1]); } } return [bx, by, bs]; } : (x, y) => [x, y, 0];
@@ -2604,11 +2604,17 @@ function prisma(kont, L, k0, k1, e0 = 0, e1 = 0, ky0 = 0, ky1 = 0, fr0 = 0, fr1 
   const luft = window.__prismaLuft || 0; // nur für Tests: Gehrungsflächen minimal auseinander
   const cum = [0]; if (mitte) for (let i = 1; i < mitte.length; i++) cum.push(cum[i - 1] + Math.hypot(mitte[i][0] - mitte[i - 1][0], mitte[i][1] - mitte[i - 1][1]));
   const sBis = mitte && kont.bisPunkt ? (() => { let bi = 0, bd = 1e30; mitte.forEach((p, i) => { const d = (p[0] - kont.bisPunkt[0]) ** 2 + (p[1] - kont.bisPunkt[1]) ** 2; if (d < bd) { bd = d; bi = i; } }); return cum[bi] + 1e-6; })() : -1; // Ende der ersten Biegung entlang der Mittellinie
+  if ((gh0 || gh1) && sBis > 0) { // Gehrung nur im Biegebereich: an jeder Kontur-Strecke über die Grenze Biegung/Wand zwei Punkte dicht nebeneinander einfügen (scharfe Stufe statt Schrägfläche über die ganze Wand)
+    const q2 = [], im = (a) => mx(a[0], a[1])[2] <= sBis;
+    for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; q2.push(a);
+      if (im(a) !== im(b)) { let lo = 0, hi = 1; for (let it = 0; it < 40; it++) { const mm = (lo + hi) / 2, pm = [a[0] + (b[0] - a[0]) * mm, a[1] + (b[1] - a[1]) * mm]; if (im(pm) === im(a)) lo = mm; else hi = mm; }
+        for (const tt of [lo, hi]) q2.push([a[0] + (b[0] - a[0]) * tt, a[1] + (b[1] - a[1]) * tt]); } }
+    q = q2; }
   if ((fr0 || fr1) && sBis > 0) { // runde Freistellung: Kontur im Biegebereich fein unterteilen, damit der Viertelkreis sauber ausgeschnitten wird
     const q2 = [], N = 6;
     for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; q2.push(a); if (Math.abs(mx(a[0], a[1])[2] - mx(b[0], b[1])[2]) > 1e-6 && Math.min(mx(a[0], a[1])[2], mx(b[0], b[1])[2]) < sBis) for (let j = 1; j < N; j++) q2.push([a[0] + (b[0] - a[0]) * j / N, a[1] + (b[1] - a[1]) * j / N]); }
     q = q2; }
-  const z0 = (x, y) => { const [cx, cy, cs] = mx(x, y); return -cx * k0 - cy * ky0 + e0 + (fr0 ? fr0 * rundFr(cs, sBis) : 0) + luft; }, z1 = (x, y) => { const [cx, cy, cs] = mx(x, y); return Math.max(L + cx * k1 + cy * ky1 - e1 - (fr1 ? fr1 * rundFr(cs, sBis) : 0) - luft, z0(x, y) + 0.01); }, pos = [];
+  const z0 = (x, y) => { const [cx, cy, cs] = mx(x, y); if (gh0 && cs <= sBis) return gh0.z0 + gh0.zx * x + luft; return -cx * k0 - cy * ky0 + e0 + (fr0 ? fr0 * rundFr(cs, sBis) : 0) + luft; }, z1 = (x, y) => { const [cx, cy, cs] = mx(x, y); if (gh1 && cs <= sBis) return Math.max(gh1.z0 + gh1.zx * x - luft, z0(x, y) + 0.01); return Math.max(L + cx * k1 + cy * ky1 - e1 - (fr1 ? fr1 * rundFr(cs, sBis) : 0) - luft, z0(x, y) + 0.01); }, pos = [];
   const P = (x, y, z) => pos.push(x, y, z), n = q.length;
   for (let i = 0; i < n; i++) { const [xa, ya] = q[i], [xb, yb] = q[(i + 1) % n];
     P(xa, ya, z0(xa, ya)); P(xb, yb, z0(xb, yb)); P(xb, yb, z1(xb, yb)); P(xa, ya, z0(xa, ya)); P(xb, yb, z1(xb, yb)); P(xa, ya, z1(xa, ya)); }
@@ -2716,7 +2722,8 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
   const richt = (a, b) => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [(b[0] - a[0]) / L, (b[1] - a[1]) / L]; };
   const knick = (d1, d2) => Math.atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]); // + = links (konvexe Ecke)
   const ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt); // dieselbe Eckregel wie die Abwicklung
-  const n = bl.gruppen.length;
+  const n = bl.gruppen.length, gehrung = gehrungEcken(bl.gruppen, bl.profile, bl.opt, m.t); // Gehrung im Biegebereich wie im exakten Kern
+
   for (const k of bl.quetsch?.keys() || []) { // Quetschfalte: die Fläche läuft in der Ecke bis zur gezeichneten Ecke durch, damit zwischen Fläche, Biegungen und Falte keine Lücke bleibt
     const kv = (k - 1 + n) % n, V = bl.gruppen[k].punkte[0], dV = richt(bl.gruppen[kv].punkte.at(-2), bl.gruppen[kv].punkte.at(-1)), d0 = richt(bl.gruppen[k].punkte[0], bl.gruppen[k].punkte[1]), dA = kuerzen[kv] || 0, dB = kuerzen[k] || 0;
     if (!(dA > 1e-6) && !(dB > 1e-6)) continue;
@@ -2745,7 +2752,7 @@ function flaechenKoerper(bl, ebene, m, seite, fid, art = oberflaecheFuer(m)) {
         }
         continue;
       }
-      const geo = prisma(k2, L, k0, k1, e0, e1, i > 1 ? 0 : ek[k].ky0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0, i > 1 ? 0 : ek[k].fr0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].fr1 || 0);
+      const geo = prisma(k2, L, k0, k1, e0, e1, i > 1 ? 0 : ek[k].ky0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].ky1 || 0, i > 1 ? 0 : ek[k].fr0 || 0, i < g.punkte.length - 1 ? 0 : ek[k].fr1 || 0, i === 1 && gehrung.has(k) ? gehrungLokal(gehrung.get(k), a, d) : null, i === g.punkte.length - 1 && gehrung.has((k + 1) % n) ? gehrungLokal(gehrung.get((k + 1) % n), a, d) : null);
       geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(d[1], -d[0], 0), new THREE.Vector3(0, 0, seite), new THREE.Vector3(d[0], d[1], 0)).setPosition(a[0], a[1], 0));
       geo.applyMatrix4(B); geos.push(nachAussen(geo)); // Basis kann gespiegelt sein: Dreiecke wieder nach aussen
     }
@@ -3361,17 +3368,7 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
   const dF = zuSeite(fold, P2).dot(P2.clone().sub(O2)), dE = zuSeite(eps, C2).dot(C2.clone().sub(O2)), r = Math.min(t, dF * 0.3, dE * 0.3);
   // Die Dreiecksflächen beginnen erst dort, wo die Biegungen an der Ecklinie enden (90°-Biegung und 180°-Saum): Abstand der Anschlusskante von der Ecklinie
   let aStart = r;
-  try {
-    const eB0 = v(q.wand === "wand1" ? g.e2 : g.e1), eA0 = v(q.wand === "wand1" ? g.e1 : g.e2), uV0 = v(g.eps).normalize();
-    const ay0 = eA0.clone().addScaledVector(uV0, -eA0.dot(uV0)).normalize(), wB0 = eB0.clone().addScaledVector(uV0, -eB0.dot(uV0)).normalize(), dBa0 = wB0.dot(ay0), dBb0 = wB0.dot(n);
-    if (dBb0 < -0.05) {
-      const R0 = Math.max(t, 0.5) * 1.5, u10 = [-dBa0, -dBb0], l0 = Math.hypot(...u10); u10[0] /= l0; u10[1] /= l0;
-      const sk0 = 2 * t / u10[1], th0 = Math.acos(Math.max(-1, Math.min(1, u10[0]))), tl0 = R0 * Math.tan(th0 / 2);
-      let pB0 = [-dBb0, dBa0]; if (pB0[0] < 0) pB0 = [-pB0[0], -pB0[1]];
-      const sE0 = (-t / 2 - (t / 2) * pB0[1]) / dBb0, aI0 = (t / 2) * pB0[0] + sE0 * dBa0;
-      aStart = Math.max(u10[0] * sk0 + tl0, aI0 + t, r);
-    }
-  } catch { aStart = r; }
+  { const an = quetschAnschluss(g, q.wand, t); if (an) aStart = Math.max(an.aK, r); }
   aStart = Math.min(aStart, dE * 0.45);
   const nF = zuSeite(fold, P2).multiplyScalar(r), nE = zuSeite(eps, C2).multiplyScalar(aStart);
   const fA = O2.clone().add(nF), fB = C2.clone().add(nF), eA = O2.clone().add(nE), eB = P2.clone().add(nE);
@@ -3404,7 +3401,7 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
         const sE = (-t / 2 - (t / 2) * pB[1]) / dBb, lamE = -sE, lamP = sk - tl, aI = (t / 2) * pB[0] + sE * dBa;
         if (lamP - lamE > 0.01) { const pt = (lam, sg) => [lam * u1[0] + sg * (t / 2) * pB[0], lam * u1[1] + sg * (t / 2) * pB[1]], sq = new THREE.Shape(); sq.moveTo(...pt(lamE, -1)); sq.lineTo(...pt(lamE, 1)); sq.lineTo(...pt(lamP, 1)); sq.lineTo(...pt(lamP, -1)); sq.closePath(); dazu(sq); }
         // Flansch A, auf dem die Falte liegt: sein Ende wird um 180° (geschlossener Saum) auf die erste Lage der Falte zurückgebogen
-        const aH = aI + t, hs = new THREE.Shape(); hs.moveTo(aH, -t / 2); hs.absarc(aH, t / 2, t, -Math.PI / 2, -1.5 * Math.PI, true); hs.closePath(); dazu(hs); // um eine Blechstärke nach innen: liegt im Hohlraum der 90°-Biegung
+        const aH = quetschAnschluss(g, q.wand, t).aK, hs = new THREE.Shape(); // Mittelpunkt des Saums = Mittelpunkt der 90°-Biegung (konzentrisch) hs.moveTo(aH, -t / 2); hs.absarc(aH, t / 2, t, -Math.PI / 2, -1.5 * Math.PI, true); hs.closePath(); dazu(hs); // um eine Blechstärke nach innen: liegt im Hohlraum der 90°-Biegung
       }
     }
   } catch (e) { biegeStueck = null; }

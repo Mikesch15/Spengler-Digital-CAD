@@ -1,5 +1,5 @@
 // Tests: Quetschfalte an der Ecke zweier Aufkantungen
-import { eckeGeometrie, quetschZuschnitt, faltenPruefen, quetschDreieck, quetschDxf } from "../kern/quetschfalte.js";
+import { eckeGeometrie, quetschZuschnitt, faltenPruefen, quetschDreieck, quetschDxf, quetschAnschluss } from "../kern/quetschfalte.js";
 let f = 0; const ok = (b, t) => { if (!b) { f++; console.error("✗", t); } else console.log("✓", t); };
 const nah = (a, b, t = 1e-6) => Math.abs(a - b) < t;
 const g = eckeGeometrie(90, 90, 90);
@@ -28,5 +28,14 @@ const un = quetschZuschnitt(90, 30, 90, 90, null, 45); ok(un.sS === 30 && un.s2 
     try { const zz = quetschZuschnitt(beta, h1, p1, p2, null, h2); if (!faltenPruefen(zz).ok || !(zz.tSpitze > zz.sS)) schlecht.push(`β${beta} φ${p1}/${p2} h${h1}/${h2}`); } catch (e) { schlecht.push(`β${beta} φ${p1}/${p2} h${h1}/${h2}: ${e.message}`); }
   }
   ok(n > 300 && schlecht.length === 0, `${n} Kombinationen (Winkel gleich/verschieden, Höhen gleich/verschieden) rechnen mit stimmender Faltprobe${schlecht.length ? ": " + schlecht.slice(0, 3).join("; ") : ""}`);
+}
+// Anschluss der Falte an den anderen Flansch (t = 0,7): rechtwinklig 90°-Biegung, Mittelradius 1,5·t, Saum konzentrisch (aK = 1,5·t), Gehrungsende aI = 0,5·t
+{
+  const t = 0.7, a = quetschAnschluss(eckeGeometrie(90, 90, 90), "wand1", t), b = quetschAnschluss(eckeGeometrie(90, 90, 90), "wand2", t);
+  ok(a && nah(a.th, Math.PI / 2, 1e-9) && nah(a.aK, 1.5 * t, 1e-9) && nah(a.aI, 0.5 * t, 1e-9) && nah(a.tl, 1.5 * t, 1e-9), "Rechtwinklige Ecke: Biegung 90°, Saummitte aK = 1,5·t, Gehrungsende aI = 0,5·t");
+  ok(b && nah(b.aK, a.aK, 1e-9) && nah(b.th, a.th, 1e-9), "Symmetrie: Falte auf Wand 2 ergibt dieselben Masse");
+  for (const beta of [63, 80, 100, 116, 130]) { const q = quetschAnschluss(eckeGeometrie(beta, 90, 90), "wand1", t); ok(q && q.aK > q.aI && q.th > 0 && q.th < Math.PI, `Ecke ${beta}°: Saum liegt hinter dem Gehrungsende (aI ${q?.aI.toFixed(3)} < aK ${q?.aK.toFixed(3)}), Biegung ${(q?.th * 180 / Math.PI).toFixed(1)}°`); }
+  const w = quetschAnschluss(eckeGeometrie(63, 90, 90), "wand1", t).th, r = quetschAnschluss(eckeGeometrie(116, 90, 90), "wand1", t).th;
+  ok(w > Math.PI / 2 && r < Math.PI / 2, "Spitzer Eckwinkel: Biegung stärker als 90°, stumpfer Eckwinkel: schwächer als 90°");
 }
 if (f) { console.error(`${f} Fehler`); process.exit(1); } else console.log("Quetschfalte: alle Tests bestanden");

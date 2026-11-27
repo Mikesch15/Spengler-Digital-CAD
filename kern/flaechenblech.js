@@ -5,7 +5,7 @@
 // Querschnitt eines Bausteins: x = von der Kante nach aussen, y = zur Sichtseite. Reines JavaScript.
 import { bausteinFolge } from "./vorlagen/parameter.js";
 import { werkzeugAuf } from "./flansch.js";
-import { quetschEckeFlach, eckeGeometrie } from "./quetschfalte.js";
+import { quetschEckeFlach, eckeGeometrie, eckSchnitt2, quetschAnschluss } from "./quetschfalte.js";
 import { berechne, versatzLinie, grenzen, kontur } from "./geometrie.js";
 import { freiesProfil } from "./profile.js";
 import { folge } from "./details.js";
@@ -210,6 +210,30 @@ function innenX(p) {
   const zone = (p.ri || 1) + 1.5 * (p.t || 1), q = p.quer || [], hoch = q.filter(([, y]) => y > zone), xs = (hoch.length ? hoch : q).map(([x]) => x);
   return xs.length ? Math.min(...xs) : 0;
 }
+
+// Gehrung im Biegebereich (siehe kern/cad/featureBau.js): an jeder Aussenecke zweier einfacher Flansche enden beide Biegezonen in derselben senkrechten Ebene durch die
+// Ecke der Biegelinien (halbiert den Winkel der beiden Kanten). Ergebnis: Map Eckenindex k (Anfang der Kante k) → { Of, mm (Normale der Ebene in Skizzenkoordinaten), H (Höhe des Biegebereichs) }
+export function gehrungEcken(gruppen, profile, opt, t) {
+  const n = gruppen.length, ecke = new Map();
+  if ((opt?.ecken || "gehrung") !== "gehrung") return ecke;
+  for (let k = 0; k < n; k++) {
+    const kv = (k - 1 + n) % n, gk = gruppen[k], gv = gruppen[kv], pk = profile[k], pv = profile[kv];
+    if (kv === k || !gk.gerade || !gv.gerade || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
+    const V0 = gk.punkte[0], dn = richtung(V0, gk.punkte[1]), dp = richtung(V0, gv.punkte.at(-2));
+    if (!(knick(dn, dp) > 0)) continue; // nur Aussenecken
+    let Of; try { Of = eckSchnitt2(V0, dn, dp, pk.biegungen[0].abstand, pv.biegungen[0].abstand); } catch { continue; }
+    const mx = dn[0] - dp[0], my = dn[1] - dp[1], ml = Math.hypot(mx, my) || 1, rB = (q) => (q.biegungen[0].ri ?? q.ri ?? 1) + (q.t || t);
+    ecke.set(k, { Of, mm: [mx / ml, my / ml], H: Math.max(rB(pk), rB(pv)) + 0.2 });
+  }
+  return ecke;
+}
+// Gehrungsebene im lokalen System eines Flansch-Abschnitts (x nach aussen, z entlang der Kante ab a, Richtung d): z = z0 + zx·x
+export function gehrungLokal(c, a, d) {
+  const xr = [d[1], -d[0]], xm = xr[0] * c.mm[0] + xr[1] * c.mm[1], dm = d[0] * c.mm[0] + d[1] * c.mm[1];
+  if (Math.abs(dm) < 1e-9) return null;
+  const xO = (c.Of[0] - a[0]) * xr[0] + (c.Of[1] - a[1]) * xr[1], zO = (c.Of[0] - a[0]) * d[0] + (c.Of[1] - a[1]) * d[1];
+  return { zx: -xm / dm, z0: zO + (xm / dm) * xO, H: c.H };
+}
 // Eckfaktoren mit nachträglichen Überschreibungen je Flanschende (opt.enden["k:start"|"k:ende"] = { art: "rechtwinklig" | "buendig" | "winkel", winkel, versatz })
 export function eckFaktoren(gruppen, profile, opt = null) {
   const ek = eckFaktorenRoh(gruppen, profile, opt), n = gruppen.length;
@@ -348,7 +372,7 @@ export function flaechenblech(ptsRoh, kanten, m, quetschEcken = [], opt = null) 
     const n = gruppen.length, kuerzen = {}; opt2 = { ...(opt2 || { t: m.t }), kuerzen };
     for (const [k, q] of quetsch) {
       const kv = (k - 1 + n) % n, tausch = q.vz * (opt?.sichtseite === -1 ? -1 : 1) < 0, rechts = opt?.quetschRichtung?.[k] === "rechts", e1Flansch = !tausch ? k : kv, aKante = rechts ? (e1Flansch === k ? kv : k) : e1Flansch;
-      try { const g = eckeGeometrie(q.beta, (tausch ? q.F2 : q.F1).phi, (tausch ? q.F1 : q.F2).phi), gam = (rechts ? g.gamma2 : g.gamma1) * Math.PI / 180; kuerzen[aKante === k ? `${k}:start` : `${kv}:ende`] = m.t / Math.max(0.2, Math.sin(gam)); } catch { /* ohne Kürzung */ }
+      try { const g = eckeGeometrie(q.beta, (tausch ? q.F2 : q.F1).phi, (tausch ? q.F1 : q.F2).phi), gam = (rechts ? g.gamma2 : g.gamma1) * Math.PI / 180, an = quetschAnschluss(g, rechts ? "wand2" : "wand1", m.t), dist = an ? Math.max(0, an.aK - an.aI) : m.t; kuerzen[aKante === k ? `${k}:start` : `${kv}:ende`] = dist / Math.max(0.2, Math.sin(gam)); } catch { /* ohne Kürzung */ } // der Flansch endet dort, wo der 180°-Saum beginnt (aK), statt an der Gehrung (aI)
     }
   }
   return { pts, gruppen, profile, quetsch, quetschFehler: fehlerQ, opt: opt2, abw: abwicklung(pts, gruppen, profile, quetsch.size ? quetsch : null, opt2) };

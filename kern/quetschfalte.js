@@ -93,3 +93,19 @@ export function quetschEckeFlach(V, dn, dp, fl1, fl2) {
   const W = (q) => [O[0] + q[0] * dn[0] + q[1] * Y[0], O[1] + q[0] * dn[1] + q[1] * Y[1]];
   return { O, beta, z, P1: W(z.P1), P2: W(z.P2), P1s: W(z.P1s), P2s: W(z.P2s), C: W(z.C), dn, dp, Y };
 }
+
+// Anschluss der Quetschfalte an den anderen Flansch (Querschnitt senkrecht zur Ecklinie ε, Koordinaten a = in der Wand A weg von ε, b = aus der Wand A heraus).
+// Flansch B endet (Gehrung) an der Innenkante der Ecklinie und biegt über eine Biegung (Mittelradius R, Winkel th) auf die äussere Lage der Falte (b = 2t) um;
+// der 180°-Saum von Flansch A liegt konzentrisch in dieser Biegung (Mittelpunkt K = (aK, t/2)). Ergebnis null, wenn die Wand B nicht «unter» die Falte läuft.
+export function quetschAnschluss(g, wand, t) {
+  const n3 = (a) => { const l = Math.hypot(...a) || 1; return a.map((x) => x / l); }, dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const eA = wand === "wand1" ? g.e1 : g.e2, eB = wand === "wand1" ? g.e2 : g.e1, dA = wand === "wand1" ? g.d1 : g.d2, u = n3(g.eps);
+  const ay = n3(eA.map((x, i) => x - dot(eA, u) * u[i])), wB = n3(eB.map((x, i) => x - dot(eB, u) * u[i]));
+  let n = n3(kreuz(eA, dA)); if (dot(n, [Math.cos(g.beta * Math.PI / 360), Math.sin(g.beta * Math.PI / 360), 0]) > 0) n = n.map((x) => -x); // nach aussen
+  const dBa = dot(wB, ay), dBb = dot(wB, n); if (!(dBb < -0.05)) return null;
+  const R = Math.max(t, 0.5) * 1.5, l1 = Math.hypot(dBa, dBb), u1 = [-dBa / l1, -dBb / l1], sk = 2 * t / u1[1], S = [u1[0] * sk, 2 * t];
+  const th = Math.acos(Math.max(-1, Math.min(1, u1[0]))), tl = R * Math.tan(th / 2);
+  let pB = [-dBb, dBa]; if (pB[0] < 0) pB = [-pB[0], -pB[1]];
+  const sE = (-t / 2 - (t / 2) * pB[1]) / dBb, aI = (t / 2) * pB[0] + sE * dBa;
+  return { R, u1, sk, S, th, tl, pB, sE, aI, aK: S[0] + tl, dBa, dBb, ay, n, u };
+}

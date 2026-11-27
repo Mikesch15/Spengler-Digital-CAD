@@ -7,7 +7,7 @@ import { blechQuerschnitt, verschiebeProfil } from "./blech.js";
 import { berechne } from "../geometrie.js";
 import { freiesProfil } from "../profile.js";
 import { folge } from "../details.js";
-import { eckFaktoren } from "../flaechenblech.js";
+import { eckFaktoren, gehrungEcken } from "../flaechenblech.js";
 import { eckSchnitt2 } from "../quetschfalte.js";
 
 const kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -105,16 +105,7 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
   const ek = eckFaktoren(bl.gruppen, bl.profile, bl.opt);
   // Gehrung im Biegebereich: an jeder Aussenecke zweier einfacher Flansche enden beide Biegezonen in derselben senkrechten Ebene durch die Ecke der Biegelinien
   // (halbiert den Winkel der Kanten); darüber (gerade Wand) gilt weiter der Schnitt der Ecke. So ragt keine Ecke des Nachbarflanschs über den Biegebereich hinaus.
-  const nE = bl.gruppen.length, ecke = new Map();
-  if ((bl.opt?.ecken || "gehrung") === "gehrung") for (let kk = 0; kk < nE; kk++) {
-    const kv = (kk - 1 + nE) % nE, gk = bl.gruppen[kk], gv = bl.gruppen[kv], pk = bl.profile[kk], pv = bl.profile[kv];
-    if (kv === kk || !gk.gerade || !gv.gerade || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
-    const V0 = gk.punkte[0], dn = richt(V0, gk.punkte[1]), dp = richt(V0, gv.punkte.at(-2));
-    if (!(knick(dn, dp) > 0)) continue;
-    let Of; try { Of = eckSchnitt2(V0, dn, dp, pk.biegungen[0].abstand, pv.biegungen[0].abstand); } catch { continue; }
-    const mx = dn[0] - dp[0], my = dn[1] - dp[1], ml = Math.hypot(mx, my) || 1, rB = (q) => (q.biegungen[0].ri ?? q.ri ?? 1) + (q.t || t);
-    ecke.set(kk, { Of, mm: [mx / ml, my / ml], H: Math.max(rB(pk), rB(pv)) + 0.2 });
-  }
+  const nE = bl.gruppen.length, ecke = gehrungEcken(bl.gruppen, bl.profile, bl.opt, t);
   bl.gruppen.forEach((g, k) => {
     const p = bl.profile[k]; if (!p?.baustein) return;
     const bq = bausteinQuerschnitt(p.baustein, m); if (!bq) throw new Error(`Baustein «${p.baustein.name ?? p.baustein.folge}» lässt sich nicht rechnen`);
