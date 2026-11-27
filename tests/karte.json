@@ -71,7 +71,8 @@
       "muster": "kern/naht",
       "tests": [
         "naht",
-        "nahtwinkel"
+        "nahtwinkel",
+        "durchdringung"
       ]
     },
     {

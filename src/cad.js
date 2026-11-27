@@ -7575,6 +7575,23 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         catch (e) { nicht.set(f.id, `STEP-Import: ${e.message}`); }
       } else if (["sweep", "loft", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
+    // Durchdringungsschutz: Blechteile dürfen sich nie durchdringen – das später angelegte Blechteil wird um den Überschnitt zurückgeschnitten
+    let zurueck = 0;
+    try {
+      const gueltig = (k) => !nicht.has(k) && !(k.includes(":") && nicht.has(k.split(":")[0])), kandidaten = [];
+      for (const [k, id] of [...koerper, ...blech]) { const h = hauptVon(k); if (!h || h.versteckt || !gueltig(k)) continue; if (blech.has(k) || h.typ === "blech" || h.typ === "vorlage") kandidaten.push({ k, h, set: (v) => (blech.has(k) ? blech.set(k, v) : koerper.set(k, v)), get: () => (blech.get(k) ?? koerper.get(k)) }); }
+      kandidaten.sort((p, q) => doc.features.indexOf(p.h) - doc.features.indexOf(q.h) || (p.k < q.k ? -1 : 1));
+      const grenzen = new Map(); for (const c of kandidaten) grenzen.set(c.k, (await K.ausfuehren({ op: "eigenschaften", ziel: c.get() })).grenzen);
+      const nah = (a, b) => a && b && [0, 1, 2].every((i) => a.min[i] <= b.max[i] + 0.01 && b.min[i] <= a.max[i] + 0.01);
+      for (let j = 1; j < kandidaten.length; j++) for (let i = 0; i < j; i++) {
+        const A = kandidaten[i], B = kandidaten[j]; if (lageVon(A.h) || lageVon(B.h) || !nah(grenzen.get(A.k), grenzen.get(B.k))) continue; // Teile mit Komponentenverschiebung: Lage unterschiedlich, hier nicht verglichen
+        try {
+          const sch = await x({ op: "boolesch", art: "schneiden", a: A.get(), b: B.get() }), vol = (await K.ausfuehren({ op: "eigenschaften", ziel: sch.id })).volumen;
+          if (!(vol > 0.02)) continue;
+          const neu = await x({ op: "boolesch", art: "abziehen", a: B.get(), b: A.get() }); B.set(neu.id); zurueck++; grenzen.set(B.k, (await K.ausfuehren({ op: "eigenschaften", ziel: neu.id })).grenzen);
+        } catch { /* kein Überschnitt berechenbar (z. B. nur Flächenkontakt) */ }
+      }
+    } catch { /* Durchdringungsschutz ist best effort */ }
     if (step) { // alle sichtbaren exakten Körper (mit Komponentenlage) in eine STEP-Datei
       const ziele = [], namen = [], ungueltig = [];
       for (const [schl, id] of [...koerper, ...blech]) {
@@ -7615,7 +7632,7 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
     if (register === "eigenschaften") zeigeWerkstatt();
     zeigeKanten?.();
     const rest = [...nicht].map(([fid, g]) => `${hauptVon(fid)?.name ?? fid}${fid.includes(":") ? " " + (+fid.split(":")[1] + 1) : ""} (${g})`);
-    status(`Exakt aus dem CAD-Kern: ${n} Körper${rest.length ? ` · als Netz: ${rest.join(", ")}` : ""}`);
+    status(`Exakt aus dem CAD-Kern: ${n} Körper${zurueck ? ` · ${zurueck} Überschneidung${zurueck > 1 ? "en" : ""} zurückgeschnitten` : ""}${rest.length ? ` · als Netz: ${rest.join(", ")}` : ""}`);
   } finally { exaktBeschaeftigt--; const frei = ids.filter((i) => !uebernommen.has(i)); if (frei.length) K.ausfuehren({ op: "freigeben", ziele: frei }).catch(() => {}); }
 }
 
