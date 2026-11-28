@@ -409,7 +409,8 @@ export function quetschEcke(pts, gruppen, profile, k) {
 export function eckenFreiraum(V0, dn, dp, t, w) { // w: Breite des Biegebereichs ab der Innenfläche der Wand (äusserer Biegeradius)
   const Pin = eckSchnitt2(V0, dn, dp, -t / 2, -t / 2); if (!(w > 0.05)) return null;
   const P1 = [Pin[0] + dn[0] * w, Pin[1] + dn[1] * w], P2 = [Pin[0] + dp[0] * w, Pin[1] + dp[1] * w], Of = [Pin[0] + (dn[0] + dp[0]) * w, Pin[1] + (dn[1] + dp[1]) * w];
-  return { poly: [Pin, P1, Of, P2], w };
+  const c = [Pin[0] + (dn[0] + dp[0]) * w / 2, Pin[1] + (dn[1] + dp[1]) * w / 2], r = Math.max(Math.hypot(Pin[0] - c[0], Pin[1] - c[1]), Math.hypot(P1[0] - c[0], P1[1] - c[1]), Math.hypot(P2[0] - c[0], P2[1] - c[1])); // kleinster Kreis, der das Viereck überdeckt
+  return { poly: [Pin, P1, Of, P2], w, c, r };
 }
 // Alles für ein Blech: Kanten, Profile der Bausteine, Abwicklung. kanten[k] = Baustein (oder null)
 export function flaechenblech(ptsRoh, kanten, m, quetschEcken = [], opt = null) { // quetschEcken: Ecken (Index k = Anfang der Kante k), an denen eine Quetschfalte gesetzt ist

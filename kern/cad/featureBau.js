@@ -146,7 +146,7 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
     const rB = (p) => (p.biegungen[0].ri ?? p.ri ?? 1) + (p.t || t), r = +bl.opt?.freistellungMass > 0 ? +bl.opt.freistellungMass : Math.max(rB(pk), rB(pv)); // Radius der runden Freistellung: automatisch = äusserer Biegeradius, sonst vorgegeben
     let O; try { O = eckSchnitt2(V0, dn, dp, pk.biegungen[0].abstand, pv.biegungen[0].abstand); } catch { continue; }
     const fr = bl.opt?.ecken === "gehrung45" ? null : eckenFreiraum(V0, dn, dp, t, +bl.opt?.freistellungMass > 0 ? +bl.opt.freistellungMass : Math.max(rB(pk), rB(pv))); // 90°-Schnittkanten: Viereck statt Kreis
-    if (fr) { const hy = Math.max(rB(pk), rB(pv)) - t / 2 + 0.1; plan.reliefs.push({ extr: { profil: { start: fr.poly[0], segmente: fr.poly.slice(1).map((q) => ({ bis: q })) }, ebene: { ursprung: [0, 0, s === -1 ? -hy : -t], x: [1, 0, 0], n: [0, 0, 1] }, hoehe: hy + t }, m: B }); continue; }
+    if (fr) { const hy = Math.max(rB(pk), rB(pv)) - t / 2 + 0.1, z0 = s === -1 ? -hy : -t; plan.reliefs.push({ zyl: { r: fr.r, h: hy + t, basis: [fr.c[0], fr.c[1], z0], achse: [0, 0, 1] }, m: B }); continue; } // rundes Loch über den Biegebereichen im Eck (Wände bleiben)
     plan.reliefs.push({ zyl: { r, h: 2 * (r - t / 2) + 0.2, basis: [O[0], O[1], -(r - t / 2) - 0.1], achse: [0, 0, 1] }, m: B });
   }
   return plan;

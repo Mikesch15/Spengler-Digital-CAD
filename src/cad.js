@@ -3402,9 +3402,9 @@ function eckenEntlastung(f, bl, m, s) {
     const O3 = eckSchnitt2(V0, dnn, dp, quetschFlansch3D(bl, k).a, quetschFlansch3D(bl, kv).a), Of = eckSchnitt2(V0, dnn, dp, bl.profile[k].biegungen[0].abstand, bl.profile[kv].biegungen[0].abstand);
     const fr = manuell || f.ecken === "gehrung45" ? null : eckenFreiraum(V0, dnn, dp, m.t, +f.freistellungMass > 0 ? +f.freistellungMass : Math.max(rBieg(k), rBieg(kv))); // 90°-Schnittkanten: Viereck von der Innenecke bis zum Schnittpunkt der Biegelinien
     if (fr) {
-      const sg = f.sichtseite === -1 ? -1 : 1, hy = Math.max(rBieg(k), rBieg(kv)) - m.t / 2 + 0.1, g2 = new THREE.ExtrudeGeometry(new THREE.Shape(fr.poly.map(([x, y]) => new THREE.Vector2(x, y))), { depth: hy + m.t, bevelEnabled: false });
-      g2.translate(0, 0, sg === -1 ? -hy : -m.t); g2.applyMatrix4(B); cuts.push(g2);
-      const loch2 = fr.poly.map((q) => [q[0], q[1]]); loch2._auto = true; bl.abw.loecher = [...(bl.abw.loecher || []), loch2]; (bl._eckLoecher ||= []).push(loch2); continue;
+      const sg = f.sichtseite === -1 ? -1 : 1, hy = Math.max(rBieg(k), rBieg(kv)) - m.t / 2 + 0.1, g2 = new THREE.CylinderGeometry(fr.r, fr.r, hy + m.t, 32); // rundes Loch über den Biegebereichen im Eck
+      g2.rotateX(Math.PI / 2); g2.translate(fr.c[0], fr.c[1], sg === -1 ? -hy + (hy + m.t) / 2 : -m.t + (hy + m.t) / 2); g2.applyMatrix4(B); cuts.push(g2);
+      const loch2 = Array.from({ length: 32 }, (_, i) => [fr.c[0] + fr.r * Math.cos((i / 32) * 2 * Math.PI), fr.c[1] + fr.r * Math.sin((i / 32) * 2 * Math.PI)]); loch2._auto = true; bl.abw.loecher = [...(bl.abw.loecher || []), loch2]; (bl._eckLoecher ||= []).push(loch2); continue;
     }
     const geo = form === "quadrat" ? new THREE.BoxGeometry(2 * r, 2 * r, hoch) : new THREE.CylinderGeometry(r, r, hoch, 24); if (form !== "quadrat") geo.rotateX(Math.PI / 2);
     const Z3 = manuell ? O3 : Of; geo.translate(Z3[0], Z3[1], 0); geo.applyMatrix4(B); cuts.push(geo);
