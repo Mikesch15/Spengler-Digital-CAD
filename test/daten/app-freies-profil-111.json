@@ -1,0 +1,48 @@
+{
+ "id": 111,
+ "project_id": 4,
+ "type": "freies_profil",
+ "title": "Referenz Wandanschluss",
+ "staerke_mm": "0.6",
+ "updated_at": "2026-11-01T08:00:00Z",
+ "data": {
+  "material": "3",
+  "konisch": false,
+  "schenkel": [
+   {
+    "laenge": 10,
+    "winkel": 90
+   },
+   {
+    "laenge": 25,
+    "winkel": 180
+   },
+   {
+    "laenge": 45,
+    "winkel": 180
+   },
+   {
+    "laenge": 110,
+    "winkel": 90
+   },
+   {
+    "laenge": 10,
+    "winkel": -180
+   }
+  ],
+  "segmente": [
+   {
+    "laenge": 490
+   },
+   {
+    "laenge": 1940
+   },
+   {
+    "laenge": 1940
+   },
+   {
+    "laenge": 1940
+   }
+  ]
+ }
+}

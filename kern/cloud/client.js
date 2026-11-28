@@ -86,6 +86,8 @@ export class CloudClient {
   // ---- Verbindung zur Spengler-Digital-App ----
   // Projekte der App (Tabelle projects): Auftragsnummer = order_no
   async appProjekte({ archiviert = false } = {}) { return this._mitToken(`/rest/v1/projects?select=id,name,order_no,customer,object,hinweis,status,archived,updated_at${archiviert ? "" : "&archived=eq.false"}&order=name.asc&limit=1000`); }
+  // Massaufnahmen eines App-Projekts (nur Lesen). Ohne Anhänge-Binärdaten; Anhänge-Verweise liefert die App-Tabelle.
+  async appMassaufnahmen(projektId) { return this._mitToken(`/rest/v1/measurements?select=id,project_id,type,title,staerke_mm,data,updated_at&project_id=eq.${encodeURIComponent(projektId)}&order=id.asc&limit=500`); }
   async appProjekt(id) { const r = await this._mitToken(`/rest/v1/projects?select=id,name,order_no,customer,object,hinweis,status,archived,updated_at&id=eq.${encodeURIComponent(id)}`); return r?.[0] || null; }
   // Anlegen/Ändern direkt in der Tabelle der App (created_by, updated_by, updated_at setzt die Datenbank); Auftrags-Nr. ist je Firma einmalig
   async appProjektNeu(f) { try { const r = await this._mitToken("/rest/v1/projects", { methode: "POST", kopf: { Prefer: "return=representation" }, body: this._projektFelder(f) }); return r?.[0]; } catch (e) { throw this._projektFehler(e); } }

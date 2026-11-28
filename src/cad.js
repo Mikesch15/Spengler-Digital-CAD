@@ -7490,7 +7490,7 @@ const cloud = cloudModul({
     einfuegen(f); regen(); waehle(f.id); },
 });
 // Projekte der App (anlegen, bearbeiten, zuordnen)
-const projekte = projekteModul({ esc, status, getDoc: () => doc, client: () => cloud.client, angemeldet: () => cloud.angemeldet,
+const projekte = projekteModul({ esc, status, getDoc: () => doc, speichern, client: () => cloud.client, angemeldet: () => cloud.angemeldet,
   setzeAuftrag, zumKonto: () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); einstRegister = "konto"; zeigeEinst(); $("einst").hidden = false; } });
 projekte.binden();
 const ablage = ablageModul({ esc, status, getDoc: () => doc, client: () => cloud.client, angemeldet: () => cloud.angemeldet, projektText: () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v), 1), ladeProjektText: (x) => ladeProjekt(x), herunterladen });

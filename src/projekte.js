@@ -1,10 +1,11 @@
 // Projekte der Spengler-Digital-App: anlegen, bearbeiten, archivieren und dem aktuellen Modell zuordnen.
 // Die Daten liegen nur in der App-Datenbank (Tabelle projects) – so sind CAD und App immer synchron.
+import { ausAppZeile, status as impStatus } from "../kern/austausch.js";
 import { pruefeProjekt, suche, modellFelder, geaendert, STATUS } from "../kern/cloud/projekte.js";
 
 export function projekteModul(ctx) {
   const { esc } = ctx, $ = (id) => document.getElementById(id);
-  const st = { liste: [], wahl: null, form: null, archiv: false, suche: "", meldung: "", laeuft: false, geladen: false };
+  const st = { liste: [], wahl: null, form: null, archiv: false, suche: "", meldung: "", laeuft: false, geladen: false, mass: null, massFür: null };
   const leer = () => ({ name: "", order_no: "", customer: "", object: "", hinweis: "", status: "offen", archived: false });
   const fehlerText = (e) => e?.art === "netz" ? "Keine Verbindung zur App – bitte später erneut versuchen." : e?.message || String(e);
   const ausgewaehlt = () => (st.wahl && st.wahl !== "neu" ? st.liste.find((p) => String(p.id) === String(st.wahl)) : null);
@@ -16,6 +17,18 @@ export function projekteModul(ctx) {
       <b>${esc(p.name)}</b>${doc.appProjekt && String(doc.appProjekt.id) === String(p.id) ? ' <span class="pjmarke">zugeordnet</span>' : ""}${p.archived ? ' <span class="pjmarke grau">archiviert</span>' : ""}
       <small>${esc([p.order_no, p.customer, p.object].filter(Boolean).join(" · "))}</small></li>`).join("")}</ul>`;
   }
+  const STUFE = { bereit: ["✔ bereit", "ok"], warnung: ["⚠ Warnung", "warn"], fehler: ["✖ fehlerhaft", "fehler"], ohneGenerator: ["○ noch kein Generator", "grau"] };
+  function massHtml() {
+    const p = ausgewaehlt(); if (!p) return "";
+    if (st.massFür !== String(p.id) || !st.mass) return `<div class="reihe ohnerand"><button class="knopf klein" data-pj-aktion="mass">Massaufnahmen aus der App laden</button></div>`;
+    const doc = ctx.getDoc(), da = new Set((doc.massaufnahmen || []).map((u) => u.quelle.id));
+    if (!st.mass.length) return '<p class="hinweis">Dieses Projekt hat keine Massaufnahmen.</p>';
+    return `<h4>Massaufnahmen aus der App</h4><ul class="pjliste">${st.mass.map((u) => { const s = impStatus(u), [t] = STUFE[s.stufe];
+      return `<li><b>${esc(u.titel || u.art)}</b> <span class="pjmarke">${t}</span>${da.has(u.quelle.id) ? ' <span class="pjmarke">im Modell</span>' : ""}
+        <small>${esc(u.art)} · ID ${esc(u.quelle.id)}${s.cad ? ` · ${s.cad.schenkel.length} Schenkel, ${s.cad.dicke_mm ?? "?"} mm` : ""}</small>
+        ${[...s.fehler, ...s.warnungen].map((x) => `<small>${esc(x)}</small>`).join("")}
+        ${s.ok ? `<button class="knopf klein" data-pj-aktion="uebernehmen" data-mid="${esc(u.quelle.id)}">${da.has(u.quelle.id) ? "Aktualisieren" : "Ins Modell übernehmen"}</button>` : ""}</li>`; }).join("")}</ul>`;
+  }
   function formHtml() {
     const f = st.form, doc = ctx.getDoc(), neu = st.wahl === "neu", p = ausgewaehlt();
     if (!f) return '<p class="hinweis">Ein Projekt links wählen oder «Neues Projekt» antippen.</p>';
@@ -24,6 +37,7 @@ export function projekteModul(ctx) {
     return `<h4>${neu ? "Neues Projekt" : "Projekt bearbeiten"}</h4>
       ${feld("name", "Projektname *")}${feld("order_no", "Auftrags-Nr. *")}${feld("customer", "Auftraggeber")}${feld("object", "Adresse *")}
       <label class="feld"><span>Hinweis</span><textarea data-pf="hinweis" rows="2">${esc(f.hinweis ?? "")}</textarea></label>
+      ${neu ? "" : massHtml()}
       ${neu ? "" : `<label class="feld"><span>Status</span><select data-pf="status">${STATUS.map(([v, t]) => `<option value="${v}" ${f.status === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>`}
       <div class="reihe"><button class="knopf haupt" data-pj-aktion="speichern" ${st.laeuft ? "disabled" : ""}>${neu ? "Projekt anlegen" : "Änderungen speichern"}</button>
         ${neu ? "" : `<button class="knopf" data-pj-aktion="${zugeordnet ? "loesen" : "zuordnen"}">${zugeordnet ? "Zuordnung lösen" : "Diesem Modell zuordnen"}</button><button class="knopf" data-pj-aktion="archiv">${p?.archived ? "Wieder öffnen" : "Archivieren"}</button>`}</div>
@@ -74,12 +88,14 @@ export function projekteModul(ctx) {
   function binden() {
     $("projekte").addEventListener("click", async (e) => {
       const li = e.target.closest("li[data-pj]");
-      if (li) { st.wahl = li.dataset.pj; st.form = { ...ausgewaehlt() }; st.meldung = ""; return zeichne(); }
+      if (li) { st.wahl = li.dataset.pj; st.mass = null; st.form = { ...ausgewaehlt() }; st.meldung = ""; return zeichne(); }
       const a = e.target.closest("[data-pj-aktion]")?.dataset.pjAktion; if (!a) return;
       if (a === "neu") { st.wahl = "neu"; st.form = leer(); st.meldung = ""; return zeichne(); }
       if (a === "laden") { st.geladen = false; zeichne(); return laden(); }
       if (a === "speichern") return speichern();
       if (a === "archiv") return archivieren();
+      if (a === "mass") { const p = ausgewaehlt(); if (!p) return; try { st.mass = (await ctx.client().appMassaufnahmen(p.id)).map((z) => ausAppZeile(z, p)); st.massFür = String(p.id); st.meldung = ""; } catch (x) { st.meldung = fehlerText(x); } return zeichne(); }
+      if (a === "uebernehmen") { const u = st.mass?.find((x) => String(x.quelle.id) === e.target.dataset.mid); if (!u || !impStatus(u).ok) return; const d = ctx.getDoc(); d.massaufnahmen = [...(d.massaufnahmen || []).filter((x) => x.quelle.id !== u.quelle.id), u]; ctx.speichern?.(); st.meldung = `Massaufnahme «${u.titel || u.art}» ins Modell übernommen (Originalwerte unverändert gesichert).`; return zeichne(); }
       if (a === "zuordnen") { const p = ausgewaehlt(); if (!p) return; ctx.setzeAuftrag(modellFelder(p)); st.meldung = `Modell dem Projekt «${p.name}» zugeordnet: Auftragsnummer und Objekt sind übernommen.`; return zeichne(); }
       if (a === "loesen") { const d = ctx.getDoc(); ctx.setzeAuftrag({ nr: d.nr, objekt: d.objekt, appProjekt: null }); st.meldung = "Zuordnung gelöst."; return zeichne(); }
       if (a === "anmelden") { zu(); ctx.zumKonto(); }

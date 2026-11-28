@@ -1,0 +1,28 @@
+// Tests Austauschformat App → CAD (Referenz: echte Massaufnahme «Freies Profil» aus der App, verkürzt)
+import { readFileSync } from "node:fs";
+import { ausAppZeile, pruefe, status, SCHEMA, VERSION } from "../kern/austausch.js";
+let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
+const zeile = JSON.parse(readFileSync(new URL("./daten/app-freies-profil-111.json", import.meta.url)));
+const u = ausAppZeile(zeile, { id: 4, order_no: "2026-114", name: "Test" }, "2026-11-28T00:00:00Z");
+ok(u.schema === SCHEMA && u.version === VERSION && u.quelle.id === 111 && u.projekt.id === 4 && u.projekt.auftragsnr === "2026-114", "Umschlag: Schema, Version, stabile IDs");
+ok(typeof u.material.staerke_mm === "number" && u.material.staerke_mm === 0.6, "Blechstärke als Zahl (App speichert Text)");
+ok(JSON.stringify(u.messwerte) === JSON.stringify(zeile.data), "Originalmesswerte unverändert");
+const p = pruefe(u);
+ok(p.ok && p.cad.schenkel.length === 5 && p.cad.schenkel[3].laenge_mm === 110 && p.cad.dicke_mm === 0.6, "Referenz gültig: 5 Schenkel, 0.6 mm");
+ok(p.cad.laengen_mm.join() === "490,1940,1940,1940" && p.cad.stueck === 4, "Längen/Stück aus Segmenten");
+ok(status(u).stufe === "bereit" || status(u).stufe === "warnung", "Status der Referenz");
+const kaputt = (fn) => { const c = ausAppZeile(JSON.parse(JSON.stringify(zeile))); fn(c); return pruefe(c); };
+ok(!kaputt((c) => (c.messwerte.schenkel = [{ laenge: 10, winkel: 0 }])).ok, "Nur 1 Schenkel → Fehler");
+ok(!kaputt((c) => (c.messwerte.schenkel[1].laenge = -5)).ok, "Negative Länge → Fehler");
+ok(!kaputt((c) => (c.messwerte.schenkel[1].laenge = "abc")).ok, "Text als Länge → Fehler");
+ok(!kaputt((c) => (c.material.staerke_mm = null)).ok, "Blechstärke fehlt → Fehler");
+ok(!kaputt((c) => (c.material.staerke_mm = 60)).ok, "Blechstärke 60 mm → Fehler");
+ok(!kaputt((c) => (c.projekt.id = null)).ok, "Projekt-ID fehlt → Fehler");
+ok(!kaputt((c) => (c.version = 2)).ok, "Neuere Version → Fehler");
+ok(kaputt((c) => (c.messwerte.schenkel[0].winkel = 33)).warnungen.length > 0, "Winkel am 1. Schenkel → Warnung");
+const k = ausAppZeile({ ...zeile, type: "kamineinfassung" });
+ok(status(k).stufe === "ohneGenerator" && status(k).ok, "Art ohne Generator: importierbar, markiert");
+ok(!pruefe(null).ok && !pruefe({}).ok, "Müll wirft nicht");
+const komma = ausAppZeile({ ...zeile, data: { ...zeile.data, schenkel: [{ laenge: "10,5", winkel: "0" }, { laenge: "20", winkel: "90" }] } });
+ok(pruefe(komma).cad?.schenkel[0].laenge_mm === 10.5, "Dezimalkomma wird zur Zahl");
+console.log(fehler ? `${fehler} Fehler` : "Austausch: alle Tests bestanden"); process.exit(fehler ? 1 : 0);
