@@ -221,7 +221,7 @@ function innenX(p) {
 // s = Sichtseite (+1/−1): lokales y der Flanschprofile liegt in Richtung s·(Plattennormale).
 export function gehrungEcken(gruppen, profile, opt, t, s = 1, volleEcken = []) {
   const n = gruppen.length, ecke = new Map(), sg = s === -1 ? -1 : 1;
-  if ((opt?.ecken || "gehrung") !== "gehrung") return ecke;
+  if (!["gehrung", "gehrung45"].includes(opt?.ecken || "gehrung")) return ecke;
   const kr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], pr = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], nm = (a) => { const l = Math.hypot(...a) || 1; return a.map((x) => x / l); };
   for (let k = 0; k < n; k++) {
     const kv = (k - 1 + n) % n, gk = gruppen[k], gv = gruppen[kv], pk = profile[k], pv = profile[kv];
@@ -242,7 +242,7 @@ export function gehrungEcken(gruppen, profile, opt, t, s = 1, volleEcken = []) {
     const cA = kr(nB, e), cB = kr(e, nA), cE = kr(nA, nB); // Spalten der Inversen
     I[0] = (r1[0] * cA[0] + r1[1] * cB[0] + r1[2] * cE[0]) / D; I[1] = (r1[0] * cA[1] + r1[1] * cB[1] + r1[2] * cE[1]) / D; I[2] = (r1[0] * cA[2] + r1[1] * cB[2] + r1[2] * cE[2]) / D;
     const M = nm([nA[0] - nB[0], nA[1] - nB[1], nA[2] - nB[2]]), rB = (q) => (q.biegungen[0].ri ?? q.ri ?? 1) + (q.t || t);
-    ecke.set(k, { I, M, H: Math.max(rB(pk), rB(pv)) + 0.2, voll: volleEcken.includes(k) });
+    ecke.set(k, { I, M, H: Math.max(rB(pk), rB(pv)) + 0.2, voll: volleEcken.includes(k) || opt?.ecken === "gehrung45" });
   }
   return ecke;
 }
@@ -283,7 +283,8 @@ function eckFaktorenRoh(gruppen, profile, opt = null) { // opt: { ecken: "gehrun
     const kk = (beta, mit, geh) => (mit ? eckFaktor(beta, true, geh) : 0); // Nachbar ohne Baustein: Ende rechtwinklig zur Biegekante (nachträglich mit «Flanschende» änderbar)
     return { k0: kk(knick(dV, d0), !!pV?.lage, !!a?.gehrung) - (a?.kB || 0), e0: a?.eB || 0, k1: kk(knick(d1, dN), !!pN?.lage, !!b?.gehrung) - (b?.kA || 0), e1: b?.eA || 0 };
   });
-  const art = opt?.ecken || "gehrung"; if (art === "gehrung") { quadratEcken(gruppen, profile, ek, opt); return ek; }
+  const art = opt?.ecken || "gehrung"; if (art === "gehrung45") return ek; // echte Gehrung (Fusion «Miter»): beide Flansche enden über die ganze Höhe in der Winkelhalbierenden, Wand und Biegebereich in derselben Ebene
+  if (art === "gehrung") { quadratEcken(gruppen, profile, ek, opt); return ek; }
   const t = +opt?.t || 0.7, gap = Math.max(0, +opt?.spalt || 0);
   gruppen.forEach((g, k) => { // Ecke am Anfang der Kante k (zwischen Kante k−1 und k): nur wo beide Kanten einen Baustein haben
     const kv = (k - 1 + n) % n; if (!profile[k]?.lage || !profile[kv]?.lage || kv === k) return;

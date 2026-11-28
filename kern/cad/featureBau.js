@@ -137,13 +137,13 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
   });
   // Runde Freistellung der Biegezone: Zylinder (Achse senkrecht zur Platte, Radius = Biegeradius + Blechstärke) um die Ecke der beiden Biegelinien
   const n = bl.gruppen.length;
-  if (bl.opt?.freistellung !== "keine" && (bl.opt?.ecken || "gehrung") === "gehrung") for (let k = 0; k < n; k++) {
+  if (bl.opt?.freistellung !== "keine" && ["gehrung", "gehrung45"].includes(bl.opt?.ecken || "gehrung")) for (let k = 0; k < n; k++) {
     const kv = (k - 1 + n) % n, gk = bl.gruppen[k], gv = bl.gruppen[kv], pk = bl.profile[k], pv = bl.profile[kv];
     if (kv === k || !gk.gerade || !gv.gerade || bl.quetsch?.has?.(k) || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
     if (!reichtBisAnfang(pk) || !reichtBisEnde(pv)) continue; // Teilstück erreicht die Ecke nicht
     const V0 = gk.punkte[0], dn = richt(V0, gk.punkte[1]), dp = richt(V0, gv.punkte.at(-2));
     if (!(knick(dn, dp) > 0)) continue; // nur Aussenecken
-    const rB = (p) => (p.biegungen[0].ri ?? p.ri ?? 1) + (p.t || t), r = Math.max(rB(pk), rB(pv));
+    const rB = (p) => (p.biegungen[0].ri ?? p.ri ?? 1) + (p.t || t), r = +bl.opt?.freistellungMass > 0 ? +bl.opt.freistellungMass : Math.max(rB(pk), rB(pv)); // Radius der runden Freistellung: automatisch = äusserer Biegeradius, sonst vorgegeben
     let O; try { O = eckSchnitt2(V0, dn, dp, pk.biegungen[0].abstand, pv.biegungen[0].abstand); } catch { continue; }
     plan.reliefs.push({ zyl: { r, h: 2 * (r - t / 2) + 0.2, basis: [O[0], O[1], -(r - t / 2) - 0.1], achse: [0, 0, 1] }, m: B });
   }
