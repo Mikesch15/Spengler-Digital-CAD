@@ -132,7 +132,7 @@ export async function occtKern({ wasmUrl } = {}) {
     sweep: (k) => versuch("Sweep", () => {
       const pfad = zeichne(k.pfad, false).sketchOnPlane(ebene(k.ebene ?? "XZ"));
       if (k.kreis) return ergebnis(pfad.sweepSketch((plane, origin) => R.sketchCircle(k.kreis, { plane, origin })), "Sweep");
-      if (k.profil) return ergebnis(pfad.sweepSketch((plane) => zeichne(k.profil).sketchOnPlane(plane)), "Sweep");
+      if (k.profil) return ergebnis(pfad.sweepSketch((plane) => zeichne(k.profil).sketchOnPlane(k.profilEbene ? ebene(k.profilEbene) : plane)), "Sweep"); // profilEbene: Profil an seiner Lage im Raum (sonst senkrecht am Pfadanfang)
       throw fehl(CODES.EINGABE, "sweep: kreis oder profil angeben");
     }),
     loft: (k) => versuch("Loft", () => {

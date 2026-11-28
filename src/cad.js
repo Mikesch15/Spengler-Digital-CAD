@@ -7680,8 +7680,14 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
           const offen = extrusionsFlaechen(await K.ausfuehren({ op: "topologie", ziel: koerper.get(f.ziel) }), lage, f.offen);
           koerper.set(f.ziel, (await x({ op: "schale", ziel: koerper.get(f.ziel), dicke: f.dicke > 0 ? f.dicke : 2, offen })).id);
         } catch (e) { nicht.set(f.ziel, `${f.name}: ${e.message}`); }
-      } else if (f.typ === "teilen") { // im Netz-Pfad gerechnet; der exakte Kern teilt noch nicht
-        if (koerper.has(f.ziel) || blech.has(f.ziel)) nicht.set(f.ziel, `${f.name} noch nicht exakt`);
+      } else if (f.typ === "teilen") { // Körper an einer Ebene teilen: Halbräume; der obere Teil bleibt am Ziel, der untere wird «Teilen:0»
+        if (blech.has(f.ziel)) { nicht.set(f.ziel, `${f.name} an Blechteil noch nicht exakt`); continue; }
+        if (!koerper.has(f.ziel) || nicht.has(f.ziel)) continue;
+        try {
+          const e = bezugEbene(f.ebene), id0 = koerper.get(f.ziel), wo = f.behalten === "oben" ? [1] : f.behalten === "unten" ? [-1] : [1, -1], teile = [];
+          for (const sg of wo) teile.push((await x({ op: "halbraum", ziel: id0, punkt: e.o, normale: e.n.map((v) => -sg * v) })).id);
+          koerper.set(f.ziel, teile[0]); if (teile[1]) { koerper.set(f.id, teile[1]); netzVon.set(f.id, `${f.id}:0`); }
+        } catch (e) { nicht.set(f.ziel, `${f.name}: ${e.message}`); }
       } else if (["kmuster", "kspiegel", "bewegen"].includes(f.typ)) { // wie koerperTransform(): Kopien «id:k» oder Lage ändern
         const z = f.ziel;
         if (blech.has(z)) { nicht.set(z, `${f.name} an Blechteil noch nicht exakt`); continue; }
@@ -7736,7 +7742,17 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
           const schnitte = sks.map((sk) => { const p = exakteProfile(sk, f).sort((a, c) => c.flaeche - a.flaeche)[0]; if (!p) throw new Error("Profil fehlt"); return { profil: p.profil, ebene: kernEbene(E_(sk.ebene)) }; });
           koerper.set(f.id, (await x({ op: "loft", schnitte })).id);
         } catch (e) { nicht.set(f.id, `Loft: ${e.message}`); }
-      } else if (["sweep", "import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
+      } else if (f.typ === "sweep") { // Sweep: Profil an seiner Lage entlang des (ebenen) Pfads; Führungsschiene/parallele Ausrichtung noch Netz
+        if (f.versteckt) continue;
+        try {
+          if (f.fuehrung || f.orientierung === "parallel") throw new Error("Führungsschiene bzw. parallele Ausrichtung noch nicht exakt");
+          const sk = finde(f.skizze), prof = exakteProfile(sk, f).sort((a, c) => c.flaeche - a.flaeche)[0]; if (!prof) throw new Error("Profil fehlt");
+          let pfad, pe;
+          if (String(f.pfad).startsWith("E:")) { const [a0, b0] = String(f.pfad).slice(2).split(";").map(zahl3), d = [b0[0] - a0[0], b0[1] - a0[1], b0[2] - a0[2]], L = Math.hypot(...d) || 1, ux = d.map((v) => v / L), h = Math.abs(ux[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], n0 = [ux[1] * h[2] - ux[2] * h[1], ux[2] * h[0] - ux[0] * h[2], ux[0] * h[1] - ux[1] * h[0]], ln = Math.hypot(...n0); pe = { ursprung: a0, x: ux, n: n0.map((v) => v / ln) }; pfad = { start: [0, 0], segmente: [{ bis: [L, 0] }] }; }
+          else { const [, sid, ei] = String(f.pfad).split(":"), [psk, el] = skizzeElement(sid, ei), pts = elementPfad(el).filter((p, i, a) => !i || Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 1e-6); pe = kernEbene(E_(psk.ebene)); pfad = { start: pts[0], segmente: pts.slice(1).map((q) => ({ bis: q })) }; }
+          koerper.set(f.id, (await x({ op: "sweep", pfad, ebene: pe, profil: prof.profil, profilEbene: kernEbene(E_(sk.ebene)) })).id);
+        } catch (e) { nicht.set(f.id, `Sweep: ${e.message}`); }
+      } else if (["import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
     }
     // Nahtfahnen an freien Körperkanten: die Fahne gehört zum Blech – Streifen am Rand abziehen, Fahne mit dem Blechkörper vereinigen
     for (const x0 of doc.features) for (const fd of (x0.typ === "naht" && !x0._aus && !x0.versteckt ? x0._fahnen : null) || []) {

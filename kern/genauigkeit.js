@@ -16,11 +16,9 @@ export const schlechter = (a, b) => (rang(b) > rang(a) ? b : a);
 const OHNE_KOERPER = new Set(["skizze", "ebene", "achse", "konpunkt", "bild", "parameter"]);
 // Features, die ausschliesslich als Netz entstehen (nicht im exakten Kern vorhanden)
 const NUR_NETZ = {
-  sweep: "Sweep ist noch nicht exakt (Netz)",
   kehle: "Kehle/Grat ist noch nicht exakt (Netz)",
   quetschfalte: "Quetschfalte ist nur als Netz modelliert",
   stirnquetsch: "Quetschfalte an der Stirn ist nur als Netz modelliert",
-  teilen: "Teilen ist noch nicht exakt (Netz)",
 };
 // Abhängigkeiten eines Features (IDs anderer Features), soweit sie aus den Feldern ablesbar sind
 export function abhaengigkeiten(f) {
