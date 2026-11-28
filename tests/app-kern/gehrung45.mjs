@@ -17,7 +17,7 @@ const diag = g45.oben.map((q) => q.split(",").map(Number)).filter((p) => Math.ab
 ok(diag.length >= 2, `Oberkante der Wände läuft auf der 45°-Ebene durch die Ecke (${diag.length} Punkte mit x = y)`);
 ok(g45.oben.length > 0 && g.oben.length > 0, `Oberkante vorhanden (45°: ${g45.oben.length}, Stoss-Gehrung: ${g.oben.length} Punkte)`);
 const klein = await lauf("gehrung", 1);
-ok(g.loch > 4 && Math.abs(klein.loch - 2) < 0.2, `Freistellung: automatisch Ø ${g.loch.toFixed(1)} mm (= 2 × (Biegeradius + Blechstärke)), mit Vorgabe Radius 1 mm Ø ${klein.loch.toFixed(1)} mm`);
+ok(Math.abs(g.loch - 2.2) < 0.15 && Math.abs(klein.loch - 1) < 0.15, `Freistellung bei 90°-Schnittkanten: Viereck mit Seite ${g.loch.toFixed(1)} mm (= Biegeradius + Blechstärke), mit Vorgabe 1 mm: ${klein.loch.toFixed(1)} mm`);
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Gehrung 45° (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

@@ -7,7 +7,7 @@ import { blechQuerschnitt, verschiebeProfil } from "./blech.js";
 import { berechne } from "../geometrie.js";
 import { freiesProfil } from "../profile.js";
 import { folge } from "../details.js";
-import { eckFaktoren, gehrungEcken, gehrungLokal, teilGruppe, reichtBisAnfang, reichtBisEnde } from "../flaechenblech.js";
+import { eckenFreiraum, eckFaktoren, gehrungEcken, gehrungLokal, teilGruppe, reichtBisAnfang, reichtBisEnde } from "../flaechenblech.js";
 import { eckSchnitt2 } from "../quetschfalte.js";
 
 const kreuz = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -145,6 +145,8 @@ export function flaechenblechPlan(bl, ebene, m, seite = 1) {
     if (!(knick(dn, dp) > 0)) continue; // nur Aussenecken
     const rB = (p) => (p.biegungen[0].ri ?? p.ri ?? 1) + (p.t || t), r = +bl.opt?.freistellungMass > 0 ? +bl.opt.freistellungMass : Math.max(rB(pk), rB(pv)); // Radius der runden Freistellung: automatisch = äusserer Biegeradius, sonst vorgegeben
     let O; try { O = eckSchnitt2(V0, dn, dp, pk.biegungen[0].abstand, pv.biegungen[0].abstand); } catch { continue; }
+    const fr = bl.opt?.ecken === "gehrung45" ? null : eckenFreiraum(V0, dn, dp, t, +bl.opt?.freistellungMass > 0 ? +bl.opt.freistellungMass : Math.max(rB(pk), rB(pv))); // 90°-Schnittkanten: Viereck statt Kreis
+    if (fr) { const hy = Math.max(rB(pk), rB(pv)) - t / 2 + 0.1; plan.reliefs.push({ extr: { profil: { start: fr.poly[0], segmente: fr.poly.slice(1).map((q) => ({ bis: q })) }, ebene: { ursprung: [0, 0, s === -1 ? -hy : -t], x: [1, 0, 0], n: [0, 0, 1] }, hoehe: hy + t }, m: B }); continue; }
     plan.reliefs.push({ zyl: { r, h: 2 * (r - t / 2) + 0.2, basis: [O[0], O[1], -(r - t / 2) - 0.1], achse: [0, 0, 1] }, m: B });
   }
   return plan;
@@ -170,6 +172,6 @@ export async function baueFlaechenblech(x, plan) {
     z = (await x({ op: "matrix", ziel: z, m: p.m })).id;
     k = (await x({ op: "boolesch", art: "vereinigen", a: k, b: z })).id;
   }
-  for (const r of plan.reliefs || []) { const q = (await x(r.zyl ? { op: "zylinder", ...r.zyl } : { op: "quader", ...r.quader })).id, w = (await x({ op: "matrix", ziel: q, m: r.m })).id; k = (await x({ op: "boolesch", art: "abziehen", a: k, b: w })).id; } // Freistellungen
+  for (const r of plan.reliefs || []) { const q = (await x(r.extr ? { op: "extrusion", ...r.extr } : r.zyl ? { op: "zylinder", ...r.zyl } : { op: "quader", ...r.quader })).id, w = (await x({ op: "matrix", ziel: q, m: r.m })).id; k = (await x({ op: "boolesch", art: "abziehen", a: k, b: w })).id; } // Freistellungen
   return k;
 }

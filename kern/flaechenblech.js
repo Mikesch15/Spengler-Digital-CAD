@@ -404,6 +404,13 @@ export function quetschEcke(pts, gruppen, profile, k) {
   return { ...quetschEckeFlach(V, dn, dp, F1, F2), vz: F1.vz, F1, F2 };
 }
 
+// Freiraum an einer Aussenecke zweier Flansche mit 90°-Schnittkanten: Viereck von der Innenecke der Wände bis zum Schnittpunkt der Biegelinien. Beide Biegebereiche enden an diesem Viereck
+// (kein Überkreuzen der Biegungen), die Wände laufen darüber bis in die Ecke. mass > 0: Seitenlänge vorgeben.
+export function eckenFreiraum(V0, dn, dp, t, w) { // w: Breite des Biegebereichs ab der Innenfläche der Wand (äusserer Biegeradius)
+  const Pin = eckSchnitt2(V0, dn, dp, -t / 2, -t / 2); if (!(w > 0.05)) return null;
+  const P1 = [Pin[0] + dn[0] * w, Pin[1] + dn[1] * w], P2 = [Pin[0] + dp[0] * w, Pin[1] + dp[1] * w], Of = [Pin[0] + (dn[0] + dp[0]) * w, Pin[1] + (dn[1] + dp[1]) * w];
+  return { poly: [Pin, P1, Of, P2], w };
+}
 // Alles für ein Blech: Kanten, Profile der Bausteine, Abwicklung. kanten[k] = Baustein (oder null)
 export function flaechenblech(ptsRoh, kanten, m, quetschEcken = [], opt = null) { // quetschEcken: Ecken (Index k = Anfang der Kante k), an denen eine Quetschfalte gesetzt ist
   const pts = gegenUhrzeiger(ptsRoh), gruppen = kantenGruppen(pts);
