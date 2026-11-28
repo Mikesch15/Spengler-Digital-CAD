@@ -11,4 +11,5 @@
 - Knopf «Bauteil erzeugen» in der Importliste; Feature trägt `herkunft` (Messaufnahme-/Projekt-ID, Schema-Version, eingefrorene Original-Schenkel). `abweichungen(f)` meldet CAD-Änderungen gegenüber der Messung (noch keine Anzeige in der Oberfläche).
 - Winkel der App (= Biegung VOR dem Schenkel) → CAD-Zeilen (Biegung NACH dem Schenkel); ±180° = Umschlag. Der Winkel am 1. Schenkel (Startdrehung) wird wie beim bisherigen Senden ignoriert (Warnung).
 - Material: Zuordnung nur über die Blechstärke; fehlt sie in den Einstellungen, wird ein Standardmaterial genommen und gewarnt.
-- Offen: Anzeige der Abweichung im Eigenschaften-Dialog, «Aktualisieren aus Messung», Werkstattblatt-Vorlage mit Messaufnahme-ID.
+- Profil-Dialog zeigt die Box «Aus Massaufnahme N» (wie gemessen / im CAD geändert + Liste) und «Auf Messwerte zurücksetzen» (auf die eingefrorenen Originalwerte). App-Test: `tests/app-kern/massimport.mjs` (Screenshots mit `SHOT=<ordner>`).
+- Offen: erneutes Laden geänderter Messwerte aus der App («Aus Messung aktualisieren»), Werkstattblatt-Vorlage mit Messaufnahme-ID.

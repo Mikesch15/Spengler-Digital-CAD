@@ -39,6 +39,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, profilErweitern, alsZeilen } from "../kern/profile.js";
+import { abweichungen } from "../kern/generator/freiesProfil.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf, rundblechDxf } from "../kern/dxf.js";
 import { rundblechAbwicklung, rundblechSvg } from "../kern/abwicklungRund.js";
@@ -2538,7 +2539,10 @@ function profilDialog(f) {
       setTimeout(() => { const d = dlg; if (d) { dialog({ ...d, felder: felder(f) }); regen(); } });
     }
   };
-  const tabelle = () => `<table class="zeilen"><thead><tr><th>#</th><th>Schenkel mm</th><th>Winkel °</th><th>Art</th><th></th></tr></thead><tbody>
+  const messungHtml = () => { if (!f.herkunft) return ""; const d = abweichungen(f);
+    return `<div class="messung ${d.length ? "abw" : ""}"><b>Aus Massaufnahme ${esc(f.herkunft.messaufnahmeId)}</b> <span class="pjmarke${d.length ? " warn" : ""}">${d.length ? "im CAD geändert" : "wie gemessen"}</span>
+      ${d.length ? `<ul>${d.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><button class="knopf klein" data-messung-zurueck>Auf Messwerte zurücksetzen</button>` : '<small class="hinweis">Masse stimmen mit der Baustellen-Messung überein.</small>'}</div>`; };
+  const tabelle = () => messungHtml() + `<table class="zeilen"><thead><tr><th>#</th><th>Schenkel mm</th><th>Winkel °</th><th>Art</th><th></th></tr></thead><tbody>
     ${f.zeilen.map((z, i) => { const letzte = i === f.zeilen.length - 1; return `<tr data-i="${i}"><td>${i + 1}</td>
       <td><input data-k="L" type="number" step="any" inputmode="decimal" value="${z.L}" aria-label="Schenkel ${i + 1} Länge"></td>
       <td>${letzte ? "–" : `<input data-k="winkel" type="number" step="any" inputmode="decimal" value="${z.winkel}" aria-label="Winkel nach Schenkel ${i + 1}">`}</td>
@@ -2550,10 +2554,12 @@ function profilDialog(f) {
     box.addEventListener("input", (e) => {
       const k = e.target.dataset.k, i = +e.target.closest("tr")?.dataset.i; if (!k) return;
       f.zeilen[i][k] = k === "art" ? e.target.value : parseFloat(e.target.value);
+      const mb = box.querySelector(".messung"); if (mb) mb.outerHTML = messungHtml();
       regen();
     });
     box.addEventListener("click", (e) => {
-      if (e.target.dataset.weg != null) { f.zeilen.splice(+e.target.dataset.weg, 1); f.zeilen.at(-1).winkel = 0; neu(); }
+      if (e.target.dataset.messungZurueck != null) { f.zeilen = JSON.parse(JSON.stringify(f.herkunft.zeilen)); if (f.herkunft.laenge != null) f.laenge = f.herkunft.laenge; neu(); }
+      else if (e.target.dataset.weg != null) { f.zeilen.splice(+e.target.dataset.weg, 1); f.zeilen.at(-1).winkel = 0; neu(); }
       else if (e.target.dataset.vorlageSpeichern != null) { const w = werte(); eigeneVorlageSpeichern(w.name || f.name, Number.isFinite(w.start) ? w.start : f.start, f.zeilen); }
       else if (e.target.dataset.neu != null) { const l = f.zeilen.at(-1); l.winkel = 90; l.art = "abkanten"; f.zeilen.push({ L: 30, winkel: 0, art: "abkanten" }); neu(); box.querySelector("tr:last-child input")?.focus(); }
     });

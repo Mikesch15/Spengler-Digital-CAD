@@ -24,12 +24,11 @@ export function projekteModul(ctx) {
     if (st.massFür !== String(p.id) || !st.mass) return `<div class="reihe ohnerand"><button class="knopf klein" data-pj-aktion="mass">Massaufnahmen aus der App laden</button></div>`;
     const doc = ctx.getDoc(), da = new Set((doc.massaufnahmen || []).map((u) => u.quelle.id));
     if (!st.mass.length) return '<p class="hinweis">Dieses Projekt hat keine Massaufnahmen.</p>';
-    return `<h4>Massaufnahmen aus der App</h4><ul class="pjliste">${st.mass.map((u) => { const s = impStatus(u), [t] = STUFE[s.stufe];
-      return `<li><b>${esc(u.titel || u.art)}</b> <span class="pjmarke">${t}</span>${da.has(u.quelle.id) ? ' <span class="pjmarke">im Modell</span>' : ""}
+    return `<h4>Massaufnahmen aus der App</h4><ul class="massliste">${st.mass.map((u) => { const s = impStatus(u), [t, k] = STUFE[s.stufe];
+      return `<li><div class="mkopf"><b>${esc(u.titel || u.art)}</b><span class="mmarke ${k}">${t}</span>${da.has(u.quelle.id) ? '<span class="mmarke grau">im Modell</span>' : ""}</div>
         <small>${esc(u.art)} · ID ${esc(u.quelle.id)}${s.cad ? ` · ${s.cad.schenkel.length} Schenkel, ${s.cad.dicke_mm ?? "?"} mm` : ""}</small>
-        ${[...s.fehler, ...s.warnungen].map((x) => `<small>${esc(x)}</small>`).join("")}
-        ${s.cad ? `<button class="knopf klein haupt" data-pj-aktion="bauteil" data-mid="${esc(u.quelle.id)}">Bauteil erzeugen</button>` : ""}
-        ${s.ok ? `<button class="knopf klein" data-pj-aktion="uebernehmen" data-mid="${esc(u.quelle.id)}">${da.has(u.quelle.id) ? "Aktualisieren" : "Ins Modell übernehmen"}</button>` : ""}</li>`; }).join("")}</ul>`;
+        ${[...s.fehler, ...s.warnungen].map((x) => `<small class="mbefund ${s.ok ? "warn" : "fehler"}">${esc(x)}</small>`).join("")}
+        ${s.ok ? `<div class="mknoepfe">${s.cad ? `<button class="knopf klein haupt" data-pj-aktion="bauteil" data-mid="${esc(u.quelle.id)}">Bauteil erzeugen</button>` : ""}<button class="knopf klein" data-pj-aktion="uebernehmen" data-mid="${esc(u.quelle.id)}">${da.has(u.quelle.id) ? "Aktualisieren" : "Ins Modell übernehmen"}</button></div>` : ""}</li>`; }).join("")}</ul>`;
   }
   function formHtml() {
     const f = st.form, doc = ctx.getDoc(), neu = st.wahl === "neu", p = ausgewaehlt();

@@ -209,7 +209,8 @@
     {
       "muster": "src/projekte.js",
       "tests": [
-        "projekte"
+        "projekte",
+        "massimport"
       ]
     },
     {
@@ -300,6 +301,12 @@
       "tests": [
         "teilstueck",
         "pruefen"
+      ]
+    },
+    {
+      "muster": "kern/generator/",
+      "tests": [
+        "massimport"
       ]
     }
   ]
