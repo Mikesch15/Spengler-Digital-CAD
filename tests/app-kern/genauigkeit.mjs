@@ -1,4 +1,4 @@
-// App-Test: Genauigkeitsstatus im Browser (Kern aus → Näherung gekennzeichnet; Kern an → exakter Körper ohne Kennzeichnung, Flächenblech + Quetschfalte → teilweise exakt)
+  ok(!r.z.fl?.klasse && !/gen-mesh/.test(r.z.q?.klasse), `Kern an: Flächenblech mit Quetschfalte ist exakt – die Falte steckt im B-Rep-Körper (Blech «${r.z.fl?.klasse}», Falte «${r.z.q?.klasse}»)`);
 import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
 const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
 const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
