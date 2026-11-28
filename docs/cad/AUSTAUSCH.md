@@ -12,4 +12,5 @@
 - Winkel der App (= Biegung VOR dem Schenkel) → CAD-Zeilen (Biegung NACH dem Schenkel); ±180° = Umschlag. Der Winkel am 1. Schenkel (Startdrehung) wird wie beim bisherigen Senden ignoriert (Warnung).
 - Material: Zuordnung nur über die Blechstärke; fehlt sie in den Einstellungen, wird ein Standardmaterial genommen und gewarnt.
 - Profil-Dialog zeigt die Box «Aus Massaufnahme N» (wie gemessen / im CAD geändert + Liste) und «Auf Messwerte zurücksetzen» (auf die eingefrorenen Originalwerte). App-Test: `tests/app-kern/massimport.mjs` (Screenshots mit `SHOT=<ordner>`).
-- Offen: erneutes Laden geänderter Messwerte aus der App («Aus Messung aktualisieren»), Werkstattblatt-Vorlage mit Messaufnahme-ID.
+- «Aus App aktualisieren» im Profil-Dialog holt die aktuelle Aufnahme (`appMassaufnahme`), ordnet über die Länge zu (`aktualisiereAusMessung`), fragt bei im CAD geänderten Massen vor dem Überschreiben. Die Blechstärke/Material wird dabei NICHT neu zugeordnet.
+- Werkstattblatt: Kopf zeigt «Messung Nr. N (geändert)», bei Abweichung eine Zeile «Gegenüber der Messung geändert».

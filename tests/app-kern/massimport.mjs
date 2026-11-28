@@ -58,5 +58,17 @@ ok(/im CAD geändert/.test(await s.textContent(".messung")) && /Schenkel 2/.test
 await bild("3-dialog-abweichung");
 await s.click("[data-messung-zurueck]"); await s.waitForTimeout(500);
 ok(/wie gemessen/.test(await s.textContent(".messung")), "Zurücksetzen auf Messwerte");
+// Werkstattblatt trägt die Messaufnahme-ID und meldet Änderungen
+const blatt = (id) => s.evaluate((i) => window.sdcadTest.blatt(i), id);
+ok(/Messung<\/dt><dd>Nr\. 111<\/dd>/.test(await blatt(pf[0].id)) && !/Gegenüber der Messung/.test(await blatt(pf[0].id)), "Werkstattblatt: Messung Nr. 111, unverändert ohne Hinweis");
+await s.evaluate((id) => { const f = window.sdcadTest.dok().features.find((x) => x.id === id); return f; }, pf[0].id);
+// Aus App aktualisieren: App-Stand ändert sich (Schenkel 2: 25 → 28), Bauteil ist unverändert → ohne Rückfrage
+MESS[0] = { ...MESS[0], data: { ...MESS[0].data, schenkel: MESS[0].data.schenkel.map((x, i) => (i === 1 ? { ...x, laenge: 28 } : x)) } };
+await s.click("[data-messung-neu]"); await s.waitForFunction(() => document.querySelector('tr[data-i="1"] input[data-k="L"]')?.value === "28", null, { timeout: 5000 });
+ok(/wie gemessen/.test(await s.textContent(".messung")), "Aus App aktualisiert: Schenkel 2 = 28, Anzeige «wie gemessen»");
+await s.click("[data-messung-neu]"); await s.waitForFunction(() => /unverändert/.test(document.querySelector("[data-messung-text]")?.textContent || ""), null, { timeout: 5000 });
+ok(true, "Zweites Aktualisieren: «Stand der App ist unverändert»");
+await bild("4-aus-app-aktualisiert");
+await s.evaluate(() => { document.getElementById("druck").innerHTML = window.sdcadTest.blatt(window.sdcadTest.dok().features.find((f) => f.typ === "profil").id); });
 ok(!probleme.length, "Keine Skriptfehler " + probleme.join("|"));
 await b.close(); srv.close(); console.log(fehler ? `${fehler} Fehler` : "Massimport: alle Tests bestanden"); process.exit(fehler ? 1 : 0);

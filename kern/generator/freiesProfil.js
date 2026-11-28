@@ -31,3 +31,14 @@ export function abweichungen(f) {
   if (h.laenge != null && f.laenge !== h.laenge) d.push(`Länge: ${h.laenge} → ${f.laenge} mm`);
   return d;
 }
+
+// Neue Messwerte der App auf ein vorhandenes Bauteil anwenden. Zuordnung über die Länge (sonst nur eindeutig bei einem Teil).
+// Ergebnis: { ok, geaendert, neu:{zeilen,laenge,stueck,herkunft}, fehler[] } – ändert f nicht.
+export function aktualisiereAusMessung(f, umschlag) {
+  const r = erzeuge(umschlag);
+  if (!r.ok) return { ok: false, geaendert: false, neu: null, fehler: r.fehler };
+  const h = f.herkunft, t = r.teile.find((x) => x.laenge === h?.laenge) || (r.teile.length === 1 ? r.teile[0] : null);
+  if (!t) return { ok: false, geaendert: false, neu: null, fehler: ["Die Länge dieses Bauteils kommt in der neuen Messung nicht mehr vor."] };
+  const gleich = JSON.stringify(t.herkunft.zeilen) === JSON.stringify(h.zeilen) && t.laenge === h.laenge && t.stueck === h.stueck && t.staerke === (h.staerke ?? t.staerke);
+  return { ok: true, geaendert: !gleich, neu: { zeilen: t.zeilen, laenge: t.laenge, stueck: t.stueck, herkunft: t.herkunft }, fehler: [] };
+}
