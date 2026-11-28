@@ -16,8 +16,6 @@ export const schlechter = (a, b) => (rang(b) > rang(a) ? b : a);
 const OHNE_KOERPER = new Set(["skizze", "ebene", "achse", "konpunkt", "bild", "parameter"]);
 // Features, die ausschliesslich als Netz entstehen (nicht im exakten Kern vorhanden)
 const NUR_NETZ = {
-  kehle: "Kehle/Grat ist noch nicht exakt (Netz)",
-  quetschfalte: "Quetschfalte ist nur als Netz modelliert",
   stirnquetsch: "Quetschfalte an der Stirn ist nur als Netz modelliert",
 };
 // Abhängigkeiten eines Features (IDs anderer Features), soweit sie aus den Feldern ablesbar sind
@@ -34,11 +32,13 @@ export function abhaengigkeiten(f) {
 
 // eingabe: { features, kernAn, exakt: Set<fid> (Körper, deren Netz durch den Kern ersetzt wurde), nicht: Map<fid|fid:i, grund> }
 // Ergebnis: Map<featureId, { klasse, grund, von: [featureId…] }>
-export function bewerteGenauigkeit({ features, kernAn = false, exakt = new Set(), nicht = new Map() }) {
+export function bewerteGenauigkeit({ features, kernAn = false, exakt = new Set(), exaktTeil = new Set(), nicht = new Map() }) { // exaktTeil: Features, deren Geometrie Teil eines exakten Körpers ist (Quetschfalte im Blechkörper)
   const aus = new Map(), nachId = new Map(features.map((f) => [f.id, f]));
   const eigen = (f) => {
     if (f._fehler) return { klasse: "failed", grund: String(f._fehler) };
     if (OHNE_KOERPER.has(f.typ)) return { klasse: "exact", grund: "Rechnung ohne Körpergeometrie" };
+    if (exaktTeil.has(f.id)) return { klasse: "exact", grund: "Teil des exakten Blechkörpers" };
+    if (f.typ === "quetschfalte" && kernAn) return { klasse: "mesh", grund: "Quetschfalte ist (noch) als Netz modelliert" };
     if (NUR_NETZ[f.typ]) return { klasse: "mesh", grund: NUR_NETZ[f.typ] };
     if (!kernAn) return { klasse: "mesh", grund: "Exakter CAD-Kern ist ausgeschaltet (Netz)" };
     const schluessel = [f.id, ...[...exakt, ...nicht.keys()].filter((k) => String(k).startsWith(f.id + ":"))];
@@ -69,9 +69,10 @@ export function bewerteGenauigkeit({ features, kernAn = false, exakt = new Set()
   for (const f of features) rechne(f);
   // Ergänzungen, die nur als Netz entstehen (Quetschfalte …), machen ihr exaktes Ziel zu «hybrid»
   for (const f of features) {
-    if (!NUR_NETZ[f.typ] || !f.ziel || f._aus) continue;
+    const netzText = NUR_NETZ[f.typ] || (f.typ === "quetschfalte" && !exaktTeil.has(f.id) ? "Quetschfalte ist als Netz modelliert" : null);
+    if (!netzText || !f.ziel || f._aus) continue;
     const z = aus.get(String(f.ziel).split(":")[0]);
-    if (z && z.klasse === "exact") { z.klasse = "hybrid"; z.grund = `${f.name || f.typ}: ${NUR_NETZ[f.typ]}`; z.von = [...z.von, f.id]; }
+    if (z && z.klasse === "exact") { z.klasse = "hybrid"; z.grund = `${f.name || f.typ}: ${netzText}`; z.von = [...z.von, f.id]; }
   }
   return aus;
 }

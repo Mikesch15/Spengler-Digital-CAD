@@ -79,7 +79,9 @@
         "abwicklungexakt",
         "loftexakt",
         "teilenexakt",
-        "sweepexakt"
+        "sweepexakt",
+        "kehleexakt",
+        "quetschexakt"
       ]
     },
     {

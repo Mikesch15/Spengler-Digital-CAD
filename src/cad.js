@@ -1313,6 +1313,7 @@ function regenEinmal() {
     }
     for (const hid of new Set(bleche.map((o) => String(o.userData.fid).split(":")[0]))) { // abgewickelte Bleche: Umriss des Ausschnitts für «Falten» merken
       const st = flachStand.get(hid); if (!st) continue;
+      f._imFlachen = true; // dieser Ausschnitt liegt in der Abwicklung (exakt über die Lochliste des abgewickelten Blechs)
       if (!aktSchnitt || aktSchnitt.ebene !== finde(finde(hid).skizze).ebene) throw new Error("Ausschneiden an der Abwicklung: die Skizze muss auf derselben Ebene wie das Blech liegen");
       st.schnitte.push(...aktSchnitt.loops); finde(hid)._bleche?.forEach((bl) => { bl.abw.loecher = st.schnitte.filter((l) => boxUeberlappt(l, bl.abw.umriss)); });
     }
@@ -3432,10 +3433,11 @@ function quetschGeo(z, f) {
 // Gefaltete Quetschfalte: zwei Blechlagen (2 t) hinter der Aussenfläche der Aufkantung; die Faltkante O–C' ist gerundet (geschlossener Saum, Innenradius 0 → Aussenradius t)
 function quetschMeshes(z, f) {
   const q = f._q, m = material(z.material), B = basis(blechEbene(finde(z.skizze).ebene, z, m)), v = (a) => new THREE.Vector3(...a);
-  return quetschFaltMeshes(q.zus, q.wand, m.t, B.clone().multiply(new THREE.Matrix4().makeBasis(v(q.X3), v(q.Y3), v(q.Z3)).setPosition(q.O[0], q.O[1], 0)), darstellungVon(z, m), f.id);
+  const Mf = B.clone().multiply(new THREE.Matrix4().makeBasis(v(q.X3), v(q.Y3), v(q.Z3)).setPosition(q.O[0], q.O[1], 0)), sammle = [];
+  const ms = quetschFaltMeshes(q.zus, q.wand, m.t, Mf, darstellungVon(z, m), f.id, sammle); f._qk = { desc: sammle, M: Mf, t: m.t }; return ms;
 }
 // Gefaltetes Dreieck mit gerundeten Kanten; M = Matrix vom Eckensystem (O, X3, Y3, Z3) in die Welt
-function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
+function quetschFaltMeshes(zus, wand, t, M, farbe, fid, sammle = null) { // sammle: Teilkörper-Beschreibung für den exakten Kern (gleiche Rechnung wie das Netz)
   const q = { zus, wand }, tri = quetschDreieck(q.zus, q.wand), g = q.zus.geometrie;
   const v = (a) => new THREE.Vector3(...a), P = v(tri.P).sub(v(tri.O)), C = v(tri.C).sub(v(tri.O)), e = v(q.wand === "wand1" ? g.e1 : g.e2), d = v(q.wand === "wand1" ? g.d1 : g.d2);
   let n = new THREE.Vector3().crossVectors(e, d).normalize(); if (n.dot(new THREE.Vector3(Math.cos(g.beta * Math.PI / 360), Math.sin(g.beta * Math.PI / 360), 0)) > 0) n.negate(); // nach aussen
@@ -3456,6 +3458,7 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
   const mk = (geo, lage) => { geo.applyMatrix4(lage); geo.applyMatrix4(M); return koerperAusGeo(geo, farbe, fid); };
   const aussen = new THREE.Matrix4().makeBasis(u, y, n).setPosition(n.clone().multiplyScalar(t / 2));
   const koerper = new THREE.ExtrudeGeometry(new THREE.Shape([Oi, Pi, Ci]), { depth: 2 * t, bevelEnabled: false }), meshes = [mk(koerper, aussen)];
+  sammle?.push({ art: "extr", shape: new THREE.Shape([Oi, Pi, Ci]), lage: aussen.clone(), tiefe: 2 * t, mitre: null });
   // Anschluss an den anderen Flansch: Kante O–P (Ecklinie) ist eine Biegung (meist 90°), die das Blech aus dem Flansch B auf die Lage der Falte führt
   let biegeStueck = null, biegeTeile = [];
   try {
@@ -3474,7 +3477,8 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
         const lageR = new THREE.Matrix4().makeBasis(ayV, n, uV), dC = C.clone().normalize(), mV = uV.clone().sub(dC), mitre = (gq) => { // Gehrung an der Ecke O: Anfangsfläche liegt in der Ebene durch O, die den Winkel zwischen Ecklinie und Faltkante halbiert (kein Überstand über die Dreiecksspitze)
           if (mV.length() < 1e-6) return; mV.normalize(); const ps = gq.attributes.position, w = new THREE.Vector3(), den = uV.dot(mV); if (Math.abs(den) < 1e-6) return;
           for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.dot(mV); if (d < 0) { w.addScaledVector(uV, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; },
-        dazu = (shape) => { const gq = new THREE.ExtrudeGeometry(shape, { depth: P.length(), bevelEnabled: false, curveSegments: 16 }); gq.applyMatrix4(lageR); mitre(gq); gq.applyMatrix4(M); biegeTeile.push(koerperAusGeo(gq, farbe, fid)); };
+        dazu = (shape) => { sammle?.push({ art: "extr", shape, lage: lageR.clone(), tiefe: P.length(), mitre: (() => { const mm = mV.clone(); if (mm.length() < 1e-6) return null; mm.normalize(); return Math.abs(uV.dot(mm)) < 1e-6 ? null : mm; })() }); const gq = new THREE.ExtrudeGeometry(shape, { depth: P.length(), bevelEnabled: false, curveSegments: 16 }); gq.applyMatrix4(lageR); mitre(gq); gq.applyMatrix4(M); biegeTeile.push(koerperAusGeo(gq, farbe, fid)); };
+        sammle?.push({ art: "extr", shape: sh, lage: lageR.clone(), tiefe: P.length(), mitre: (() => { const mm = mV.clone(); if (mm.length() < 1e-6) return null; mm.normalize(); return Math.abs(uV.dot(mm)) < 1e-6 ? null : mm; })() });
         geoR.applyMatrix4(lageR); mitre(geoR); geoR.applyMatrix4(M); biegeStueck = koerperAusGeo(geoR, farbe, fid);
         // Ende von Flansch B: Gehrungsschnitt durch die Innenkante der Ecklinie – von dort läuft das Blech gerade bis zum Beginn der Biegung
         let pB = [-dBb, dBa]; if (pB[0] < 0) pB = [-pB[0], -pB[1]];
@@ -3501,6 +3505,8 @@ function quetschFaltMeshes(zus, wand, t, M, farbe, fid) {
         const ps = cyl.attributes.position, w = new THREE.Vector3(), axR = C.clone().normalize(), den = axR.dot(nTop);
         if (Math.abs(den) > 1e-6) { for (let i = 0; i < ps.count; i++) { w.fromBufferAttribute(ps, i); const d = w.clone().sub(P).dot(nTop); if (d > 0) { w.addScaledVector(axR, -d / den); ps.setXYZ(i, w.x, w.y, w.z); } } ps.needsUpdate = true; }
       }
+      if (sammle) { const uR2 = P.clone().normalize(), dR2 = C.clone().normalize(), mR2 = uR2.clone().sub(dR2), mitreR = mR2.length() > 1e-6 && Math.abs(dR2.dot(mR2.clone().normalize())) > 1e-6 ? mR2.normalize() : null, tk2 = C.clone().sub(P).normalize(), nT2 = new THREE.Vector3().crossVectors(n, tk2).normalize(); if (nT2.dot(P.clone().negate()) > 0) nT2.negate();
+        sammle.push({ art: "zyl", r, L, start: u.clone().multiplyScalar(a1.x).addScaledVector(y, a1.y).addScaledVector(n, t + t / 2), achse: u.clone().multiplyScalar(ax.x).addScaledVector(y, ax.y).normalize(), mitre: mitreR, top: { P: P.clone(), n: nT2 } }); }
       cyl.applyMatrix4(M); meshes.push(koerperAusGeo(cyl, farbe, fid)); continue;
     }
     meshes.push(mk(cyl, aussen));
@@ -4896,7 +4902,7 @@ function kehlBlech(f) {
   geo.applyMatrix4(T);
   let g = geo; if (T.determinant() < 0) { g = geo.toNonIndexed(); g = nachAussen(g); }
   f.laenge = +L.toFixed(1); // tatsächliche Länge (Werkstatt, Stückliste); Vorgabe steht in laengeVorgabe
-  return { res: r.res, geo: g, laenge: L, winkel };
+  return { res: r.res, geo: g, laenge: L, winkel, T };
 }
 const norm2 = (v) => { const l = Math.hypot(v[0], v[1]) || 1; return [v[0] / l, v[1] / l]; };
 function schnitt2(p, u, q, v) { const d = u[0] * v[1] - u[1] * v[0]; if (Math.abs(d) < 1e-9) return null; const s = ((q[0] - p[0]) * v[1] - (q[1] - p[1]) * v[0]) / d; return [p[0] + u[0] * s, p[1] + u[1] * s]; }
@@ -7618,10 +7624,11 @@ function ersetzeNetz(mesh, n, M) { // Anzeige-Netz durch die Tessellierung des e
 // Genauigkeitsstatus je Feature (kern/genauigkeit.js): exakt, hybrid, Netz (Näherung), nicht unterstützt, Fehler; abgeleitete Features erben die ungenauere Klasse
 function aktualisiereGenauigkeit() {
   const kernBereit = kernAn() && exaktFuer === regenStand, offen = kernAn() && !kernBereit;
-  const erg = bewerteGenauigkeit({ features: doc.features, kernAn: kernAn() && !offen, exakt: new Set(kernBereit ? exaktEig.keys() : []), nicht: kernBereit ? exaktNicht : new Map() });
+  const erg = bewerteGenauigkeit({ features: doc.features, kernAn: kernAn() && !offen, exakt: new Set(kernBereit ? exaktEig.keys() : []), exaktTeil: kernBereit ? exaktTeile : new Set(), nicht: kernBereit ? exaktNicht : new Map() });
   for (const f of doc.features) { const r = erg.get(f.id); f._genau = r ? (offen && r.klasse !== "exact" && r.klasse !== "failed" ? { ...r, grund: "exakte Berechnung läuft …" } : r) : null; }
   const st = modellStatus(erg, doc.features); modellGenauigkeit = st; return st;
 }
+let exaktTeile = new Set(); // Features, deren Geometrie als Teil eines exakten Blechkörpers vorliegt (z. B. Quetschfalte)
 let modellGenauigkeit = { gesamt: "exact", zaehl: {}, nichtExakt: [] };
 const GENAU_TEXT = { exact: "exakt", hybrid: "teilweise exakt", mesh: "Näherung (Netz)", unsupported: "nicht unterstützt", failed: "Fehler" };
 async function exaktesModell({ step = false } = {}) { // step: exakte Körper als STEP herunterladen statt Netze ersetzen
@@ -7660,7 +7667,10 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         const kr = f.typ === "extrusion" ? doc.features.filter((k) => k.typ === "kantenrund" && k.ziel === f.id && !k._aus) : [];
         if (kr.length) try { w = await kantenRunden(w, kr, f, s); } catch (e) { if (op === "neu") nicht.set(f.id, `Abrunden/Fasen: ${e.message}`); else markiereZiel(f, `${f.name} Abrunden/Fasen: ${e.message}`); continue; }
         if (op === "neu") { koerper.set(f.id, w); continue; }
-        if (op === "ausschneiden") for (const k of blech.keys()) if (!f.ziel || f.ziel === "alle" || k.split(":")[0] === f.ziel) nicht.set(k, `${f.name} (Ausschneiden) an Blech noch nicht exakt`);
+        if (op === "ausschneiden") for (const k of [...blech.keys()]) if ((!f.ziel || f.ziel === "alle" || k.split(":")[0] === f.ziel) && !nicht.has(k)) { // Ausschnitt durch das Blech: im Flachen über die Lochliste, sonst räumlich durchschneiden
+          if (f._imFlachen || finde(k.split(":")[0])?._flach) continue;
+          try { blech.set(k, (await x({ op: "boolesch", art: "abziehen", a: blech.get(k), b: w })).id); } catch (e) { nicht.set(k, `${f.name} (Ausschneiden): ${e.message}`); }
+        }
         const ziele = f.ziel && f.ziel !== "alle" ? [f.ziel].filter((z) => koerper.has(z)) : [...koerper.keys()];
         for (const z of op === "verbinden" ? ziele.slice(0, 1) : ziele) {
           if (nicht.has(z)) continue;
@@ -7707,14 +7717,25 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         if (f.versteckt || !f._bleche) continue;
         const m = material(f.material), ebene = blechEbene(finde(f.skizze).ebene, f, m);
         const flachJetzt = !!f._flach, manuell = f._bleche.some((bl) => bl.abw.loecher?.some((h) => !h._auto));
-        if (manuell && !flachJetzt) { f._bleche.forEach((_, i) => nicht.set(`${f.id}:${i}`, "Ausschnitte im gefalteten Blech noch nicht exakt")); continue; } // Ausschnitte lassen sich im flachen Blech exakt schneiden, im gefalteten noch nicht
+        // Ausschnitte: im flachen Blech Teil der Platte; im gefalteten Blech exakt nur, wenn sie ganz in der ebenen Platte liegen (Biegezonen brauchen die Abbildung auf die Biegung)
         const profilVon = (poly) => ({ start: poly[0], segmente: poly.slice(1).map((q) => ({ bis: q })) });
         for (const [i, bl] of f._bleche.entries()) {
           try {
             if (flachJetzt) { // abgewickeltes Blech: flache Platte aus dem Zuschnitt mit allen Ausschnitten
               const plan = flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1);
               blech.set(`${f.id}:${i}`, (await x({ ...plan.platte, profil: profilVon(bl.abw.umriss), loecher: (bl.abw.loecher || []).map(profilVon) })).id);
-            } else blech.set(`${f.id}:${i}`, await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1)));
+            } else {
+              let id = await baueFlaechenblech(x, flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1));
+              const von = (bl.abw.loecher || []).filter((h) => !h._auto);
+              if (von.length) {
+                const kz = bl.gruppen.map((g, k) => { const p = bl.profile[k]; if (!p) return 0; try { const q = bausteinQuerschnitt(p.baustein, m); return q ? Math.max(0, -q.xFlach) : 0; } catch { return 0; } });
+                const platte = plattenUmriss(bl.pts, bl.gruppen, kz, new Map(bl.profile.map((p, k) => [k, p?.teil]).filter(([, t]) => t)));
+                if (von.some((h) => !h.every((q) => innen(q, platte)))) throw new Error("Ausschnitt reicht in die Biegezone (dort noch nicht exakt)");
+                const eb = flaechenblechPlan(bl, ebene, m, f.sichtseite === -1 ? -1 : 1).platte.ebene;
+                for (const h of von) id = (await x({ op: "boolesch", art: "abziehen", a: id, b: (await x({ op: "extrusion", profil: { start: h[0], segmente: h.slice(1).map((q) => ({ bis: q })) }, ebene: { ...eb, ursprung: eb.ursprung.map((w, j) => w - eb.n[j] * m.t) }, hoehe: 3 * m.t })).id })).id;
+              }
+              blech.set(`${f.id}:${i}`, id);
+            }
           }
           catch (e) { nicht.set(`${f.id}:${i}`, e.message); }
         }
@@ -7752,7 +7773,13 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
           else { const [, sid, ei] = String(f.pfad).split(":"), [psk, el] = skizzeElement(sid, ei), pts = elementPfad(el).filter((p, i, a) => !i || Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 1e-6); pe = kernEbene(E_(psk.ebene)); pfad = { start: pts[0], segmente: pts.slice(1).map((q) => ({ bis: q })) }; }
           koerper.set(f.id, (await x({ op: "sweep", pfad, ebene: pe, profil: prof.profil, profilEbene: kernEbene(E_(sk.ebene)) })).id);
         } catch (e) { nicht.set(f.id, `Sweep: ${e.message}`); }
-      } else if (["import", "kehle"].includes(f.typ)) nicht.set(f.id, "noch nicht exakt");
+      } else if (f.typ === "kehle") { // Kehl-/Gratblech: Biegeprofil (exakte Bögen) in der lokalen Ebene extrudieren, dann in die Lage der Kehle bringen
+        if (f.versteckt || !f._kehle?.T) continue;
+        try {
+          const k = f._kehle, { kommando } = blechTeilKommando({ res: k.res, t: material(f.material).t, ebene: { o: [0, 0, 0], u: [1, 0, 0], v: [0, 1, 0], n: [0, 0, 1] }, laenge: k.laenge });
+          koerper.set(f.id, (await x({ op: "matrix", ziel: (await x(kommando)).id, m: matrixZeilen(k.T.elements) })).id);
+        } catch (e) { nicht.set(f.id, `Kehle: ${e.message}`); }
+      } else if (f.typ === "import") nicht.set(f.id, "noch nicht exakt");
     }
     // Nahtfahnen an freien Körperkanten: die Fahne gehört zum Blech – Streifen am Rand abziehen, Fahne mit dem Blechkörper vereinigen
     for (const x0 of doc.features) for (const fd of (x0.typ === "naht" && !x0._aus && !x0.versteckt ? x0._fahnen : null) || []) {
@@ -7767,6 +7794,36 @@ async function exaktesModell({ step = false } = {}) { // step: exakte Körper al
         blech.set(wirt, (await x({ op: "boolesch", art: "vereinigen", a: wirtId, b: fahne })).id);
       } catch (e) { nicht.set(wirt, `Nahtfahne: ${e.message}`); }
     }
+    // Quetschfalte: Teilkörper (Dreieck, Biegungen, Saum, Wulst) aus derselben Rechnung wie das Netz exakt bauen und mit dem Blechkörper vereinigen
+    const teilIds = new Set();
+    for (const x0 of doc.features) {
+      if (x0.typ !== "quetschfalte" || x0._aus || x0.versteckt || !x0._qk) continue;
+      const z = finde(x0.ziel), pi = +String(x0.ecke).split(":")[0], wirt = `${z?.id}:${z?._bleche?.findIndex((b) => b.pi === pi)}`;
+      if (!blech.has(wirt) || nicht.has(wirt)) continue;
+      try {
+        const { desc, M } = x0._qk; let alle = null;
+        for (const d of desc) {
+          let id;
+          if (d.art === "extr") {
+            const e = d.lage.elements, ax = [e[0], e[1], e[2]], ay = [e[4], e[5], e[6]], az = [e[8], e[9], e[10]], pos = [e[12], e[13], e[14]], vv = [az[1] * ax[2] - az[2] * ax[1], az[2] * ax[0] - az[0] * ax[2], az[0] * ax[1] - az[1] * ax[0]], sp = vv[0] * ay[0] + vv[1] * ay[1] + vv[2] * ay[2] < 0 ? -1 : 1; // Profil-y muss v = n × x entsprechen
+            const kurven = d.shape.curves, pt = (c, tt) => { const q = c.getPoint(tt); return [q.x, sp * q.y]; };
+            const profil = { start: pt(kurven[0], 0), segmente: kurven.map((c) => (c.isLineCurve ? { bis: pt(c, 1) } : { bis: pt(c, 1), bogenMitte: pt(c, 0.5) })) };
+            id = (await x({ op: "extrusion", profil, ebene: { ursprung: pos, x: ax, n: az }, hoehe: d.tiefe })).id;
+            if (d.mitre) id = (await x({ op: "halbraum", ziel: id, punkt: [0, 0, 0], normale: d.mitre.clone().negate().toArray() })).id;
+          } else {
+            id = (await x({ op: "zylinder", r: d.r, h: d.L, basis: d.start.toArray(), achse: d.achse.toArray() })).id;
+            if (d.mitre) id = (await x({ op: "halbraum", ziel: id, punkt: [0, 0, 0], normale: d.mitre.toArray() })).id;
+            id = (await x({ op: "halbraum", ziel: id, punkt: d.top.P.toArray(), normale: d.top.n.toArray() })).id;
+          }
+          alle = alle ? (await x({ op: "boolesch", art: "vereinigen", a: alle, b: id })).id : id;
+        }
+        const falte = (await x({ op: "matrix", ziel: alle, m: matrixZeilen(M.elements) })).id;
+        blech.set(wirt, (await x({ op: "boolesch", art: "vereinigen", a: blech.get(wirt), b: falte })).id);
+        teilIds.add(x0.id);
+        for (const o of modell.children.filter((o) => o.isMesh && o.userData.fid === x0.id)) { modell.remove(o); o.traverse((c) => c.geometry?.dispose()); } // das Netz der Falte steckt jetzt im exakten Blechkörper
+      } catch (e) { nicht.set(wirt, `Quetschfalte: ${e.message}`); }
+    }
+    exaktTeile = teilIds;
     // Ecknaht (Dreieck in der Fuge) und Schweissnaht (Linse): eigener exakter Körper der Naht
     for (const x0 of doc.features) {
       const d = x0.typ === "naht" && (x0.art === "ecke" || x0.art === "schweiss") && !x0._aus && !x0.versteckt ? x0._eck : null; if (!d) continue;

@@ -13,10 +13,13 @@ const lauf = async (extra) => { const s = await b.newPage({ viewport: { width: 1
   await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test");
   await s.waitForFunction(() => /Exakt aus dem CAD-Kern/.test(document.getElementById("status").textContent), null, { timeout: 90000 }).catch(async () => { console.log("STATUS", await s.evaluate(() => document.getElementById("status").textContent), pr.join("|")); }); await s.waitForTimeout(500);
   const r = await s.evaluate(() => ({ st: document.getElementById("status").textContent, k: window.sdcadTest.koerper().filter((k) => String(k.fid).startsWith("f1")).map((k) => Math.abs(k.volumen)) })); await s.close(); return r; };
+// Ausschnitt (Extrusion «ausschneiden») in der ebenen Platte des gefalteten Blechs
+const mitLoch = await lauf([{ id: "s2", typ: "skizze", name: "Loch", ebene: "XY", elemente: [{ id: 1, art: "rechteck", a: [40, 30], b: [60, 50] }], bedingungen: [] }, { id: "x2", typ: "extrusion", name: "Ausschnitt", skizze: "s2", abstand: 5, richtung: "symmetrisch", vorgang: "ausschneiden", ziel: "f1", flaechen: [[50, 40]] }]);
 const gefaltet = await lauf([]), flach = await lauf([{ id: "ab", typ: "abwickeln", name: "Abwickeln", ziel: "f1" }]), ab = await lauf([{ id: "ab", typ: "abwickeln", name: "Abwickeln", ziel: "f1" }, { id: "fa", typ: "falten", name: "Falten", ziel: "f1" }]);
 ok(gefaltet.k.length === 1 && gefaltet.k[0] > 5000, `gefaltetes Blech exakt (${gefaltet.k[0]?.toFixed(0)} mm³)`);
 ok(flach.k.length === 1 && flach.k[0] > 5000 && !/Abwicklung\/Ausschnitte/.test(flach.st), `abgewickeltes Blech exakt als flache Platte (${flach.k[0]?.toFixed(0)} mm³) ${flach.st.slice(0, 120)}`);
 ok(ab.k.length === 1 && Math.abs(ab.k[0] - gefaltet.k[0]) < 1 && !/noch nicht exakt/.test(ab.st), `Abwickeln + Falten: wieder dasselbe exakte Blech (${ab.k[0]?.toFixed(0)} mm³)`);
+ok(mitLoch.k.length === 1 && gefaltet.k[0] - mitLoch.k[0] > 20 * 20 * 0.7 * 0.9 && !/noch nicht exakt/.test(mitLoch.st), `Ausschnitt in der ebenen Platte exakt: ${gefaltet.k[0]?.toFixed(0)} → ${mitLoch.k[0]?.toFixed(0)} mm³ (−280 erwartet) ${mitLoch.st.slice(0, 100)}`);
 ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
 await b.close(); srv.close();
 console.log(fehler ? `${fehler} Fehler` : "Abwicklung exakt (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);

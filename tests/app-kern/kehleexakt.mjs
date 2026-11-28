@@ -1,0 +1,20 @@
+// App-Test Kehle exakt: Kehlblech zwischen zwei Ebenen (Boden und Wand) – exakter Körper, Volumen ≈ Netz
+import { createServer } from "node:http"; import { readFileSync } from "node:fs"; import { createRequire } from "node:module"; import { extname, join, resolve } from "node:path";
+const dist = resolve("dist"), { chromium } = createRequire(import.meta.url)("playwright");
+const typ = { ".html": "text/html", ".js": "text/javascript", ".wasm": "application/wasm", ".json": "application/json" };
+const srv = createServer((q, a) => { let p, d; try { p = q.url === "/" ? "index.html" : decodeURIComponent(q.url.slice(1).split("?")[0]); d = readFileSync(join(dist, p)); } catch { a.writeHead(404); a.end(); return; } a.writeHead(200, { "content-type": typ[extname(p)] || "application/octet-stream" }); a.end(d); }).listen(process.env.PORT || 8797);
+let fehler = 0; const ok = (c, t) => { console.log(`${c ? "✓" : "✗"} ${t}`); if (!c) fehler++; };
+const b = await chromium.launch(), pr = [];
+const doc = { objekt: "T", nr: "1", zaehler: 20, features: [{ id: "k1", typ: "kehle", name: "Kehle", flaeche1: "F:0,0,0;0,1,0", flaeche2: "F:0,0,0;1,0,0", breite1: 60, breite2: 60, ende1: "", ende2: "", laengeVorgabe: 100, material: "zink07", stueck: 1 }] };
+const lauf = async (kern) => { const s = await b.newPage({ viewport: { width: 1280, height: 800 } }); s.on("pageerror", (e) => pr.push(e.message));
+  await s.addInitScript(([d, k]) => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify(d)); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Z", t: 0.7, ri: 1, k: 0.4, dichte: 7.2 }], ...(k ? { programm: { kern: "occt" } } : {}) })); }, [doc, kern]);
+  await s.goto("http://localhost:" + (process.env.PORT || 8797) + "/index.html?test");
+  if (kern) await s.waitForFunction(() => /Exakt aus dem CAD-Kern/.test(document.getElementById("status").textContent), null, { timeout: 90000 }); else await s.waitForTimeout(1500);
+  await s.waitForTimeout(500);
+  const r = await s.evaluate(() => ({ st: document.getElementById("status").textContent, fehl: window.sdcadTest.dok().features.map((x) => x._fehler).filter(Boolean), k: window.sdcadTest.koerper().filter((k) => String(k.fid).startsWith("k1")).map((k) => Math.abs(k.volumen)) })); await s.close(); return r; };
+const netz = await lauf(false), exakt = await lauf(true);
+ok(netz.fehl.length === 0 && netz.k.length === 1, `Kehle im Netz gerechnet (${netz.k[0]?.toFixed(0)} mm³) ${netz.fehl.join(";")}`);
+ok(exakt.k.length === 1 && Math.abs(exakt.k[0] - netz.k[0]) / netz.k[0] < 0.03 && !/Kehle/.test(exakt.st), `Kehle exakt ${exakt.k[0]?.toFixed(0)} ≈ Netz ${netz.k[0]?.toFixed(0)} mm³ (${exakt.st.slice(0, 80)})`);
+ok(pr.length === 0, "keine Seitenfehler " + pr.join(" | "));
+await b.close(); srv.close();
+console.log(fehler ? `${fehler} Fehler` : "Kehle exakt (App): alle Prüfungen bestanden"); process.exit(fehler ? 1 : 0);
