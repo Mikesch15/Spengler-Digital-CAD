@@ -224,6 +224,7 @@ export function gehrungEcken(gruppen, profile, opt, t, s = 1, volleEcken = []) {
   if (!["gehrung", "gehrung45"].includes(opt?.ecken || "gehrung")) return ecke;
   const kr = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]], pr = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2], nm = (a) => { const l = Math.hypot(...a) || 1; return a.map((x) => x / l); };
   for (let k = 0; k < n; k++) {
+    if ((opt?.ecken || "gehrung") === "gehrung" && !volleEcken.includes(k)) continue; // «Gehrung» = Enden 90° zum Blech über die ganze Höhe (auch im Biegebereich); Ebenenschnitt nur bei 45°-Gehrung und Quetschfalte
     const kv = (k - 1 + n) % n, gk = gruppen[k], gv = gruppen[kv], pk = profile[k], pv = profile[kv];
     if (kv === k || !gk.gerade || !gv.gerade || pk?.biegungen?.length !== 1 || pv?.biegungen?.length !== 1 || !pk.baustein || !pv.baustein) continue;
     if (!reichtBisAnfang(pk) || !reichtBisEnde(pv)) continue; // Teilstück: der Baustein erreicht die Ecke nicht
