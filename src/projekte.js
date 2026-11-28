@@ -1,5 +1,6 @@
 // Projekte der Spengler-Digital-App: anlegen, bearbeiten, archivieren und dem aktuellen Modell zuordnen.
 // Die Daten liegen nur in der App-Datenbank (Tabelle projects) – so sind CAD und App immer synchron.
+import { erzeuge } from "../kern/generator/freiesProfil.js";
 import { ausAppZeile, status as impStatus } from "../kern/austausch.js";
 import { pruefeProjekt, suche, modellFelder, geaendert, STATUS } from "../kern/cloud/projekte.js";
 
@@ -27,6 +28,7 @@ export function projekteModul(ctx) {
       return `<li><b>${esc(u.titel || u.art)}</b> <span class="pjmarke">${t}</span>${da.has(u.quelle.id) ? ' <span class="pjmarke">im Modell</span>' : ""}
         <small>${esc(u.art)} · ID ${esc(u.quelle.id)}${s.cad ? ` · ${s.cad.schenkel.length} Schenkel, ${s.cad.dicke_mm ?? "?"} mm` : ""}</small>
         ${[...s.fehler, ...s.warnungen].map((x) => `<small>${esc(x)}</small>`).join("")}
+        ${s.cad ? `<button class="knopf klein haupt" data-pj-aktion="bauteil" data-mid="${esc(u.quelle.id)}">Bauteil erzeugen</button>` : ""}
         ${s.ok ? `<button class="knopf klein" data-pj-aktion="uebernehmen" data-mid="${esc(u.quelle.id)}">${da.has(u.quelle.id) ? "Aktualisieren" : "Ins Modell übernehmen"}</button>` : ""}</li>`; }).join("")}</ul>`;
   }
   function formHtml() {
@@ -95,6 +97,9 @@ export function projekteModul(ctx) {
       if (a === "speichern") return speichern();
       if (a === "archiv") return archivieren();
       if (a === "mass") { const p = ausgewaehlt(); if (!p) return; try { st.mass = (await ctx.client().appMassaufnahmen(p.id)).map((z) => ausAppZeile(z, p)); st.massFür = String(p.id); st.meldung = ""; } catch (x) { st.meldung = fehlerText(x); } return zeichne(); }
+      if (a === "bauteil") { const u = st.mass?.find((x) => String(x.quelle.id) === e.target.dataset.mid); if (!u) return; const r = erzeuge(u); if (!r.ok) { st.meldung = r.fehler.join(" "); return zeichne(); }
+        const d = ctx.getDoc(); d.massaufnahmen = [...(d.massaufnahmen || []).filter((x) => x.quelle.id !== u.quelle.id), u];
+        r.teile.forEach((t) => ctx.neuesProfil(t)); zu(); ctx.status(`${r.teile.length} Bauteil(e) aus Massaufnahme «${u.titel || u.art}» erzeugt.` + (r.warnungen.length ? " Hinweis: " + r.warnungen.join(" ") : "")); return; }
       if (a === "uebernehmen") { const u = st.mass?.find((x) => String(x.quelle.id) === e.target.dataset.mid); if (!u || !impStatus(u).ok) return; const d = ctx.getDoc(); d.massaufnahmen = [...(d.massaufnahmen || []).filter((x) => x.quelle.id !== u.quelle.id), u]; ctx.speichern?.(); st.meldung = `Massaufnahme «${u.titel || u.art}» ins Modell übernommen (Originalwerte unverändert gesichert).`; return zeichne(); }
       if (a === "zuordnen") { const p = ausgewaehlt(); if (!p) return; ctx.setzeAuftrag(modellFelder(p)); st.meldung = `Modell dem Projekt «${p.name}» zugeordnet: Auftragsnummer und Objekt sind übernommen.`; return zeichne(); }
       if (a === "loesen") { const d = ctx.getDoc(); ctx.setzeAuftrag({ nr: d.nr, objekt: d.objekt, appProjekt: null }); st.meldung = "Zuordnung gelöst."; return zeichne(); }

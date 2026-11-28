@@ -7477,6 +7477,12 @@ $("wOeffnen").onclick = () => dateiWahl($("wOeffnen"), [
   ["pc", pc ? "Vom PC öffnen" : "Vom Gerät öffnen", "Projektdatei (.sdcad) wählen", projektOeffnen]]);
 // ------------------------------------------------------------ Konto & Cloud (Spengler-Digital-App)
 function setzeAuftrag({ nr, objekt, appProjekt }) { doc.nr = nr; doc.objekt = objekt; if (appProjekt) doc.appProjekt = appProjekt; else delete doc.appProjekt; $("aNr").value = nr; $("aObjekt").value = objekt; auftragAnzeige(); speichern(); if (appProjekt) ablage?.sicherstellen(); } // Projekt zugeordnet: Cloud-Ordner anlegen (falls es sie noch nicht gibt)
+const neuesProfilAus = ({ name, zeilen, laenge, stueck, staerke, herkunft }) => {
+    const gefunden = staerke > 0 && einst.materialien.find((x) => x.t === +staerke);
+    const m = gefunden || einst.materialien.find((x) => x.id === neuMaterial()) || einst.materialien[0];
+    if (staerke > 0 && !gefunden) status(`Achtung: Kein Material mit ${staerke} mm Stärke vorhanden – «${m.name}» (${m.t} mm) verwendet. Bitte Material prüfen.`);
+    const f = { id: neueId(), typ: "profil", name, start: 0, zeilen: zeilen.length ? zeilen : [{ L: 100, winkel: 0, art: "abkanten" }], material: m.id, laenge: laenge > 0 ? +laenge : einst.neu.laenge, stueck: stueck > 0 ? +stueck : 1, richtung: "eine", ebene: einst.neu.ebene, ...(herkunft ? { herkunft } : {}) };
+    einfuegen(f); regen(); waehle(f.id); return f; };
 const cloud = cloudModul({
   esc, status, getEinst: () => einst, setEinst: (e) => { einst = e; if (entwurf) entwurf = JSON.parse(JSON.stringify(einst)); }, einstSpeichern, getDoc: () => doc, regen,
   projektAktualisieren: () => projekte.aktualisiere(), projekteOeffnen: () => { $("einst").hidden = true; entwurf = null; projekte.oeffnen(); },
@@ -7484,13 +7490,10 @@ const cloud = cloudModul({
   projektText: () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v)), ladeProjektText: (x) => ladeProjekt(x),
   neuZeichnen: () => { if (!$("einst").hidden && einstRegister === "konto") zeigeEinst(); },
   teile: () => blechteile().filter((f) => f._res).map((f) => ({ f, res: f._res, mat: material(f.material) })),
-  neuesProfil: ({ name, zeilen, laenge, stueck, staerke }) => {
-    const m = (staerke > 0 && einst.materialien.find((x) => x.t === +staerke)) || einst.materialien.find((x) => x.id === neuMaterial()) || einst.materialien[0];
-    const f = { id: neueId(), typ: "profil", name, start: 0, zeilen: zeilen.length ? zeilen : [{ L: 100, winkel: 0, art: "abkanten" }], material: m.id, laenge: laenge > 0 ? +laenge : einst.neu.laenge, stueck: stueck > 0 ? +stueck : 1, richtung: "eine", ebene: einst.neu.ebene };
-    einfuegen(f); regen(); waehle(f.id); },
+  neuesProfil: (a) => neuesProfilAus(a),
 });
 // Projekte der App (anlegen, bearbeiten, zuordnen)
-const projekte = projekteModul({ esc, status, getDoc: () => doc, speichern, client: () => cloud.client, angemeldet: () => cloud.angemeldet,
+const projekte = projekteModul({ esc, status, getDoc: () => doc, speichern, neuesProfil: (a) => neuesProfilAus(a), client: () => cloud.client, angemeldet: () => cloud.angemeldet,
   setzeAuftrag, zumKonto: () => { if (dlg) $("dAbbrechen").click(); entwurf = JSON.parse(JSON.stringify(einst)); einstRegister = "konto"; zeigeEinst(); $("einst").hidden = false; } });
 projekte.binden();
 const ablage = ablageModul({ esc, status, getDoc: () => doc, client: () => cloud.client, angemeldet: () => cloud.angemeldet, projektText: () => JSON.stringify(doc, (k, v) => (k.startsWith("_") ? undefined : v), 1), ladeProjektText: (x) => ladeProjekt(x), herunterladen });

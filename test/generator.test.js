@@ -1,0 +1,16 @@
+import { readFileSync } from "node:fs";
+import { ausAppZeile } from "../kern/austausch.js";
+import { erzeuge, abweichungen } from "../kern/generator/freiesProfil.js";
+let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
+const z = JSON.parse(readFileSync(new URL("./daten/app-freies-profil-111.json", import.meta.url)));
+const r = erzeuge(ausAppZeile(z, { id: 4 }));
+ok(r.ok && r.teile.length === 2, "Referenz: 2 Teile (490 mm ×1, 1940 mm ×3)");
+const t = r.teile.find((x) => x.laenge === 1940);
+ok(t.stueck === 3 && t.staerke === 0.6 && t.zeilen.length === 5, "1940 mm: 3 Stück, 0.6 mm, 5 Schenkel");
+ok(t.zeilen[0].winkel === 180 && t.zeilen[3].winkel === -180 && t.zeilen[0].art === "umschlag" && t.zeilen[3].L === 110, "Winkel nach Schenkel (App: davor), ±180 = Umschlag");
+ok(t.herkunft.messaufnahmeId === 111 && t.herkunft.projektId === 4, "Herkunft: Messaufnahme- und Projekt-ID");
+ok(abweichungen(t).length === 0, "Unverändert: keine Abweichung");
+const g = JSON.parse(JSON.stringify(t)); g.zeilen[1].L = 30; g.laenge = 2000;
+ok(abweichungen(g).length === 2, "Änderung im CAD wird als Abweichung gemeldet: " + abweichungen(g).join("; "));
+ok(!erzeuge(ausAppZeile({ ...z, staerke_mm: null })).ok && !erzeuge(ausAppZeile({ ...z, type: "kamineinfassung" })).ok, "Ungültig/ohne Generator: nichts erzeugt");
+console.log(fehler ? `${fehler} Fehler` : "Generator: alle Tests bestanden"); process.exit(fehler ? 1 : 0);
