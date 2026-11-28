@@ -66,7 +66,12 @@ ok(await p.isVisible("#dialog") && /Naht/.test(await p.textContent("#dTitel")) &
 // neuer Ablauf: erst das Blech, dann die Kante – für beide Nahtseiten (4 Schritte)
 const klickUV = async (uv, text) => { const q = await p.evaluate((u) => window.sdcadTest.schirmUV("XY", u), uv); await p.mouse.move(q[0], q[1]); await p.waitForTimeout(100); await p.mouse.down(); await p.mouse.up(); await p.waitForTimeout(600); if (text) ok(new RegExp(text).test(await p.textContent("#dInfo")), `Naht-Fenster zeigt «${text}»`); };
 ok(/Schritt 1 von 4/.test(await p.textContent("#dInfo")), "Naht-Fenster: Schritt 1 von 4 (Blech A)");
-await klickUV([50, 30], "Schritt 2 von 4"); await klickUV([100, 30], "Schritt 3 von 4"); await klickUV([150, 30], "Schritt 4 von 4"); await klickUV([100, 30], null);
+{ const q0 = await p.evaluate(() => window.sdcadTest.schirmUV("XY", [50, 30])); await p.mouse.move(q0[0] - 5, q0[1] - 5); await p.mouse.move(q0[0], q0[1]); await p.waitForTimeout(200);
+  ok((await p.evaluate(() => window.sdcadTest.hoverAnzahl())) > 0, "Schweben über einem Blech hebt es im Naht-Werkzeug hervor"); }
+await klickUV([50, 30], "Schritt 2 von 4");
+{ const q1 = await p.evaluate(() => window.sdcadTest.schirmUV("XY", [100, 30])); await p.mouse.move(q1[0] - 4, q1[1]); await p.mouse.move(q1[0], q1[1]); await p.waitForTimeout(200);
+  ok((await p.evaluate(() => window.sdcadTest.hoverAnzahl())) > 0, "Schweben über einer Kante hebt sie im Naht-Werkzeug hervor"); }
+ await klickUV([100, 30], "Schritt 3 von 4"); await klickUV([150, 30], "Schritt 4 von 4"); await klickUV([100, 30], null);
 const f = await p.evaluate(() => window.sdcadTest.dok().features.find((x) => x.typ === "naht"));
 ok(!!f && f.a.ziel !== f.b.ziel && f.a.key && f.b.key && f.art === "punkt", "vier Klicks → Naht mit beiden Kanten im offenen Fenster");
 await p.click("#dOk"); await p.waitForTimeout(400); ok(await p.evaluate(() => document.getElementById("dialog").hidden) && (await p.evaluate(() => window.sdcadTest.dok().features.filter((x) => x.typ === "naht").length)) === 1, "OK schliesst das Fenster, die Naht bleibt");
