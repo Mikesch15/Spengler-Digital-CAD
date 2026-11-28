@@ -14,3 +14,12 @@
 - Profil-Dialog zeigt die Box «Aus Massaufnahme N» (wie gemessen / im CAD geändert + Liste) und «Auf Messwerte zurücksetzen» (auf die eingefrorenen Originalwerte). App-Test: `tests/app-kern/massimport.mjs` (Screenshots mit `SHOT=<ordner>`).
 - «Aus App aktualisieren» im Profil-Dialog holt die aktuelle Aufnahme (`appMassaufnahme`), ordnet über die Länge zu (`aktualisiereAusMessung`), fragt bei im CAD geänderten Massen vor dem Überschreiben. Die Blechstärke/Material wird dabei NICHT neu zugeordnet.
 - Werkstattblatt: Kopf zeigt «Messung Nr. N (geändert)», bei Abweichung eine Zeile «Gegenüber der Messung geändert».
+
+## Phase 3: «Einlaufblech gerade»
+`kern/generator/einlaufblechGerade.js` (Verteiler `kern/generator/index.js`, Test `test/einlaufblech.test.js`, Referenz `test/daten/app-einlaufblech-98.json`).
+- Profil: Umschlag unten (−180°) · Mass A · Biegung −(180° − Winkel) · Restbreite · Umschlag oben (+180°); Vorzeichen so, dass die Umschläge wie in der App-Schnittzeichnung (js/11) liegen (geprüft per Screenshot-Vergleich und Pfadrechnung).
+- Ein Bauteil je Stücklänge (+ Gehrungsseite), Stück = Anzahl. Länge = `pieces[].laenge` (inkl. Überlappung/Endzugabe der App).
+- Die App speichert die Umschläge nicht (Firmeneinstellung): Umschlag gesamt = Abwicklung − Mass A − Restbreite, je zur Hälfte oben/unten angenommen (Warnung).
+- CAD-Zuschnitt (mit Biegezugaben) weicht leicht von der App-«Abwicklung» ab (Referenz: 200.3 vs 200 mm), die App summiert nur Schenkel.
+- Nicht umgesetzt: Gehrungsschnitte an den Stückenden (Teile bekommen Notiz), Winkel der Eckstücke, Montage von links/rechts (enges Mass A), GAVA-Haltebleche, Stossüberlappung als Geometrie.
+- Alle Teile eines Imports liegen am gleichen Ursprung übereinander (wie beim freien Profil) – Anordnung steht noch aus.

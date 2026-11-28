@@ -1,0 +1,35 @@
+// Tests Generator «Einlaufblech gerade» (Referenz: echte Aufnahme der App, ID 98 gekürzt)
+import { readFileSync } from "node:fs";
+import { ausAppZeile, pruefe } from "../kern/austausch.js";
+import { erzeuge, abweichungen, aktualisiereAusMessung } from "../kern/generator/index.js";
+import { freiesProfil } from "../kern/profile.js";
+import { berechne } from "../kern/geometrie.js";
+let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
+const z = JSON.parse(readFileSync(new URL("./daten/app-einlaufblech-98.json", import.meta.url)));
+const u = ausAppZeile(z, { id: 53 });
+const p = pruefe(u);
+ok(p.ok && p.cad.mass_a_mm === 50 && p.cad.rest_mm === 126 && p.cad.umschlag_mm === 12, "Referenz gültig, Umschlag je 12 mm aus Abwicklung − A − Rest (200−50−126)");
+ok(p.warnungen.some((w) => /nicht gespeichert/.test(w)) && p.warnungen.some((w) => /Gehrung/.test(w)), "Warnungen: Umschlag angenommen, Gehrung nicht modelliert");
+const r = erzeuge(u);
+ok(r.ok && r.teile.length === 4, "4 Teile: 2070 ×4, 2170 Gehrung rechts, 2170 Gehrung links, 1600");
+const g = r.teile.find((t) => t.laenge === 2070);
+ok(g.stueck === 4 && g.staerke === 0.7 && g.zeilen.length === 4, "2070 mm: 4 Stück, 0.7 mm, 4 Schenkel");
+ok(g.zeilen[0].art === "umschlag" && g.zeilen[2].art === "umschlag" && g.zeilen[1].winkel === -60 && g.zeilen[1].L === 50 && g.zeilen[2].L === 126, "Profil: Umschlag · A 50 · Biegung 180°−120° · Rest 126 · Umschlag");
+ok(r.teile.filter((t) => t.laenge === 2170).length === 2 && r.teile.every((t) => t.herkunft.messaufnahmeId === 98 && t.herkunft.schluessel), "Gehrungsstücke getrennt, Herkunft mit Schlüssel");
+// CAD-Zuschnitt darf die gewählte Abwicklung (Streifenbreite 200) nicht überschreiten
+const m = { t: 0.7, ri: 1, k: 0.4 }, { start, ops } = freiesProfil(0, g.zeilen, m), res = berechne(start, ops, m.t, m.ri, m.k);
+ok(Math.abs(res.zuschnitt - 200) < 2, `CAD-Zuschnitt ${res.zuschnitt.toFixed(2)} mm weicht von der App-Abwicklung 200 mm um < 2 mm ab (CAD rechnet Biegezugaben, App summiert Schenkel)`);
+const k = (fn) => { const c = JSON.parse(JSON.stringify(z)); fn(c); return pruefe(ausAppZeile(c)); };
+ok(!k((c) => (c.data.winkel = 180)).ok && !k((c) => (c.data.winkel = 0)).ok, "Winkel 0°/180° → Fehler");
+ok(!k((c) => (c.data.massA = 0)).ok, "Mass A fehlt → Fehler");
+ok(!k((c) => (c.data.restBreite = 190)).ok, "A + Rest > Abwicklung → Fehler");
+ok(!k((c) => (c.data.pieces = [])).ok, "Keine Stücke → Fehler");
+ok(!k((c) => (c.staerke_mm = null)).ok, "Blechstärke fehlt → Fehler");
+ok(!k((c) => (c.data.pieces[0].laenge = -1)).ok, "Negative Stücklänge → Fehler");
+ok(abweichungen(g).length === 0, "Unverändert: keine Abweichung");
+const c2 = JSON.parse(JSON.stringify(z)); c2.data.massA = 60; c2.data.restBreite = 116;
+const a = aktualisiereAusMessung(g, ausAppZeile(c2));
+ok(a.ok && a.geaendert && a.neu.zeilen[1].L === 60, "Aktualisieren: Mass A 60 übernommen, Teil über Schlüssel gefunden");
+c2.data.pieces = c2.data.pieces.slice(3, 4);
+ok(!aktualisiereAusMessung(g, ausAppZeile(c2)).ok, "Aktualisieren: Stücklänge entfällt → Fehler, nichts geändert");
+console.log(fehler ? `${fehler} Fehler` : "Einlaufblech: alle Tests bestanden"); process.exit(fehler ? 1 : 0);

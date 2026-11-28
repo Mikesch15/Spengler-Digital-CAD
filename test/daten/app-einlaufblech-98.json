@@ -1,0 +1,71 @@
+{
+ "id": 98,
+ "project_id": 53,
+ "type": "einlaufblech_gerade",
+ "title": "Referenz Einlaufblech",
+ "staerke_mm": "0.7",
+ "updated_at": "2026-11-05T08:00:00Z",
+ "data": {
+  "massA": 50,
+  "winkel": 120,
+  "abwicklung": 200,
+  "restBreite": 126,
+  "montage": "links",
+  "massAEng": 48,
+  "engeSeite": "rechts",
+  "material": "2",
+  "pieces": [
+   {
+    "laenge": 2070,
+    "winkel": 0,
+    "stossStoss": 2000,
+    "gehrungLinks": false,
+    "gehrungRechts": false
+   },
+   {
+    "laenge": 2070,
+    "winkel": 0,
+    "stossStoss": 2000,
+    "gehrungLinks": false,
+    "gehrungRechts": false
+   },
+   {
+    "laenge": 2070,
+    "winkel": 0,
+    "stossStoss": 2000,
+    "gehrungLinks": false,
+    "gehrungRechts": false
+   },
+   {
+    "laenge": 2170,
+    "winkel": 90,
+    "stossStoss": 2000,
+    "gehrungLinks": false,
+    "gehrungRechts": true
+   },
+   {
+    "laenge": 2170,
+    "winkel": 0,
+    "stossStoss": 2000,
+    "gehrungLinks": true,
+    "gehrungRechts": false
+   },
+   {
+    "laenge": 2070,
+    "winkel": 0,
+    "stossStoss": 2000,
+    "gehrungLinks": false,
+    "gehrungRechts": false
+   },
+   {
+    "laenge": 1600,
+    "winkel": 0,
+    "stossStoss": 1580,
+    "endzugabeEnd": 10,
+    "endzugabeStart": 10,
+    "gehrungLinks": false,
+    "gehrungRechts": false
+   }
+  ]
+ }
+}

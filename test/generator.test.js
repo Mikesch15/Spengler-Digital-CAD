@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { ausAppZeile } from "../kern/austausch.js";
-import { erzeuge, abweichungen, aktualisiereAusMessung } from "../kern/generator/freiesProfil.js";
+import { erzeuge, abweichungen, aktualisiereAusMessung } from "../kern/generator/index.js";
 let fehler = 0; const ok = (b, t) => { console.log(`${b ? "✓" : "✗"} ${t}`); if (!b) fehler++; };
 const z = JSON.parse(readFileSync(new URL("./daten/app-freies-profil-111.json", import.meta.url)));
 const r = erzeuge(ausAppZeile(z, { id: 4 }));
@@ -20,4 +20,8 @@ const neu = aktualisiereAusMessung(t, ausAppZeile(z2, { id: 4 }));
 ok(neu.ok && neu.geaendert && neu.neu.zeilen[1].L === 28 && neu.neu.laenge === 1940 && neu.neu.herkunft.zeilen[1].L === 28, "Aktualisieren: neue Schenkellänge, gleiche Länge zugeordnet");
 z2.data.segmente = [{ laenge: 700 }, { laenge: 900 }];
 ok(!aktualisiereAusMessung(t, ausAppZeile(z2, { id: 4 })).ok, "Aktualisieren: Länge nicht mehr vorhanden und mehrdeutig → Fehler, nichts geändert");
+ok(abweichungen(t, 0.7).join().includes("Blechstärke: 0.6 → 0.7") && abweichungen(t, 0.6).length === 0, "Blechstärke weicht ab → Abweichung");
+const z3 = JSON.parse(JSON.stringify(z)); z3.staerke_mm = "0.7";
+const ns = aktualisiereAusMessung(t, ausAppZeile(z3, { id: 4 }));
+ok(ns.ok && ns.geaendert && ns.staerke === 0.7, "Aktualisieren: neue Blechstärke wird erkannt und geliefert");
 console.log(fehler ? `${fehler} Fehler` : "Generator: alle Tests bestanden"); process.exit(fehler ? 1 : 0);

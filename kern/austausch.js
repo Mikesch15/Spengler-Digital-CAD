@@ -9,7 +9,7 @@ export const EINHEITEN = Object.freeze({ laenge: "mm", winkel: "grad", flaeche: 
 const zahl = (x) => (typeof x === "number" ? x : typeof x === "string" && /^-?\d+([.,]\d+)?$/.test(x.trim()) ? Number(x.trim().replace(",", ".")) : NaN);
 
 // Produktarten, für die das CAD einen Generator hat bzw. haben wird. Alle anderen werden importiert, aber als «noch kein Generator» markiert.
-export const GENERATOREN = Object.freeze({ freies_profil: { name: "Freies Profil", bereit: true } });
+export const GENERATOREN = Object.freeze({ freies_profil: { name: "Freies Profil", bereit: true }, einlaufblech_gerade: { name: "Einlaufblech gerade", bereit: true } });
 
 // Zeile der App-Tabelle `measurements` (+ optional Projekt) → Austausch-Umschlag. Unverändert bleibt `messwerte` (= data).
 export function ausAppZeile(zeile, projekt = null, jetzt = new Date().toISOString()) {
@@ -45,6 +45,33 @@ function freiesProfil(u, f, w) {
   return { schenkel: s, dicke_mm: t, laengen_mm: segs, stueck: segs.length || 1 };
 }
 
+// Einlaufblech gerade: Profil = Umschlag unten · Mass A · Biegung (180° − Winkel) · Restbreite · Umschlag oben.
+// Die App speichert die Umschläge NICHT (Firmeneinstellung), nur Abwicklung, Mass A und Restbreite → Umschlag gesamt = Abwicklung − Mass A − Restbreite,
+// hier zu gleichen Teilen auf oben/unten verteilt (Annahme, als Warnung gemeldet).
+function einlaufblech(u, f, w) {
+  const m = u.messwerte, A = zahl(m.massA), wi = zahl(m.winkel), ab = zahl(m.abwicklung), rb = zahl(m.restBreite);
+  if (!(A > 0)) f.push("Mass A fehlt oder ist nicht grösser als 0.");
+  if (!(wi > 0 && wi < 180)) f.push(`Winkel ${m.winkel ?? "fehlt"}° ist nicht plausibel (nur zwischen 0° und 180°).`);
+  if (!(ab > 0)) f.push("Abwicklung fehlt.");
+  if (!(rb >= 0)) f.push("Restbreite fehlt oder ist negativ (Mass A und Umschläge sind grösser als die Abwicklung).");
+  const um = ab - A - rb;
+  if (Number.isFinite(um) && um < 0) f.push(`Mass A (${A}) + Restbreite (${rb}) sind grösser als die Abwicklung (${ab}).`);
+  if (Number.isFinite(um) && um > 100) f.push(`Umschlag gesamt ${um} mm ist nicht plausibel.`);
+  if (rb === 0) w.push("Restbreite ist 0 mm – für die Dachschräge bleibt nichts übrig.");
+  const t = u.material.staerke_mm;
+  if (t == null || !(t >= 0.2 && t <= 5)) f.push(`Blechstärke ${t ?? "fehlt"} mm fehlt oder ist nicht plausibel (0.2–5 mm).`);
+  const st = Array.isArray(m.pieces) ? m.pieces.map((x, i) => {
+    const l = zahl(x?.laenge);
+    if (!(l > 0) || l > 20000) f.push(`Stück ${i + 1}: Länge ${x?.laenge} mm ist nicht plausibel.`);
+    return { laenge_mm: l, winkel_grad: zahl(x?.winkel ?? 0) || 0, gehrung_links: !!x?.gehrungLinks, gehrung_rechts: !!x?.gehrungRechts };
+  }) : [];
+  if (!st.length) f.push("Keine Stücke erfasst.");
+  if (st.some((x) => x.gehrung_links || x.gehrung_rechts)) w.push("Stücke mit Gehrung: die Gehrungsschnitte sind im Bauteil noch nicht umgesetzt (gerade Enden).");
+  if (um >= 0 && um <= 100) w.push(`Umschlag oben/unten ist in der Aufnahme nicht gespeichert – je ${Math.round(um * 5) / 10} mm angenommen (Summe ${um} mm aus Abwicklung − Mass A − Restbreite).`);
+  if (f.length) return null;
+  return { schenkel: [], dicke_mm: t, mass_a_mm: A, winkel_grad: wi, rest_mm: rb, abwicklung_mm: ab, umschlag_mm: um / 2, stuecke: st, laengen_mm: [...new Set(st.map((x) => x.laenge_mm))], stueck: st.length };
+}
+
 // Prüft einen Umschlag. Ergebnis: { ok, fehler[], warnungen[], cad } – cad nur wenn ok. Nie werfen.
 export function pruefe(u) {
   const f = [], w = [];
@@ -60,6 +87,7 @@ export function pruefe(u) {
     const g = GENERATOREN[u.art];
     if (!g) w.push(`Für «${u.art}» gibt es noch keinen Generator – die Aufnahme wird nur angezeigt.`);
     else if (u.art === "freies_profil") cad = freiesProfil(u, f, w);
+    else if (u.art === "einlaufblech_gerade") cad = einlaufblech(u, f, w);
   }
   return { ok: f.length === 0, fehler: f, warnungen: w, cad: f.length ? null : cad };
 }

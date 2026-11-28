@@ -15,13 +15,13 @@ export function erzeuge(umschlag) {
     name: a.length > 1 ? `${basis} ${laenge ?? "?"} mm` : basis,
     zeilen: JSON.parse(JSON.stringify(zeilen)), laenge, stueck, staerke: c.dicke_mm,
     herkunft: { system: umschlag.quelle.system, messaufnahmeId: umschlag.quelle.id, projektId: umschlag.projekt.id, schema: umschlag.schema, version: umschlag.version,
-      stand: umschlag.quelle.aktualisiert, zeilen: JSON.parse(JSON.stringify(zeilen)), laenge, stueck },
+      stand: umschlag.quelle.aktualisiert, staerke: c.dicke_mm, zeilen: JSON.parse(JSON.stringify(zeilen)), laenge, stueck },
   }));
   return { ok: true, fehler: [], warnungen: p.warnungen, teile };
 }
 
 // Weicht das Bauteil von der Messung ab? → Liste der Änderungen (leer = identisch)
-export function abweichungen(f) {
+export function abweichungen(f, dicke = null) {
   const h = f?.herkunft; if (!h) return [];
   const d = [];
   if ((f.zeilen || []).length !== h.zeilen.length) d.push("Anzahl Schenkel");
@@ -29,16 +29,7 @@ export function abweichungen(f) {
     if (z.L !== o.L) d.push(`Schenkel ${i + 1}: ${o.L} → ${z.L} mm`);
     if ((z.winkel || 0) !== (o.winkel || 0)) d.push(`Winkel ${i + 1}: ${o.winkel}° → ${z.winkel}°`); });
   if (h.laenge != null && f.laenge !== h.laenge) d.push(`Länge: ${h.laenge} → ${f.laenge} mm`);
+  if (dicke != null && h.staerke != null && Math.abs(dicke - h.staerke) > 1e-9) d.push(`Blechstärke: ${h.staerke} → ${dicke} mm`);
   return d;
 }
 
-// Neue Messwerte der App auf ein vorhandenes Bauteil anwenden. Zuordnung über die Länge (sonst nur eindeutig bei einem Teil).
-// Ergebnis: { ok, geaendert, neu:{zeilen,laenge,stueck,herkunft}, fehler[] } – ändert f nicht.
-export function aktualisiereAusMessung(f, umschlag) {
-  const r = erzeuge(umschlag);
-  if (!r.ok) return { ok: false, geaendert: false, neu: null, fehler: r.fehler };
-  const h = f.herkunft, t = r.teile.find((x) => x.laenge === h?.laenge) || (r.teile.length === 1 ? r.teile[0] : null);
-  if (!t) return { ok: false, geaendert: false, neu: null, fehler: ["Die Länge dieses Bauteils kommt in der neuen Messung nicht mehr vor."] };
-  const gleich = JSON.stringify(t.herkunft.zeilen) === JSON.stringify(h.zeilen) && t.laenge === h.laenge && t.stueck === h.stueck && t.staerke === (h.staerke ?? t.staerke);
-  return { ok: true, geaendert: !gleich, neu: { zeilen: t.zeilen, laenge: t.laenge, stueck: t.stueck, herkunft: t.herkunft }, fehler: [] };
-}

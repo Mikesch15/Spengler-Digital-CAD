@@ -1,6 +1,6 @@
 // Projekte der Spengler-Digital-App: anlegen, bearbeiten, archivieren und dem aktuellen Modell zuordnen.
 // Die Daten liegen nur in der App-Datenbank (Tabelle projects) – so sind CAD und App immer synchron.
-import { erzeuge } from "../kern/generator/freiesProfil.js";
+import { erzeuge } from "../kern/generator/index.js";
 import { ausAppZeile, status as impStatus } from "../kern/austausch.js";
 import { pruefeProjekt, suche, modellFelder, geaendert, STATUS } from "../kern/cloud/projekte.js";
 
@@ -26,7 +26,7 @@ export function projekteModul(ctx) {
     if (!st.mass.length) return '<p class="hinweis">Dieses Projekt hat keine Massaufnahmen.</p>';
     return `<h4>Massaufnahmen aus der App</h4><ul class="massliste">${st.mass.map((u) => { const s = impStatus(u), [t, k] = STUFE[s.stufe];
       return `<li><div class="mkopf"><b>${esc(u.titel || u.art)}</b><span class="mmarke ${k}">${t}</span>${da.has(u.quelle.id) ? '<span class="mmarke grau">im Modell</span>' : ""}</div>
-        <small>${esc(u.art)} · ID ${esc(u.quelle.id)}${s.cad ? ` · ${s.cad.schenkel.length} Schenkel, ${s.cad.dicke_mm ?? "?"} mm` : ""}</small>
+        <small>${esc(u.art)} · ID ${esc(u.quelle.id)}${s.cad ? (s.cad.schenkel.length ? ` · ${s.cad.schenkel.length} Schenkel, ${s.cad.dicke_mm ?? "?"} mm` : ` · Mass A ${s.cad.mass_a_mm}, ${s.cad.winkel_grad}°, ${s.cad.stueck} Stücke, ${s.cad.dicke_mm} mm`) : ""}</small>
         ${[...s.fehler, ...s.warnungen].map((x) => `<small class="mbefund ${s.ok ? "warn" : "fehler"}">${esc(x)}</small>`).join("")}
         ${s.ok ? `<div class="mknoepfe">${s.cad ? `<button class="knopf klein haupt" data-pj-aktion="bauteil" data-mid="${esc(u.quelle.id)}">Bauteil erzeugen</button>` : ""}<button class="knopf klein" data-pj-aktion="uebernehmen" data-mid="${esc(u.quelle.id)}">${da.has(u.quelle.id) ? "Aktualisieren" : "Ins Modell übernehmen"}</button></div>` : ""}</li>`; }).join("")}</ul>`;
   }

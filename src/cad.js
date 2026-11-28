@@ -39,7 +39,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { Brush, Evaluator, ADDITION, SUBTRACTION, INTERSECTION } from "three-bvh-csg";
 import { berechne, kontur, polylinie, grenzen, versatzLinie } from "../kern/geometrie.js";
 import { VORLAGEN, VORLAGE, standardwerte, freiesProfil, profilErweitern, alsZeilen } from "../kern/profile.js";
-import { abweichungen, aktualisiereAusMessung } from "../kern/generator/freiesProfil.js";
+import { abweichungen, aktualisiereAusMessung } from "../kern/generator/index.js";
 import { ausAppZeile } from "../kern/austausch.js";
 import { MATERIALIEN, LAGER, quelle, kFaktorAusProbe } from "../kern/materialien.js";
 import { abwicklungDxf, abwicklungenDxf, flaecheDxf, rundblechDxf } from "../kern/dxf.js";
@@ -2073,14 +2073,14 @@ function werkstattblatt(f) {
   const r = f._res, m = material(f.material), q = quelle(r.zuschnitt, einst), d = einst.druck, abB = einst.anzeige.abB;
   return `<section class="blatt">
     <header>${logoImg()}<div>${kopf("Werkstattblatt")}<h1>${esc(f.name)}</h1></div>
-      <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd>${f.herkunft ? `<dt>Messung</dt><dd>Nr. ${esc(f.herkunft.messaufnahmeId)}${abweichungen(f).length ? " (geändert)" : ""}</dd>` : ""}</dl></header>
+      <dl><dt>Objekt</dt><dd>${esc(doc.objekt)}</dd><dt>Nr.</dt><dd>${esc(doc.nr)}</dd><dt>Datum</dt><dd>${new Date().toLocaleDateString("de-CH")}</dd>${f.herkunft ? `<dt>Messung</dt><dd>Nr. ${esc(f.herkunft.messaufnahmeId)}${abweichungen(f, m.t).length ? " (geändert)" : ""}</dd>` : ""}</dl></header>
     <div class="eckdaten">
       <div><small>Zuschnitt</small><b>${f1(r.zuschnitt)} × ${laengeVon(f)} mm</b></div>
       <div><small>Material</small><b>${esc(m.name)}</b></div>
       <div><small>Stück</small><b>${f.stueck ?? 1}</b></div>
       <div><small>Aus</small><b>${q ? `${q.art} ${q.breite}${q.laenge ? " × " + q.laenge : ""}` : "Sonderformat"}</b></div>
     </div>
-    ${f.herkunft && abweichungen(f).length ? `<div class="notiz"><b>Gegenüber der Messung geändert</b> ${esc(abweichungen(f).join("; "))}</div>` : ""}
+    ${f.herkunft && abweichungen(f, m.t).length ? `<div class="notiz"><b>Gegenüber der Messung geändert</b> ${esc(abweichungen(f, m.t).join("; "))}</div>` : ""}
     ${f.notiz?.trim() ? `<div class="notiz"><b>Notiz</b> ${esc(f.notiz)}</div>` : ""}
     <div class="grosszeichnung">${profilSvg(r, { dicke: m.t, breite: 640, hoehe: 360, schrift: 14, rand: 44 })}</div>
     ${d.abwicklung ? `<div class="abwicklung"><small>Abwicklung · Anschlag ab Kante A${abB ? " (ab B: Blech gewendet)" : ""}</small>${abwicklungSvg(r, { breite: 640, schrift: 12 })}</div>` : ""}
@@ -2541,7 +2541,7 @@ function profilDialog(f) {
       setTimeout(() => { const d = dlg; if (d) { dialog({ ...d, felder: felder(f) }); regen(); } });
     }
   };
-  const messungHtml = () => { if (!f.herkunft) return ""; const d = abweichungen(f);
+  const messungHtml = () => { if (!f.herkunft) return ""; const d = abweichungen(f, material(f.material)?.t);
     return `<div class="messung ${d.length ? "abw" : ""}"><b>Aus Massaufnahme ${esc(f.herkunft.messaufnahmeId)}</b> <span class="pjmarke${d.length ? " warn" : ""}">${d.length ? "im CAD geändert" : "wie gemessen"}</span>
       ${d.length ? `<ul>${d.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><button class="knopf klein" data-messung-zurueck>Auf Messwerte zurücksetzen</button>` : '<small class="hinweis">Masse stimmen mit der Baustellen-Messung überein.</small>'}
       ${cloud.angemeldet ? '<div class="mknoepfe"><button class="knopf klein" data-messung-neu title="Aktuelle Messwerte aus der App holen">Aus App aktualisieren</button></div>' : ""}<small class="hinweis" data-messung-text></small></div>`; };
@@ -2562,8 +2562,11 @@ function profilDialog(f) {
       const r = aktualisiereAusMessung(f, ausAppZeile(z));
       if (!r.ok) return say(r.fehler.join(" "));
       if (!r.geaendert) return say("Keine neuere Messung – Stand der App ist unverändert.");
-      if (abweichungen(f).length && !confirm("Das Bauteil wurde im CAD geändert. Mit den neuen Messwerten der App überschreiben?")) return say("Abgebrochen.");
-      Object.assign(f, r.neu); neu(); status("Bauteil mit den aktuellen Messwerten der App aktualisiert.");
+      if (abweichungen(f, material(f.material)?.t).length && !confirm("Das Bauteil wurde im CAD geändert. Mit den neuen Messwerten der App überschreiben?")) return say("Abgebrochen.");
+      Object.assign(f, r.neu);
+      const mm = einst.materialien.find((x) => x.t === +r.staerke);
+      if (mm) f.material = mm.id;
+      neu(); status(mm ? "Bauteil mit den aktuellen Messwerten der App aktualisiert." : `Bauteil aktualisiert – aber kein Material mit ${r.staerke} mm vorhanden, Material bitte prüfen.`);
     } catch (x) { say(x.art === "netz" ? "Keine Verbindung zur App." : x.message || String(x)); }
   };
   const binden = (box) => {
@@ -2575,7 +2578,7 @@ function profilDialog(f) {
     });
     box.addEventListener("click", (e) => {
       if (e.target.dataset.messungNeu != null) { messungNeuLaden(box); }
-      else if (e.target.dataset.messungZurueck != null) { f.zeilen = JSON.parse(JSON.stringify(f.herkunft.zeilen)); if (f.herkunft.laenge != null) f.laenge = f.herkunft.laenge; neu(); }
+      else if (e.target.dataset.messungZurueck != null) { f.zeilen = JSON.parse(JSON.stringify(f.herkunft.zeilen)); if (f.herkunft.laenge != null) f.laenge = f.herkunft.laenge; const mm0 = einst.materialien.find((x) => x.t === +f.herkunft.staerke); if (mm0) f.material = mm0.id; neu(); }
       else if (e.target.dataset.weg != null) { f.zeilen.splice(+e.target.dataset.weg, 1); f.zeilen.at(-1).winkel = 0; neu(); }
       else if (e.target.dataset.vorlageSpeichern != null) { const w = werte(); eigeneVorlageSpeichern(w.name || f.name, Number.isFinite(w.start) ? w.start : f.start, f.zeilen); }
       else if (e.target.dataset.neu != null) { const l = f.zeilen.at(-1); l.winkel = 90; l.art = "abkanten"; f.zeilen.push({ L: 30, winkel: 0, art: "abkanten" }); neu(); box.querySelector("tr:last-child input")?.focus(); }
@@ -7500,11 +7503,11 @@ $("wOeffnen").onclick = () => dateiWahl($("wOeffnen"), [
   ["pc", pc ? "Vom PC öffnen" : "Vom Gerät öffnen", "Projektdatei (.sdcad) wählen", projektOeffnen]]);
 // ------------------------------------------------------------ Konto & Cloud (Spengler-Digital-App)
 function setzeAuftrag({ nr, objekt, appProjekt }) { doc.nr = nr; doc.objekt = objekt; if (appProjekt) doc.appProjekt = appProjekt; else delete doc.appProjekt; $("aNr").value = nr; $("aObjekt").value = objekt; auftragAnzeige(); speichern(); if (appProjekt) ablage?.sicherstellen(); } // Projekt zugeordnet: Cloud-Ordner anlegen (falls es sie noch nicht gibt)
-const neuesProfilAus = ({ name, zeilen, laenge, stueck, staerke, herkunft }) => {
+const neuesProfilAus = ({ name, zeilen, laenge, stueck, staerke, herkunft, notiz }) => {
     const gefunden = staerke > 0 && einst.materialien.find((x) => x.t === +staerke);
     const m = gefunden || einst.materialien.find((x) => x.id === neuMaterial()) || einst.materialien[0];
     if (staerke > 0 && !gefunden) status(`Achtung: Kein Material mit ${staerke} mm Stärke vorhanden – «${m.name}» (${m.t} mm) verwendet. Bitte Material prüfen.`);
-    const f = { id: neueId(), typ: "profil", name, start: 0, zeilen: zeilen.length ? zeilen : [{ L: 100, winkel: 0, art: "abkanten" }], material: m.id, laenge: laenge > 0 ? +laenge : einst.neu.laenge, stueck: stueck > 0 ? +stueck : 1, richtung: "eine", ebene: einst.neu.ebene, ...(herkunft ? { herkunft } : {}) };
+    const f = { id: neueId(), typ: "profil", name, start: 0, zeilen: zeilen.length ? zeilen : [{ L: 100, winkel: 0, art: "abkanten" }], material: m.id, laenge: laenge > 0 ? +laenge : einst.neu.laenge, stueck: stueck > 0 ? +stueck : 1, richtung: "eine", ebene: einst.neu.ebene, ...(herkunft ? { herkunft } : {}), ...(notiz ? { notiz } : {}) };
     einfuegen(f); regen(); waehle(f.id); return f; };
 const cloud = cloudModul({
   esc, status, getEinst: () => einst, setEinst: (e) => { einst = e; if (entwurf) entwurf = JSON.parse(JSON.stringify(einst)); }, einstSpeichern, getDoc: () => doc, regen,

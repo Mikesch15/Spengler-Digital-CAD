@@ -13,6 +13,7 @@ const db = { proj: [{ id: 7, name: "Dach Müller", order_no: "2026-114", custome
 const ref = JSON.parse(readFileSync("test/daten/app-freies-profil-111.json", "utf8"));
 const MESS = [ref, { id: 112, project_id: 7, type: "freies_profil", title: "Defekt (1 Schenkel)", staerke_mm: "0.6", data: { schenkel: [{ laenge: 50, winkel: 0 }], segmente: [{ laenge: 1000 }] }, updated_at: "2026-11-02T08:00:00Z" },
   { id: 113, project_id: 7, type: "kamineinfassung", title: "Kamin Ost", staerke_mm: "0.7", data: { breiteVorne: 600 }, updated_at: "2026-11-03T08:00:00Z" }].map((z) => ({ ...z, project_id: 7 }));
+const eb = JSON.parse(readFileSync("test/daten/app-einlaufblech-98.json", "utf8")); MESS.push({ ...eb, id: 114, project_id: 7 });
 const b = await chromium.launch(), s = await b.newPage({ viewport: { width: 1280, height: 800 } }), probleme = []; s.on("pageerror", (e) => probleme.push(e.message));
 await s.route("**/nfgryuzkpwjfmdlmevuy.supabase.co/**", async (r) => {
   const q = r.request(), u = new URL(q.url()), p = u.pathname, m = q.method(), body = q.postData() ? JSON.parse(q.postData()) : null, j = (st, d) => r.fulfill({ status: st, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(d) });
@@ -31,7 +32,7 @@ await s.route("**/nfgryuzkpwjfmdlmevuy.supabase.co/**", async (r) => {
   }
   return j(404, {});
 });
-await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Muster, Bern", nr: "2026-001", zaehler: 5, features: [] })); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }] })); });
+await s.addInitScript(() => { localStorage.setItem("sdcad-doc-0.2", JSON.stringify({ objekt: "Muster, Bern", nr: "2026-001", zaehler: 5, features: [] })); localStorage.setItem("sdcad-einstellungen", JSON.stringify({ materialien: [{ id: "zink07", name: "Titanzink 0.70", t: 0.7, ri: 1.0, k: 0.4, dichte: 7.2 }, { id: "zink06", name: "Titanzink 0.60", t: 0.6, ri: 1.0, k: 0.4, dichte: 7.2 }] })); });
 await s.goto("http://localhost:" + (process.env.PORT || 8775) + "/index.html?test"); await s.waitForTimeout(800);
 // ohne Anmeldung
 await s.click("#aProjektWahl"); ok(/Anmeldung nötig/.test(await s.textContent("#pjInhalt")), "Ohne Anmeldung: Hinweis und Weg zum Konto");
@@ -43,8 +44,9 @@ await s.click("#aProjektWahl"); await s.waitForSelector("#pjListe li", { timeout
 await s.click('#pjListe li[data-pj="7"]'); await s.click('[data-pj-aktion="mass"]'); await s.waitForSelector('[data-pj-aktion="bauteil"]', { timeout: 4000 });
 const liste = await s.textContent("#pjForm");
 ok(/Referenz|Freies Profil/.test(liste) && /fehlerhaft/.test(liste) && /noch kein Generator/.test(liste), "Importliste: bereit/Warnung, fehlerhaft und «noch kein Generator» sichtbar");
-ok(await s.locator('[data-pj-aktion="bauteil"]').count() === 1 && await s.locator('[data-pj-aktion="uebernehmen"]').count() === 2, "Knöpfe: «Bauteil erzeugen» nur bei Generator, «Übernehmen» nur bei gültigen Aufnahmen");
+ok(await s.locator('[data-pj-aktion="bauteil"]').count() === 2 && await s.locator('[data-pj-aktion="uebernehmen"]').count() === 3, "Knöpfe: «Bauteil erzeugen» nur bei Generator, «Übernehmen» nur bei gültigen Aufnahmen");
 await bild("1-importliste");
+await s.locator('[data-pj-aktion="bauteil"]').nth(1).scrollIntoViewIfNeeded(); await bild("1b-importliste-einlaufblech");
 await s.click('[data-pj-aktion="bauteil"]'); await s.waitForTimeout(1500);
 const d = await s.evaluate(() => window.sdcadTest.dok());
 const pf = d.features.filter((f) => f.typ === "profil");
@@ -70,5 +72,13 @@ await s.click("[data-messung-neu]"); await s.waitForFunction(() => /unverändert
 ok(true, "Zweites Aktualisieren: «Stand der App ist unverändert»");
 await bild("4-aus-app-aktualisiert");
 await s.evaluate(() => { document.getElementById("druck").innerHTML = window.sdcadTest.blatt(window.sdcadTest.dok().features.find((f) => f.typ === "profil").id); });
+// Einlaufblech gerade aus der Importliste erzeugen
+await s.click("#aProjektWahl"); await s.waitForSelector("#pjListe li", { timeout: 4000 }); await s.click('#pjListe li[data-pj="7"]'); await s.click('[data-pj-aktion="mass"]'); await s.waitForSelector('[data-pj-aktion="bauteil"]');
+await s.locator('[data-pj-aktion="bauteil"][data-mid="114"]').scrollIntoViewIfNeeded(); await bild("5-importliste-einlaufblech");
+await s.click('[data-pj-aktion="bauteil"][data-mid="114"]'); await s.waitForTimeout(1800);
+const d3 = await s.evaluate(() => window.sdcadTest.dok()), ef = d3.features.filter((f) => f.typ === "profil" && f.herkunft?.messaufnahmeId === 114);
+ok(ef.length === 4 && ef.find((f) => f.laenge === 2070)?.stueck === 4 && ef.every((f) => f.zeilen.length === 4), "Einlaufblech: 4 Profile (2070 ×4, 2 Gehrungsstücke, 1600)");
+ok(ef.filter((f) => /Gehrung/.test(f.notiz || "")).length === 2, "Gehrungsstücke tragen den Hinweis «noch nicht modelliert»");
+await s.evaluate((id) => window.sdcadTest.waehle(id), ef[0].id); await s.waitForTimeout(800); await bild("6-einlaufblech-im-modell");
 ok(!probleme.length, "Keine Skriptfehler " + probleme.join("|"));
 await b.close(); srv.close(); console.log(fehler ? `${fehler} Fehler` : "Massimport: alle Tests bestanden"); process.exit(fehler ? 1 : 0);
