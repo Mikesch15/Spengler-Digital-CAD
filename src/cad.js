@@ -3614,7 +3614,7 @@ function nahtPaar(x) {
   const mitte = (k, c) => (c.mid && k.kand ? c.mid.clone().add(k.punkte[1].clone().sub(k.punkte[0]).multiplyScalar(0.5)) : k.punkte[0].clone().add(k.punkte.at(-1)).multiplyScalar(0.5));
   let best = null;
   for (const ca of wahl(ka)) for (const cb of wahl(kb)) {
-    const d = mitte(ka, ca).distanceTo(mitte(kb, cb)) + (ca.art === "flaeche" ? 0 : 0.01) + (cb.art === "flaeche" ? 0 : 0.01) + (ca.normale.dot(cb.normale) > 0.999 && ca.art === "flaeche" && cb.art === "flaeche" ? 0.5 : 0);
+    const d = mitte(ka, ca).distanceTo(mitte(kb, cb)) + (ca.inn.dot(cb.inn) > 0.5 ? 5 : 0) /* beide Bleche laufen in dieselbe Richtung: kein sinnvolles Paar */ + (ca.art === "flaeche" ? 0 : 0.01) + (cb.art === "flaeche" ? 0 : 0.01) + (ca.normale.dot(cb.normale) > 0.999 && ca.art === "flaeche" && cb.art === "flaeche" ? 0.5 : 0);
     if (!best || d < best.d) best = { d, ca, cb };
   }
   const mit = (k, c) => ({ ...k, normale: c.normale, inn: c.inn, mid: c.mid, meshFid: c.fid ?? k.meshFid });
